@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Display - Vinyl Spin View (Skeuomorphic)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #111;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 18px; font-weight: 400; color: #888; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: #555; margin-bottom: 24px; text-align: center; }
+
+  /* === THE DISPLAY FRAME === */
+  .display-frame {
+    width: 860px;
+    height: 484px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    user-select: none;
+  }
+
+  /* === TURNTABLE CABINET SURFACE === */
+  .turntable-cabinet {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Dark walnut wood grain */
+    background:
+      repeating-linear-gradient(
+        2deg,
+        transparent 0px,
+        transparent 2px,
+        rgba(80,50,25,0.03) 2px,
+        rgba(80,50,25,0.03) 4px
+      ),
+      repeating-linear-gradient(
+        178deg,
+        transparent 0px,
+        transparent 6px,
+        rgba(60,35,15,0.04) 6px,
+        rgba(60,35,15,0.04) 8px
+      ),
+      linear-gradient(170deg,
+        #2a1f16 0%,
+        #1e150e 15%,
+        #231a12 30%,
+        #1c1310 50%,
+        #201710 70%,
+        #1a120c 85%,
+        #15100a 100%
+      );
+    overflow: hidden;
+  }
+
+  /* Subtle vignette */
+  .cabinet-vignette {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 48% 45%, transparent 30%, rgba(0,0,0,0.4) 100%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Warm overhead light */
+  .cabinet-light {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 48% 35%, rgba(255,220,160,0.06) 0%, transparent 50%);
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  /* === PLATTER / RECORD AREA === */
+  /* Recessed platter well */
+  .platter-well {
+    position: absolute;
+    top: 50%;
+    left: 46%;
+    transform: translate(-50%, -50%);
+    width: 410px;
+    height: 410px;
+    border-radius: 50%;
+    z-index: 1;
+    /* Inset shadow to look recessed */
+    box-shadow:
+      inset 0 3px 12px rgba(0,0,0,0.6),
+      inset 0 0 4px rgba(0,0,0,0.4),
+      0 0 0 2px rgba(40,30,18,0.8),
+      0 0 0 4px rgba(20,15,8,0.5);
+    background: radial-gradient(circle, #0e0e0e 0%, #080808 100%);
+  }
+
+  /* Rubber platter mat texture */
+  .platter-mat {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 396px;
+    height: 396px;
+    border-radius: 50%;
+    background:
+      repeating-radial-gradient(
+        circle at center,
+        rgba(255,255,255,0.015) 0px,
+        rgba(255,255,255,0.015) 1px,
+        transparent 1px,
+        transparent 4px
+      ),
+      radial-gradient(circle, #111 0%, #0a0a0a 100%);
+  }
+
+  /* === THE VINYL RECORD === */
+  .vinyl-container {
+    position: absolute;
+    top: 50%;
+    left: 46%;
+    transform: translate(-50%, -50%);
+    width: 380px;
+    height: 380px;
+    z-index: 2;
+  }
+
+  .vinyl-record {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    animation: spin 5s linear infinite;
+    box-shadow:
+      0 0 0 2px rgba(10,10,10,0.9),
+      0 0 0 3px rgba(30,30,30,0.4),
+      0 8px 30px rgba(0,0,0,0.6),
+      inset 0 0 30px rgba(0,0,0,0.3);
+  }
+
+  .vinyl-record.paused {
+    animation-play-state: paused;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .vinyl-surface {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: absolute;
+    top: 0; left: 0;
+    background:
+      radial-gradient(ellipse at 38% 30%, rgba(255,255,255,0.025) 0%, transparent 45%),
+      radial-gradient(circle, #161616 0%, #0b0b0b 100%);
+    overflow: hidden;
+  }
+
+  .vinyl-grooves {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+  }
+
+  .groove-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 0.5px solid rgba(255,255,255,0.025);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes counter-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+  }
+
+  .dead-wax {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 168px;
+    height: 168px;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+      transparent 0%, transparent 56%,
+      rgba(25,25,25,0.5) 60%,
+      rgba(18,18,18,1) 68%,
+      rgba(16,16,16,1) 100%
+    );
+    z-index: 2;
+  }
+
+  .center-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    z-index: 6;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 2px rgba(60,50,30,0.6),
+      0 0 0 3.5px rgba(40,35,20,0.35),
+      0 2px 6px rgba(0,0,0,0.5),
+      inset 0 0 12px rgba(0,0,0,0.15);
+  }
+
+  .label-art {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #e8d5a3 0%, #c9a96e 50%, #d4bc84 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .label-art::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-conic-gradient(
+      rgba(0,0,0,0.015) 0deg 1deg, transparent 1deg 2deg
+    );
+    opacity: 0.6;
+  }
+
+  .label-art::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 78%;
+    height: 78%;
+    border-radius: 50%;
+    border: 0.5px solid rgba(0,0,0,0.08);
+  }
+
+  .label-art .note-icon {
+    font-size: 34px;
+    color: rgba(0,0,0,0.12);
+    z-index: 1;
+    position: relative;
+  }
+
+  .spindle-hole {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #060606;
+    z-index: 7;
+    box-shadow:
+      0 0 0 1.5px rgba(50,50,50,0.4),
+      0 0 0 3px rgba(80,80,80,0.15),
+      inset 0 1px 3px rgba(0,0,0,0.9);
+  }
+
+  /* Reflection + diffraction overlays */
+  .vinyl-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: counter-spin 5s linear infinite;
+  }
+
+  .vinyl-reflection {
+    z-index: 20;
+    background: conic-gradient(
+      from 210deg,
+      transparent 0deg,
+      rgba(255,255,255,0.0) 8deg,
+      rgba(255,255,255,0.035) 22deg,
+      rgba(255,255,255,0.07) 40deg,
+      rgba(255,255,255,0.09) 50deg,
+      rgba(255,255,255,0.07) 60deg,
+      rgba(255,255,255,0.035) 75deg,
+      rgba(255,255,255,0.0) 88deg,
+      transparent 98deg,
+      transparent 360deg
+    );
+  }
+
+  .vinyl-diffraction {
+    z-index: 19;
+    opacity: 0.4;
+    mix-blend-mode: screen;
+    background: conic-gradient(
+      from 195deg,
+      transparent 0deg, transparent 18deg,
+      rgba(100,50,150,0.18) 26deg,
+      rgba(50,70,180,0.18) 36deg,
+      rgba(40,150,130,0.13) 48deg,
+      rgba(130,170,50,0.10) 58deg,
+      rgba(180,110,50,0.13) 68deg,
+      rgba(150,50,70,0.16) 78deg,
+      transparent 88deg,
+      transparent 360deg
+    );
+  }
+
+  /* === TONEARM === */
+  .tonearm-assembly {
+    position: absolute;
+    top: 20px;
+    right: 180px;
+    z-index: 30;
+    transform-origin: 18px 18px;
+    transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: rotate(-14deg);
+  }
+
+  .tonearm-assembly.playing {
+    transform: rotate(18deg);
+  }
+
+  .tonearm-pivot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 33%,
+      #6a6a6a 0%, #444 35%, #2a2a2a 70%, #1a1a1a 100%
+    );
+    box-shadow:
+      0 4px 14px rgba(0,0,0,0.8),
+      0 0 0 1px rgba(90,90,90,0.2),
+      0 0 0 3px rgba(30,20,12,0.6),
+      inset 0 1px 2px rgba(255,255,255,0.08);
+    position: absolute;
+    top: 0; left: 0;
+    z-index: 3;
+  }
+
+  .tonearm-pivot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #888, #555);
+    box-shadow: inset 0 0.5px 1px rgba(255,255,255,0.2);
+  }
+
+  .tonearm-tube {
+    position: absolute;
+    top: 17px;
+    left: 16px;
+    width: 200px;
+    height: 5px;
+    background: linear-gradient(180deg,
+      #777 0%, #555 20%, #404040 50%, #555 80%, #666 100%
+    );
+    border-radius: 2.5px;
+    transform-origin: 2px 2.5px;
+    transform: rotate(62deg);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.6),
+      inset 0 0.5px 0 rgba(255,255,255,0.1);
+  }
+
+  .tonearm-head {
+    position: absolute;
+    bottom: -9px;
+    right: -4px;
+    width: 24px;
+    height: 15px;
+    background: linear-gradient(180deg, #666, #3a3a3a);
+    border-radius: 1px 1px 2px 2px;
+    transform: rotate(-25deg);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+  }
+
+  .tonearm-stylus {
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 7px;
+    background: linear-gradient(180deg, #aaa, #ccc);
+  }
+
+  .tonearm-weight {
+    position: absolute;
+    top: 6px;
+    left: -7px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 33%,
+      #777 0%, #555 45%, #3a3a3a 100%
+    );
+    box-shadow:
+      0 3px 8px rgba(0,0,0,0.7),
+      inset 0 0.5px 0 rgba(255,255,255,0.06);
+  }
+
+  /* Arm rest */
+  .arm-rest {
+    position: absolute;
+    top: 48px;
+    right: 118px;
+    width: 8px;
+    height: 28px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #444, #333, #444);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(60,60,60,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+    z-index: 29;
+    transform: rotate(12deg);
+  }
+
+  /* === LCD DISPLAY PANEL === */
+  .lcd-panel {
+    position: absolute;
+    bottom: 30px;
+    left: 30px;
+    width: 240px;
+    z-index: 40;
+  }
+
+  /* LCD housing - recessed into cabinet */
+  .lcd-housing {
+    background: linear-gradient(180deg, #1a1510 0%, #0f0c08 100%);
+    border-radius: 6px;
+    padding: 3px;
+    box-shadow:
+      inset 0 2px 6px rgba(0,0,0,0.8),
+      inset 0 0 2px rgba(0,0,0,0.5),
+      0 0 0 1px rgba(60,45,25,0.4),
+      0 1px 0 rgba(60,50,30,0.2);
+  }
+
+  /* The LCD screen itself */
+  .lcd-screen {
+    background: #1a2a18;
+    border-radius: 4px;
+    padding: 10px 12px;
+    position: relative;
+    overflow: hidden;
+    /* LCD pixel grid texture */
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 1px,
+        rgba(0,0,0,0.08) 1px,
+        rgba(0,0,0,0.08) 2px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        transparent 1px,
+        rgba(0,0,0,0.08) 1px,
+        rgba(0,0,0,0.08) 2px
+      );
+    background-color: #1a2a18;
+    box-shadow:
+      inset 0 1px 4px rgba(0,0,0,0.4),
+      inset 0 0 8px rgba(0,40,0,0.15);
+  }
+
+  /* LCD glow effect */
+  .lcd-screen::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 40%, rgba(100,220,100,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* LCD text styling - green phosphor look */
+  .lcd-text {
+    font-family: 'Share Tech Mono', monospace;
+    color: #5adc5a;
+    text-shadow:
+      0 0 6px rgba(90,220,90,0.4),
+      0 0 12px rgba(90,220,90,0.15);
+    line-height: 1.4;
+  }
+
+  .lcd-station {
+    font-size: 9px;
+    color: #3aaa3a;
+    text-shadow: 0 0 4px rgba(60,170,60,0.3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+
+  .lcd-track {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .lcd-track-inner {
+    display: inline-block;
+    animation: lcd-scroll 12s linear infinite;
+  }
+
+  @keyframes lcd-scroll {
+    0%, 20% { transform: translateX(0); }
+    80%, 100% { transform: translateX(-50%); }
+  }
+
+  .lcd-artist {
+    font-size: 12px;
+    color: #48c048;
+    text-shadow: 0 0 5px rgba(72,192,72,0.3);
+    margin-top: 1px;
+  }
+
+  .lcd-divider {
+    height: 1px;
+    background: rgba(90,220,90,0.15);
+    margin: 6px 0;
+  }
+
+  .lcd-bottom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+  }
+
+  .lcd-time {
+    color: #5adc5a;
+    font-family: 'Share Tech Mono', monospace;
+    text-shadow: 0 0 5px rgba(90,220,90,0.35);
+    font-size: 11px;
+  }
+
+  .lcd-progress-container {
+    flex: 1;
+    margin: 0 10px;
+    height: 4px;
+    background: rgba(90,220,90,0.1);
+    border-radius: 0;
+    overflow: hidden;
+    position: relative;
+    /* Segmented LCD bar */
+    background-image: repeating-linear-gradient(
+      90deg,
+      rgba(90,220,90,0.1) 0px,
+      rgba(90,220,90,0.1) 4px,
+      transparent 4px,
+      transparent 5px
+    );
+  }
+
+  .lcd-progress-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 35%;
+    background-image: repeating-linear-gradient(
+      90deg,
+      #5adc5a 0px,
+      #5adc5a 4px,
+      transparent 4px,
+      transparent 5px
+    );
+    box-shadow: 0 0 4px rgba(90,220,90,0.3);
+  }
+
+  .lcd-duration {
+    color: #3aaa3a;
+    font-family: 'Share Tech Mono', monospace;
+    text-shadow: 0 0 4px rgba(60,170,60,0.25);
+    font-size: 11px;
+  }
+
+  /* Small LED indicator on LCD housing */
+  .lcd-power-led {
+    position: absolute;
+    top: -1px;
+    right: 10px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #5adc5a;
+    box-shadow:
+      0 0 4px rgba(90,220,90,0.6),
+      0 0 8px rgba(90,220,90,0.3);
+  }
+
+  /* === PHYSICAL TRANSPORT BUTTONS === */
+  .transport-panel {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    gap: 12px;
+    z-index: 40;
+    align-items: center;
+  }
+
+  /* Button base styling - machined aluminum look */
+  .phys-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.08s ease;
+
+    /* Brushed metal surface */
+    background:
+      radial-gradient(ellipse at 45% 35%, rgba(255,255,255,0.12) 0%, transparent 50%),
+      linear-gradient(180deg, #5a5a5a 0%, #404040 40%, #333 70%, #444 100%);
+
+    box-shadow:
+      /* Outer rim bevel */
+      0 0 0 1.5px rgba(80,80,80,0.5),
+      0 0 0 3px rgba(20,15,8,0.7),
+      /* Drop shadow */
+      0 4px 12px rgba(0,0,0,0.7),
+      0 2px 4px rgba(0,0,0,0.5),
+      /* Inner highlight */
+      inset 0 1px 2px rgba(255,255,255,0.12),
+      inset 0 -1px 2px rgba(0,0,0,0.3);
+  }
+
+  .phys-btn:hover {
+    background:
+      radial-gradient(ellipse at 45% 35%, rgba(255,255,255,0.15) 0%, transparent 50%),
+      linear-gradient(180deg, #666 0%, #4a4a4a 40%, #3a3a3a 70%, #4f4f4f 100%);
+  }
+
+  .phys-btn:active {
+    transform: translateY(2px);
+    box-shadow:
+      0 0 0 1.5px rgba(80,80,80,0.5),
+      0 0 0 3px rgba(20,15,8,0.7),
+      0 1px 4px rgba(0,0,0,0.6),
+      0 1px 2px rgba(0,0,0,0.4),
+      inset 0 2px 4px rgba(0,0,0,0.3),
+      inset 0 -0.5px 1px rgba(255,255,255,0.08);
+  }
+
+  .phys-btn .btn-icon {
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    pointer-events: none;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Play button - larger, accent */
+  .phys-btn.play-btn {
+    width: 64px;
+    height: 64px;
+  }
+
+  .phys-btn.play-btn .btn-icon {
+    font-size: 20px;
+    color: rgba(255,255,255,0.85);
+  }
+
+  /* Engraved labels under buttons */
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn-label {
+    font-size: 7px;
+    color: rgba(180,160,120,0.35);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+
+  /* === VOLUME KNOB === */
+  .volume-section {
+    position: absolute;
+    bottom: 34px;
+    right: 212px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .volume-knob-outer {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 40% 35%, rgba(255,255,255,0.08) 0%, transparent 50%),
+      linear-gradient(180deg, #555 0%, #3a3a3a 50%, #444 100%);
+    box-shadow:
+      0 0 0 1.5px rgba(70,70,70,0.4),
+      0 0 0 3px rgba(20,15,8,0.6),
+      0 3px 10px rgba(0,0,0,0.6),
+      inset 0 1px 2px rgba(255,255,255,0.1),
+      inset 0 -1px 2px rgba(0,0,0,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+  }
+
+  /* Knurled edge texture */
+  .volume-knob-outer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 50%;
+    background: repeating-conic-gradient(
+      rgba(255,255,255,0.04) 0deg 3deg,
+      transparent 3deg 6deg
+    );
+  }
+
+  /* Indicator line on knob */
+  .knob-indicator {
+    width: 2px;
+    height: 12px;
+    background: rgba(255,255,255,0.4);
+    border-radius: 1px;
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    transform-origin: center 17px;
+    box-shadow: 0 0 3px rgba(255,255,255,0.1);
+  }
+
+  .volume-label {
+    font-size: 7px;
+    color: rgba(180,160,120,0.35);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
+
+  /* Small dots around knob for scale */
+  .knob-dot {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    border-radius: 50%;
+    background: rgba(180,160,120,0.2);
+  }
+
+  /* === BRAND PLATE === */
+  .brand-plate {
+    position: absolute;
+    top: 20px;
+    left: 28px;
+    z-index: 40;
+  }
+
+  .brand-text {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: rgba(200,180,140,0.3);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+  }
+
+  .brand-model {
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: rgba(200,180,140,0.15);
+    margin-top: 1px;
+  }
+
+  /* === SPEED SELECTOR === */
+  .speed-selector {
+    position: absolute;
+    top: 22px;
+    right: 30px;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .speed-option {
+    font-size: 9px;
+    font-family: 'Share Tech Mono', monospace;
+    color: rgba(180,160,120,0.2);
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 2px 4px;
+  }
+
+  .speed-option.active {
+    color: rgba(200,180,140,0.5);
+    text-shadow: 0 0 4px rgba(200,180,140,0.15);
+  }
+
+  .speed-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(180,160,120,0.1);
+    transition: all 0.3s;
+  }
+
+  .speed-dot.active {
+    background: #5adc5a;
+    box-shadow: 0 0 4px rgba(90,220,90,0.4), 0 0 8px rgba(90,220,90,0.15);
+  }
+
+  /* === SCREW DETAILS === */
+  .screw {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%,
+      #666 0%, #3a3a3a 50%, #222 100%
+    );
+    box-shadow:
+      inset 0 0.5px 1px rgba(255,255,255,0.1),
+      0 1px 2px rgba(0,0,0,0.5);
+    z-index: 40;
+  }
+
+  .screw::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(35deg);
+    width: 5px;
+    height: 0.8px;
+    background: rgba(0,0,0,0.4);
+    box-shadow: 0 0 0.5px rgba(255,255,255,0.1);
+  }
+
+  /* === ANNOTATIONS === */
+  .annotations {
+    max-width: 860px;
+    width: 100%;
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+  }
+
+  .annotations h3 { font-size: 14px; font-weight: 500; color: #ccc; margin-bottom: 8px; }
+  .annotations p { font-size: 12px; color: #666; line-height: 1.7; }
+
+  .hint-text {
+    font-size: 12px;
+    color: #444;
+    margin-top: 16px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Vinyl Spin View - Full Skeuomorphic</h1>
+<p class="page-subtitle">Physical buttons, LCD metadata, walnut cabinet, and a spinning record.</p>
+
+<div class="display-frame">
+  <div class="turntable-cabinet">
+
+    <div class="cabinet-vignette"></div>
+    <div class="cabinet-light"></div>
+
+    <!-- Brand plate -->
+    <div class="brand-plate">
+      <div class="brand-text">Nikolaus</div>
+      <div class="brand-model">KD-1500 Digital</div>
+    </div>
+
+    <!-- Speed selector -->
+    <div class="speed-selector">
+      <span class="speed-option" onclick="setSpeed(33, this)">33</span>
+      <div class="speed-dot active" id="speed-dot"></div>
+      <span class="speed-option active" id="speed-45" onclick="setSpeed(45, this)">45</span>
+    </div>
+
+    <!-- Corner screws -->
+    <div class="screw" style="top:10px; left:10px;"></div>
+    <div class="screw" style="top:10px; right:10px;"></div>
+    <div class="screw" style="bottom:10px; left:10px;"></div>
+    <div class="screw" style="bottom:10px; right:10px;"></div>
+
+    <!-- Platter well -->
+    <div class="platter-well">
+      <div class="platter-mat"></div>
+    </div>
+
+    <!-- Tonearm -->
+    <div class="tonearm-assembly playing" id="tonearm">
+      <div class="tonearm-pivot"></div>
+      <div class="tonearm-weight"></div>
+      <div class="tonearm-tube">
+        <div class="tonearm-head">
+          <div class="tonearm-stylus"></div>
+        </div>
+      </div>
+    </div>
+    <div class="arm-rest"></div>
+
+    <!-- The Record -->
+    <div class="vinyl-container">
+      <div class="vinyl-record" id="vinyl-record">
+        <div class="vinyl-surface"></div>
+        <div class="vinyl-grooves" id="vinyl-grooves"></div>
+        <div class="dead-wax"></div>
+        <div class="center-label">
+          <div class="label-art">
+            <span class="note-icon">♪</span>
+          </div>
+        </div>
+        <div class="spindle-hole"></div>
+      </div>
+      <div class="vinyl-overlay vinyl-reflection" id="overlay-reflect"></div>
+      <div class="vinyl-overlay vinyl-diffraction" id="overlay-diffract"></div>
+    </div>
+
+    <!-- LCD Display -->
+    <div class="lcd-panel">
+      <div class="lcd-housing">
+        <div class="lcd-power-led"></div>
+        <div class="lcd-screen">
+          <div class="lcd-text">
+            <div class="lcd-station">CLASSIC ROCK RADIO</div>
+            <div class="lcd-track">
+              <span class="lcd-track-inner">LANDSLIDE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LANDSLIDE</span>
+            </div>
+            <div class="lcd-artist">Fleetwood Mac</div>
+            <div class="lcd-divider"></div>
+            <div class="lcd-bottom-row">
+              <span class="lcd-time">1:12</span>
+              <div class="lcd-progress-container">
+                <div class="lcd-progress-fill"></div>
+              </div>
+              <span class="lcd-duration">3:19</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Volume Knob -->
+    <div class="volume-section">
+      <div class="volume-knob-outer">
+        <div class="knob-indicator"></div>
+      </div>
+      <span class="volume-label">Volume</span>
+    </div>
+
+    <!-- Physical Transport Buttons -->
+    <div class="transport-panel">
+      <div class="btn-group">
+        <button class="phys-btn" onclick="event.stopPropagation()">
+          <span class="btn-icon">⏮</span>
+        </button>
+        <span class="btn-label">Prev</span>
+      </div>
+      <div class="btn-group">
+        <button class="phys-btn play-btn" id="play-btn" onclick="togglePlay(event)">
+          <span class="btn-icon" id="play-icon">⏸</span>
+        </button>
+        <span class="btn-label">Play</span>
+      </div>
+      <div class="btn-group">
+        <button class="phys-btn" onclick="event.stopPropagation()">
+          <span class="btn-icon">⏭</span>
+        </button>
+        <span class="btn-label">Next</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="annotations">
+  <h3>Design Notes</h3>
+  <p>
+    Full skeuomorphic turntable. Dark walnut cabinet with wood grain texture, corner screws, and warm overhead lighting.
+    The record sits in a recessed platter well with a rubber mat texture. Machined aluminum transport buttons with bevel
+    edges, press animation, and engraved labels. Green phosphor LCD panel (Casio/VFD-inspired) with pixel grid texture,
+    scrolling track name, and segmented progress bar. Volume knob with knurled edge. Tonearm with counterweight, headshell,
+    and arm rest. Brand plate reads "Nikolaus KD-1500 Digital." Speed selector toggles 33/45 RPM.
+  </p>
+</div>
+
+<p class="hint-text">Press the physical buttons. Toggle 33/45 RPM speed.</p>
+
+<script>
+  let isPlaying = true;
+  let currentSpeed = 45;
+
+  function generateGrooves() {
+    const container = document.getElementById('vinyl-grooves');
+    const recordSize = 380;
+    const outerRadius = recordSize / 2 - 12;
+    const innerRadius = 88;
+    const numGrooves = 65;
+
+    for (let i = 0; i < numGrooves; i++) {
+      const t = i / (numGrooves - 1);
+      const radius = innerRadius + (outerRadius - innerRadius) * t;
+      const diameter = radius * 2;
+
+      const ring = document.createElement('div');
+      ring.className = 'groove-ring';
+      ring.style.width = diameter + 'px';
+      ring.style.height = diameter + 'px';
+
+      const alpha = (i % 4 === 0) ? 0.04 : (i % 3 === 0) ? 0.028 : (i % 2 === 0) ? 0.018 : 0.01;
+      ring.style.borderColor = `rgba(255,255,255,${alpha})`;
+
+      if (i === 14 || i === 30 || i === 44 || i === 55) {
+        ring.style.borderWidth = '1px';
+        ring.style.borderColor = 'rgba(255,255,255,0.05)';
+      }
+
+      container.appendChild(ring);
+    }
+  }
+
+  function togglePlay(e) {
+    e.stopPropagation();
+    isPlaying = !isPlaying;
+
+    const icon = document.getElementById('play-icon');
+    const record = document.getElementById('vinyl-record');
+    const tonearm = document.getElementById('tonearm');
+    const reflect = document.getElementById('overlay-reflect');
+    const diffract = document.getElementById('overlay-diffract');
+
+    icon.textContent = isPlaying ? '⏸' : '▶';
+
+    if (isPlaying) {
+      record.classList.remove('paused');
+      reflect.style.animationPlayState = 'running';
+      diffract.style.animationPlayState = 'running';
+      tonearm.classList.add('playing');
+    } else {
+      record.classList.add('paused');
+      reflect.style.animationPlayState = 'paused';
+      diffract.style.animationPlayState = 'paused';
+      tonearm.classList.remove('playing');
+    }
+  }
+
+  function setSpeed(rpm, el) {
+    currentSpeed = rpm;
+    const duration = rpm === 33 ? '5.45s' : '4s';
+
+    document.getElementById('vinyl-record').style.animationDuration = duration;
+    document.getElementById('overlay-reflect').style.animationDuration = duration;
+    document.getElementById('overlay-diffract').style.animationDuration = duration;
+
+    // Update active states
+    document.querySelectorAll('.speed-option').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+
+    const dot = document.getElementById('speed-dot');
+    dot.classList.toggle('active', true);
+  }
+
+  generateGrooves();
+</script>
+
+</body>
+</html>

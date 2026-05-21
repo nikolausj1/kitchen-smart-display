@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Display - Jukebox Grid Design Inspiration</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #111;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 400;
+    color: #888;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  /* Style selector tabs */
+  .style-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .style-selector button {
+    padding: 8px 18px;
+    border: 1px solid #333;
+    background: transparent;
+    color: #888;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: all 0.3s;
+    white-space: nowrap;
+  }
+
+  .style-selector button.active {
+    background: white;
+    color: #111;
+    border-color: white;
+    font-weight: 500;
+  }
+
+  .style-selector button:hover:not(.active) {
+    border-color: #666;
+    color: #ccc;
+  }
+
+  /* Display frame - 16:9 aspect like the 15.6" screen */
+  .display-frame {
+    width: 860px;
+    height: 484px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    user-select: none;
+  }
+
+  .now-playing-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    background: #1c1c1e;
+  }
+
+  /* === LEFT SIDE: Now Playing (consistent across all) === */
+  .np-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 36px 40px;
+    position: relative;
+    min-width: 0;
+  }
+
+  .np-station {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+  }
+
+  .np-track {
+    font-size: 26px;
+    font-weight: 500;
+    color: white;
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
+
+  .np-artist {
+    font-size: 17px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 24px;
+  }
+
+  /* Progress bar */
+  .np-progress {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .progress-bar-bg {
+    width: 100%;
+    height: 3px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    width: 35%;
+    height: 100%;
+    background: white;
+    border-radius: 2px;
+  }
+
+  .progress-times {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .np-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .ctrl-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .ctrl-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+  }
+
+  .ctrl-btn.play-btn {
+    width: 50px;
+    height: 50px;
+    background: white;
+    color: #1c1c1e;
+    font-size: 18px;
+  }
+
+  .ctrl-btn.play-btn:hover {
+    background: #e0e0e0;
+  }
+
+  .np-time-widget {
+    position: absolute;
+    bottom: 16px;
+    left: 40px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* === RIGHT SIDE: The Jukebox Grid Area === */
+  .jukebox-right {
+    width: 400px;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Album art face (before flip) */
+  .album-face {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    background: linear-gradient(135deg, #e8d5a3 0%, #c9a96e 50%, #d4bc84 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    z-index: 2;
+  }
+
+  .album-face .album-note {
+    font-size: 80px;
+    color: rgba(0,0,0,0.12);
+  }
+
+  .album-face .flip-hint {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    font-size: 11px;
+    color: rgba(0,0,0,0.4);
+    background: rgba(255,255,255,0.35);
+    padding: 4px 12px;
+    border-radius: 10px;
+    pointer-events: none;
+  }
+
+  .album-face.flipped {
+    opacity: 0;
+    transform: rotateY(90deg);
+    pointer-events: none;
+  }
+
+  /* Jukebox grid face (after flip) */
+  .jukebox-face {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    opacity: 0;
+    transform: rotateY(-90deg);
+    transition: opacity 0.4s ease 0.15s, transform 0.4s ease 0.15s;
+    z-index: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+  }
+
+  .jukebox-face.visible {
+    opacity: 1;
+    transform: rotateY(0);
+    z-index: 3;
+  }
+
+  .jukebox-face::-webkit-scrollbar {
+    width: 4px;
+  }
+  .jukebox-face::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .jukebox-face::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+  }
+
+  /* Back button (on jukebox face) */
+  .jukebox-back {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    transition: color 0.2s;
+  }
+
+  .jukebox-back:hover {
+    color: white;
+  }
+
+  .jukebox-back .back-arrow {
+    font-size: 16px;
+  }
+
+  /* ============================================= */
+  /* STYLE 1: Sonos-style (clean tiles, art + text) */
+  /* ============================================= */
+  .sonos-grid {
+    background: #1c1c1e;
+    padding: 0 16px 16px;
+  }
+
+  .sonos-grid .jukebox-back {
+    background: linear-gradient(180deg, #1c1c1e 60%, transparent);
+    padding-bottom: 8px;
+  }
+
+  .sonos-grid .grid-section-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    padding: 8px 4px 10px;
+  }
+
+  .sonos-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .sonos-tile {
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .sonos-tile:hover {
+    transform: scale(1.03);
+  }
+
+  .sonos-tile:active {
+    transform: scale(0.97);
+    opacity: 0.8;
+  }
+
+  .sonos-tile .tile-art {
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    position: relative;
+  }
+
+  .sonos-tile .tile-label {
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sonos-tile .tile-sublabel {
+    padding: 0 10px 10px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    margin-top: -4px;
+  }
+
+
+  /* ============================================= */
+  /* STYLE 2: Spotify-style (large art, bold text)  */
+  /* ============================================= */
+  .spotify-grid {
+    background: #121212;
+    padding: 0 16px 16px;
+  }
+
+  .spotify-grid .jukebox-back {
+    background: linear-gradient(180deg, #121212 60%, transparent);
+  }
+
+  .spotify-section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    padding: 6px 4px 12px;
+  }
+
+  .spotify-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .spotify-tile {
+    cursor: pointer;
+    transition: transform 0.15s, background 0.2s;
+    border-radius: 6px;
+    padding: 10px;
+    background: rgba(255,255,255,0.04);
+  }
+
+  .spotify-tile:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+  }
+
+  .spotify-tile:active {
+    transform: scale(0.96);
+  }
+
+  .spotify-tile .tile-art {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Play button overlay on hover */
+  .spotify-tile .tile-art::after {
+    content: '▶';
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 32px;
+    height: 32px;
+    background: #1db954;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: white;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+  }
+
+  .spotify-tile:hover .tile-art::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .spotify-tile .tile-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: white;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .spotify-tile .tile-sublabel {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 3px;
+  }
+
+
+  /* ============================================= */
+  /* STYLE 3: Smart Display (Echo Show / Nest Hub)  */
+  /* ============================================= */
+  .smart-grid {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    padding: 0 14px 14px;
+  }
+
+  .smart-grid .jukebox-back {
+    background: linear-gradient(180deg, #1a1a2e 60%, transparent);
+  }
+
+  .smart-section-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 4px 10px;
+  }
+
+  .smart-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .smart-tile {
+    cursor: pointer;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 1;
+    transition: transform 0.15s;
+  }
+
+  .smart-tile:hover {
+    transform: scale(1.04);
+  }
+
+  .smart-tile:active {
+    transform: scale(0.95);
+  }
+
+  .smart-tile .tile-art {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    position: relative;
+  }
+
+  /* Dark overlay gradient at bottom for text */
+  .smart-tile .tile-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 24px 10px 10px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  }
+
+  .smart-tile .tile-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+
+  .smart-tile .tile-sublabel {
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    margin-top: 1px;
+  }
+
+
+  /* ============================================= */
+  /* STYLE 4: Commercial Jukebox (bold, neon vibe)  */
+  /* ============================================= */
+  .jukebox-classic-grid {
+    background: linear-gradient(180deg, #0a0a0a 0%, #111 100%);
+    padding: 0 12px 12px;
+  }
+
+  .jukebox-classic-grid .jukebox-back {
+    background: linear-gradient(180deg, #0a0a0a 60%, transparent);
+  }
+
+  .jukebox-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 4px 4px 10px;
+    text-align: center;
+  }
+
+  .jukebox-classic-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .jukebox-classic-tile {
+    cursor: pointer;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.15s;
+  }
+
+  .jukebox-classic-tile:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.15);
+    box-shadow: 0 0 20px rgba(255,255,255,0.05);
+  }
+
+  .jukebox-classic-tile:active {
+    transform: scale(0.96);
+  }
+
+  .jukebox-classic-tile .tile-art-small {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .jukebox-classic-tile .tile-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .jukebox-classic-tile .tile-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .jukebox-classic-tile .tile-sublabel {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    margin-top: 2px;
+  }
+
+  /* Number badge (jukebox style) */
+  .tile-number {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.2);
+    font-variant-numeric: tabular-nums;
+  }
+
+
+  /* ============================================= */
+  /* STYLE 5: Minimal / Apple-style (art-only grid) */
+  /* ============================================= */
+  .minimal-grid {
+    background: #1c1c1e;
+    padding: 0 16px 16px;
+  }
+
+  .minimal-grid .jukebox-back {
+    background: linear-gradient(180deg, #1c1c1e 60%, transparent);
+  }
+
+  .minimal-section-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 4px 10px;
+  }
+
+  .minimal-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .minimal-tile {
+    cursor: pointer;
+    border-radius: 12px;
+    overflow: hidden;
+    aspect-ratio: 1;
+    position: relative;
+    transition: transform 0.15s;
+  }
+
+  .minimal-tile:hover {
+    transform: scale(1.04);
+  }
+
+  .minimal-tile:active {
+    transform: scale(0.95);
+  }
+
+  .minimal-tile .tile-art {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  /* Tooltip on hover */
+  .minimal-tile .tile-tooltip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 20px 10px 8px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.65));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .minimal-tile:hover .tile-tooltip {
+    opacity: 1;
+  }
+
+  .minimal-tile .tile-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: white;
+  }
+
+  /* Currently playing indicator */
+  .now-playing-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 8px;
+    height: 8px;
+    background: #1db954;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(29,185,84,0.6);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+  }
+
+
+  /* === Tile color palettes (shared) === */
+  .art-rock { background: linear-gradient(135deg, #8b5a3c, #c17f4e); }
+  .art-pop { background: linear-gradient(135deg, #d4578b, #e88aa5); }
+  .art-jazz { background: linear-gradient(135deg, #2a4a6b, #3a6b9f); }
+  .art-indie { background: linear-gradient(135deg, #6b8f5e, #8fb578); }
+  .art-hiphop { background: linear-gradient(135deg, #4a3060, #7b5ea7); }
+  .art-country { background: linear-gradient(135deg, #b8860b, #daa520); }
+  .art-electronic { background: linear-gradient(135deg, #1a3a4a, #2dd4bf); }
+  .art-chill { background: linear-gradient(135deg, #4a6741, #6b9a5e); }
+  .art-family { background: linear-gradient(135deg, #e07c4f, #f4a261); }
+  .art-decade { background: linear-gradient(135deg, #6b4c6e, #9b7a9d); }
+  .art-workout { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+  .art-dinner { background: linear-gradient(135deg, #8e6f3e, #c9a96e); }
+
+
+  /* Description panel below display */
+  .style-description {
+    max-width: 860px;
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+  }
+
+  .style-description h3 {
+    font-size: 14px;
+    font-weight: 500;
+    color: #ccc;
+    margin-bottom: 6px;
+  }
+
+  .style-description p {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.6;
+  }
+
+  .style-description .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    font-size: 10px;
+    color: #888;
+    margin-right: 4px;
+    margin-top: 8px;
+  }
+
+  .hint-text {
+    font-size: 12px;
+    color: #444;
+    margin-top: 16px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Jukebox Grid - Design Inspiration</h1>
+<p class="subtitle">Tap the album art to flip to the Jukebox. Switch styles to compare.</p>
+
+<div class="style-selector" id="style-selector">
+  <button class="active" onclick="setStyle('sonos', this)">Sonos-style</button>
+  <button onclick="setStyle('spotify', this)">Spotify-style</button>
+  <button onclick="setStyle('smart', this)">Smart Display</button>
+  <button onclick="setStyle('jukebox', this)">Commercial Jukebox</button>
+  <button onclick="setStyle('minimal', this)">Minimal / Apple</button>
+</div>
+
+<div class="display-frame">
+  <div class="now-playing-layout">
+
+    <!-- LEFT: Now Playing (consistent) -->
+    <div class="np-left">
+      <div class="np-station">Classic Rock Radio</div>
+      <div class="np-track">Landslide</div>
+      <div class="np-artist">Fleetwood Mac</div>
+      <div class="np-progress">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill"></div>
+        </div>
+        <div class="progress-times">
+          <span>1:12</span>
+          <span>3:19</span>
+        </div>
+      </div>
+      <div class="np-controls">
+        <button class="ctrl-btn">⏮</button>
+        <button class="ctrl-btn play-btn">⏸</button>
+        <button class="ctrl-btn">⏭</button>
+      </div>
+      <div class="np-time-widget">12:18 PM</div>
+    </div>
+
+    <!-- RIGHT: Album Art / Jukebox Grid -->
+    <div class="jukebox-right" id="jukebox-right">
+
+      <!-- Album art face -->
+      <div class="album-face" id="album-face" onclick="flipToJukebox()">
+        <span class="album-note">♪</span>
+        <div class="flip-hint">Tap to browse</div>
+      </div>
+
+      <!-- STYLE 1: Sonos -->
+      <div class="jukebox-face sonos-grid" id="style-sonos">
+        <div class="jukebox-back" onclick="flipToAlbum()"><span class="back-arrow">←</span> Now Playing</div>
+        <div class="grid-section-label">Favorites</div>
+        <div class="sonos-tiles">
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-rock"><div class="now-playing-badge"></div></div>
+            <div class="tile-label">Classic Rock Radio</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-chill"></div>
+            <div class="tile-label">Sunday Morning</div>
+            <div class="tile-sublabel">Playlist</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-pop"></div>
+            <div class="tile-label">Today's Hits</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-jazz"></div>
+            <div class="tile-label">Jazz Cafe</div>
+            <div class="tile-sublabel">Playlist</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-family"></div>
+            <div class="tile-label">Kids Favorites</div>
+            <div class="tile-sublabel">Playlist</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-dinner"></div>
+            <div class="tile-label">Dinner Party</div>
+            <div class="tile-sublabel">Playlist</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-indie"></div>
+            <div class="tile-label">Indie Discovery</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-decade"></div>
+            <div class="tile-label">90s Throwback</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-electronic"></div>
+            <div class="tile-label">Lo-Fi Beats</div>
+            <div class="tile-sublabel">Playlist</div>
+          </div>
+          <div class="sonos-tile" onclick="selectStation(this)">
+            <div class="tile-art art-country"></div>
+            <div class="tile-label">Country Roads</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STYLE 2: Spotify -->
+      <div class="jukebox-face spotify-grid" id="style-spotify">
+        <div class="jukebox-back" onclick="flipToAlbum()"><span class="back-arrow">←</span> Now Playing</div>
+        <div class="spotify-section-label">Your Library</div>
+        <div class="spotify-tiles">
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-rock"><div class="now-playing-badge"></div></div>
+            <div class="tile-label">Classic Rock Radio</div>
+            <div class="tile-sublabel">Station - Playing</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-chill"></div>
+            <div class="tile-label">Sunday Morning</div>
+            <div class="tile-sublabel">Playlist - 42 songs</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-pop"></div>
+            <div class="tile-label">Today's Hits</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-jazz"></div>
+            <div class="tile-label">Jazz Cafe</div>
+            <div class="tile-sublabel">Playlist - 38 songs</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-family"></div>
+            <div class="tile-label">Kids Favorites</div>
+            <div class="tile-sublabel">Playlist - 25 songs</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-dinner"></div>
+            <div class="tile-label">Dinner Party</div>
+            <div class="tile-sublabel">Playlist - 64 songs</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-indie"></div>
+            <div class="tile-label">Indie Discovery</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-decade"></div>
+            <div class="tile-label">90s Throwback</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-electronic"></div>
+            <div class="tile-label">Lo-Fi Beats</div>
+            <div class="tile-sublabel">Playlist - 50 songs</div>
+          </div>
+          <div class="spotify-tile" onclick="selectStation(this)">
+            <div class="tile-art art-country"></div>
+            <div class="tile-label">Country Roads</div>
+            <div class="tile-sublabel">Station</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STYLE 3: Smart Display -->
+      <div class="jukebox-face smart-grid" id="style-smart">
+        <div class="jukebox-back" onclick="flipToAlbum()"><span class="back-arrow">←</span> Now Playing</div>
+        <div class="smart-section-label">Your Music</div>
+        <div class="smart-tiles">
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-rock"><div class="now-playing-badge"></div></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Classic Rock</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-chill"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Sunday Morning</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-pop"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Today's Hits</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-jazz"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Jazz Cafe</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-family"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Kids Favorites</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-dinner"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Dinner Party</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-indie"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Indie Discovery</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-hiphop"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Hip Hop Mix</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-electronic"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Lo-Fi Beats</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="smart-tile" onclick="selectStation(this)">
+            <div class="tile-art art-country"></div>
+            <div class="tile-overlay">
+              <div class="tile-label">Country Roads</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STYLE 4: Commercial Jukebox -->
+      <div class="jukebox-face jukebox-classic-grid" id="style-jukebox">
+        <div class="jukebox-back" onclick="flipToAlbum()"><span class="back-arrow">←</span> Now Playing</div>
+        <div class="jukebox-section-label">Pick Your Vibe</div>
+        <div class="jukebox-classic-tiles">
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">01</div>
+            <div class="tile-art-small art-rock"><div class="now-playing-badge"></div></div>
+            <div class="tile-info">
+              <div class="tile-label">Classic Rock</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">02</div>
+            <div class="tile-art-small art-chill"></div>
+            <div class="tile-info">
+              <div class="tile-label">Sunday Morning</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">03</div>
+            <div class="tile-art-small art-pop"></div>
+            <div class="tile-info">
+              <div class="tile-label">Today's Hits</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">04</div>
+            <div class="tile-art-small art-jazz"></div>
+            <div class="tile-info">
+              <div class="tile-label">Jazz Cafe</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">05</div>
+            <div class="tile-art-small art-family"></div>
+            <div class="tile-info">
+              <div class="tile-label">Kids Favorites</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">06</div>
+            <div class="tile-art-small art-dinner"></div>
+            <div class="tile-info">
+              <div class="tile-label">Dinner Party</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">07</div>
+            <div class="tile-art-small art-indie"></div>
+            <div class="tile-info">
+              <div class="tile-label">Indie Discovery</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">08</div>
+            <div class="tile-art-small art-decade"></div>
+            <div class="tile-info">
+              <div class="tile-label">90s Throwback</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">09</div>
+            <div class="tile-art-small art-electronic"></div>
+            <div class="tile-info">
+              <div class="tile-label">Lo-Fi Beats</div>
+              <div class="tile-sublabel">Playlist</div>
+            </div>
+          </div>
+          <div class="jukebox-classic-tile" onclick="selectStation(this)">
+            <div class="tile-number">10</div>
+            <div class="tile-art-small art-country"></div>
+            <div class="tile-info">
+              <div class="tile-label">Country Roads</div>
+              <div class="tile-sublabel">Station</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STYLE 5: Minimal / Apple -->
+      <div class="jukebox-face minimal-grid" id="style-minimal">
+        <div class="jukebox-back" onclick="flipToAlbum()"><span class="back-arrow">←</span> Now Playing</div>
+        <div class="minimal-section-label">Favorites</div>
+        <div class="minimal-tiles">
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-rock"><div class="now-playing-badge"></div></div>
+            <div class="tile-tooltip"><div class="tile-label">Classic Rock</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-chill"></div>
+            <div class="tile-tooltip"><div class="tile-label">Sunday Morning</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-pop"></div>
+            <div class="tile-tooltip"><div class="tile-label">Today's Hits</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-jazz"></div>
+            <div class="tile-tooltip"><div class="tile-label">Jazz Cafe</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-family"></div>
+            <div class="tile-tooltip"><div class="tile-label">Kids Favorites</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-dinner"></div>
+            <div class="tile-tooltip"><div class="tile-label">Dinner Party</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-indie"></div>
+            <div class="tile-tooltip"><div class="tile-label">Indie Discovery</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-decade"></div>
+            <div class="tile-tooltip"><div class="tile-label">90s Throwback</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-electronic"></div>
+            <div class="tile-tooltip"><div class="tile-label">Lo-Fi Beats</div></div>
+          </div>
+          <div class="minimal-tile" onclick="selectStation(this)">
+            <div class="tile-art art-country"></div>
+            <div class="tile-tooltip"><div class="tile-label">Country Roads</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="style-description" id="style-desc">
+  <h3 id="desc-title">Sonos-style: Clean Tiles with Labels</h3>
+  <p id="desc-text">Album art dominates each tile with 1-2 lines of text below for playlist name and type. Clean white space between tiles reduces cognitive load when scanning. Consistent square shapes create visual harmony. This is the closest match to Sonos's actual library browsing experience.</p>
+  <div id="desc-tags">
+    <span class="tag">Clean</span>
+    <span class="tag">Art + Text</span>
+    <span class="tag">Scannable</span>
+    <span class="tag">Touch-friendly</span>
+  </div>
+</div>
+
+<p class="hint-text">Tap album art to flip to Jukebox. Tap a playlist to simulate selection. Click "← Now Playing" to flip back.</p>
+
+<script>
+  let currentStyle = 'sonos';
+  let isFlipped = false;
+
+  const descriptions = {
+    sonos: {
+      title: 'Sonos-style: Clean Tiles with Labels',
+      text: 'Album art dominates each tile with 1-2 lines of text below for playlist name and type. Clean white space between tiles reduces cognitive load when scanning. Consistent square shapes create visual harmony. This is the closest match to Sonos\'s actual library browsing experience.',
+      tags: ['Clean', 'Art + Text', 'Scannable', 'Touch-friendly']
+    },
+    spotify: {
+      title: 'Spotify-style: Bold Cards with Hover Play',
+      text: 'Larger cards with subtle background hover states and a green play button that slides in on hover. Bolder typography with song count metadata. The card padding creates generous touch targets. Shadow under artwork adds depth and premium feel.',
+      tags: ['Bold', 'Hover feedback', 'Play button', 'Premium feel']
+    },
+    smart: {
+      title: 'Smart Display: Full-Bleed Art with Overlay Text',
+      text: 'Inspired by Echo Show and Google Nest Hub. Art fills the entire tile with text overlaid on a gradient at the bottom. Maximizes visual impact and recognition at a distance. The rounded corners and deep blue background give it a cozy, ambient smart-home feel.',
+      tags: ['Immersive', 'Glanceable', 'Art-forward', 'Ambient']
+    },
+    jukebox: {
+      title: 'Commercial Jukebox: Compact List-Cards',
+      text: 'Inspired by TouchTunes and bar jukeboxes. Compact horizontal cards with small art + text side by side. Numbered slots give a classic jukebox feel. Fits more items visible without scrolling (10 items in the visible area). Great for a long list of favorites.',
+      tags: ['Compact', 'Numbered', 'High density', 'Classic vibe']
+    },
+    minimal: {
+      title: 'Minimal / Apple: Art-Only with Hover Labels',
+      text: 'Art tiles only, no visible text until hover/touch. Maximizes visual real estate and relies on users recognizing playlist art. Labels appear on hover via a subtle gradient overlay. The green dot indicates currently playing. Best if you have distinctive artwork for each playlist.',
+      tags: ['Minimal', 'Art-only', 'Reveal on hover', 'Elegant']
+    }
+  };
+
+  function setStyle(style, btn) {
+    // Hide current
+    const currentEl = document.getElementById('style-' + currentStyle);
+
+    currentStyle = style;
+
+    // Update buttons
+    document.querySelectorAll('.style-selector button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // If flipped, show new style immediately
+    if (isFlipped) {
+      // Hide all jukebox faces
+      document.querySelectorAll('.jukebox-face').forEach(f => {
+        f.classList.remove('visible');
+      });
+      // Show new one
+      document.getElementById('style-' + style).classList.add('visible');
+    }
+
+    // Update description
+    const desc = descriptions[style];
+    document.getElementById('desc-title').textContent = desc.title;
+    document.getElementById('desc-text').textContent = desc.text;
+    document.getElementById('desc-tags').innerHTML = desc.tags.map(t => `<span class="tag">${t}</span>`).join('');
+  }
+
+  function flipToJukebox() {
+    if (isFlipped) return;
+    isFlipped = true;
+
+    const albumFace = document.getElementById('album-face');
+    albumFace.classList.add('flipped');
+
+    const jukeboxFace = document.getElementById('style-' + currentStyle);
+    jukeboxFace.classList.add('visible');
+    jukeboxFace.scrollTop = 0;
+  }
+
+  function flipToAlbum() {
+    if (!isFlipped) return;
+    isFlipped = false;
+
+    // Hide all jukebox faces
+    document.querySelectorAll('.jukebox-face').forEach(f => {
+      f.classList.remove('visible');
+    });
+
+    const albumFace = document.getElementById('album-face');
+    albumFace.classList.remove('flipped');
+  }
+
+  function selectStation(el) {
+    // Brief visual feedback
+    el.style.outline = '2px solid rgba(255,255,255,0.6)';
+    el.style.outlineOffset = '-2px';
+
+    setTimeout(() => {
+      el.style.outline = 'none';
+      // Flip back to album art after selection
+      flipToAlbum();
+    }, 300);
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Display - Nav Bar Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #1a1a1a;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 400;
+    color: #888;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .instructions {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+
+  .view-selector {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 30px;
+  }
+
+  .view-selector button {
+    padding: 8px 20px;
+    border: 1px solid #444;
+    background: transparent;
+    color: #aaa;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    transition: all 0.3s;
+  }
+
+  .view-selector button.active {
+    background: white;
+    color: #1a1a1a;
+    border-color: white;
+  }
+
+  .view-selector button:hover:not(.active) {
+    border-color: #888;
+    color: #ccc;
+  }
+
+  /* Display frame */
+  .display-frame {
+    width: 800px;
+    height: 480px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    background: #000;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* Photo view */
+  .view-photos {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background:
+      linear-gradient(135deg, #2d5a3d 0%, #1a3a4a 30%, #3d4a2d 60%, #2a4a5a 100%);
+  }
+
+  .view-photos .photo-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, #4a7c5e 0%, #2c5364 40%, #667755 70%, #3a6073 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .view-photos .photo-placeholder::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle at 30% 40%, rgba(255,255,255,0.08) 0%, transparent 50%),
+      radial-gradient(circle at 70% 60%, rgba(255,255,255,0.05) 0%, transparent 40%);
+  }
+
+  .view-photos .photo-label {
+    font-size: 14px;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Photo metadata */
+  .photo-metadata {
+    position: absolute;
+    bottom: 60px;
+    right: 24px;
+    text-align: right;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+    pointer-events: none;
+  }
+
+  .photo-metadata.visible {
+    opacity: 1;
+  }
+
+  .photo-metadata .location {
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+
+  .photo-metadata .date {
+    font-size: 11px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.65);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    margin-top: 2px;
+  }
+
+  /* Time widget */
+  .time-widget {
+    position: absolute;
+    bottom: 20px;
+    left: 24px;
+    z-index: 10;
+  }
+
+  .time-widget .time {
+    font-size: 48px;
+    font-weight: 300;
+    color: white;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    line-height: 1;
+  }
+
+  .time-widget .date-line {
+    font-size: 13px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.7);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    margin-top: 2px;
+  }
+
+  /* Album art widget (small, on photos view) */
+  .album-widget {
+    position: absolute;
+    bottom: 20px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    z-index: 10;
+    cursor: pointer;
+    transition: transform 0.2s;
+    display: none;
+  }
+
+  .album-widget:hover {
+    transform: scale(1.08);
+  }
+
+  .album-widget.visible {
+    display: block;
+  }
+
+  .album-widget .album-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #e8d5a3 0%, #c9a96e 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .album-widget .album-placeholder::after {
+    content: '♪';
+    font-size: 20px;
+    color: rgba(0,0,0,0.3);
+  }
+
+  /* Now Playing view */
+  .view-music {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    background: #1c1c1e;
+    display: none;
+  }
+
+  .music-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 40px;
+    position: relative;
+  }
+
+  .music-left .station-name {
+    font-size: 12px;
+    color: rgba(255,255,255,0.45);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
+  }
+
+  .music-left .track-title {
+    font-size: 28px;
+    font-weight: 500;
+    color: white;
+    margin-bottom: 6px;
+  }
+
+  .music-left .artist-name {
+    font-size: 18px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 32px;
+  }
+
+  .music-controls {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .music-controls .control-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+
+  .music-controls .control-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  .music-controls .control-btn.play {
+    width: 56px;
+    height: 56px;
+    background: white;
+    color: #1c1c1e;
+    font-size: 22px;
+  }
+
+  .music-controls .control-btn.play:hover {
+    background: #e0e0e0;
+  }
+
+  .music-right {
+    width: 380px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .music-right .album-art-large {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #e8d5a3 0%, #c9a96e 50%, #d4bc84 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.3s;
+    position: relative;
+  }
+
+  .music-right .album-art-large::after {
+    content: '♪';
+    font-size: 80px;
+    color: rgba(0,0,0,0.15);
+  }
+
+  .music-right .flip-hint {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    font-size: 11px;
+    color: rgba(0,0,0,0.35);
+    background: rgba(255,255,255,0.3);
+    padding: 4px 10px;
+    border-radius: 10px;
+  }
+
+  /* Morning Helper view */
+  .view-morning {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, #1a2332 0%, #0f1923 100%);
+    display: none;
+    padding: 32px;
+  }
+
+  .morning-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+  }
+
+  .morning-time-block .morning-time {
+    font-size: 72px;
+    font-weight: 300;
+    color: white;
+    line-height: 1;
+  }
+
+  .morning-time-block .morning-date {
+    font-size: 15px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+
+  .countdown-block {
+    text-align: right;
+  }
+
+  .countdown-block .leave-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .countdown-block .leave-time {
+    font-size: 48px;
+    font-weight: 300;
+    color: #4ade80;
+    line-height: 1;
+    margin-top: 4px;
+  }
+
+  .countdown-block .leave-subtext {
+    font-size: 13px;
+    color: rgba(255,255,255,0.4);
+    margin-top: 4px;
+  }
+
+  .morning-bottom {
+    display: flex;
+    gap: 24px;
+    flex: 1;
+  }
+
+  .weather-card {
+    flex: 1;
+    background: rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .weather-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+  }
+
+  .weather-temp {
+    font-size: 28px;
+    font-weight: 300;
+    color: white;
+  }
+
+  .weather-advice {
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 8px;
+    text-align: center;
+  }
+
+  .clothing-icon {
+    font-size: 36px;
+    margin-top: 8px;
+  }
+
+  .agenda-card {
+    flex: 1.5;
+    background: rgba(255,255,255,0.06);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+  .agenda-card .agenda-title {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+
+  .agenda-item {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .agenda-item:last-child { border-bottom: none; }
+
+  .agenda-item .agenda-event-time {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+  }
+
+  .agenda-item .agenda-event-name {
+    font-size: 16px;
+    color: white;
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  /* ===== THE NAV BAR ===== */
+  .nav-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .nav-bar.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .nav-item:hover {
+    background: rgba(255,255,255,0.12);
+  }
+
+  .nav-item .nav-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .nav-item .nav-icon.photos-icon {
+    background: linear-gradient(135deg, #4a7c5e, #3a6073);
+  }
+
+  .nav-item .nav-icon.music-icon {
+    background: linear-gradient(135deg, #e8d5a3, #c9a96e);
+    color: #1c1c1e;
+  }
+
+  .nav-item .nav-icon.morning-icon {
+    background: linear-gradient(135deg, #1a2332, #2a4a5a);
+  }
+
+  .nav-item .nav-label {
+    font-size: 13px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 400;
+  }
+
+  /* Nav bar variant styles */
+  .nav-bar-v2 {
+    gap: 48px;
+  }
+
+  .nav-bar-v2 .nav-item {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 24px;
+  }
+
+  .nav-bar-v2 .nav-item .nav-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.5px;
+  }
+
+  /* Variant selector */
+  .variant-selector {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    margin-bottom: 16px;
+  }
+
+  .variant-selector button {
+    padding: 6px 16px;
+    border: 1px solid #333;
+    background: transparent;
+    color: #777;
+    border-radius: 16px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    transition: all 0.3s;
+  }
+
+  .variant-selector button.active {
+    background: #333;
+    color: #ccc;
+    border-color: #555;
+  }
+
+  .hint-text {
+    font-size: 12px;
+    color: #555;
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  .section-label {
+    font-size: 11px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 24px;
+    margin-bottom: 8px;
+  }
+
+  .music-playing-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .music-playing-toggle label {
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+  }
+
+  .music-playing-toggle input {
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>Kitchen Display - Navigation Bar Mockup</h1>
+<p class="instructions">Tap the display to summon/dismiss the nav bar. Use buttons above to switch views.</p>
+
+<div class="view-selector">
+  <button class="active" onclick="switchView('photos')">Photos</button>
+  <button onclick="switchView('music')">Now Playing</button>
+  <button onclick="switchView('morning')">Morning Helper</button>
+</div>
+
+<div class="display-frame" id="display" onclick="handleDisplayTap(event)">
+
+  <!-- Photo View -->
+  <div class="view-photos" id="view-photos">
+    <div class="photo-placeholder">
+      <span class="photo-label">Photo Slideshow</span>
+    </div>
+    <div class="photo-metadata visible" id="photo-metadata">
+      <div class="location">Universal Islands of Adventure</div>
+      <div class="date">February 17th, 2026</div>
+    </div>
+    <div class="album-widget" id="album-widget" onclick="event.stopPropagation(); switchView('music');">
+      <div class="album-placeholder"></div>
+    </div>
+  </div>
+
+  <!-- Music View -->
+  <div class="view-music" id="view-music">
+    <div class="music-left">
+      <div class="station-name">Classic Rock Radio</div>
+      <div class="track-title">Landslide</div>
+      <div class="artist-name">Fleetwood Mac</div>
+      <div class="music-controls">
+        <button class="control-btn">⏮</button>
+        <button class="control-btn play">⏸</button>
+        <button class="control-btn">⏭</button>
+      </div>
+    </div>
+    <div class="music-right">
+      <div class="album-art-large" onclick="event.stopPropagation();">
+        <div class="flip-hint">Tap to browse</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Morning Helper View -->
+  <div class="view-morning" id="view-morning">
+    <div class="morning-top">
+      <div class="morning-time-block">
+        <div class="morning-time">7:18</div>
+        <div class="morning-date">Wednesday, March 26</div>
+      </div>
+      <div class="countdown-block">
+        <div class="leave-label">Leave in</div>
+        <div class="leave-time">27m</div>
+        <div class="leave-subtext">Depart at 7:45 AM</div>
+      </div>
+    </div>
+    <div class="morning-bottom">
+      <div class="weather-card">
+        <div class="weather-icon">⛅</div>
+        <div class="weather-temp">52°F</div>
+        <div class="weather-advice">Light jacket</div>
+        <div class="clothing-icon">🧥</div>
+      </div>
+      <div class="agenda-card">
+        <div class="agenda-title">Today</div>
+        <div class="agenda-item">
+          <div class="agenda-event-time">8:00 AM</div>
+          <div class="agenda-event-name">School starts</div>
+        </div>
+        <div class="agenda-item">
+          <div class="agenda-event-time">3:30 PM</div>
+          <div class="agenda-event-name">Soccer practice</div>
+        </div>
+        <div class="agenda-item">
+          <div class="agenda-event-time">6:00 PM</div>
+          <div class="agenda-event-name">Family dinner</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time widget (shown on photos and music) -->
+  <div class="time-widget" id="time-widget">
+    <div class="time">12:18</div>
+    <div class="date-line" id="time-date-line"></div>
+  </div>
+
+  <!-- THE NAV BAR -->
+  <div class="nav-bar" id="nav-bar">
+    <!-- Items populated dynamically based on current view -->
+  </div>
+</div>
+
+<div class="music-playing-toggle">
+  <input type="checkbox" id="music-toggle" onchange="toggleMusicPlaying()" checked>
+  <label for="music-toggle">Simulate music playing (shows album widget on Photos view)</label>
+</div>
+
+<p class="section-label">Nav bar style</p>
+<div class="variant-selector">
+  <button class="active" onclick="setVariant('horizontal', this)">Horizontal with labels</button>
+  <button onclick="setVariant('vertical', this)">Icon-focused</button>
+  <button onclick="setVariant('minimal', this)">Minimal icons only</button>
+</div>
+
+<p class="hint-text" id="hint-text">Tap the display to toggle the nav bar</p>
+
+<script>
+  let currentView = 'photos';
+  let navVisible = false;
+  let navVariant = 'horizontal';
+  let musicPlaying = true;
+  let fadeTimeout = null;
+
+  const navItems = {
+    photos: { icon: '🖼', label: 'Photos', iconClass: 'photos-icon' },
+    music: { icon: '♪', label: 'Music', iconClass: 'music-icon' },
+    morning: { icon: '☀', label: 'Morning', iconClass: 'morning-icon' }
+  };
+
+  function switchView(view) {
+    currentView = view;
+    navVisible = false;
+
+    document.getElementById('view-photos').style.display = view === 'photos' ? 'block' : 'none';
+    document.getElementById('view-music').style.display = view === 'music' ? 'flex' : 'none';
+    document.getElementById('view-morning').style.display = view === 'morning' ? 'flex' : 'none';
+
+    // Time widget: show on photos and music, hide on morning (it has its own)
+    document.getElementById('time-widget').style.display = view === 'morning' ? 'none' : 'block';
+
+    // Update nav bar
+    document.getElementById('nav-bar').classList.remove('visible');
+
+    // Update view selector buttons
+    document.querySelectorAll('.view-selector button').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent.toLowerCase().includes(view === 'morning' ? 'morning' : view));
+    });
+
+    // Update album widget visibility
+    updateAlbumWidget();
+
+    if (fadeTimeout) clearTimeout(fadeTimeout);
+  }
+
+  function handleDisplayTap(event) {
+    navVisible = !navVisible;
+    const navBar = document.getElementById('nav-bar');
+
+    if (navVisible) {
+      renderNavItems();
+      navBar.classList.add('visible');
+
+      if (fadeTimeout) clearTimeout(fadeTimeout);
+      fadeTimeout = setTimeout(() => {
+        navBar.classList.remove('visible');
+        navVisible = false;
+      }, 4000);
+    } else {
+      navBar.classList.remove('visible');
+      if (fadeTimeout) clearTimeout(fadeTimeout);
+    }
+  }
+
+  function renderNavItems() {
+    const navBar = document.getElementById('nav-bar');
+    navBar.className = 'nav-bar visible';
+    if (navVariant === 'vertical') navBar.classList.add('nav-bar-v2');
+
+    let html = '';
+    const views = ['photos', 'music', 'morning'];
+
+    views.forEach(view => {
+      if (view === currentView) return;
+      const item = navItems[view];
+
+      if (navVariant === 'minimal') {
+        html += `<div class="nav-item" onclick="event.stopPropagation(); switchView('${view}');">
+          <div class="nav-icon ${item.iconClass}">${item.icon}</div>
+        </div>`;
+      } else {
+        html += `<div class="nav-item" onclick="event.stopPropagation(); switchView('${view}');">
+          <div class="nav-icon ${item.iconClass}">${item.icon}</div>
+          <span class="nav-label">${item.label}</span>
+        </div>`;
+      }
+    });
+
+    navBar.innerHTML = html;
+  }
+
+  function setVariant(variant, btn) {
+    navVariant = variant;
+    document.querySelectorAll('.variant-selector button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    if (navVisible) {
+      renderNavItems();
+    }
+  }
+
+  function toggleMusicPlaying() {
+    musicPlaying = document.getElementById('music-toggle').checked;
+    updateAlbumWidget();
+  }
+
+  function updateAlbumWidget() {
+    const widget = document.getElementById('album-widget');
+    widget.classList.toggle('visible', musicPlaying && currentView === 'photos');
+  }
+
+  // Initialize
+  updateAlbumWidget();
+</script>
+
+</body>
+</html>
