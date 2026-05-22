@@ -1,0 +1,33 @@
+#!/bin/sh
+# Kitchen Smart Display - labwc kiosk autostart
+# Deployed to ~/.config/labwc/autostart on the Pi.
+#
+# Having a user autostart overrides the default Pi OS desktop autostart, so
+# there is no panel, no desktop file manager, and no swayidle. With swayidle
+# absent the display never blanks, which is the behaviour we want for a kiosk.
+
+# Serve the built kiosk app over local HTTP. The app only ever loads "/", so
+# the lack of SPA route fallback in http.server does not matter.
+python3 -m http.server 8080 --directory /home/pi/kiosk --bind 127.0.0.1 &
+
+# Wait until the server accepts connections before launching the browser.
+until curl -s -o /dev/null http://127.0.0.1:8080/; do
+  sleep 0.5
+done
+
+# Launch Chromium in kiosk mode. Relaunch if it ever exits so the display
+# recovers on its own from a crash or an accidental close.
+while true; do
+  chromium \
+    --ozone-platform=wayland \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=Translate \
+    --no-first-run \
+    --check-for-update-interval=31536000 \
+    --password-store=basic \
+    http://localhost:8080/
+  sleep 2
+done
