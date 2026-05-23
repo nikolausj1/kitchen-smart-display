@@ -11,6 +11,7 @@
     "deploy": "vite build && rsync -av --delete dist/ pi@smartdisplay.local:/home/pi/kiosk/ && ssh pi@smartdisplay.local 'pkill -f chromium || true'"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

@@ -1,21 +1,24 @@
 import { useState } from 'react'
 import './TimerPanel.css'
 
-// --- Inline icons ----------------------------------------------------------
+// --- Icons ----------------------------------------------------------------
+// Car and X close are sourced from the Figma artwork (in /public/icons/ui/).
+// Shoe is an inline approximation - no Figma walking variant was provided yet.
 
-function CarIcon() {
+const CAR_SRC = '/icons/ui/car.svg'
+
+function CloseIcon() {
+  // Inline so it inherits currentColor and works on both colored and dark
+  // panels. The Figma close.svg bakes black/0.3 which is invisible on dark.
   return (
-    <svg viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
       <path
-        d="M4 14l1.6-4.8A2 2 0 0 1 7.5 8h9a2 2 0 0 1 1.9 1.2L20 14M3 14h18v4H3zM6 18v1.5M18 18v1.5"
+        d="M6 6l12 12M18 6L6 18"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="2.4"
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      <circle cx="7.5" cy="16" r="1.2" fill="currentColor" />
-      <circle cx="16.5" cy="16" r="1.2" fill="currentColor" />
     </svg>
   )
 }
@@ -34,21 +37,7 @@ function ShoeIcon() {
   )
 }
 
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
-      <path
-        d="M6 6l12 12M18 6L6 18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-// --- Active timer ---------------------------------------------------------
+// --- Active timer --------------------------------------------------------
 
 function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTravel }) {
   const expired = minutesLeft <= 0
@@ -88,7 +77,7 @@ function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTr
         >
           {travelMode === 'driving' ? (
             <>
-              DRIVING <CarIcon />
+              DRIVING <img src={CAR_SRC} alt="" aria-hidden="true" />
             </>
           ) : (
             <>
@@ -101,7 +90,7 @@ function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTr
   )
 }
 
-// --- No-timer state -------------------------------------------------------
+// --- No-timer state ------------------------------------------------------
 
 function NoTimer({ onSet }) {
   return (
@@ -119,19 +108,13 @@ function NoTimer({ onSet }) {
   )
 }
 
-// --- Set-timer picker -----------------------------------------------------
-//
-// Phase 1 picker is tap-driven rather than a true inertial scroll wheel.
-// Each column shows the value above, the selected value (bold/white), and
-// the value below. Tap above or below to step the value. Visually matches
-// the Figma reference; a touch scroll wheel can replace this later.
+// --- Set-timer picker ----------------------------------------------------
 
 function mod(n, m) {
   return ((n % m) + m) % m
 }
 
 function defaultPickerStart() {
-  // Round up to the next 5 minutes so the picker starts at a useful value.
   const now = new Date()
   const minutes = now.getMinutes()
   const rounded = Math.ceil((minutes + 1) / 5) * 5
@@ -152,10 +135,10 @@ function PickerColumn({ label, above, current, below, onUp, onDown, isAmPm = fal
     return String(v)
   }
   return (
-    <div className="picker-col">
+    <div className={`picker-col ${isAmPm ? 'picker-col--ampm' : ''}`}>
       <button
         type="button"
-        className="picker-cell picker-cell--faded"
+        className="picker-cell picker-cell--faded picker-cell--above"
         onClick={onUp}
         aria-label={`${label} up`}
       >
@@ -164,7 +147,7 @@ function PickerColumn({ label, above, current, below, onUp, onDown, isAmPm = fal
       <div className="picker-cell picker-cell--selected">{formatVal(current)}</div>
       <button
         type="button"
-        className="picker-cell picker-cell--faded"
+        className="picker-cell picker-cell--faded picker-cell--below"
         onClick={onDown}
         aria-label={`${label} down`}
       >
@@ -186,6 +169,8 @@ function SetTimer({ onConfirm, onCancel }) {
 
   return (
     <div className="timer timer--idle">
+      {/* X close on set-timer is a UX addition (not in Figma) so the user
+        * can back out without committing. */}
       <button
         type="button"
         className="timer__close"
@@ -235,7 +220,7 @@ function SetTimer({ onConfirm, onCancel }) {
   )
 }
 
-// --- Root dispatcher ------------------------------------------------------
+// --- Root dispatcher ----------------------------------------------------
 
 export default function TimerPanel(props) {
   const { mode, minutesLeft, band, kind, travelMode, actions } = props

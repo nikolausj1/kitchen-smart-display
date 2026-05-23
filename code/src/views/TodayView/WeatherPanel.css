@@ -1,3 +1,10 @@
+/* WeatherPanel - Figma reference:
+ *   Slot label "8AM"  Inter Regular (400), 96 px on canvas = 1.80 vw
+ *   Slot temp  "47°"  Inter Bold (700),    124 px = 2.33 vw
+ *   Icon              ~324 px wide = ~6 vw on a square cell
+ *   5 evenly-spaced columns within the panel
+ */
+
 .weather {
   justify-content: center;
 }
@@ -6,30 +13,43 @@
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 1vw;
 }
 
 .weather__cell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 1.5vh;
 }
 
 .weather__label {
-  font-size: clamp(1rem, 1.4vw, 1.6rem);
-  font-weight: 500;
-  color: #e5e5e5;
-  letter-spacing: 0.04em;
+  font-size: 1.8vw;
+  font-weight: 400;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0.04vw 0.04vw rgba(0, 0, 0, 0.25);
 }
 
 .weather__icon {
-  width: clamp(64px, 6vw, 110px);
-  height: clamp(64px, 6vw, 110px);
+  width: 6.5vw;
+  height: 6.5vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.weather-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .weather__temp {
-  font-size: clamp(1.4rem, 2vw, 2.4rem);
+  font-size: 2.33vw;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow: 0 0.04vw 0.04vw rgba(0, 0, 0, 0.25);
 }

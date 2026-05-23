@@ -1,3 +1,10 @@
+/* TimeDatePanel - Figma reference:
+ *   "7:16"           Inter Semi-Bold (600), 674.32 px on a 5320-wide canvas
+ *                    = 12.68 vw at 1920 viewport, white, subtle shadow
+ *   "MON, APRIL 13"  Inter Regular (400), 173.62 px = 3.26 vw, white
+ * Both are roughly centered horizontally within the panel.
+ */
+
 .time-date {
   justify-content: center;
   align-items: center;
@@ -8,17 +15,20 @@
 }
 
 .time-date__time {
-  font-size: clamp(8rem, 18vw, 18rem);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 0.95;
+  font-size: 12.68vw;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: #ffffff;
+  text-shadow: 0 0.27vw 0.27vw rgba(0, 0, 0, 0.25);
 }
 
 .time-date__date {
-  margin-top: 1.5rem;
-  font-size: clamp(1.5rem, 2.6vw, 3rem);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  color: #cfcfcf;
+  margin-top: 1.5vh;
+  font-size: 3.26vw;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  text-shadow: 0 0.07vw 0.07vw rgba(0, 0, 0, 0.25);
 }
