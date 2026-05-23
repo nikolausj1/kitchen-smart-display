@@ -1,0 +1,35 @@
+.weather {
+  justify-content: center;
+}
+
+.weather__row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.weather__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.weather__label {
+  font-size: clamp(1rem, 1.4vw, 1.6rem);
+  font-weight: 500;
+  color: #e5e5e5;
+  letter-spacing: 0.04em;
+}
+
+.weather__icon {
+  width: clamp(64px, 6vw, 110px);
+  height: clamp(64px, 6vw, 110px);
+}
+
+.weather__temp {
+  font-size: clamp(1.4rem, 2vw, 2.4rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
