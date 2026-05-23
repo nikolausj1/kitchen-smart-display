@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SCHOOL, TIMER_THRESHOLDS } from '../config.js'
+import { useView } from '../shell/ViewContext.jsx'
 
 // Timer state machine for the Today view countdown panel.
 //
@@ -17,11 +18,14 @@ import { SCHOOL, TIMER_THRESHOLDS } from '../config.js'
 // If the user cancels (X) the default timer, the day is marked dismissed and
 // the timer will not re-arm until tomorrow.
 //
-// Expiry handoff to Photo Slideshow is deferred (Photos view does not exist
-// yet) - for Phase 1, an expired timer auto-resets to no-timer after 15
-// minutes so the screen does not get stuck on LEAVE NOW indefinitely.
+// View handoffs (spec):
+//   - Active timer + 15 min past expiry  -> navigate to Photo Slideshow
+//   - No-timer state + 15 min no interaction -> navigate to Photo Slideshow
+// User interactions inside the timer (cancel, toggle, picker) reset the
+// no-timer idle clock by virtue of changing mode.
 
 const POST_EXPIRY_LIFETIME_MS = 15 * 60 * 1000
+const NO_TIMER_IDLE_MS = 15 * 60 * 1000
 
 function isoDate(date) {
   const y = date.getFullYear()
@@ -50,25 +54,29 @@ function colourBandForMinutes(minutesLeft) {
 }
 
 export default function useTimer() {
+  const { setView } = useView()
+
   // Persistent state across renders.
   const [state, setState] = useState({
     mode: 'no-timer',
     kind: null, // 'default' | 'manual' | null
     target: null, // Date | null
-    travelMode: 'driving', // tracked even outside default timer for next morning
-    dismissedDate: null, // ISO date string the user cancelled today's default
-    autoArmedDate: null, // ISO date we already auto-armed today
+    travelMode: 'driving',
+    dismissedDate: null,
+    autoArmedDate: null,
+    // Used to drive the 15-min idle handoff while in 'no-timer'.
+    noTimerEnteredAt: Date.now(),
   })
 
-  // Tick - used to recompute minutesLeft and drive the auto-arm check.
+  // Tick once a second so derived state (minutesLeft, expired flag, idle
+  // check) updates without us having to wire individual setIntervals.
   const [, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000)
     return () => clearInterval(id)
   }, [])
 
-  // Auto-arm + post-expiry handoff. Runs every tick (cheap).
-  // Use a ref to read the latest state without re-creating the effect.
+  // Auto-arm + view handoffs. Runs every tick.
   const stateRef = useRef(state)
   stateRef.current = state
 
@@ -106,8 +114,7 @@ export default function useTimer() {
       }
     }
 
-    // Post-expiry handoff for active timers: 15 min after target, fall back to
-    // no-timer (Photo Slideshow will replace this once it exists).
+    // Post-expiry handoff: 15 min past target -> Photo Slideshow.
     if (s.mode === 'active' && s.target) {
       const past = now.getTime() - s.target.getTime()
       if (past > POST_EXPIRY_LIFETIME_MS) {
@@ -116,14 +123,26 @@ export default function useTimer() {
           mode: 'no-timer',
           kind: null,
           target: null,
-          // Default timers count as "dismissed" so we do not immediately re-arm.
           dismissedDate: prev.kind === 'default' ? today : prev.dismissedDate,
+          noTimerEnteredAt: Date.now(),
         }))
+        setView('photos')
+        return
+      }
+    }
+
+    // No-timer idle handoff: 15 min in no-timer state -> Photo Slideshow.
+    if (s.mode === 'no-timer' && s.noTimerEnteredAt) {
+      const idle = now.getTime() - s.noTimerEnteredAt
+      if (idle > NO_TIMER_IDLE_MS) {
+        setView('photos')
       }
     }
   })
 
   // --- Actions --------------------------------------------------------------
+  // Any state-changing action resets noTimerEnteredAt when leaving no-timer,
+  // and stamps it fresh when entering no-timer.
 
   const cancel = useCallback(() => {
     setState((prev) => ({
@@ -131,8 +150,8 @@ export default function useTimer() {
       mode: 'no-timer',
       kind: null,
       target: null,
-      // If they cancel a default timer, mark today dismissed.
       dismissedDate: prev.kind === 'default' ? isoDate(new Date()) : prev.dismissedDate,
+      noTimerEnteredAt: Date.now(),
     }))
   }, [])
 
@@ -141,7 +160,11 @@ export default function useTimer() {
   }, [])
 
   const exitSetTimer = useCallback(() => {
-    setState((prev) => ({ ...prev, mode: 'no-timer' }))
+    setState((prev) => ({
+      ...prev,
+      mode: 'no-timer',
+      noTimerEnteredAt: Date.now(),
+    }))
   }, [])
 
   const confirmManualTimer = useCallback((hour12, minute, ampm) => {
@@ -150,7 +173,6 @@ export default function useTimer() {
     const now = new Date()
     const target = new Date(now)
     target.setHours(hour24, minute, 0, 0)
-    // If selected time is in the past, treat it as tomorrow's same time.
     if (target.getTime() <= now.getTime()) {
       target.setDate(target.getDate() + 1)
     }
@@ -165,7 +187,6 @@ export default function useTimer() {
   const toggleTravel = useCallback(() => {
     setState((prev) => {
       const next = prev.travelMode === 'driving' ? 'walking' : 'driving'
-      // If the default timer is active, also recompute its target.
       if (prev.mode === 'active' && prev.kind === 'default') {
         return {
           ...prev,
@@ -184,7 +205,6 @@ export default function useTimer() {
   let band = null
   if (state.mode === 'active' && state.target) {
     const msLeft = state.target.getTime() - now.getTime()
-    // Ceil so "1 second left" still reads as "1 MIN", not "0 MIN".
     minutesLeft = Math.max(0, Math.ceil(msLeft / 60_000))
     band = colourBandForMinutes(minutesLeft)
   }

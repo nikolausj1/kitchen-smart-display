@@ -1,0 +1,75 @@
+/* MenuPill - frosted-glass navigation pill summoned by dead-area tap.
+ *
+ * Figma reference (195:158): rounded pill, white-tinted glass effect over
+ * a dimmed/blurred backdrop. Four icons + labels arranged horizontally.
+ */
+
+.menu-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  animation: menu-fade-in 200ms ease-out;
+}
+
+@keyframes menu-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.menu-pill {
+  display: flex;
+  align-items: center;
+  gap: 2.5vw;
+  padding: 2.5vh 3.5vw;
+  background: rgba(255, 255, 255, 0.24);
+  border: 0.5vh solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+}
+
+.menu-pill__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8vh;
+  background: transparent;
+  border: 0;
+  padding: 0.5vh 1.5vw;
+  color: #ffffff;
+  cursor: pointer;
+  font-family: inherit;
+  min-width: 6vw;
+}
+
+.menu-pill__item--active .menu-pill__icon {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.menu-pill__item--active .menu-pill__label {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.menu-pill__icon {
+  width: 3.2vw;
+  height: 3.2vw;
+  object-fit: contain;
+  opacity: 0.95;
+  filter: drop-shadow(0 0.2vh 0.4vh rgba(0, 0, 0, 0.35));
+}
+
+.menu-pill__label {
+  font-size: 1.6vw;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.45);
+}

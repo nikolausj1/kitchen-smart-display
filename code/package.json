@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && rsync -av --delete dist/ pi@smartdisplay.local:/home/pi/kiosk/ && ssh pi@smartdisplay.local 'rm -rf /home/pi/.cache/chromium /home/pi/.config/chromium/Default/Cache /home/pi/.config/chromium/Default/\"Code Cache\"; pkill -f chromium || true'"
+    "deploy": "vite build && rsync -av --delete dist/ pi@smartdisplay.local:/home/pi/kiosk/ && ssh pi@smartdisplay.local 'rm -rf /home/pi/.cache/chromium /home/pi/.config/chromium/Default/Cache; pkill -f chromium || true'"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

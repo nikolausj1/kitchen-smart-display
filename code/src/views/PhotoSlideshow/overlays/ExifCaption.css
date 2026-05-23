@@ -1,0 +1,47 @@
+/* ExifCaption - bottom-center caption pill on the Photo Slideshow.
+ *
+ * Figma reference (photo-timeMusicExif): subtle dark pill with 3 lines of
+ * white text (location / date / album), centered horizontally just above
+ * the bottom edge. Pure passive overlay; fades on its own after a few
+ * seconds without user interaction.
+ */
+
+.exif-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 4vh;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.8s ease-out;
+  pointer-events: none;
+  z-index: 9;
+}
+
+.exif-caption--visible {
+  opacity: 1;
+}
+
+.exif-caption__inner {
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 14px;
+  padding: 1.2vh 2vw;
+  text-align: center;
+  color: #ffffff;
+  text-shadow: 0 0.1vw 0.2vw rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.exif-caption__line {
+  font-size: 1.05vw;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.exif-caption__line--primary {
+  font-size: 1.25vw;
+  font-weight: 600;
+}
+
+.exif-caption__line--muted {
+  opacity: 0.75;
+}

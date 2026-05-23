@@ -1,0 +1,107 @@
+/* PhotoSlideshow - fullscreen slideshow with crossfade-in transitions.
+ *
+ * Layout: a black canvas filling the viewport. The photo layer is a child
+ * that fades in on every photo change (via React key + CSS animation).
+ * Overlays (time, exif, album art) sit on top via fixed positioning.
+ */
+
+.photo-slideshow {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.photo-slideshow__layer {
+  position: absolute;
+  inset: 0;
+  animation: photo-fade-in 700ms ease-out;
+}
+
+@keyframes photo-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.photo-slideshow__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 2vw;
+}
+
+/* --- Photo stage variants ------------------------------------------------ */
+
+.photo-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background: #000;
+}
+
+.photo-stage--landscape {
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-stage--landscape .photo-stage__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-stage--pair {
+  flex-direction: row;
+}
+
+.photo-stage__half {
+  flex: 1 1 50%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.photo-stage__half .photo-stage__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-stage--solo {
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+}
+
+/* Blurred enlarged background fill for solo portrait. */
+.photo-stage__blur-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(40px) saturate(1.1);
+  transform: scale(1.1);
+  z-index: 0;
+}
+
+.photo-stage__blur-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+
+.photo-stage__solo-img {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
