@@ -47,7 +47,8 @@ export default function TimeWidget() {
     return () => clearInterval(id)
   }, [])
 
-  function cycle() {
+  function cycle(e) {
+    e.stopPropagation()
     setMode((m) => MODES[(MODES.indexOf(m) + 1) % MODES.length])
   }
 

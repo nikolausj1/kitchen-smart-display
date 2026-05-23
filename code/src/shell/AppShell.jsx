@@ -1,23 +1,18 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import TodayView from '../views/TodayView/TodayView.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
 import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
+import { DebugHud, logEvent } from './DebugLog.jsx'
 
 // AppShell - top-level chrome that owns view routing and menu pill state.
 //
 // Dead-area tap rule per spec: tapping the background of any view summons
-// the menu pill. Tapping an interactive element (button, toggle, anything
-// with data-interactive="true" anywhere up its DOM tree) does NOT.
-//
-// We implement this with a single onClick on the shell that walks up from
-// event.target looking for [data-interactive="true"]; if it finds nothing
-// before reaching the shell, the click counts as dead-area.
+// the menu pill. Tapping an interactive element does NOT. Interactive =
+// <button>, <a>, <input>, <select>, <textarea>, anything with role=listbox,
+// or anything with data-interactive="true".
 
-// Treat as interactive: <button>, <a>, <input>, anything with role=listbox
-// (our scroll-wheel viewport), and anything explicitly marked with
-// data-interactive="true". Everything else is dead-area.
 function isInsideInteractive(target, stopNode) {
   let el = target
   while (el && el !== stopNode) {
@@ -42,16 +37,9 @@ function CurrentView() {
     case 'photos':
       return <PhotoSlideshow />
     case 'music':
-      return (
-        <ComingSoonView
-          title="Now Playing"
-          subtitle="Sonos integration coming next"
-        />
-      )
+      return <ComingSoonView title="Now Playing" subtitle="Sonos integration coming next" />
     case 'settings':
-      return (
-        <ComingSoonView title="Settings" subtitle="Settings page coming later" />
-      )
+      return <ComingSoonView title="Settings" subtitle="Settings page coming later" />
     default:
       return <TodayView />
   }
@@ -59,21 +47,29 @@ function CurrentView() {
 
 function Shell() {
   const [menuOpen, setMenuOpen] = useState(false)
-  const shellRef = useCallback((node) => {
-    // No-op now; reserved if we ever need direct DOM access.
-    void node
-  }, [])
 
   function onShellClick(e) {
-    if (menuOpen) return // clicks while menu open are handled by the overlay
-    if (isInsideInteractive(e.target, e.currentTarget)) return
+    const tag = e.target.tagName
+    const cls = (e.target.className && typeof e.target.className === 'string')
+      ? e.target.className.split(/\s+/).slice(0, 2).join('.')
+      : ''
+    const interactive = isInsideInteractive(e.target, e.currentTarget)
+    logEvent(`shell click: ${tag}.${cls} interactive=${interactive} menuOpen=${menuOpen}`)
+    if (menuOpen) return
+    if (interactive) return
     setMenuOpen(true)
   }
 
+  function closeMenu() {
+    logEvent('menu close')
+    setMenuOpen(false)
+  }
+
   return (
-    <div className="app-shell" onClick={onShellClick} ref={shellRef}>
+    <div className="app-shell" onClick={onShellClick}>
       <CurrentView />
-      <MenuPill open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <MenuPill open={menuOpen} onClose={closeMenu} />
+      <DebugHud />
     </div>
   )
 }

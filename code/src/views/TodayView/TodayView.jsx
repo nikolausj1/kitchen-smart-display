@@ -85,7 +85,10 @@ export default function TodayView() {
       <button
         type="button"
         className="dev-cycler"
-        onClick={cycleDevState}
+        onClick={(e) => {
+          e.stopPropagation()
+          cycleDevState()
+        }}
         title="Dev only: cycle timer state overrides"
       >
         state: {devState}

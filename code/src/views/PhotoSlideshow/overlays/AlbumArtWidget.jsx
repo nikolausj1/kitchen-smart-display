@@ -16,7 +16,10 @@ export default function AlbumArtWidget() {
     <button
       type="button"
       className="album-art-widget"
-      onClick={() => setView('music')}
+      onClick={(e) => {
+        e.stopPropagation()
+        setView('music')
+      }}
       data-interactive="true"
       aria-label={`Now playing: ${track.title} by ${track.artist}`}
     >

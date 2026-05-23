@@ -1,0 +1,32 @@
+.debug-hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #6cf;
+  font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  padding: 8px 12px;
+  border: 1px solid #1a4;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 60vw;
+  overflow: hidden;
+}
+
+.debug-hud__title {
+  color: #1a4;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.debug-hud__row {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.debug-hud__row--muted {
+  color: #555;
+}

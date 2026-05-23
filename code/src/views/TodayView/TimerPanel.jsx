@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import ScrollPickerColumn from './ScrollPickerColumn.jsx'
+import { logEvent } from '../../shell/DebugLog.jsx'
 import './TimerPanel.css'
+
+// Wrap an action so the click does not bubble to the AppShell dead-area
+// handler, and so we get a debug log entry for each invocation.
+function tap(label, fn) {
+  return (e) => {
+    e.stopPropagation()
+    logEvent(`tap: ${label}`)
+    fn?.(e)
+  }
+}
 
 // --- Icons ----------------------------------------------------------------
 // Car, shoe, and X close all sourced from the Figma artwork in
@@ -40,7 +51,7 @@ function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTr
         type="button"
         className="timer__close"
         aria-label="Cancel timer"
-        onClick={onCancel}
+        onClick={tap('cancel-timer', onCancel)}
       >
         <CloseIcon />
       </button>
@@ -64,7 +75,7 @@ function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTr
         <button
           type="button"
           className="timer__travel"
-          onClick={onToggleTravel}
+          onClick={tap('toggle-travel', onToggleTravel)}
         >
           {travelMode === 'driving' ? (
             <>
@@ -92,7 +103,7 @@ function NoTimer({ onSet }) {
           <div>TIMER</div>
         </div>
       </div>
-      <button type="button" className="timer__set" onClick={onSet}>
+      <button type="button" className="timer__set" onClick={tap('SET', onSet)}>
         SET
       </button>
     </div>
@@ -130,7 +141,7 @@ function SetTimer({ onConfirm, onCancel }) {
         type="button"
         className="timer__close"
         aria-label="Cancel set timer"
-        onClick={onCancel}
+        onClick={tap('cancel-set-timer', onCancel)}
       >
         <CloseIcon />
       </button>
@@ -162,7 +173,9 @@ function SetTimer({ onConfirm, onCancel }) {
       <button
         type="button"
         className="timer__set"
-        onClick={() => onConfirm(draft.hour12, draft.minute, draft.ampm)}
+        onClick={tap('DONE', () =>
+          onConfirm(draft.hour12, draft.minute, draft.ampm)
+        )}
       >
         DONE
       </button>
