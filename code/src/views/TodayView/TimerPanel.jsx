@@ -3,10 +3,13 @@ import ScrollPickerColumn from './ScrollPickerColumn.jsx'
 import './TimerPanel.css'
 
 // --- Icons ----------------------------------------------------------------
-// Car and X close are sourced from the Figma artwork (in /public/icons/ui/).
-// Shoe is an inline approximation - no Figma walking variant was provided yet.
+// Car, shoe, and X close all sourced from the Figma artwork in
+// /public/icons/ui/. The X is rendered inline rather than via <img> because
+// the Figma close.svg bakes black/0.3 opacity, which is invisible on the
+// dark set-timer panel; the inline version uses currentColor instead.
 
 const CAR_SRC = '/icons/ui/car.svg'
+const SHOE_SRC = '/icons/ui/shoe.svg'
 
 function CloseIcon() {
   // Inline so it inherits currentColor and works on both colored and dark
@@ -24,19 +27,6 @@ function CloseIcon() {
   )
 }
 
-function ShoeIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true">
-      <path
-        d="M3 16c0-2 1-3 3-4l3-1 2-4 3 1 1 2 5 2c1.5.5 2 1.5 2 3v2H3v-1z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 // --- Active timer --------------------------------------------------------
 
@@ -82,7 +72,7 @@ function ActiveTimer({ minutesLeft, band, kind, travelMode, onCancel, onToggleTr
             </>
           ) : (
             <>
-              Walking <ShoeIcon />
+              Walking <img src={SHOE_SRC} alt="" aria-hidden="true" />
             </>
           )}
         </button>

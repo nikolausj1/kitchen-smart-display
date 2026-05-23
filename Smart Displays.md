@@ -50,7 +50,11 @@ music-StationPicker https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects
 
 nav menu https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=195-158&m=dev
 
+photo-time https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=1-138&m=dev
 
+photo-timeMusic https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=83-454&m=dev
+
+Photo-timeMusicExif https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=1-3&m=dev
 
 ---
 
