@@ -25,7 +25,9 @@
 }
 
 .time-date__date {
-  margin-top: 1.5vh;
+  /* Figma: time bottom ~y=1153, date top ~y=1295 -> ~142 canvas px gap,
+   * which scales to ~45 px at 1920 viewport = ~4 vh. */
+  margin-top: 4vh;
   font-size: 3.26vw;
   font-weight: 400;
   letter-spacing: 0.02em;

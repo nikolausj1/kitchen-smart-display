@@ -52,15 +52,18 @@
   color: #000000;
 }
 
-/* Close (X) - small, top-right corner of the panel. */
+/* Close (X) - small, top-right corner of the panel. Figma X is a tiny
+ * ~21 px glyph at 1920 viewport. We render the glyph at that size but pad
+ * the button to at least 44 x 44 px so the tap target is touch-friendly.
+ */
 .timer__close {
   position: absolute;
-  top: 1.5vh;
-  right: 1vw;
-  width: 4.5vw;
-  height: 4.5vw;
-  max-width: 80px;
-  max-height: 80px;
+  top: 1.2vh;
+  right: 0.8vw;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,17 +72,15 @@
   color: currentColor;
   opacity: 0.35;
   cursor: pointer;
-  padding: 0.5vw;
+  padding: 10px;
 }
 .timer__close:hover {
   opacity: 1;
 }
-.timer__close img {
+.timer__close svg {
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display: block;
-  /* The Figma close SVG bakes in opacity 0.3 already. */
 }
 
 .timer__body {
@@ -173,7 +174,7 @@
   cursor: pointer;
 }
 
-/* --- Set-timer picker ---------------------------------------------------- */
+/* --- Set-timer picker (CSS scroll-snap wheel) --------------------------- */
 
 .timer__picker-grid {
   display: grid;
@@ -182,58 +183,73 @@
   gap: 0.5vw;
   font-variant-numeric: tabular-nums;
   width: 100%;
+  /* Override the parent .timer__body flex direction so columns lay out
+   * horizontally, since the parent forces flex column. */
+  flex-direction: row;
+  /* The wheel viewport defines its own height; keep this row centered in
+   * the timer body. */
+  align-self: center;
 }
 
-.picker-col {
+/* Scroll wheel viewport. Three items tall. Native overflow scroll gives us
+ * touch inertia for free; scroll-snap keeps it locked to whole values.
+ * The mask gradient fades items as they approach the top/bottom of the
+ * viewport, giving the iOS-style "wheel disappearing off-screen" look. */
+.scroll-picker {
+  height: 48vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.18) 33%,
+    black 50%,
+    rgba(0, 0, 0, 0.18) 67%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.18) 33%,
+    black 50%,
+    rgba(0, 0, 0, 0.18) 67%,
+    transparent 100%
+  );
+  font-family: inherit;
+  outline: none;
+}
+
+.scroll-picker::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-picker__spacer {
+  height: 16vh;
+  flex-shrink: 0;
+}
+
+.scroll-picker__item {
+  height: 16vh;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.4em;
-}
-
-.picker-cell {
+  justify-content: center;
   font-weight: 700;
   letter-spacing: -0.02em;
-  background: transparent;
-  border: 0;
   color: #ffffff;
-  padding: 0;
-  cursor: pointer;
   line-height: 1;
-  font-family: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
-.picker-cell--selected {
+.scroll-picker--digits .scroll-picker__item {
   font-size: 9.24vw;
 }
 
-/* Faded "above" cell - gradient fades from panel-bg (top) to gray (bottom),
- * masked through the text. Mimics the iOS-style scroll wheel disappearing
- * off-screen at the top. */
-.picker-cell--faded.picker-cell--above {
-  font-size: 9.24vw;
-  background: linear-gradient(to bottom, #212528, #999);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  opacity: 0.2;
-}
-
-/* Faded "below" cell - gradient flips so text fades off at the bottom. */
-.picker-cell--faded.picker-cell--below {
-  font-size: 9.24vw;
-  background: linear-gradient(to bottom, #999, #212528);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  opacity: 0.2;
-}
-
-/* AM/PM column uses smaller type than the digits. */
-.picker-col--ampm .picker-cell--selected {
-  font-size: 4.92vw;
-}
-.picker-col--ampm .picker-cell--faded {
+.scroll-picker--ampm .scroll-picker__item {
   font-size: 4.92vw;
 }
 
@@ -242,4 +258,5 @@
   font-weight: 700;
   color: #ffffff;
   line-height: 1;
+  padding-bottom: 0.1em;
 }

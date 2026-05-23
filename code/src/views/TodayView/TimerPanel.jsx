@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ScrollPickerColumn from './ScrollPickerColumn.jsx'
 import './TimerPanel.css'
 
 // --- Icons ----------------------------------------------------------------
@@ -108,13 +109,14 @@ function NoTimer({ onSet }) {
   )
 }
 
-// --- Set-timer picker ----------------------------------------------------
+// --- Set-timer picker (native scroll-wheel) -------------------------------
 
-function mod(n, m) {
-  return ((n % m) + m) % m
-}
+const HOUR_ITEMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+const MINUTE_ITEMS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+const AMPM_ITEMS = ['AM', 'PM']
 
 function defaultPickerStart() {
+  // Round up to the next 5 minutes so the picker starts at a useful value.
   const now = new Date()
   const minutes = now.getMinutes()
   const rounded = Math.ceil((minutes + 1) / 5) * 5
@@ -127,45 +129,8 @@ function defaultPickerStart() {
   }
 }
 
-function PickerColumn({ label, above, current, below, onUp, onDown, isAmPm = false }) {
-  const formatVal = (v) => {
-    if (v == null) return ''
-    if (isAmPm) return v
-    if (label === 'minute') return String(v).padStart(2, '0')
-    return String(v)
-  }
-  return (
-    <div className={`picker-col ${isAmPm ? 'picker-col--ampm' : ''}`}>
-      <button
-        type="button"
-        className="picker-cell picker-cell--faded picker-cell--above"
-        onClick={onUp}
-        aria-label={`${label} up`}
-      >
-        {formatVal(above)}
-      </button>
-      <div className="picker-cell picker-cell--selected">{formatVal(current)}</div>
-      <button
-        type="button"
-        className="picker-cell picker-cell--faded picker-cell--below"
-        onClick={onDown}
-        aria-label={`${label} down`}
-      >
-        {formatVal(below)}
-      </button>
-    </div>
-  )
-}
-
 function SetTimer({ onConfirm, onCancel }) {
   const [draft, setDraft] = useState(defaultPickerStart)
-
-  const stepHour = (delta) =>
-    setDraft((d) => ({ ...d, hour12: mod(d.hour12 - 1 + delta, 12) + 1 }))
-  const stepMinute = (delta) =>
-    setDraft((d) => ({ ...d, minute: mod(d.minute + delta, 60) }))
-  const stepAmPm = () =>
-    setDraft((d) => ({ ...d, ampm: d.ampm === 'AM' ? 'PM' : 'AM' }))
 
   return (
     <div className="timer timer--idle">
@@ -181,31 +146,26 @@ function SetTimer({ onConfirm, onCancel }) {
       </button>
 
       <div className="timer__body timer__picker-grid">
-        <PickerColumn
-          label="hour"
-          above={mod(draft.hour12 - 2, 12) + 1}
-          current={draft.hour12}
-          below={mod(draft.hour12, 12) + 1}
-          onUp={() => stepHour(-1)}
-          onDown={() => stepHour(1)}
+        <ScrollPickerColumn
+          items={HOUR_ITEMS}
+          value={draft.hour12}
+          onChange={(v) => setDraft((d) => ({ ...d, hour12: v }))}
+          ariaLabel="Hour"
         />
         <div className="picker-colon">:</div>
-        <PickerColumn
-          label="minute"
-          above={mod(draft.minute - 5, 60)}
-          current={draft.minute}
-          below={mod(draft.minute + 5, 60)}
-          onUp={() => stepMinute(-5)}
-          onDown={() => stepMinute(5)}
+        <ScrollPickerColumn
+          items={MINUTE_ITEMS}
+          value={draft.minute}
+          onChange={(v) => setDraft((d) => ({ ...d, minute: v }))}
+          formatItem={(v) => String(v).padStart(2, '0')}
+          ariaLabel="Minute"
         />
-        <PickerColumn
-          label="ampm"
-          above={draft.ampm === 'AM' ? 'PM' : 'AM'}
-          current={draft.ampm}
-          below={draft.ampm === 'AM' ? 'PM' : 'AM'}
-          onUp={stepAmPm}
-          onDown={stepAmPm}
-          isAmPm
+        <ScrollPickerColumn
+          items={AMPM_ITEMS}
+          value={draft.ampm}
+          onChange={(v) => setDraft((d) => ({ ...d, ampm: v }))}
+          ariaLabel="AM/PM"
+          variant="ampm"
         />
       </div>
 

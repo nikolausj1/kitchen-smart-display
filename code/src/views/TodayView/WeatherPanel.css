@@ -20,7 +20,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5vh;
+  /* Figma: label->icon ~25-30 px, icon->temp ~25 px at 1920 viewport. */
+  gap: 2.5vh;
 }
 
 .weather__label {

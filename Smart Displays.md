@@ -41,6 +41,17 @@ tags:
 2. **Now Playing** - Split screen: playback controls/metadata on left, album art on right.
 3. **Today** - Daily briefing: time, countdown (school days), weather. Phase 1 focuses on time/date, weather timeline, and departure countdown. Future phases add calendar/agenda, what to wear recommendations, and school schedule awareness.
 
+
+## Figma Links 
+
+music-NowPlaying https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=83-461&m=dev
+
+music-StationPicker https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=171-20&m=dev
+
+nav menu https://www.figma.com/design/V9TzOQY1M3pieFIVzgfnMb/Projects-04-2026?node-id=195-158&m=dev
+
+
+
 ---
 
 ### Behavior
