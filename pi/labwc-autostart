@@ -17,6 +17,18 @@ done
 
 # Launch Chromium in kiosk mode. Relaunch if it ever exits so the display
 # recovers on its own from a crash or an accidental close.
+#
+# Cache flags:
+#   --disk-cache-dir=/tmp/chromium-cache  put cache on tmpfs so it dies on
+#                                          reboot and never persists stale
+#                                          assets
+#   --disk-cache-size=1                   effectively disable the disk cache
+#                                          (memory cache still works for the
+#                                          current page session). Combined
+#                                          with `npm run deploy` killing
+#                                          chromium, this guarantees the
+#                                          fresh build is loaded on every
+#                                          deploy.
 while true; do
   chromium \
     --ozone-platform=wayland \
@@ -28,6 +40,8 @@ while true; do
     --no-first-run \
     --check-for-update-interval=31536000 \
     --password-store=basic \
+    --disk-cache-dir=/tmp/chromium-cache \
+    --disk-cache-size=1 \
     http://localhost:8080/
   sleep 2
 done
