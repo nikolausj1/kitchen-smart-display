@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import useSonosState, { sonosActions } from '../../hooks/useSonosState.js'
+import useSonosState, { useSonosActions } from '../../hooks/useSonosState.js'
 import './NowPlaying.css'
 
 // NowPlaying view per Figma node 83:461.
@@ -40,6 +40,7 @@ function TransportButton({ icon, label, onClick }) {
 
 export default function NowPlaying() {
   const state = useSonosState()
+  const actions = useSonosActions()
   const now = useNow()
 
   const { track, stationName, playing, paused, loading, error } = state
@@ -77,7 +78,7 @@ export default function NowPlaying() {
           <TransportButton
             icon="/icons/ui/transport-prev-next.svg"
             label="Previous track"
-            onClick={sonosActions.previous}
+            onClick={actions.previous}
           />
           <TransportButton
             icon={
@@ -86,12 +87,12 @@ export default function NowPlaying() {
                 : '/icons/ui/transport-next-alt.svg'
             }
             label={playing ? 'Pause' : 'Play'}
-            onClick={playing ? sonosActions.pause : sonosActions.play}
+            onClick={playing ? actions.pause : actions.play}
           />
           <TransportButton
             icon="/icons/ui/transport-prev-next.svg"
             label="Next track"
-            onClick={sonosActions.next}
+            onClick={actions.next}
           />
         </div>
 

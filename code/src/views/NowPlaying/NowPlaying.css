@@ -14,8 +14,7 @@
 .np {
   position: fixed;
   inset: 0;
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
+  display: flex;
   background: #000;
   color: #ffffff;
   font-family: 'Inter', -apple-system, system-ui, sans-serif;
@@ -26,6 +25,7 @@
 
 .np__left {
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -139,24 +139,30 @@
 /* --- Right column / album art ------------------------------------------- */
 
 .np__right {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  /* Match the page margin used by .np__left and the bottom-left clock:
+   * 4vh top/bottom, 4vw right. */
   padding: 4vh 4vw 4vh 0;
-  min-width: 0;
   min-height: 0;
 }
 
 .np__art {
+  /* Height fills the available column height inside the 4vh top/bottom
+   * padding (so its bottom edge aligns with the clock's bottom edge).
+   * Width follows the image's native aspect ratio; the flex row auto-sizes
+   * the right cell to match, so the left column reflows around it. */
   height: 92vh;
-  width: 92vh;
-  max-width: 100%;
-  object-fit: cover;
-  border-radius: 24px;
+  width: auto;
+  display: block;
   box-shadow: 0 1vw 3vw rgba(0, 0, 0, 0.55);
   background: #1e1e1e;
 }
 
 .np__art--empty {
+  height: 92vh;
+  aspect-ratio: 1;
   background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
 }

@@ -1,17 +1,7 @@
-import { useEffect, useState } from 'react'
-import { SONOS } from '../config.js'
+import { useEffect, useMemo, useState } from 'react'
+import { useSettings } from '../lib/settings.js'
 
-// useSonosState - reads node-sonos-http-api on the Pi.
-//
-// GET {apiBase}/{room}/state returns full track + transport info. We poll
-// every SONOS.pollIntervalMs so the progress bar and play/pause state stay
-// fresh. (Webhooks are available on jishi's API too; we can add them later
-// for true push updates if 1.5s polling feels laggy.)
-//
-// Return shape (stable across phases):
-//   { playing, track: { title, artist, album, albumArtUrl, durationMs,
-//                       elapsedMs },
-//     stationName, volume, loading, error }
+// useSonosState - reads node-sonos-http-api via Settings-configured base + room.
 
 function parseState(raw) {
   if (!raw) return null
@@ -35,6 +25,7 @@ function parseState(raw) {
 }
 
 export default function useSonosState() {
+  const { sonos } = useSettings()
   const [state, setState] = useState({
     playing: false,
     paused: false,
@@ -50,10 +41,9 @@ export default function useSonosState() {
 
     async function fetchState() {
       try {
-        const res = await fetch(
-          `${SONOS.apiBase}/${SONOS.room}/state`,
-          { cache: 'no-store' }
-        )
+        const res = await fetch(`${sonos.apiBase}/${sonos.room}/state`, {
+          cache: 'no-store',
+        })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const raw = await res.json()
         if (cancelled) return
@@ -71,38 +61,57 @@ export default function useSonosState() {
     }
 
     fetchState()
-    const id = setInterval(fetchState, SONOS.pollIntervalMs)
+    const id = setInterval(fetchState, sonos.pollIntervalMs)
     return () => {
       cancelled = true
       clearInterval(id)
     }
-  }, [])
+  }, [sonos.apiBase, sonos.room, sonos.pollIntervalMs])
 
   return state
 }
 
-// --- Transport action helpers ------------------------------------------------
-// Fire-and-forget POSTs (the polling loop will pick up the new state on the
-// next tick). All return a promise but callers can ignore it.
-
-async function send(path) {
-  try {
-    await fetch(`${SONOS.apiBase}/${SONOS.room}${path}`, {
-      method: 'GET',
-      cache: 'no-store',
-    })
-  } catch (e) {
-    // Surface to console; the polling loop will reveal any persistent issue.
-    console.warn('sonos action failed', path, e)
-  }
+// Hook for transport + favorite actions, bound to current Settings.
+export function useSonosActions() {
+  const { sonos } = useSettings()
+  return useMemo(() => {
+    const send = async (path) => {
+      try {
+        await fetch(`${sonos.apiBase}/${sonos.room}${path}`, {
+          method: 'GET',
+          cache: 'no-store',
+        })
+      } catch (e) {
+        console.warn('sonos action failed', path, e)
+      }
+    }
+    return {
+      play: () => send('/play'),
+      pause: () => send('/pause'),
+      next: () => send('/next'),
+      previous: () => send('/previous'),
+      playFavorite: (name) => send(`/favorite/${encodeURIComponent(name)}`),
+      volumeUp: () => send('/volume/+5'),
+      volumeDown: () => send('/volume/-5'),
+    }
+  }, [sonos.apiBase, sonos.room])
 }
 
+// Backwards-compatible non-hook export. Reads settings ONCE at call time
+// from the storage layer. Prefer useSonosActions() inside components for
+// reactive bindings; this fallback is here so existing imports don't break.
 export const sonosActions = {
-  play: () => send('/play'),
-  pause: () => send('/pause'),
-  next: () => send('/next'),
-  previous: () => send('/previous'),
-  playFavorite: (name) => send(`/favorite/${encodeURIComponent(name)}`),
-  volumeUp: () => send('/volume/+5'),
-  volumeDown: () => send('/volume/-5'),
+  play: () => stubWarn('play'),
+  pause: () => stubWarn('pause'),
+  next: () => stubWarn('next'),
+  previous: () => stubWarn('previous'),
+  playFavorite: (name) => stubWarn(`playFavorite(${name})`),
+  volumeUp: () => stubWarn('volumeUp'),
+  volumeDown: () => stubWarn('volumeDown'),
+}
+
+function stubWarn(action) {
+  console.warn(
+    `sonosActions.${action}() called outside React - use useSonosActions() instead`
+  )
 }

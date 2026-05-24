@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
+import { useSettings } from '../../lib/settings.js'
 import TimeWidget from './overlays/TimeWidget.jsx'
 import ExifCaption from './overlays/ExifCaption.jsx'
 import AlbumArtWidget from './overlays/AlbumArtWidget.jsx'
 import './PhotoSlideshow.css'
 
-const SLIDESHOW_INTERVAL_MS = 6000
 const PORTRAIT_BUFFER_FALLBACK_AFTER_N_ADVANCES = 40
 
 // Compute the next display item, mutating refs that hold the queue cursor
@@ -96,6 +96,8 @@ function PhotoLayer({ display }) {
 
 export default function PhotoSlideshow() {
   const { photos, loading } = useImmichPhotos()
+  const { slideshow } = useSettings()
+  const intervalMs = slideshow?.intervalMs ?? 6000
   const queueIndexRef = useRef(0)
   const portraitBufferRef = useRef([])
   const advanceCountRef = useRef(0)
@@ -119,13 +121,13 @@ export default function PhotoSlideshow() {
     }
   }, [photos, display, advance])
 
-  // Auto-advance every SLIDESHOW_INTERVAL_MS (when > 0).
+  // Auto-advance every intervalMs (when > 0).
   useEffect(() => {
     if (!photos || photos.length === 0) return
-    if (SLIDESHOW_INTERVAL_MS <= 0) return
-    const id = setInterval(advance, SLIDESHOW_INTERVAL_MS)
+    if (intervalMs <= 0) return
+    const id = setInterval(advance, intervalMs)
     return () => clearInterval(id)
-  }, [photos, advance])
+  }, [photos, advance, intervalMs])
 
   // The current EXIF data drives the caption overlay. For pairs we show the
   // first photo's exif; could be expanded to show both if we ever want it.
