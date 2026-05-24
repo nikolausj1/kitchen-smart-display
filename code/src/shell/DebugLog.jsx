@@ -2,21 +2,39 @@ import { useEffect, useState } from 'react'
 import './DebugLog.css'
 
 // Lightweight global event log + on-screen HUD for diagnosing the touch /
-// click event flow on the kiosk. Drop calls to logEvent() at any interesting
-// site (button clicks, menu open, navigation) and the last 8 events appear
-// in the top-left corner of the screen.
-//
-// Intentionally module-level (singleton) so any component can publish
-// without prop drilling. Remove the <DebugHud /> from AppShell when the
-// kiosk is behaving and we no longer need it.
+// click event flow on the kiosk. Drop calls to logEvent() at interesting
+// sites and the most recent events appear in the top-left corner.
 
 let listeners = []
 let events = []
 
 export function logEvent(msg) {
   const ev = { msg, t: new Date().toLocaleTimeString([], { hour12: false }) }
-  events = [...events, ev].slice(-8)
+  events = [...events, ev].slice(-14)
   listeners.forEach((l) => l(events))
+}
+
+// Document-level capture-phase pointerdown listener. Fires for EVERY touch
+// on the page before React handlers, regardless of stopPropagation or
+// component logic. Gives us ground truth on what the user actually tapped.
+if (typeof window !== 'undefined' && !window.__debugPointerInstalled) {
+  window.__debugPointerInstalled = true
+  window.addEventListener(
+    'pointerdown',
+    (e) => {
+      const t = e.target
+      const tag = t.tagName || '?'
+      let cls = ''
+      if (t.className) {
+        if (typeof t.className === 'string') cls = t.className
+        else if (t.className.baseVal) cls = t.className.baseVal // SVGAnimatedString
+      }
+      cls = String(cls).split(/\s+/).filter(Boolean).slice(0, 2).join('.')
+      const interactive = !!(t.closest && t.closest('button, a, [data-interactive="true"]'))
+      logEvent(`PTR ${tag}${cls ? '.' + cls : ''} ${e.clientX | 0},${e.clientY | 0} int=${interactive}`)
+    },
+    { capture: true, passive: true }
+  )
 }
 
 function useDebugEvents() {
