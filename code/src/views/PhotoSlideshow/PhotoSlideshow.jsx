@@ -101,7 +101,13 @@ export default function PhotoSlideshow() {
   const queueIndexRef = useRef(0)
   const portraitBufferRef = useRef([])
   const advanceCountRef = useRef(0)
-  const [display, setDisplay] = useState(null)
+
+  // Two-layer crossfade. Both <Layer>s stay mounted; we just flip which one
+  // is "active" (opacity 1) and put the new photo into the other slot. CSS
+  // transitions handle the simultaneous fade in/out.
+  const [layers, setLayers] = useState([null, null])
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [tick, setTick] = useState(0) // bumps each advance so EXIF caption resets
 
   const advance = useCallback(() => {
     if (!photos || photos.length === 0) return
@@ -111,15 +117,25 @@ export default function PhotoSlideshow() {
       portraitBufferRef,
       advanceCountRef,
     })
-    if (next) setDisplay(next)
+    if (!next) return
+    setActiveIdx((prev) => {
+      const nextIdx = 1 - prev
+      setLayers((prevLayers) => {
+        const updated = [...prevLayers]
+        updated[nextIdx] = next
+        return updated
+      })
+      return nextIdx
+    })
+    setTick((t) => t + 1)
   }, [photos])
 
   // Initial display once photos are loaded.
   useEffect(() => {
-    if (photos && photos.length > 0 && display === null) {
+    if (photos && photos.length > 0 && layers[0] === null && layers[1] === null) {
       advance()
     }
-  }, [photos, display, advance])
+  }, [photos, layers, advance])
 
   // Auto-advance every intervalMs (when > 0).
   useEffect(() => {
@@ -129,25 +145,34 @@ export default function PhotoSlideshow() {
     return () => clearInterval(id)
   }, [photos, advance, intervalMs])
 
-  // The current EXIF data drives the caption overlay. For pairs we show the
-  // first photo's exif; could be expanded to show both if we ever want it.
-  const captionExif = display?.photos?.[0]?.exif || null
+  // EXIF drives off whichever layer is currently active.
+  const activeDisplay = layers[activeIdx]
+  const captionExif = activeDisplay?.photos?.[0]?.exif || null
   const captionKey = useMemo(
-    () => display ? `${display.kind}-${advanceCountRef.current}` : 'none',
-    [display]
+    () => activeDisplay ? `${activeDisplay.kind}-${tick}` : 'none',
+    [activeDisplay, tick]
   )
 
   return (
     <div className="photo-slideshow">
-      {loading && !display && (
+      {loading && !activeDisplay && (
         <div className="photo-slideshow__placeholder">Loading photos...</div>
       )}
 
-      {/* Use the advance count as a key so a fresh DOM node mounts on every
-        * change, triggering the CSS fade-in animation. */}
-      <div className="photo-slideshow__layer" key={captionKey}>
-        <PhotoLayer display={display} />
-      </div>
+      {/* Two stable, stacked layers. activeIdx flips between 0 and 1; the
+        * active layer fades to opacity 1, the other fades to 0 - both
+        * transitioning simultaneously for a smooth crossfade. */}
+      {[0, 1].map((idx) => (
+        <div
+          key={idx}
+          className={
+            'photo-slideshow__layer' +
+            (idx === activeIdx ? ' photo-slideshow__layer--active' : '')
+          }
+        >
+          <PhotoLayer display={layers[idx]} />
+        </div>
+      ))}
 
       <TimeWidget />
       <ExifCaption exif={captionExif} cycleKey={captionKey} />

@@ -6,7 +6,7 @@ import './ExifCaption.css'
 // auto-fades out after VISIBLE_MS. Pure visual; not interactive, so taps
 // pass through to the dead-area handler that summons the menu pill.
 
-const VISIBLE_MS = 5500
+const VISIBLE_MS = 3000
 
 export default function ExifCaption({ exif, cycleKey }) {
   const [visible, setVisible] = useState(true)
