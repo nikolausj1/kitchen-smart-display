@@ -82,17 +82,7 @@ export default function TodayView() {
         <TimerPanel {...timerProps} />
       </div>
 
-      <button
-        type="button"
-        className="dev-cycler"
-        onClick={(e) => {
-          e.stopPropagation()
-          cycleDevState()
-        }}
-        title="Dev only: cycle timer state overrides"
-      >
-        state: {devState}
-      </button>
+      {/* Dev-only state cycler removed; URL param ?state=... still works. */}
     </div>
   )
 }

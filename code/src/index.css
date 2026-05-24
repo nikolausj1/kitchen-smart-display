@@ -9,6 +9,10 @@ body,
   padding: 0;
   height: 100%;
   width: 100%;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
 }
 
 body {

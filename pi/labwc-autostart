@@ -43,6 +43,8 @@ while true; do
     --disk-cache-dir=/tmp/chromium-cache \
     --disk-cache-size=1 \
     --touch-events=enabled \
+    --disable-pinch \
+    --overscroll-history-navigation=0 \
     http://localhost:8080/
   sleep 2
 done

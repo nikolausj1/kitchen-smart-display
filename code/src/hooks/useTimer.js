@@ -114,7 +114,9 @@ export default function useTimer() {
       }
     }
 
-    // Post-expiry handoff: 15 min past target -> Photo Slideshow.
+    // Auto view handoffs disabled while we stabilize navigation. The state
+    // machine still tracks expiry/idle internally; we just do not navigate.
+    // Re-enable by uncommenting the setView calls below.
     if (s.mode === 'active' && s.target) {
       const past = now.getTime() - s.target.getTime()
       if (past > POST_EXPIRY_LIFETIME_MS) {
@@ -126,18 +128,16 @@ export default function useTimer() {
           dismissedDate: prev.kind === 'default' ? today : prev.dismissedDate,
           noTimerEnteredAt: Date.now(),
         }))
-        setView('photos')
+        // setView('photos')
         return
       }
     }
-
-    // No-timer idle handoff: 15 min in no-timer state -> Photo Slideshow.
-    if (s.mode === 'no-timer' && s.noTimerEnteredAt) {
-      const idle = now.getTime() - s.noTimerEnteredAt
-      if (idle > NO_TIMER_IDLE_MS) {
-        setView('photos')
-      }
-    }
+    // if (s.mode === 'no-timer' && s.noTimerEnteredAt) {
+    //   const idle = now.getTime() - s.noTimerEnteredAt
+    //   if (idle > NO_TIMER_IDLE_MS) setView('photos')
+    // }
+    void NO_TIMER_IDLE_MS
+    void setView
   })
 
   // --- Actions --------------------------------------------------------------

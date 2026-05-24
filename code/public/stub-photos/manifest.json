@@ -1,15 +1,16 @@
 {
   "_comment": "Stub photo manifest used until Immich is set up. The kiosk's useImmichPhotos hook reads this file. Real Immich integration will replace this with a REST call to the Immich server.",
   "photos": [
+    { "src": "/stub-photos/IMG_3161.jpg", "width": 4032, "height": 3024, "orientation": "landscape", "exif": { "location": "Family Photo", "date": "Aug 20th, 2023", "album": "Family" } },
+    { "src": "/stub-photos/IMG_3880.jpg", "width": 3573, "height": 2680, "orientation": "landscape", "exif": { "location": "Family Photo", "date": "Sep 10th, 2023", "album": "Family" } },
+    { "src": "/stub-photos/0003b.jpg", "width": 3628, "height": 2418, "orientation": "landscape", "exif": { "location": "Sample DSLR", "date": "2026", "album": "Travel" } },
     { "src": "/stub-photos/01.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Kitchen Test Album", "date": "Jan 4th, 2026", "album": "Best of 2026" } },
-    { "src": "/stub-photos/02.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Backyard", "date": "Feb 12th, 2026", "album": "Best of 2026" } },
     { "src": "/stub-photos/07.jpg", "width": 800, "height": 1200, "orientation": "portrait", "exif": { "location": "Living Room", "date": "Feb 17th, 2026", "album": "Family" } },
-    { "src": "/stub-photos/03.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Lake Day", "date": "Mar 3rd, 2026", "album": "Best of 2026" } },
+    { "src": "/stub-photos/02.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Backyard", "date": "Feb 12th, 2026", "album": "Best of 2026" } },
     { "src": "/stub-photos/08.jpg", "width": 800, "height": 1200, "orientation": "portrait", "exif": { "location": "Park", "date": "Mar 15th, 2026", "album": "Family" } },
+    { "src": "/stub-photos/03.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Lake Day", "date": "Mar 3rd, 2026", "album": "Best of 2026" } },
     { "src": "/stub-photos/04.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Hike", "date": "Apr 2nd, 2026", "album": "Best of 2026" } },
-    { "src": "/stub-photos/05.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "School Run", "date": "Apr 9th, 2026", "album": "Best of 2026" } },
     { "src": "/stub-photos/09.jpg", "width": 800, "height": 1200, "orientation": "portrait", "exif": { "location": "Birthday", "date": "Apr 18th, 2026", "album": "Family" } },
-    { "src": "/stub-photos/06.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Sunset", "date": "May 1st, 2026", "album": "Best of 2026" } },
-    { "src": "/stub-photos/10.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Beach", "date": "May 14th, 2026", "album": "Best of 2026" } }
+    { "src": "/stub-photos/06.jpg", "width": 1600, "height": 1000, "orientation": "landscape", "exif": { "location": "Sunset", "date": "May 1st, 2026", "album": "Best of 2026" } }
   ]
 }

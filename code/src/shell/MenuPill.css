@@ -24,12 +24,12 @@
 
 .menu-pill {
   display: flex;
-  align-items: center;
-  gap: 2.5vw;
-  padding: 2.5vh 3.5vw;
+  align-items: stretch;
+  gap: 1vw;
+  padding: 3vh 3vw;
   background: rgba(255, 255, 255, 0.24);
   border: 0.5vh solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
+  border-radius: 60px;
   box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(12px) saturate(1.4);
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
@@ -39,14 +39,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8vh;
+  justify-content: center;
+  gap: 1.5vh;
   background: transparent;
   border: 0;
-  padding: 0.5vh 1.5vw;
+  padding: 3vh 2vw;
   color: #ffffff;
   cursor: pointer;
   font-family: inherit;
-  min-width: 6vw;
+  min-width: 16vw;
+  min-height: 26vh;
+  border-radius: 36px;
+}
+
+.menu-pill__item:active {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .menu-pill__item--active .menu-pill__icon {
@@ -60,16 +67,18 @@
 }
 
 .menu-pill__icon {
-  width: 3.2vw;
-  height: 3.2vw;
+  width: 8vw;
+  height: 8vw;
   object-fit: contain;
   opacity: 0.95;
   filter: drop-shadow(0 0.2vh 0.4vh rgba(0, 0, 0, 0.35));
+  pointer-events: none;
 }
 
 .menu-pill__label {
-  font-size: 1.6vw;
+  font-size: 2.6vw;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }

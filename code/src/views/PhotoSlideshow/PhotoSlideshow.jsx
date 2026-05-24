@@ -119,9 +119,10 @@ export default function PhotoSlideshow() {
     }
   }, [photos, display, advance])
 
-  // Auto-advance every SLIDESHOW_INTERVAL_MS.
+  // Auto-advance every SLIDESHOW_INTERVAL_MS (when > 0).
   useEffect(() => {
     if (!photos || photos.length === 0) return
+    if (SLIDESHOW_INTERVAL_MS <= 0) return
     const id = setInterval(advance, SLIDESHOW_INTERVAL_MS)
     return () => clearInterval(id)
   }, [photos, advance])
