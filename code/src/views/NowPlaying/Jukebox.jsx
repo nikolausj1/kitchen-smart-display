@@ -3,6 +3,42 @@ import { useSettings } from '../../lib/settings.js'
 import { useSonosActions, cleanStationName } from '../../hooks/useSonosState.js'
 import './Jukebox.css'
 
+// Sonos exposes the music service per favorite in two places:
+//   - the URI's sid= query param (numeric service ID)
+//   - the metadata's <desc>SA_RINCONxxx_...</desc> token
+// Map the ones we actually see in this household to a friendly name.
+const SID_TO_SOURCE = {
+  '9': 'Spotify',
+  '12': 'Pandora',
+  '236': 'Pandora',
+  '151': 'Amazon Music',
+  '160': 'SoundCloud',
+  '184': 'Tidal',
+  '254': 'YouTube Music',
+  '255': 'YouTube Music',
+}
+const SA_TO_SOURCE = {
+  '3079': 'Spotify',
+  '60423': 'Pandora',
+  '38663': 'Pandora',
+}
+
+function detectSource(item) {
+  const uri = item?.uri || ''
+  const meta = item?.metadata || ''
+
+  const sidMatch = uri.match(/[?&]sid=(\d+)/)
+  if (sidMatch && SID_TO_SOURCE[sidMatch[1]]) return SID_TO_SOURCE[sidMatch[1]]
+
+  const saMatch = meta.match(/SA_RINCON(\d+)/)
+  if (saMatch && SA_TO_SOURCE[saMatch[1]]) return SA_TO_SOURCE[saMatch[1]]
+
+  if (uri.startsWith('x-sonosapi-stream:')) return 'Radio'
+  if (uri.startsWith('x-rincon-playlist:')) return 'Sonos playlist'
+  if (uri.startsWith('file:')) return 'Library'
+  return 'Sonos'
+}
+
 // Jukebox - the station/playlist picker. Opens centered over Now Playing
 // (Figma 171:20). Lists all Sonos Favorites as a 2-column grid; tap a
 // card to play that favorite and dismiss.
@@ -58,11 +94,20 @@ export default function Jukebox({ open, onClose, currentStationName }) {
   useEffect(() => {
     if (!open) return
     let cancelled = false
-    fetch(`${sonos.apiBase}/${sonos.room}/favorites`)
+    // The 'detailed' variant returns rich entries with uri + metadata so we
+    // can derive the underlying service (Pandora / Spotify / etc.).
+    fetch(`${sonos.apiBase}/${sonos.room}/favorites/detailed`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return
-        setFavorites(Array.isArray(data) ? data : [])
+        const items = Array.isArray(data) ? data : []
+        setFavorites(
+          items.map((it) => ({
+            name: it.title || '',
+            uri: it.uri || '',
+            source: detectSource(it),
+          }))
+        )
         setError(null)
       })
       .catch((e) => {
@@ -117,17 +162,17 @@ export default function Jukebox({ open, onClose, currentStationName }) {
               {error && <div className="jb-empty__err">({error})</div>}
             </div>
           )}
-          {favorites?.map((name, i) => {
-            const color = PALETTE[hashIndex(name, PALETTE.length)]
-            const display = cleanStationName(name)
+          {favorites?.map((fav, i) => {
+            const color = PALETTE[hashIndex(fav.name, PALETTE.length)]
+            const display = cleanStationName(fav.name)
             const isPlaying =
-              cleanStationName(name) === cleanStationName(currentStationName)
+              cleanStationName(fav.name) === cleanStationName(currentStationName)
             return (
               <button
-                key={name}
+                key={fav.name}
                 type="button"
                 className={'jb-card' + (isPlaying ? ' jb-card--playing' : '')}
-                onClick={(e) => pick(e, name)}
+                onClick={(e) => pick(e, fav.name)}
                 data-interactive="true"
               >
                 <div className="jb-card__art" style={{ background: color }}>
@@ -135,7 +180,7 @@ export default function Jukebox({ open, onClose, currentStationName }) {
                 </div>
                 <div className="jb-card__body">
                   <div className="jb-card__name">{display}</div>
-                  <div className="jb-card__source">Sonos</div>
+                  <div className="jb-card__source">{fav.source}</div>
                 </div>
                 <div className="jb-card__slot">{pad2(i)}</div>
               </button>
