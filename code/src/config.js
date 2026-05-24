@@ -5,12 +5,10 @@
 // Justin should personalize before the display is in regular use.
 
 // --- Location ----------------------------------------------------------------
-// Used for the Open-Meteo weather forecast. TODO Justin: replace with your
-// actual coordinates (Google Maps right-click on your house gives lat/lon).
-// Defaulting to a US east-coast placeholder so the API call succeeds.
+// Used for the Open-Meteo weather forecast. Seattle, WA.
 export const LOCATION = {
-  lat: 40.7128,
-  lon: -74.006,
+  lat: 47.6610608,
+  lon: -122.3999576,
   // Open-Meteo uses an IANA timezone name to align hourly slots with local time.
   // 'auto' makes Open-Meteo pick the timezone of the coordinates.
   timezone: 'auto',
