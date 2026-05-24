@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import TodayView from '../views/TodayView/TodayView.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
 import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
@@ -60,10 +60,12 @@ function Shell() {
     setMenuOpen(true)
   }
 
-  function closeMenu() {
+  // Stable so MenuPill's useEffect deps do not change every render (which
+  // would keep clearing and re-arming the autofade timer forever).
+  const closeMenu = useCallback(() => {
     logEvent('menu close')
     setMenuOpen(false)
-  }
+  }, [])
 
   return (
     <div className="app-shell" onClick={onShellClick}>

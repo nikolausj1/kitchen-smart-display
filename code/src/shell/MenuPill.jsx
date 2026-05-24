@@ -8,7 +8,7 @@ import './MenuPill.css'
 // icon navigates and dismisses; tapping outside the pill dismisses without
 // navigating; auto-fades after AUTOFADE_MS regardless of motion.
 
-const AUTOFADE_MS = 5000
+const AUTOFADE_MS = 4500
 
 const ITEMS = [
   { id: 'photos', label: 'Photos', icon: '/icons/ui/pinwheel.svg' },
