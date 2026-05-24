@@ -28,3 +28,26 @@ build/
 
 # Dropbox trash
 .Trash-*/
+
+# Photo binaries - kept on local disk + on the Pi, not in git (too big).
+# Run `node code/scripts/build-photo-manifest.mjs` to regenerate the
+# manifest after adding/removing photos in samplePhotos/.
+samplePhotos/*.jpg
+samplePhotos/*.JPG
+samplePhotos/*.jpeg
+samplePhotos/*.JPEG
+samplePhotos/*.png
+samplePhotos/*.PNG
+samplePhotos/*.heic
+samplePhotos/*.HEIC
+code/public/stub-photos/*.jpg
+code/public/stub-photos/*.JPG
+code/public/stub-photos/*.jpeg
+code/public/stub-photos/*.JPEG
+code/public/stub-photos/*.png
+code/public/stub-photos/*.PNG
+code/public/stub-photos/*.heic
+code/public/stub-photos/*.HEIC
+
+# Geocode cache (regenerated; safe to omit)
+code/scripts/.geocode-cache.json
