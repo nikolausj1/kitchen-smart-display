@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import TodayView from '../views/TodayView/TodayView.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
+import NowPlaying from '../views/NowPlaying/NowPlaying.jsx'
 import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
@@ -37,7 +38,7 @@ function CurrentView() {
     case 'photos':
       return <PhotoSlideshow />
     case 'music':
-      return <ComingSoonView title="Now Playing" subtitle="Sonos integration coming next" />
+      return <NowPlaying />
     case 'settings':
       return <ComingSoonView title="Settings" subtitle="Settings page coming later" />
     default:

@@ -40,3 +40,12 @@ export const TIMER_THRESHOLDS = {
 // --- Weather timeline slots --------------------------------------------------
 // Hours of day shown in the bottom-left weather strip, in 24h local time.
 export const WEATHER_SLOT_HOURS = [8, 11, 14, 17, 20]
+
+// --- Sonos ------------------------------------------------------------------
+// node-sonos-http-api runs as a local systemd service on the Pi, bound to
+// 127.0.0.1:5005. The kiosk app talks to it via this base URL.
+export const SONOS = {
+  apiBase: 'http://localhost:5005',
+  room: 'Main',
+  pollIntervalMs: 1500,
+}
