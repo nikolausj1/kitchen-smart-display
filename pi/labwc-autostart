@@ -42,6 +42,7 @@ while true; do
     --password-store=basic \
     --disk-cache-dir=/tmp/chromium-cache \
     --disk-cache-size=1 \
+    --touch-events=enabled \
     http://localhost:8080/
   sleep 2
 done
