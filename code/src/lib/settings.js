@@ -31,6 +31,8 @@ export const DEFAULTS = {
   },
   slideshow: {
     intervalMs: 6000,
+    // 'random' | 'date-taken' | 'date-added'
+    sortOrder: 'random',
   },
 }
 

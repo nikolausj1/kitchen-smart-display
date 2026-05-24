@@ -231,6 +231,20 @@ export default function SettingsView() {
               }
             />
           </Row>
+          <Row label="Sort order" hint="How photos are ordered through the slideshow.">
+            <select
+              className="settings-select"
+              value={slideshow.sortOrder || 'random'}
+              onChange={(e) =>
+                updateSettings({ slideshow: { sortOrder: e.target.value } })
+              }
+              data-interactive="true"
+            >
+              <option value="random">Random</option>
+              <option value="date-taken">Date taken (oldest first)</option>
+              <option value="date-added">Date added (oldest first)</option>
+            </select>
+          </Row>
         </section>
 
         {/* --- Reset --- */}

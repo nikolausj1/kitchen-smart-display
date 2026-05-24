@@ -6,6 +6,30 @@ import ExifCaption from './overlays/ExifCaption.jsx'
 import AlbumArtWidget from './overlays/AlbumArtWidget.jsx'
 import './PhotoSlideshow.css'
 
+// Fisher-Yates shuffle (returns a new array).
+function shuffle(arr) {
+  const out = arr.slice()
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+function orderPhotos(photos, sortOrder) {
+  if (!photos) return null
+  switch (sortOrder) {
+    case 'random':
+      return shuffle(photos)
+    case 'date-added':
+      return photos.slice().sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0))
+    case 'date-taken':
+    default:
+      // Manifest is already sorted oldest -> newest by date taken.
+      return photos.slice()
+  }
+}
+
 const PORTRAIT_BUFFER_FALLBACK_AFTER_N_ADVANCES = 40
 
 // Compute the next display item, mutating refs that hold the queue cursor
@@ -95,9 +119,20 @@ function PhotoLayer({ display }) {
 }
 
 export default function PhotoSlideshow() {
-  const { photos, loading } = useImmichPhotos()
+  const { photos: rawPhotos, loading } = useImmichPhotos()
   const { slideshow } = useSettings()
   const intervalMs = slideshow?.intervalMs ?? 6000
+  const sortOrder = slideshow?.sortOrder || 'random'
+
+  // Order the photo list per the user's sort preference. Recomputed when
+  // the photo list changes or the sort changes - and a fresh shuffle each
+  // time the component mounts (so navigating away + back from Photos does
+  // not always start on the same image when sort='random').
+  const photos = useMemo(
+    () => orderPhotos(rawPhotos, sortOrder),
+    [rawPhotos, sortOrder]
+  )
+
   const queueIndexRef = useRef(0)
   const portraitBufferRef = useRef([])
   const advanceCountRef = useRef(0)
@@ -130,9 +165,12 @@ export default function PhotoSlideshow() {
     setTick((t) => t + 1)
   }, [photos])
 
-  // Initial display once photos are loaded.
+  // Initial display once photos are loaded. Even for deterministic sort
+  // orders (date-taken / date-added) we randomize the starting index so the
+  // first photo varies between visits to the Photos tab.
   useEffect(() => {
     if (photos && photos.length > 0 && layers[0] === null && layers[1] === null) {
+      queueIndexRef.current = Math.floor(Math.random() * photos.length)
       advance()
     }
   }, [photos, layers, advance])

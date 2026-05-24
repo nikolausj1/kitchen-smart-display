@@ -129,6 +129,16 @@ for (const name of files) {
   const src = join(SAMPLES_DIR, name)
   const dst = join(PUBLIC_DIR, name)
 
+  // Capture "date added" from the source file's modification time before
+  // we copy (which would reset mtime on the destination).
+  let addedAt = 0
+  try {
+    const st = await stat(src)
+    addedAt = Math.round(st.mtimeMs)
+  } catch {
+    // leave 0
+  }
+
   // Copy the file in.
   await copyFile(src, dst)
 
@@ -181,6 +191,7 @@ for (const name of files) {
     height: h,
     orientation,
     sortKey,
+    addedAt,
     exif: {
       location: location || '',
       date: dateStr || '',
