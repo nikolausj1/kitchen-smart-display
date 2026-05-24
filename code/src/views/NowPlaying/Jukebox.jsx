@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../../lib/settings.js'
-import { useSonosActions } from '../../hooks/useSonosState.js'
+import { useSonosActions, cleanStationName } from '../../hooks/useSonosState.js'
 import './Jukebox.css'
 
 // Jukebox - the station/playlist picker. Opens centered over Now Playing
@@ -119,7 +119,9 @@ export default function Jukebox({ open, onClose, currentStationName }) {
           )}
           {favorites?.map((name, i) => {
             const color = PALETTE[hashIndex(name, PALETTE.length)]
-            const isPlaying = name === currentStationName
+            const display = cleanStationName(name)
+            const isPlaying =
+              cleanStationName(name) === cleanStationName(currentStationName)
             return (
               <button
                 key={name}
@@ -132,7 +134,7 @@ export default function Jukebox({ open, onClose, currentStationName }) {
                   {isPlaying && <EqIndicator />}
                 </div>
                 <div className="jb-card__body">
-                  <div className="jb-card__name">{name}</div>
+                  <div className="jb-card__name">{display}</div>
                   <div className="jb-card__source">Sonos</div>
                 </div>
                 <div className="jb-card__slot">{pad2(i)}</div>

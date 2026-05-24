@@ -3,6 +3,12 @@ import { useSettings } from '../lib/settings.js'
 
 // useSonosState - reads node-sonos-http-api via Settings-configured base + room.
 
+// Strip Pandora's "(My Station)" suffix so the UI shows clean names.
+export function cleanStationName(name) {
+  if (!name) return name
+  return name.replace(/\s*\((My Station|Shared)\)\s*$/i, '').trim()
+}
+
 function parseState(raw) {
   if (!raw) return null
   const t = raw.currentTrack || {}
@@ -19,7 +25,7 @@ function parseState(raw) {
           elapsedMs: (raw.elapsedTime || 0) * 1000,
         }
       : null,
-    stationName: t.stationName || '',
+    stationName: cleanStationName(t.stationName || ''),
     volume: raw.volume || 0,
   }
 }
