@@ -40,6 +40,66 @@ function NumberField({ value, onChange, step = 1, min, max, suffix }) {
   )
 }
 
+// Touch-friendly +/- stepper. Numeric value with big tap targets.
+function Stepper({ value, onChange, min = 1, max = 999, step = 1, suffix }) {
+  function clamp(n) {
+    return Math.max(min, Math.min(max, n))
+  }
+  return (
+    <div className="settings-stepper">
+      <button
+        type="button"
+        className="settings-stepper__btn"
+        onClick={(e) => {
+          e.stopPropagation()
+          onChange(clamp((Number(value) || 0) - step))
+        }}
+        aria-label="Decrease"
+        data-interactive="true"
+      >
+        &minus;
+      </button>
+      <div className="settings-stepper__value">
+        {value}
+        {suffix && <span className="settings-stepper__suffix">{suffix}</span>}
+      </div>
+      <button
+        type="button"
+        className="settings-stepper__btn"
+        onClick={(e) => {
+          e.stopPropagation()
+          onChange(clamp((Number(value) || 0) + step))
+        }}
+        aria-label="Increase"
+        data-interactive="true"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+// Touch-friendly slider with live readout.
+function Slider({ value, onChange, min = 1, max = 60, step = 1, suffix }) {
+  return (
+    <div className="settings-slider">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        data-interactive="true"
+      />
+      <div className="settings-slider__readout">
+        {value}
+        {suffix && <span className="settings-slider__suffix">{suffix}</span>}
+      </div>
+    </div>
+  )
+}
+
 function TimeOfDay({ hour, minute, onChange }) {
   return (
     <div className="settings-time">
@@ -218,15 +278,16 @@ export default function SettingsView() {
         {/* --- Photos --- */}
         <section className="settings-section">
           <h2 className="settings-section__title">Photo slideshow</h2>
-          <Row label="Seconds per photo">
-            <NumberField
+          <Row label="Seconds per photo" hint="How long each photo is displayed before crossfading to the next.">
+            <Slider
               value={Math.round(slideshow.intervalMs / 1000)}
-              min={1}
-              max={120}
+              min={2}
+              max={60}
+              step={1}
               suffix="s"
-              onChange={(v) =>
+              onChange={(secs) =>
                 updateSettings({
-                  slideshow: { intervalMs: Math.max(1000, (Number(v) || 6) * 1000) },
+                  slideshow: { intervalMs: Math.max(2000, secs * 1000) },
                 })
               }
             />

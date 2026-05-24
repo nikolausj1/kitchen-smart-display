@@ -38,18 +38,35 @@ if (typeof window !== 'undefined' && !window.__debugPointerInstalled) {
     logEvent(`CLK  ${describe(e.target)}`)
   }, { capture: true })
 
-  // Workaround for Chromium + labwc + wl_touch on this Pi: the browser
-  // delivers touch events but does NOT synthesize a normal click chain.
-  // We dispatch the click ourselves on touchend.
-  //
-  // The SiS touch controller fires several touchend events per single
-  // finger contact (~14 in ~700 ms observed). They all share the same
-  // touch.identifier because it's still the same touch session, so we
-  // deduplicate by identifier rather than by a global time window. That
-  // way two separate quick taps (different identifiers) both register.
-  // No synthetic click dispatch here - now that the touch device produces
-  // clean events, Chromium handles touchstart -> click natively. The CLK
-  // listener above will log them so we can verify.
+  // Swipe detection. Track touchstart, compare to touchend; if the move
+  // was a meaningful horizontal sweep, dispatch a custom 'app-swipe' event
+  // with direction. Consumers (e.g. PhotoSlideshow) listen on window.
+  // Chromium handles taps natively now, so no synthetic click needed.
+  const SWIPE_MIN_DX = 90
+  const SWIPE_AXIS_RATIO = 1.5
+  let __tStart = null
+  window.addEventListener('touchstart', (e) => {
+    const t = e.touches[0]
+    if (t) __tStart = { x: t.clientX, y: t.clientY, time: Date.now() }
+  }, { capture: true, passive: true })
+  window.addEventListener('touchend', (e) => {
+    const t = e.changedTouches[0]
+    const start = __tStart
+    __tStart = null
+    if (!t || !start) return
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (
+      Math.abs(dx) >= SWIPE_MIN_DX &&
+      Math.abs(dx) > Math.abs(dy) * SWIPE_AXIS_RATIO
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('app-swipe', {
+          detail: { direction: dx < 0 ? 'left' : 'right', dx, dy },
+        })
+      )
+    }
+  }, { capture: true, passive: true })
   void describe
 }
 

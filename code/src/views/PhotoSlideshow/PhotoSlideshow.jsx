@@ -136,6 +136,13 @@ export default function PhotoSlideshow() {
   const queueIndexRef = useRef(0)
   const portraitBufferRef = useRef([])
   const advanceCountRef = useRef(0)
+  // Manual-back history: when the user swipes right we push the
+  // currently-shown item onto here and replay it on the next swipe-right.
+  const backStackRef = useRef([])
+  // While the user is browsing backwards, suppress auto-advance for this
+  // long so they have time to look at the photo they just rewound to.
+  const PAUSE_AFTER_BACK_MS = 60_000
+  const pausedUntilRef = useRef(0)
 
   // Two-layer crossfade. Both <Layer>s stay mounted; we just flip which one
   // is "active" (opacity 1) and put the new photo into the other slot. CSS
@@ -144,14 +151,9 @@ export default function PhotoSlideshow() {
   const [activeIdx, setActiveIdx] = useState(0)
   const [tick, setTick] = useState(0) // bumps each advance so EXIF caption resets
 
-  const advance = useCallback(() => {
-    if (!photos || photos.length === 0) return
-    const next = pickNextDisplay({
-      photos,
-      queueIndexRef,
-      portraitBufferRef,
-      advanceCountRef,
-    })
+  // Swap in a new display item with the crossfade machinery. Used by both
+  // forward advance and back-stack replay.
+  const showItem = useCallback((next) => {
     if (!next) return
     setActiveIdx((prev) => {
       const nextIdx = 1 - prev
@@ -163,7 +165,41 @@ export default function PhotoSlideshow() {
       return nextIdx
     })
     setTick((t) => t + 1)
-  }, [photos])
+  }, [])
+
+  const advance = useCallback(
+    (opts = {}) => {
+      const { auto = false } = opts
+      if (auto && Date.now() < pausedUntilRef.current) return
+      if (!photos || photos.length === 0) return
+      const next = pickNextDisplay({
+        photos,
+        queueIndexRef,
+        portraitBufferRef,
+        advanceCountRef,
+      })
+      if (!next) return
+      // Push current onto back stack BEFORE replacing it.
+      setLayers((curr) => {
+        setActiveIdx((idx) => {
+          const cur = curr[idx]
+          if (cur) backStackRef.current.push(cur)
+          if (backStackRef.current.length > 30) backStackRef.current.shift()
+          return idx
+        })
+        return curr
+      })
+      showItem(next)
+    },
+    [photos, showItem]
+  )
+
+  const goBack = useCallback(() => {
+    const prev = backStackRef.current.pop()
+    if (!prev) return
+    pausedUntilRef.current = Date.now() + PAUSE_AFTER_BACK_MS
+    showItem(prev)
+  }, [showItem])
 
   // Initial display once photos are loaded. Even for deterministic sort
   // orders (date-taken / date-added) we randomize the starting index so the
@@ -171,17 +207,30 @@ export default function PhotoSlideshow() {
   useEffect(() => {
     if (photos && photos.length > 0 && layers[0] === null && layers[1] === null) {
       queueIndexRef.current = Math.floor(Math.random() * photos.length)
-      advance()
+      advance({ auto: false })
     }
   }, [photos, layers, advance])
 
-  // Auto-advance every intervalMs (when > 0).
+  // Auto-advance every intervalMs (when > 0). The auto:true flag lets the
+  // pause-after-back logic suppress the next few ticks.
   useEffect(() => {
     if (!photos || photos.length === 0) return
     if (intervalMs <= 0) return
-    const id = setInterval(advance, intervalMs)
+    const id = setInterval(() => advance({ auto: true }), intervalMs)
     return () => clearInterval(id)
   }, [photos, advance, intervalMs])
+
+  // Listen for swipe gestures (emitted by the document-level handler in
+  // DebugLog.jsx). Left = next, right = previous.
+  useEffect(() => {
+    function onSwipe(e) {
+      const dir = e.detail?.direction
+      if (dir === 'left') advance({ auto: false })
+      else if (dir === 'right') goBack()
+    }
+    window.addEventListener('app-swipe', onSwipe)
+    return () => window.removeEventListener('app-swipe', onSwipe)
+  }, [advance, goBack])
 
   // EXIF drives off whichever layer is currently active.
   const activeDisplay = layers[activeIdx]
