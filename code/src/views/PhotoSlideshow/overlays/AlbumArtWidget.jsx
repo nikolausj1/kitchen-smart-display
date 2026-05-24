@@ -3,9 +3,8 @@ import { useView } from '../../../shell/ViewContext.jsx'
 import './AlbumArtWidget.css'
 
 // Album art widget - bottom-right of the Photo Slideshow.
-// Only renders when Sonos is playing. Tapping navigates to Now Playing.
-// In Phase 1 useSonosState always returns playing:false, so this stays
-// hidden until the Sonos hook is wired to the real node-sonos-http-api.
+// Renders only when Sonos is playing AND we have a track with art.
+// Tap navigates to the Music (Now Playing) view.
 
 export default function AlbumArtWidget() {
   const { playing, track } = useSonosState()

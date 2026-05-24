@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import useSonosState, { useSonosActions } from '../../hooks/useSonosState.js'
+import Jukebox from './Jukebox.jsx'
 import './NowPlaying.css'
 
 // NowPlaying view per Figma node 83:461.
@@ -42,6 +43,7 @@ export default function NowPlaying() {
   const state = useSonosState()
   const actions = useSonosActions()
   const now = useNow()
+  const [jukeboxOpen, setJukeboxOpen] = useState(false)
 
   const { track, stationName, playing, paused, loading, error } = state
   const progress =
@@ -54,7 +56,18 @@ export default function NowPlaying() {
       {/* Left half - metadata + transport */}
       <div className="np__left">
         {stationName && (
-          <div className="np__station">{stationName}</div>
+          <button
+            type="button"
+            className="np__station"
+            onClick={(e) => {
+              e.stopPropagation()
+              setJukeboxOpen(true)
+            }}
+            data-interactive="true"
+            aria-label={`Change station from ${stationName}`}
+          >
+            {stationName}
+          </button>
         )}
 
         <div className="np__title">
@@ -112,6 +125,12 @@ export default function NowPlaying() {
           <div className="np__art np__art--empty" aria-hidden="true" />
         )}
       </div>
+
+      <Jukebox
+        open={jukeboxOpen}
+        onClose={() => setJukeboxOpen(false)}
+        currentStationName={stationName}
+      />
     </div>
   )
 }
