@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
+import { useView } from '../../shell/ViewContext.jsx'
+import useImmichPhotos from '../../hooks/useImmichPhotos.js'
 import './SettingsView.css'
+
+// If the Settings screen sees no user activity for this long, auto-bounce
+// back to the Photos view so the device returns to its ambient state.
+const IDLE_TO_PHOTOS_MS = 60_000
 
 // SettingsView - the four main config groups, all auto-saved to localStorage
 // via updateSettings(). Stays full-screen until the user navigates away via
 // the menu pill.
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_LABELS = [
+  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
+]
 
 function Row({ label, children, hint }) {
   return (
@@ -103,16 +111,18 @@ function Slider({ value, onChange, min = 1, max = 60, step = 1, suffix }) {
 function TimeOfDay({ hour, minute, onChange }) {
   return (
     <div className="settings-time">
-      <NumberField
+      <Stepper
         value={hour}
         onChange={(v) => onChange({ hour: Math.max(0, Math.min(23, v || 0)), minute })}
         min={0}
         max={23}
       />
       <span className="settings-time__sep">:</span>
-      <NumberField
+      <Stepper
         value={String(minute).padStart(2, '0')}
-        onChange={(v) => onChange({ hour, minute: Math.max(0, Math.min(59, v || 0)) })}
+        onChange={(v) =>
+          onChange({ hour, minute: Math.max(0, Math.min(59, Number(v) || 0)) })
+        }
         min={0}
         max={59}
       />
@@ -176,7 +186,45 @@ function SonosRoomSelect({ apiBase, value, onChange }) {
 
 export default function SettingsView() {
   const settings = useSettings()
-  const { location, school, sonos, slideshow } = settings
+  const { location, school, sonos, slideshow, display } = settings
+  const { setView } = useView()
+  const { albums: manifestAlbums } = useImmichPhotos()
+
+  // Album picker. selectedAlbumIds=null means "all albums" - we show every
+  // album toggled on. Toggling one switches us to an explicit array.
+  const selectedSet = (() => {
+    if (!Array.isArray(slideshow?.selectedAlbumIds)) {
+      return new Set((manifestAlbums || []).map((a) => a.id))
+    }
+    return new Set(slideshow.selectedAlbumIds)
+  })()
+  function toggleAlbum(id) {
+    const next = new Set(selectedSet)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    updateSettings({ slideshow: { selectedAlbumIds: [...next] } })
+  }
+
+  // Idle-bounce to Photos: any touch, scroll, or input within Settings
+  // resets a 60s timer. When it fires, navigate to Photos. Listeners are
+  // attached to the scroll root and use the capture phase so they fire
+  // even when a child stops propagation.
+  const rootRef = useRef(null)
+  useEffect(() => {
+    const node = rootRef.current
+    if (!node) return
+    let timerId = setTimeout(() => setView('photos'), IDLE_TO_PHOTOS_MS)
+    function bump() {
+      clearTimeout(timerId)
+      timerId = setTimeout(() => setView('photos'), IDLE_TO_PHOTOS_MS)
+    }
+    const events = ['pointerdown', 'touchmove', 'wheel', 'input', 'change', 'keydown']
+    events.forEach((e) => node.addEventListener(e, bump, { capture: true, passive: true }))
+    return () => {
+      clearTimeout(timerId)
+      events.forEach((e) => node.removeEventListener(e, bump, { capture: true }))
+    }
+  }, [setView])
 
   function toggleDay(d) {
     const set = new Set(school.schoolDays)
@@ -189,32 +237,9 @@ export default function SettingsView() {
   }
 
   return (
-    <div className="settings">
+    <div className="settings" ref={rootRef}>
       <div className="settings__scroll">
         <h1 className="settings__title">Settings</h1>
-
-        {/* --- Location --- */}
-        <section className="settings-section">
-          <h2 className="settings-section__title">Location</h2>
-          <Row label="Latitude" hint="Decimal degrees. Used for weather.">
-            <NumberField
-              value={location.lat}
-              step={0.0001}
-              onChange={(v) =>
-                updateSettings({ location: { lat: Number(v) || 0 } })
-              }
-            />
-          </Row>
-          <Row label="Longitude">
-            <NumberField
-              value={location.lon}
-              step={0.0001}
-              onChange={(v) =>
-                updateSettings({ location: { lon: Number(v) || 0 } })
-              }
-            />
-          </Row>
-        </section>
 
         {/* --- School / morning timer --- */}
         <section className="settings-section">
@@ -238,6 +263,13 @@ export default function SettingsView() {
               hour={school.autoShowAt.hour}
               minute={school.autoShowAt.minute}
               onChange={(t) => updateSettings({ school: { autoShowAt: t } })}
+            />
+          </Row>
+          <Row label="Morning ends at" hint="Today screen auto-switches back to Photos at this time on school days.">
+            <TimeOfDay
+              hour={school.morningEndsAt?.hour ?? 8}
+              minute={school.morningEndsAt?.minute ?? 0}
+              onChange={(t) => updateSettings({ school: { morningEndsAt: t } })}
             />
           </Row>
           <Row label="School days">
@@ -305,6 +337,180 @@ export default function SettingsView() {
               <option value="date-taken">Date taken (oldest first)</option>
               <option value="date-added">Date added (oldest first)</option>
             </select>
+          </Row>
+          <Row label="Smart faces" hint="Shift the crop to keep faces in view.">
+            <select
+              className="settings-select"
+              value={slideshow.smartFaces === false ? 'off' : 'on'}
+              onChange={(e) =>
+                updateSettings({
+                  slideshow: { smartFaces: e.target.value === 'on' },
+                })
+              }
+              data-interactive="true"
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </Row>
+          <Row label="Display" hint="How each photo is sized to the screen.">
+            <select
+              className="settings-select"
+              value={slideshow.displayMode || 'smart'}
+              onChange={(e) =>
+                updateSettings({ slideshow: { displayMode: e.target.value } })
+              }
+              data-interactive="true"
+            >
+              <option value="smart">Smart (fill when it fits, otherwise fit)</option>
+              <option value="fill">Fill (crops to fill the screen)</option>
+              <option value="fit">Fit (whole photo with a blurred backdrop)</option>
+            </select>
+          </Row>
+          <Row label="Auto-dismiss EXIF" hint="On: location/date caption fades after a delay. Off: stays visible the whole photo.">
+            <select
+              className="settings-select"
+              value={slideshow.autoDismissExif === false ? 'off' : 'on'}
+              onChange={(e) =>
+                updateSettings({
+                  slideshow: { autoDismissExif: e.target.value === 'on' },
+                })
+              }
+              data-interactive="true"
+            >
+              <option value="on">On (auto-dismiss)</option>
+              <option value="off">Off (always visible)</option>
+            </select>
+          </Row>
+          {slideshow.autoDismissExif !== false && (
+            <Row label="EXIF visible for" hint="How long the caption stays before fading out.">
+              <Slider
+                value={Math.max(1, slideshow.exifVisibleSeconds ?? 5)}
+                min={1}
+                max={30}
+                step={1}
+                suffix="s"
+                onChange={(secs) =>
+                  updateSettings({
+                    slideshow: { exifVisibleSeconds: Math.max(1, secs) },
+                  })
+                }
+              />
+            </Row>
+          )}
+          {manifestAlbums && manifestAlbums.length > 0 && (
+            <Row label="Albums" hint="Which albums feed the slideshow. All on by default.">
+              <div className="settings-albums">
+                {manifestAlbums.map((a) => {
+                  const on = selectedSet.has(a.id)
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      className={'settings-album' + (on ? ' settings-album--on' : '')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleAlbum(a.id)
+                      }}
+                      data-interactive="true"
+                    >
+                      <span className="settings-album__name">{a.name}</span>
+                      <span className="settings-album__count">({a.count})</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Row>
+          )}
+        </section>
+
+        {/* --- Display (night mode schedule) --- */}
+        <section className="settings-section">
+          <h2 className="settings-section__title">Display</h2>
+          <Row label="Sleep now" hint="Turn the screen off right now. Touch the screen to wake.">
+            <button
+              type="button"
+              className="settings-reset"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.dispatchEvent(new CustomEvent('display-sleep-now'))
+              }}
+              data-interactive="true"
+            >
+              Sleep now
+            </button>
+          </Row>
+          <Row label="Brightness" hint="How bright the screen looks during the day.">
+            <Slider
+              value={Math.round((display?.wakeBrightness ?? 0.9) * 100)}
+              min={10}
+              max={100}
+              step={5}
+              suffix="%"
+              onChange={(pct) =>
+                updateSettings({
+                  display: { wakeBrightness: Math.max(0.1, Math.min(1, pct / 100)) },
+                })
+              }
+            />
+          </Row>
+          <Row label="Evening brightness" hint="Brightness during the night.">
+            <Slider
+              value={Math.round((display?.eveningBrightness ?? 0.4) * 100)}
+              min={10}
+              max={100}
+              step={5}
+              suffix="%"
+              onChange={(pct) =>
+                updateSettings({
+                  display: { eveningBrightness: Math.max(0.1, Math.min(1, pct / 100)) },
+                })
+              }
+            />
+          </Row>
+          <Row label="Dim from" hint="Screen dims at this time each evening.">
+            <TimeOfDay
+              hour={display?.dimAt?.hour ?? 21}
+              minute={display?.dimAt?.minute ?? 0}
+              onChange={(t) => updateSettings({ display: { dimAt: t } })}
+            />
+          </Row>
+          <Row label="Off from" hint="Screen turns fully off at this time. Touch to wake.">
+            <TimeOfDay
+              hour={display?.offAt?.hour ?? 0}
+              minute={display?.offAt?.minute ?? 0}
+              onChange={(t) => updateSettings({ display: { offAt: t } })}
+            />
+          </Row>
+          <Row label="Wake at" hint="Screen returns to full brightness in the morning.">
+            <TimeOfDay
+              hour={display?.wakeAt?.hour ?? 6}
+              minute={display?.wakeAt?.minute ?? 0}
+              onChange={(t) => updateSettings({ display: { wakeAt: t } })}
+            />
+          </Row>
+        </section>
+
+        {/* --- Location (bottom: rarely changed) --- */}
+        <section className="settings-section">
+          <h2 className="settings-section__title">Location</h2>
+          <Row label="Latitude" hint="Decimal degrees. Used for weather.">
+            <NumberField
+              value={location.lat}
+              step={0.0001}
+              onChange={(v) =>
+                updateSettings({ location: { lat: Number(v) || 0 } })
+              }
+            />
+          </Row>
+          <Row label="Longitude">
+            <NumberField
+              value={location.lon}
+              step={0.0001}
+              onChange={(v) =>
+                updateSettings({ location: { lon: Number(v) || 0 } })
+              }
+            />
           </Row>
         </section>
 

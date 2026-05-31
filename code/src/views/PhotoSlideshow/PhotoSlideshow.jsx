@@ -86,29 +86,184 @@ function pickNextDisplay({ photos, queueIndexRef, portraitBufferRef, advanceCoun
   return null
 }
 
-function PhotoLayer({ display }) {
+// When Smart Faces is on AND the photo has detected faces that fit the
+// cover-crop window, we let crop-loss go this high before falling back to
+// Fit. Higher than the default 15% smart threshold because we know we
+// aren't cutting anyone's face off.
+const SMART_FACES_CROP_LOSS_MAX = 0.40
+
+// Crop loss = fraction of the photo's area that would be hidden if drawn
+// with object-fit: cover into the given container aspect ratio.
+function coverCropLoss(photoW, photoH, containerW, containerH) {
+  if (!photoW || !photoH || !containerW || !containerH) return 0
+  const photoAR = photoW / photoH
+  const containerAR = containerW / containerH
+  if (photoAR > containerAR) {
+    return 1 - containerAR / photoAR
+  }
+  return 1 - photoAR / containerAR
+}
+
+// Compute the object-position that keeps all faces visible in a cover-crop
+// of `photo` into `(containerW, containerH)`. Returns { objectPosition,
+// facesFit } where facesFit=false means the face union is wider than the
+// crop window and the caller should fall back to Fit.
+//
+// `faces` is an array of { cx, cy, w, h } normalized to [0..1] in the
+// photo's own coords (manifest schema). Empty / missing -> centered.
+function computeFillCrop(photoW, photoH, containerW, containerH, faces) {
+  if (!faces || faces.length === 0 || !photoW || !photoH || !containerW || !containerH) {
+    return { objectPosition: '50% 50%', facesFit: true }
+  }
+  const pA = photoW / photoH
+  const cA = containerW / containerH
+
+  // Which axis crops? Compute normalized window extent on that axis.
+  let axis, wN
+  if (pA > cA) {
+    axis = 'x'
+    wN = cA / pA  // visible window width in normalized photo-x
+  } else {
+    axis = 'y'
+    wN = pA / cA  // visible window height in normalized photo-y
+  }
+
+  // Face union on the cropping axis.
+  let minE = Infinity, maxE = -Infinity
+  for (const f of faces) {
+    const c = axis === 'x' ? f.cx : f.cy
+    const half = axis === 'x' ? f.w / 2 : f.h / 2
+    minE = Math.min(minE, c - half)
+    maxE = Math.max(maxE, c + half)
+  }
+
+  // Don't fit: face union spans wider than the visible window.
+  if (maxE - minE > wN + 1e-6) {
+    return { objectPosition: '50% 50%', facesFit: false }
+  }
+
+  // Pick the window centered on the face union, clamped to [0, 1-wN].
+  const midpoint = (minE + maxE) / 2
+  const idealStart = midpoint - wN / 2
+  const start = Math.max(0, Math.min(1 - wN, idealStart))
+
+  // object-position maps the window start to the photo's overflow range
+  // [0, 1-wN]. If wN ~= 1 (axis fully visible), default to 50%.
+  const posPct = wN < 1 ? (start / (1 - wN)) * 100 : 50
+
+  return {
+    objectPosition: axis === 'x' ? `${posPct}% 50%` : `50% ${posPct}%`,
+    facesFit: true,
+  }
+}
+
+// Decide Fill vs Fit for a single photo + container, factoring in Smart
+// Faces. Returns { mode: 'fill' | 'fit', objectPosition: 'X% Y%' }.
+function resolveCell(photo, containerW, containerH, opts) {
+  const { displayMode, smartThreshold, smartFaces } = opts
+  if (displayMode === 'fill') {
+    // Explicit Fill: still use face-aware positioning if we can, but never
+    // bail to Fit (the user asked for Fill).
+    const { objectPosition } = smartFaces
+      ? computeFillCrop(photo.width, photo.height, containerW, containerH, photo.faces || [])
+      : { objectPosition: '50% 50%' }
+    return { mode: 'fill', objectPosition }
+  }
+  if (displayMode === 'fit') {
+    return { mode: 'fit', objectPosition: '50% 50%' }
+  }
+  // 'smart' mode.
+  const loss = coverCropLoss(photo.width, photo.height, containerW, containerH)
+  const hasFaces = smartFaces && Array.isArray(photo.faces) && photo.faces.length > 0
+  if (hasFaces) {
+    const { objectPosition, facesFit } =
+      computeFillCrop(photo.width, photo.height, containerW, containerH, photo.faces)
+    if (!facesFit) return { mode: 'fit', objectPosition: '50% 50%' }
+    return loss > SMART_FACES_CROP_LOSS_MAX
+      ? { mode: 'fit', objectPosition: '50% 50%' }
+      : { mode: 'fill', objectPosition }
+  }
+  return loss > smartThreshold
+    ? { mode: 'fit', objectPosition: '50% 50%' }
+    : { mode: 'fill', objectPosition: '50% 50%' }
+}
+
+// Single landscape or pair-half cell. Receives the resolved mode and an
+// object-position (only meaningful for Fill).
+function PhotoCell({ photo, mode, objectPosition, className }) {
+  if (mode === 'fit') {
+    return (
+      <div className={`${className} photo-stage__cell--fit`}>
+        <img className="photo-stage__blur-bg" src={photo.src} alt="" aria-hidden="true" draggable="false" />
+        <div className="photo-stage__blur-overlay" aria-hidden="true" />
+        <img className="photo-stage__fit-img" src={photo.src} alt="" draggable="false" />
+      </div>
+    )
+  }
+  return (
+    <div className={`${className} photo-stage__cell--fill`}>
+      <img
+        className="photo-stage__img"
+        src={photo.src}
+        alt=""
+        draggable="false"
+        style={objectPosition ? { objectPosition } : undefined}
+      />
+    </div>
+  )
+}
+
+function PhotoLayer({ display, displayMode, smartThreshold, smartFaces }) {
   if (!display) return null
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1920
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 1080
+  const opts = { displayMode, smartThreshold, smartFaces }
+
   if (display.kind === 'landscape') {
     const p = display.photos[0]
+    const { mode, objectPosition } = resolveCell(p, vw, vh, opts)
     return (
       <div className="photo-stage photo-stage--landscape">
-        <img className="photo-stage__img" src={p.src} alt="" draggable="false" />
+        <PhotoCell photo={p} mode={mode} objectPosition={objectPosition} className="photo-stage__full" />
       </div>
     )
   }
   if (display.kind === 'portrait-pair') {
+    const halfW = vw / 2
     return (
       <div className="photo-stage photo-stage--pair">
-        {display.photos.map((p, i) => (
-          <div key={i} className="photo-stage__half">
-            <img className="photo-stage__img" src={p.src} alt="" draggable="false" />
-          </div>
-        ))}
+        {display.photos.map((p, i) => {
+          const { mode, objectPosition } = resolveCell(p, halfW, vh, opts)
+          return (
+            <PhotoCell
+              key={i}
+              photo={p}
+              mode={mode}
+              objectPosition={objectPosition}
+              className="photo-stage__half"
+            />
+          )
+        })}
       </div>
     )
   }
-  // portrait-solo with blurred background
+  // Portrait-solo: route through the same resolveCell logic. When Smart
+  // Faces says we can Fill safely, we do; otherwise fall back to the
+  // existing solo-with-blur layout.
   const p = display.photos[0]
+  const { mode, objectPosition } = resolveCell(p, vw, vh, opts)
+  if (mode === 'fill') {
+    return (
+      <div className="photo-stage photo-stage--landscape">
+        <PhotoCell
+          photo={p}
+          mode="fill"
+          objectPosition={objectPosition}
+          className="photo-stage__full"
+        />
+      </div>
+    )
+  }
   return (
     <div className="photo-stage photo-stage--solo">
       <img className="photo-stage__blur-bg" src={p.src} alt="" aria-hidden="true" draggable="false" />
@@ -123,6 +278,9 @@ export default function PhotoSlideshow() {
   const { slideshow } = useSettings()
   const intervalMs = slideshow?.intervalMs ?? 6000
   const sortOrder = slideshow?.sortOrder || 'random'
+  const displayMode = slideshow?.displayMode || 'smart'
+  const smartThreshold = slideshow?.smartCropLossThreshold ?? 0.15
+  const smartFaces = slideshow?.smartFaces !== false
 
   // Order the photo list per the user's sort preference. Recomputed when
   // the photo list changes or the sort changes - and a fresh shuffle each
@@ -172,6 +330,16 @@ export default function PhotoSlideshow() {
       const { auto = false } = opts
       if (auto && Date.now() < pausedUntilRef.current) return
       if (!photos || photos.length === 0) return
+      // Manual advance: extend the auto-advance pause so the next auto
+      // tick fires intervalMs from now (not from whenever the last
+      // auto-fired). Math.max preserves a longer back-pause if one is
+      // already in effect.
+      if (!auto) {
+        pausedUntilRef.current = Math.max(
+          pausedUntilRef.current,
+          Date.now() + intervalMs
+        )
+      }
       const next = pickNextDisplay({
         photos,
         queueIndexRef,
@@ -191,7 +359,7 @@ export default function PhotoSlideshow() {
       })
       showItem(next)
     },
-    [photos, showItem]
+    [photos, showItem, intervalMs]
   )
 
   const goBack = useCallback(() => {
@@ -232,18 +400,42 @@ export default function PhotoSlideshow() {
     return () => window.removeEventListener('app-swipe', onSwipe)
   }, [advance, goBack])
 
-  // EXIF drives off whichever layer is currently active.
+  // Imperative photo navigation for the tvOS shell (Siri Remote clickpad).
+  // 'next' advances, 'prev' steps back. Mirrors the swipe handlers, which
+  // already pause auto-advance briefly after a manual move, then resume.
+  useEffect(() => {
+    window.photoNav = (dir) => {
+      if (dir === 'next') advance({ auto: false })
+      else if (dir === 'prev') goBack()
+    }
+    return () => {
+      if (window.photoNav) delete window.photoNav
+    }
+  }, [advance, goBack])
+
+  // EXIF drives off whichever layer is currently active. For portrait-pair
+  // we render TWO captions (one under each photo); for landscape and
+  // portrait-solo it's a single centered caption.
   const activeDisplay = layers[activeIdx]
-  const captionExif = activeDisplay?.photos?.[0]?.exif || null
   const captionKey = useMemo(
     () => activeDisplay ? `${activeDisplay.kind}-${tick}` : 'none',
     [activeDisplay, tick]
   )
+  const isPair = activeDisplay?.kind === 'portrait-pair'
+  const leftExif = activeDisplay?.photos?.[0]?.exif || null
+  const rightExif = isPair ? (activeDisplay?.photos?.[1]?.exif || null) : null
+
+  const isEmpty = !loading && photos && photos.length === 0
 
   return (
     <div className="photo-slideshow">
       {loading && !activeDisplay && (
         <div className="photo-slideshow__placeholder">Loading photos...</div>
+      )}
+      {isEmpty && !activeDisplay && (
+        <div className="photo-slideshow__placeholder">
+          No photos to show. Enable an album in Settings &rarr; Photo slideshow.
+        </div>
       )}
 
       {/* Two stable, stacked layers. activeIdx flips between 0 and 1; the
@@ -257,12 +449,24 @@ export default function PhotoSlideshow() {
             (idx === activeIdx ? ' photo-slideshow__layer--active' : '')
           }
         >
-          <PhotoLayer display={layers[idx]} />
+          <PhotoLayer
+            display={layers[idx]}
+            displayMode={displayMode}
+            smartThreshold={smartThreshold}
+            smartFaces={smartFaces}
+          />
         </div>
       ))}
 
       <TimeWidget />
-      <ExifCaption exif={captionExif} cycleKey={captionKey} />
+      {isPair ? (
+        <>
+          <ExifCaption exif={leftExif} cycleKey={captionKey + '-L'} position="left" />
+          <ExifCaption exif={rightExif} cycleKey={captionKey + '-R'} position="right" />
+        </>
+      ) : (
+        <ExifCaption exif={leftExif} cycleKey={captionKey} position="center" />
+      )}
       <AlbumArtWidget />
     </div>
   )

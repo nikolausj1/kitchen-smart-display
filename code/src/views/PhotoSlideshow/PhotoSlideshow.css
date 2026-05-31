@@ -47,29 +47,50 @@
   justify-content: center;
 }
 
-.photo-stage--landscape .photo-stage__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
 .photo-stage--pair {
   flex-direction: row;
+  /* Thin black divider between the two portrait halves. The stage
+     background (#000) shows through this gap. */
+  gap: 6px;
 }
 
-.photo-stage__half {
-  flex: 1 1 50%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* Cell containers: a full-stage cell (landscape) or a 50% half (portrait
+ * pair). Each is a positioning context so the blur-backdrop can absolute-
+ * fill the cell rather than the whole stage. */
+.photo-stage__full {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
 }
 
-.photo-stage__half .photo-stage__img {
+.photo-stage__half {
+  position: relative;
+  flex: 1 1 50%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Fill mode: image covers the cell, cropping as needed. */
+.photo-stage__cell--fill .photo-stage__img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Fit mode: image is contained within the cell; a blurred enlarged copy of
+ * the same photo fills the empty area behind it. */
+.photo-stage__cell--fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-stage__cell--fit .photo-stage__fit-img {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .photo-stage--solo {
@@ -78,7 +99,8 @@
   position: absolute;
 }
 
-/* Blurred enlarged background fill for solo portrait. */
+/* Blurred enlarged background fill - used by any fit cell and by solo
+ * portrait. */
 .photo-stage__blur-bg {
   position: absolute;
   inset: 0;

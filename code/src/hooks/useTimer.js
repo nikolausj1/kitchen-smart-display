@@ -162,6 +162,23 @@ export default function useTimer() {
     })
   }, [school])
 
+  // Mirror the current timer mode + target to localStorage so other parts
+  // of the app (specifically the morning-end auto-leave watcher in
+  // AppShell) can tell whether a timer is in flight when Today isn't
+  // mounted. Updated on every state change.
+  useEffect(() => {
+    try {
+      localStorage.setItem('kioskTimerMode', state.mode || 'no-timer')
+      if (state.target instanceof Date && !Number.isNaN(state.target.getTime())) {
+        localStorage.setItem('kioskTimerTarget', state.target.toISOString())
+      } else {
+        localStorage.removeItem('kioskTimerTarget')
+      }
+    } catch {
+      // no-op if storage unavailable
+    }
+  }, [state.mode, state.target])
+
   // --- Derived view-model ---
 
   const now = new Date()
