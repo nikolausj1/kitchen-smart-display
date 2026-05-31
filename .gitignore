@@ -69,3 +69,6 @@ tvos/DerivedData/
 # Local agent state + scratch screenshots
 .claude/
 screenshots/
+
+# Python bytecode cache
+__pycache__/
