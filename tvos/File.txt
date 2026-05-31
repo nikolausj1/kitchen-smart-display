@@ -1,0 +1,1 @@
+It loads correctly, but I want the design to follow what we had on the kitchen display. 

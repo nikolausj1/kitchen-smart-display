@@ -1,0 +1,45 @@
+name: KitchenDisplayTV
+options:
+  bundleIdPrefix: com.nikolaus.kitchendisplay
+  createIntermediateGroups: true
+  deploymentTarget:
+    tvOS: "17.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "3"
+targets:
+  KitchenDisplayTV:
+    type: application
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: Sources
+      - path: Resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nikolaus.kitchendisplay.tv
+        SUPPORTED_PLATFORMS: "appletvos appletvsimulator"
+        # Real-device signing. Team 6A4J2GTB6F = "Justin Nikolaus" (Individual),
+        # the dev team registered to the Apple ID signed into Xcode. (NOT the
+        # 66R634SR25 string embedded in the cert's display name.)
+        DEVELOPMENT_TEAM: "6A4J2GTB6F"
+        CODE_SIGN_STYLE: Automatic
+        # No app icon asset for Phase 1 simulator validation. A Brand Assets
+        # icon set is required before a real-device / App Store build.
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Kitchen Display
+        CFBundleName: Kitchen Display
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UIAppFonts:
+          - Caveat-Regular.ttf
+        NSAppTransportSecurity:
+          # The kiosk is served over plain HTTP on the LAN (smartdisplay.local).
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true

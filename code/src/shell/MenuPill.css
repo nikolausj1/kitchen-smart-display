@@ -82,3 +82,10 @@
   text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.45);
   pointer-events: none;
 }
+
+/* TV surface (Apple TV): the Siri Remote provides navigation, so the
+ * touch-summoned menu pill is hidden. The body attribute is set by
+ * lib/kioskMode.js when the app loads with ?kiosk=tv. */
+body[data-kiosk="tv"] .menu-overlay {
+  display: none;
+}

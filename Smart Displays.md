@@ -1,8 +1,8 @@
 ---
 title: "Smart Displays - Kitchen Display Project"
 created: 2026-03-01
-modified: 2026-05-23
-version: 15.0
+modified: 2026-05-30
+version: 16.0
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -467,3 +467,23 @@ No open questions blocking phase 1. All decisions have been made.
 - **Now Playing auto-show behavior:** When music auto-interrupt is added in a future phase, what are the exact rules? (Auto-switch to Now Playing when music starts? Only from Photos, or also from no-timer Today? What happens when music stops?)
 
 Note: The following are configurable via the Settings page and don't need to be decided upfront: Immich source/album selection, Google Calendar(s) to show (future), school departure time, weather thresholds, Sonos room name.
+
+---
+
+### Secondary Display: Apple TV / Frame TV
+
+Status as of 2026-05-30: Phase 1 in progress. The Today view is built; Photos and Now Playing are next. Detailed source of truth for this thread is `Apple-TV-Display-PRD.md`.
+
+The dashboard also runs on the living-room Frame TV via an Apple TV. The TV is an independent, read-only view of the same data: it does not mirror the kitchen, and all configuration stays on the kitchen display.
+
+Architecture note (important): tvOS ships no WebKit (no web view), so the Apple TV app is NOT a wrapper around the React web app. It is a native SwiftUI app that reimplements the three views (Today, Photos, Now Playing) and reads from the same Pi backend the kitchen uses, plus Open-Meteo directly. Code lives in the sibling `tvos/` folder, generated with XcodeGen.
+
+Locked decisions:
+
+- Three views on the TV: Today, Photos, Now Playing. No Settings UI on the TV (permanent).
+- Boot picker: weekday school morning shows Today (always wins), else Now Playing if Sonos is playing, else Photos.
+- Settings sync: the kitchen is the sole editor. It POSTs a subset (location, school, slideshow) to a Pi endpoint (`/api/state`); the TV polls and applies them read-only. Sonos state is shared via node-sonos-http-api through a Pi proxy.
+- Siri Remote: swipe up/down switches view; swipe left/right is previous/next (photo in Photos, track in Now Playing); Play/Pause and Select control Sonos; Menu exits. Volume is NOT remote-controllable on tvOS (system handles it over CEC), deferred to a future on-screen control.
+- Phase 2 (deferred): Home Assistant auto-launch (school mornings, guests scene), a cinematic TV-specific Now Playing layout, and multi-room Sonos.
+
+Pi-side additions (`pi/kiosk-server.py`, done + deployed): bind on all interfaces (was loopback-only); GET and POST `/api/state` for the synced subset (persisted to `/home/pi/state.json`); and a `/api/sonos/*` passthrough proxy so the TV reaches node-sonos-http-api over port 8080 without exposing it on the LAN.
