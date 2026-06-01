@@ -72,3 +72,6 @@ screenshots/
 
 # Python bytecode cache
 __pycache__/
+
+# Photoshop design files (large binaries; kept on disk, not in git)
+*.psd

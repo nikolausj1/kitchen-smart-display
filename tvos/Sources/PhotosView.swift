@@ -43,7 +43,8 @@ struct PhotosView: View {
                          artist: sonos.state.track?.artist)
     }
 
-    // EXIF of the currently shown item (location/date drive the caption).
+    // EXIF of the currently shown item (location/date drive the caption). For a
+    // portrait pair this is the LEFT photo.
     private var currentExif: PhotoExif? {
         switch engine.current {
         case .landscape(let p): return p.exif
@@ -51,6 +52,13 @@ struct PhotosView: View {
         case .portraitPair(let a, _): return a.exif
         case nil: return nil
         }
+    }
+
+    // EXIF of the RIGHT photo in a portrait pair (nil otherwise), so its caption
+    // can be written on the mat starting at the screen center.
+    private var rightExif: PhotoExif? {
+        if case .portraitPair(_, let b) = engine.current { return b.exif }
+        return nil
     }
 
     var body: some View {
@@ -84,6 +92,8 @@ struct PhotosView: View {
                     HandwrittenMat(size: geo.size,
                                    photoLocation: currentExif?.location,
                                    photoDate: currentExif?.date,
+                                   rightPhotoLocation: rightExif?.location,
+                                   rightPhotoDate: rightExif?.date,
                                    musicTitle: showArt ? sonos.state.track?.title : nil,
                                    musicArtist: showArt ? sonos.state.track?.artist : nil)
                 } else if let item = engine.current {
@@ -120,11 +130,12 @@ struct PhotosView: View {
             }
         }
         .onDisappear { engine.stop() }
-        .onChange(of: remote.last) { _, action in
-            switch action {
+        // Observe the per-press sequence counter so every press advances, even
+        // repeated presses in the same direction.
+        .onChange(of: remote.seq) { _, _ in
+            switch remote.action {
             case .next: engine.next()
             case .previous: engine.previous()
-            case nil: break
             }
         }
     }
@@ -154,11 +165,17 @@ private struct PhotoStage: View {
             CroppedPhoto(photo: p, settings: settings,
                          containerW: size.width, containerH: size.height)
         case .portraitPair(let a, let b):
+            // Thin black divider line between the two portraits (like the
+            // kitchen's center seam). Each photo takes half of the width that
+            // remains after the divider.
+            let divider: CGFloat = 6
+            let half = (size.width - divider) / 2
             HStack(spacing: 0) {
                 CroppedPhoto(photo: a, settings: settings,
-                             containerW: size.width / 2, containerH: size.height)
+                             containerW: half, containerH: size.height)
+                Color.black.frame(width: divider, height: size.height)
                 CroppedPhoto(photo: b, settings: settings,
-                             containerW: size.width / 2, containerH: size.height)
+                             containerW: half, containerH: size.height)
             }
         }
     }
@@ -264,7 +281,8 @@ private struct AlbumArtCorner: View {
         let side = 475 * sy
         // Top-left corner per Figma; when unmatted, nudge toward the corner a
         // little since there's no mat to clear.
-        let figX = 3173.0, figY = 1478.0
+        // figY nudged down a touch from the raw Figma 1478 per Justin's eye.
+        let figX = 3173.0, figY = 1478.0 + 14.0
         let x = (matted ? figX : figX + 60) * sx
         let y = (matted ? figY : figY + 40) * sy
         AsyncImage(url: url, transaction: Transaction(animation: .none)) { phase in
@@ -277,7 +295,8 @@ private struct AlbumArtCorner: View {
         .frame(width: side, height: side)
         .clipped()
         .overlay(
-            Rectangle().strokeBorder(Color.white.opacity(matted ? 0.9 : 0), lineWidth: 3)
+            // Hairline white inner border (was 3px).
+            Rectangle().strokeBorder(Color.white.opacity(matted ? 0.9 : 0), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.35), radius: 14, x: 4, y: 4)
         // Absolute placement: pad to the top-left corner, fill the rest.
@@ -295,6 +314,10 @@ private struct HandwrittenMat: View {
     let size: CGSize
     let photoLocation: String?
     let photoDate: String?
+    // Right photo of a 2-up portrait pair (nil otherwise): written starting at
+    // the screen center (the seam = left edge of the right photo).
+    var rightPhotoLocation: String? = nil
+    var rightPhotoDate: String? = nil
     let musicTitle: String?
     let musicArtist: String?
 
@@ -305,6 +328,7 @@ private struct HandwrittenMat: View {
         static let frameW: CGFloat = 3840
         static let frameH: CGFloat = 2160
         static let leftX: CGFloat = 154          // photo text left edge (= opening left)
+        static let centerX: CGFloat = 1920       // seam = left edge of the right photo
         static let openingRight: CGFloat = 3699  // 154 + 3545 (opening right edge)
         static let titleTop: CGFloat = 2005.57   // both titles' top y
         static let dateTop: CGFloat = 2077       // both subtitles' top y
@@ -318,6 +342,7 @@ private struct HandwrittenMat: View {
         let titleSize = Fig.titlePt * sy
         let dateSize = Fig.datePt * sy
         let leftPad = Fig.leftX * sx
+        let centerPad = Fig.centerX * sx
         let rightPad = (Fig.frameW - Fig.openingRight) * sx
         let titleTop = Fig.titleTop * sy
         let dateTop = Fig.dateTop * sy
@@ -326,6 +351,9 @@ private struct HandwrittenMat: View {
             // Photo metadata (left), anchored to each line's top-left corner.
             line(photoLocation, size: titleSize, top: titleTop, leadingPad: leftPad, trailing: false)
             line(photoDate, size: dateSize, top: dateTop, leadingPad: leftPad, trailing: false)
+            // Right-photo metadata (2-up pairs), left-aligned starting at center.
+            line(rightPhotoLocation, size: titleSize, top: titleTop, leadingPad: centerPad, trailing: false)
+            line(rightPhotoDate, size: dateSize, top: dateTop, leadingPad: centerPad, trailing: false)
             // Music metadata (right), anchored to each line's top-right corner.
             line(musicTitle, size: titleSize, top: titleTop, trailingPad: rightPad, trailing: true)
             line(musicArtist, size: dateSize, top: dateTop, trailingPad: rightPad, trailing: true)

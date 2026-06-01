@@ -107,7 +107,12 @@ struct RootView: View {
     private var matted: some View {
         switch router.view {
         case .photos:
+            // Photos composes its own mat/z-order.
             PhotosView(remote: photoRemote, sonos: sonos)
+        case .today:
+            // Today is structured panels whose content sits near the edges, so
+            // the mat would clip it. Always render full-screen, never matted.
+            TodayView()
         default:
             if tvSettings.matEnabled {
                 MatFrame { nonPhotoShell }
@@ -198,8 +203,12 @@ private struct ExitToSettingsParent: ViewModifier {
 }
 
 // Lightweight channel so the shell's remote can drive the photo slideshow.
+// Each press bumps `seq` so repeated same-direction presses are distinct events
+// (PhotosView observes `seq`, not the action enum — observing the enum would
+// drop a second identical press because SwiftUI's onChange only fires on change).
 final class PhotoRemoteSignal: ObservableObject {
     enum Action: Equatable { case next, previous }
-    @Published var last: Action?
-    func send(_ a: Action) { last = a }
+    @Published private(set) var seq: Int = 0
+    private(set) var action: Action = .next
+    func send(_ a: Action) { action = a; seq += 1 }
 }
