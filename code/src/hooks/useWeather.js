@@ -97,6 +97,10 @@ export default function useWeather() {
       loading: !cached,
       error: null,
       stale: !!cached,  // true when we're showing cached (not fresh) data
+      // Today's raw hourly arrays from the live payload, for arbitrary-hour
+      // lookups (e.g. the departure-time forecast that drives the travel
+      // default). Null until a live fetch succeeds (not cached).
+      hourly: null,
     }
   })
 
@@ -120,7 +124,13 @@ export default function useWeather() {
         if (cancelled) return
         const slots = pickSlots(payload, weatherSlots)
         writeCache(slots)
-        setState({ slots, loading: false, error: null, stale: false })
+        setState({
+          slots,
+          loading: false,
+          error: null,
+          stale: false,
+          hourly: payload?.hourly || null,
+        })
         schedule(REFRESH_MS)
       } catch (err) {
         if (cancelled) return
@@ -130,6 +140,7 @@ export default function useWeather() {
           loading: false,
           error: err.message || 'fetch failed',
           stale: !!prev.slots,
+          hourly: prev.hourly,
         }))
         schedule(ERROR_RETRY_MS)
       }
@@ -148,7 +159,24 @@ export default function useWeather() {
     }
   }, [location.lat, location.lon, location.timezone, weatherSlots])
 
-  return state
+  // Look up today's forecast for a specific local hour (0-23) from the live
+  // hourly arrays. Returns { code, tempF } or null if unavailable. Used by the
+  // travel-mode default to read the departure-time forecast.
+  const forecastForHour = (hour) => {
+    const h = state.hourly
+    if (!h?.time) return null
+    const stamp = `${todayLocalIsoDate()}T${String(hour).padStart(2, '0')}:00`
+    const idx = h.time.indexOf(stamp)
+    if (idx === -1) return null
+    const code = h.weather_code?.[idx]
+    const temp = h.temperature_2m?.[idx]
+    return {
+      code: typeof code === 'number' ? code : null,
+      tempF: typeof temp === 'number' ? Math.round(temp) : null,
+    }
+  }
+
+  return { ...state, forecastForHour }
 }
 
 export function placeholderSlots(hours = [8, 11, 14, 17, 20]) {

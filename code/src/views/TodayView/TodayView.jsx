@@ -5,6 +5,8 @@ import TimerPanel from './TimerPanel.jsx'
 import useWeather, { placeholderSlots } from '../../hooks/useWeather.js'
 import useTimer from '../../hooks/useTimer.js'
 import { postTimerState } from '../../lib/settings.js'
+import { useSettings } from '../../lib/settings.js'
+import { decideTravelMode } from '../../lib/travelDefault.js'
 import './TodayView.css'
 
 // Dev-only visual override of the timer state. Lets us preview every Figma
@@ -44,9 +46,16 @@ function devOverrideProps(devState, realActions, realTravelMode) {
 
 export default function TodayView() {
   const [devState, setDevState] = useState(readDevState)
+  const { school } = useSettings()
   const weather = useWeather()
-  const timer = useTimer()
   const slots = weather.slots || placeholderSlots()
+
+  // Weather-based default travel mode: read the forecast at the (walking)
+  // departure hour and decide drive-vs-walk. The timer uses this as the default
+  // when it auto-arms; a manual toggle on the kitchen overrides it for the day.
+  const depHour = school?.walkingDepart?.hour ?? 7
+  const weatherDefaultMode = decideTravelMode(weather.forecastForHour?.(depHour))
+  const timer = useTimer({ weatherDefaultMode })
 
   useEffect(() => {
     const onPop = () => setDevState(readDevState())
