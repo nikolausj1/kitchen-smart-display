@@ -194,6 +194,7 @@ export default function useTimer() {
     mode: state.mode,
     kind: state.kind,
     travelMode: state.travelMode,
+    target: state.target,   // absolute departure Date (or null); used to mirror to the TV
     minutesLeft,
     band,
     actions: {

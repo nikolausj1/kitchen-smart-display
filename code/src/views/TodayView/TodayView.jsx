@@ -4,6 +4,7 @@ import WeatherPanel from './WeatherPanel.jsx'
 import TimerPanel from './TimerPanel.jsx'
 import useWeather, { placeholderSlots } from '../../hooks/useWeather.js'
 import useTimer from '../../hooks/useTimer.js'
+import { postTimerState } from '../../lib/settings.js'
 import './TodayView.css'
 
 // Dev-only visual override of the timer state. Lets us preview every Figma
@@ -52,6 +53,25 @@ export default function TodayView() {
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
+
+  // Mirror the live timer to the Pi so the Apple TV can show the same
+  // countdown. Push only on MEANINGFUL changes (active flag / target / travel
+  // mode / kind) - not the 1Hz minutesLeft tick. The TV recomputes
+  // minutesLeft + band itself from targetISO, so we don't need to post those.
+  // No-op on the TV surface (postTimerState gates on IS_TV).
+  const timerActive = timer.mode === 'active'
+  const timerTargetISO =
+    timer.mode === 'active' && timer.target instanceof Date && !Number.isNaN(timer.target.getTime())
+      ? timer.target.toISOString()
+      : null
+  useEffect(() => {
+    postTimerState({
+      active: timerActive,
+      travelMode: timer.travelMode,
+      targetISO: timerTargetISO,
+      kind: timer.kind || null,
+    })
+  }, [timerActive, timerTargetISO, timer.travelMode, timer.kind])
 
   function cycleDevState() {
     const next = DEV_STATES[(DEV_STATES.indexOf(devState) + 1) % DEV_STATES.length]

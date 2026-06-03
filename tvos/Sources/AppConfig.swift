@@ -86,19 +86,30 @@ struct SlideshowSettings: Codable, Equatable {
     )
 }
 
+// The kitchen's live Today-timer, mirrored via /api/state. nil = no kitchen
+// timer state available (idle fallback).
+struct KitchenTimer: Equatable {
+    var active: Bool
+    var travelMode: String     // "driving" | "walking"
+    var target: Date?          // parsed from targetISO
+    var kind: String?          // "default" | "manual" | nil
+}
+
 struct AppSettings: Equatable {
     var location: LocationSettings
     var school: SchoolSettings
     var timerThresholds: TimerThresholds
     var weatherSlots: [Int]
     var slideshow: SlideshowSettings
+    var kitchenTimer: KitchenTimer?    // nil = idle / not posted
 
     static let defaults = AppSettings(
         location: .defaults,
         school: .defaults,
         timerThresholds: .defaults,
         weatherSlots: [8, 11, 14, 17, 20],
-        slideshow: .defaults
+        slideshow: .defaults,
+        kitchenTimer: nil
     )
 }
 
@@ -108,6 +119,7 @@ struct SharedStatePayload: Decodable {
     var location: LocationSettings?
     var school: SchoolSettingsLenient?
     var slideshow: SlideshowLenient?
+    var timer: TimerLenient?
 
     struct SchoolSettingsLenient: Decodable {
         var drivingDepart: HourMinute?
@@ -126,6 +138,13 @@ struct SharedStatePayload: Decodable {
         var exifVisibleSeconds: Int?
         var selectedAlbumIds: [String]?
         var smartFaces: Bool?
+    }
+
+    struct TimerLenient: Decodable {
+        var active: Bool?
+        var travelMode: String?
+        var targetISO: String?
+        var kind: String?
     }
 
     func merged(into base: AppSettings) -> AppSettings {
@@ -153,6 +172,28 @@ struct SharedStatePayload: Decodable {
             if let v = s.smartFaces { ss.smartFaces = v }
             out.slideshow = ss
         }
+        // Kitchen timer. Absent -> nil (idle fallback). Present -> mirror.
+        if let t = timer {
+            out.kitchenTimer = KitchenTimer(
+                active: t.active ?? false,
+                travelMode: t.travelMode ?? "driving",
+                target: t.targetISO.flatMap { Self.parseISO($0) },
+                kind: t.kind
+            )
+        }
         return out
+    }
+
+    // ISO-8601 with fractional seconds (JS Date.toISOString()).
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static func parseISO(_ s: String) -> Date? {
+        if let d = isoFormatter.date(from: s) { return d }
+        // Fallback without fractional seconds.
+        let f = ISO8601DateFormatter()
+        return f.date(from: s)
     }
 }

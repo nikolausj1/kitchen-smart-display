@@ -38,6 +38,26 @@ function postSharedState(next) {
   }
 }
 
+// Push the live Today-timer state to the Pi so the Apple TV can mirror the
+// kitchen's countdown. Same best-effort + TV-gated semantics as
+// postSharedState. `timer` is a small plain object (see TodayView). Posted
+// under the `timer` key, which the Pi merges into /api/state alongside the
+// settings subset.
+export function postTimerState(timer) {
+  if (IS_TV) return
+  if (typeof fetch === 'undefined') return
+  try {
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timer }),
+      cache: 'no-store',
+    }).catch(() => {})
+  } catch {
+    // best-effort
+  }
+}
+
 export const DEFAULTS = {
   location: {
     lat: 47.6610608,

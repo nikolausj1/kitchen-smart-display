@@ -34,7 +34,11 @@ struct TodayView: View {
     @EnvironmentObject var model: AppModel
 
     private var departure: DepartureState {
-        computeDeparture(settings: model.settings, mode: .driving, now: model.now)
+        mirrorKitchenTimer(
+            kitchenTimer: model.settings.kitchenTimer,
+            thresholds: model.settings.timerThresholds,
+            now: model.now
+        )
     }
 
     var body: some View {
@@ -201,12 +205,13 @@ private struct TimerPanel: View {
                     .lineLimit(1)
             }
             Spacer()
-            // Travel pill (read-only on TV): driving is the synced default.
+            // Travel pill (read-only on TV): mirrors the kitchen's travel mode.
+            let walking = departure.travelMode == .walking
             HStack(spacing: width * 0.008) {
-                Text("DRIVING")
+                Text(walking ? "WALKING" : "DRIVING")
                     .font(.system(size: width * 0.0305, weight: .bold))
                     .tracking((width * 0.0305) * 0.02)
-                Image(systemName: "car.fill")
+                Image(systemName: walking ? "figure.walk" : "car.fill")
                     .font(.system(size: width * 0.0305))
             }
             .padding(.vertical, width * 0.012)

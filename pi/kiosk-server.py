@@ -146,7 +146,13 @@ class Handler(SimpleHTTPRequestHandler):
             obj = json.loads(raw.decode('utf-8') or '{}')
             if not isinstance(obj, dict):
                 return self._json(400, {'ok': False, 'error': 'expected JSON object'})
-            write_shared_state(obj)
+            # MERGE the incoming top-level keys into the existing state rather
+            # than replacing the whole document. The kitchen posts settings
+            # (location/school/slideshow) and the live timer (timer) as separate
+            # POSTs, so a replace would clobber whichever was posted last.
+            merged = read_shared_state()
+            merged.update(obj)
+            write_shared_state(merged)
             return self._json(200, {'ok': True})
         except Exception as e:
             return self._json(500, {'ok': False, 'error': str(e)})

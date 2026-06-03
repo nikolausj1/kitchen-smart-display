@@ -29,6 +29,7 @@ struct DepartureState {
     var minutesLeft: Int?
     var band: TimerBand?
     var target: Date?
+    var travelMode: TravelMode = .driving
 }
 
 // Matches colourBandForMinutes in useTimer.js (ascending "<=" checks).
@@ -48,8 +49,37 @@ func departureTime(school: SchoolSettings, mode: TravelMode, on day: Date) -> Da
     ) ?? day
 }
 
+// Mirror the kitchen's live timer. The TV no longer computes its own schedule-
+// based countdown; it reflects what the kitchen posted via /api/state.
+//   - kitchenTimer == nil OR not active  -> idle (no countdown).
+//   - active with a target               -> live countdown to that target,
+//                                            using the kitchen's travel mode.
+// minutesLeft + band are computed here (off the synced thresholds) so the
+// countdown ticks smoothly at 1Hz without the kitchen posting every second.
+func mirrorKitchenTimer(
+    kitchenTimer: KitchenTimer?,
+    thresholds: TimerThresholds,
+    now: Date
+) -> DepartureState {
+    guard let kt = kitchenTimer, kt.active, let target = kt.target else {
+        return DepartureState(active: false, minutesLeft: nil, band: nil, target: nil)
+    }
+    let mode: TravelMode = (kt.travelMode == "walking") ? .walking : .driving
+    let msLeft = target.timeIntervalSince(now)
+    let minutesLeft = max(0, Int(ceil(msLeft / 60.0)))
+    return DepartureState(
+        active: true,
+        minutesLeft: minutesLeft,
+        band: bandForMinutes(minutesLeft, thresholds),
+        target: target,
+        travelMode: mode
+    )
+}
+
 // Compute the display state for "now". On a school day, between autoShowAt and
 // (target + 15min), show an active countdown; otherwise inactive.
+// (Legacy schedule-based computation; superseded by mirrorKitchenTimer but
+// kept for reference / potential offline fallback.)
 func computeDeparture(
     settings: AppSettings,
     mode: TravelMode,
