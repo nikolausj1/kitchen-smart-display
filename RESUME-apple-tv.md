@@ -1,36 +1,66 @@
-# Resume note: Apple TV / Frame TV Phase 1 (NATIVE pivot)
+# Resume note: Apple TV / Frame TV
 
-Updated 2026-05-30. Branch: `feature/apple-tv-display`. Full design: `Apple-TV-Display-PRD.md` (v2.0.0).
+Updated 2026-06-03. Branch: `feature/apple-tv-display` (now pushed to GitHub).
+Source of truth: `Apple-TV-Display-PRD.md` and the "Secondary Display" section
+of `Smart Displays.md`.
 
-## CRITICAL architecture fact
-tvOS ships NO WebKit (no UIWebView/WKWebView) - confirmed by compiler error and SDK inspection. The original WKWebView-wrapper plan is dead. The Apple TV app is NATIVE SwiftUI, reimplementing the views and hitting the same Pi endpoints (/api/state, /api/sonos) + Open-Meteo. Build target chosen by user: native SwiftUI (not React Native, not AirPlay).
+## Status: Phase 1 SHIPPED
 
-## DONE and verified
-Web foundation (code/) - lint passes, deployed to live Pi:
-- kioskMode.js, useSharedState.js, settings.js write-through, AppShell (appNav/tvAction/sonosCmd + TV gating), MenuPill TV-hide, PhotoSlideshow photoNav.
-- NOTE: this web-side TV bridge is now DEAD CODE for the TV (native app doesn't use it). Harmless (gated behind ?kiosk=tv). Flagged for cleanup, not urgent. Kitchen unaffected.
+The Apple TV app is a native SwiftUI app (tvOS has no WebKit, so it is NOT a
+web-view wrapper) running on the living-room Frame TV. All views are live:
+Today, Photos, Now Playing, and a TV-local Settings screen.
 
-Pi (pi/kiosk-server.py) - DEPLOYED, live, kitchen healthy (http 200):
-- BIND 0.0.0.0; GET/POST /api/state -> /home/pi/state.json; GET /api/sonos/* proxy to 127.0.0.1:5005.
+Code lives in `tvos/` (XcodeGen project from `project.yml`).
+- Build + deploy to the real Apple TV: `cd tvos && ./deploy-device.sh`
+  (builds with `-destination 'generic/platform=tvOS'`, signs with team
+  6A4J2GTB6F, installs + launches on "Living Room").
+- Simulator loop: `open -a Simulator` FIRST (attaches the TVOut display, else
+  screenshots fail with "no default display port"), then build
+  `-destination 'generic/platform=tvOS Simulator'`, install via `simctl`,
+  `simctl io <udid> screenshot`. Sim builds hit the Pi by IP
+  (`#if targetEnvironment(simulator)` in AppConfig.swift) since the sim doesn't
+  resolve `smartdisplay.local`; the device uses `.local`.
+- Sim-only debug flags (UserDefaults on the app bundle; all
+  `#if targetEnvironment(simulator)`, can't ship): `debug.view` (force a view),
+  `debug.fakeMusic`, `debug.forcePair` (force portrait pairs).
 
-tvOS app (tvos/) - native SwiftUI, Today view BUILDS (** BUILD SUCCEEDED ** for appletvsimulator):
-- project.yml (XcodeGen; bundle com.nikolaus.kitchendisplay.tv; tvOS 17+; SUPPORTED_PLATFORMS set; ATS exception).
-- Sources/: KitchenDisplayTVApp.swift, AppConfig.swift, AppModel.swift, WeatherService.swift, DepartureTimer.swift, TodayView.swift, Info.plist.
-- Build command that works: `xcodebuild -project KitchenDisplayTV.xcodeproj -scheme KitchenDisplayTV -configuration Debug -destination 'generic/platform=tvOS Simulator' -derivedDataPath ./.build-sim CODE_SIGNING_ALLOWED=NO build`
-  (Toolchain has tvOS 26.5 SDK but only 26.4 sim runtime installed; pinning a concrete sim OS fails to resolve - use the GENERIC destination.)
-- Runtime launch/screenshot in the sim was flaky in this environment ("no default display port", launch hangs) - NOT a code problem; build success is the validation. Worth a manual launch in Simulator.app to eyeball the Today view.
+## What works (shipped + deployed)
+- Three views + Settings; Siri Remote nav (swipe up/down = switch view,
+  left/right = prev/next, play-pause/select = Sonos). No screensaver
+  (isIdleTimerDisabled).
+- Picture-frame mat (toggleable in Settings): Figma-width off-white paper mat,
+  corner album art (when Sonos playing/recent), handwritten Caveat photo+music
+  metadata by exact Figma coords. Suppressed on Today.
+- Photos: cover-crop with face-aware framing, 2-up portrait pairs w/ black
+  divider + per-photo captions, Left=true previous (30-item history), TV-local
+  photo duration + album picker.
+- Settings sync kitchen->TV read-only via Pi `/api/state` (30s poll).
+- Live Today-timer mirroring: kitchen posts its timer; TV shows the same
+  countdown/band/travel-pill. Kitchen travel default is weather-aware.
 
-Docs - DONE:
-- Apple-TV-Display-PRD.md bumped to v2.0.0 with the native-pivot architecture banner + section 7.4 rewrite.
-- Smart Displays.md bumped to v16.0 / 2026-05-30, added "Secondary Display: Apple TV / Frame TV" section.
+## Pi backend (`pi/kiosk-server.py`, deployed)
+- BIND 0.0.0.0; GET/POST `/api/state` (POST MERGES keys -> `/home/pi/state.json`);
+  `/api/sonos/*` proxy to 127.0.0.1:5005.
+- The Pi only serves the built app + this server; it has NO Node, scripts, or
+  Immich creds. The photo manifest is built on the Mac
+  (`node --env-file=.env code/scripts/build-photo-manifest.mjs`) and rsynced via
+  `npm run deploy`.
 
-## NOT done yet (next)
-1. Native Photos view (tvos/) - Immich manifest slideshow with smart crop / face-aware positioning / portrait pairing, matching code/src/views/PhotoSlideshow/PhotoSlideshow.jsx. Manifest is served at http://smartdisplay.local:8080/stub-photos/manifest.json (or Immich). Siri Remote prev/next.
-2. Native Now Playing view (tvos/) - album art, track/artist/station, progress, transport via /api/sonos/Main/*. Mirror useSonosState.js parsing (/zones -> coordinator.state). Siri Remote play/pause/prev/next.
-3. App shell + Siri Remote view switching (swipe up/down) + boot picker (school morning->Today, Sonos playing->NowPlaying, else Photos). Currently RootView shows TodayView only.
-4. Clear stale test data in Pi /api/state (currently holds an incomplete test POST: lat 47.66, drivingDepart 7:42, intervalMs 6000). Harmless + self-heals on next kitchen settings change. To reset cleanly, change-and-save any setting on the kitchen.
-5. Real-device install to "Living Room" Apple TV (available/paired): set DEVELOPMENT_TEAM in project.yml, then `xcodebuild -destination 'platform=tvOS,name=Living Room' -allowProvisioningUpdates`. Also need an app icon (Brand Assets) before device/App Store build. And verify the Apple TV's network path to smartdisplay.local:8080 (Mac had subnet/VLAN issues reaching the Pi earlier).
+## Open / deferred (next-session candidates)
+1. Verify on a real school morning: the weather-based walking/driving default +
+   timer mirroring (auto-arm only fires in the morning window; logic is
+   unit-tested but not yet seen end-to-end live).
+2. Automated Immich manifest rebuild (nightly + a kitchen "rebuild" button) —
+   DEFERRED pending a decision: the Pi can't run it (no Node/Immich creds), so
+   either make the Pi self-sufficient (install Node + creds; check where Immich
+   runs) or have the Mac do it + Pi triggers via SSH.
+3. Home Assistant auto-launch (school mornings -> Today, guests scene ->
+   Now Playing) — the original Phase 2 goal; turns manual launch into ambient.
+4. Merge `feature/apple-tv-display` -> main once it's proven in daily use.
+5. Cosmetic: Now Playing mat treatment; cold-threshold (35F) -> a Settings row.
 
 ## Environment caveats
-- Tool output stream has intermittently reordered/replayed/cancelled batches and silently dropped output. Verify each important step with a single command ending in a unique sentinel; do not trust large parallel batches.
-- simctl launch/screenshot unreliable here; rely on BUILD SUCCEEDED + manual eyeball.
+- tvOS sim screenshots only work if Simulator.app is opened first (display
+  attach). `simctl launch` can hang; rely on BUILD SUCCEEDED + screenshot.
+- The real Apple TV's RSD/dev tunnel occasionally wedges; an Apple TV reboot or
+  Wi-Fi toggle clears it. Xcode GUI Run is the fallback when CLI install fails.

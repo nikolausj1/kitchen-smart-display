@@ -1,8 +1,8 @@
 ---
 title: "Smart Displays - Kitchen Display Project"
 created: 2026-03-01
-modified: 2026-05-30
-version: 16.0
+modified: 2026-06-03
+version: 17.0
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -472,18 +472,22 @@ Note: The following are configurable via the Settings page and don't need to be 
 
 ### Secondary Display: Apple TV / Frame TV
 
-Status as of 2026-05-30: Phase 1 in progress. The Today view is built; Photos and Now Playing are next. Detailed source of truth for this thread is `Apple-TV-Display-PRD.md`.
+Status as of 2026-06-03: Phase 1 SHIPPED and running on the living-room Frame TV. All three views (Today, Photos, Now Playing) plus a TV-local Settings screen are live. Detailed source of truth for this thread is `Apple-TV-Display-PRD.md`.
 
-The dashboard also runs on the living-room Frame TV via an Apple TV. The TV is an independent, read-only view of the same data: it does not mirror the kitchen, and all configuration stays on the kitchen display.
+The dashboard also runs on the living-room Frame TV via an Apple TV. The TV is a mostly-independent companion view of the same data: it pulls shared settings read-only from the kitchen, but has its own TV-local preferences and mirrors the kitchen's live Today timer.
 
-Architecture note (important): tvOS ships no WebKit (no web view), so the Apple TV app is NOT a wrapper around the React web app. It is a native SwiftUI app that reimplements the three views (Today, Photos, Now Playing) and reads from the same Pi backend the kitchen uses, plus Open-Meteo directly. Code lives in the sibling `tvos/` folder, generated with XcodeGen.
+Architecture note (important): tvOS ships no WebKit (no web view), so the Apple TV app is NOT a wrapper around the React web app. It is a native SwiftUI app that reimplements the views and reads from the same Pi backend the kitchen uses, plus Open-Meteo directly. Code lives in the sibling `tvos/` folder, generated with XcodeGen; build/deploy via `tvos/deploy-device.sh` (real device) or `tvos/build-sim.sh` (simulator).
 
-Locked decisions:
+Locked decisions / shipped behavior:
 
-- Three views on the TV: Today, Photos, Now Playing. No Settings UI on the TV (permanent).
-- Boot picker: weekday school morning shows Today (always wins), else Now Playing if Sonos is playing, else Photos.
-- Settings sync: the kitchen is the sole editor. It POSTs a subset (location, school, slideshow) to a Pi endpoint (`/api/state`); the TV polls and applies them read-only. Sonos state is shared via node-sonos-http-api through a Pi proxy.
-- Siri Remote: swipe up/down switches view; swipe left/right is previous/next (photo in Photos, track in Now Playing); Play/Pause and Select control Sonos; Menu exits. Volume is NOT remote-controllable on tvOS (system handles it over CEC), deferred to a future on-screen control.
-- Phase 2 (deferred): Home Assistant auto-launch (school mornings, guests scene), a cinematic TV-specific Now Playing layout, and multi-room Sonos.
+- Views on the TV: Today, Photos, Now Playing, and Settings (a TV-LOCAL settings screen — this superseded the earlier "no Settings UI on the TV" decision).
+- Boot picker: weekday school morning shows Today, else Now Playing if Sonos is playing, else Photos.
+- Settings sync (kitchen -> TV, read-only): the kitchen is the sole editor and POSTs a subset (location, school, slideshow) to `/api/state`; the TV polls every 30s and applies them. Sonos state is shared via node-sonos-http-api through a Pi proxy.
+- TV-LOCAL settings (UserDefaults, never posted to the Pi): photo duration (10s..24h), photo album (independent of the kitchen's album), and mat on/off.
+- Live timer mirroring: the kitchen POSTs its active Today timer (`{active, travelMode, targetISO, kind}`) to `/api/state`; the TV mirrors the countdown + color band + walking/driving pill (idle fallback when none). The kitchen's travel-mode default is weather-aware (drive when wet/cold at departure time), so the TV reflects that automatically.
+- Picture-frame mat (toggleable): off-white paper-textured mat at the Figma width, with corner album art (when Sonos is playing/recent) and handwritten (Caveat font) photo + music metadata on the bottom mat, positioned by exact Figma coordinates. The mat is suppressed on the Today screen (its panels would be clipped).
+- Photos navigation: Siri Remote swipe up/down switches view; left/right is previous/next within the slideshow's history (Left re-shows the actual previous item, ~30-item back history, brief auto-advance pause after a press). Play/Pause + Select control Sonos; Menu exits. Volume is NOT remote-controllable on tvOS (system handles it over CEC).
+- Distribution: native app signed with the personal Apple Developer team; annual re-sign/reinstall via Xcode.
+- Phase 2 (deferred): Home Assistant auto-launch (school mornings, guests scene); automated Immich manifest rebuild (nightly + a kitchen "rebuild" button) — blocked on where it runs since the Pi has no Node/Immich creds; a cinematic TV-specific Now Playing layout; multi-room Sonos.
 
-Pi-side additions (`pi/kiosk-server.py`, done + deployed): bind on all interfaces (was loopback-only); GET and POST `/api/state` for the synced subset (persisted to `/home/pi/state.json`); and a `/api/sonos/*` passthrough proxy so the TV reaches node-sonos-http-api over port 8080 without exposing it on the LAN.
+Pi-side additions (`pi/kiosk-server.py`, done + deployed): bind on all interfaces (was loopback-only); GET and POST `/api/state` for the synced subset + live timer (POST MERGES top-level keys, persisted to `/home/pi/state.json`); and a `/api/sonos/*` passthrough proxy so the TV reaches node-sonos-http-api over port 8080 without exposing it on the LAN.
