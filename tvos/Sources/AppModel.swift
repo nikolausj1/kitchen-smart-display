@@ -8,7 +8,9 @@ import Combine
 @MainActor
 final class AppModel: ObservableObject {
     @Published var settings: AppSettings = .defaults
-    @Published var weatherSlots: [WeatherSlot] = []
+    // Seed from the cached forecast so a launch during an Open-Meteo outage
+    // still shows the last good weather instead of nothing.
+    @Published var weatherSlots: [WeatherSlot] = WeatherCache.read() ?? []
     @Published var now: Date = Date()
     // Immich album index (for the TV's album picker in Settings).
     @Published var photoAlbums: [PhotoAlbum] = []
@@ -36,11 +38,15 @@ final class AppModel: ObservableObject {
             }
         }
 
-        // Weather: pull now, then every 30 min (matches useWeather).
+        // Weather: pull now, then every 30 min on success / 2 min on failure
+        // (matches the web useWeather retry cadence). The faster failure retry
+        // means the TV recovers quickly after an Open-Meteo outage instead of
+        // waiting a full 30 min.
         Task { [weak self] in
             while !Task.isCancelled {
-                await self?.refreshWeather()
-                try? await Task.sleep(nanoseconds: 30 * 60 * 1_000_000_000)
+                let ok = await self?.refreshWeather() ?? false
+                let delayMin: UInt64 = ok ? 30 : 2
+                try? await Task.sleep(nanoseconds: delayMin * 60 * 1_000_000_000)
             }
         }
 
@@ -65,12 +71,17 @@ final class AppModel: ObservableObject {
         if merged != settings { settings = merged }
     }
 
-    func refreshWeather() async {
+    // Returns true if a live forecast was fetched (drives the retry cadence).
+    @discardableResult
+    func refreshWeather() async -> Bool {
         let slots = await weather.fetch(
             location: settings.location,
             slots: settings.weatherSlots
         )
-        if let slots { weatherSlots = slots }
+        guard let slots else { return false }   // outage: keep showing cache
+        weatherSlots = slots
+        WeatherCache.write(slots)
+        return true
     }
 }
 

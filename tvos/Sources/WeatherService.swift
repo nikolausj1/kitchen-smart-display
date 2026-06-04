@@ -4,12 +4,36 @@ import Foundation
 // (no API key), reduced to the configured slot hours that are still upcoming
 // today. WMO code -> icon name mapping matches the web app.
 
-struct WeatherSlot: Identifiable, Equatable {
+struct WeatherSlot: Identifiable, Equatable, Codable {
     var hour: Int
     var label: String
     var temp: Int?
     var icon: String
     var id: Int { hour }
+}
+
+// Cache the last good forecast so an Open-Meteo outage doesn't blank the TV.
+// Mirrors the web useWeather cache: keep for up to 12h, then ignore as stale.
+enum WeatherCache {
+    private static let key = "tv.weatherCache"
+    private static let maxAgeSec: TimeInterval = 12 * 60 * 60
+
+    struct Entry: Codable { var slots: [WeatherSlot]; var fetchedAt: Date }
+
+    static func read() -> [WeatherSlot]? {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let e = try? JSONDecoder().decode(Entry.self, from: data),
+              Date().timeIntervalSince(e.fetchedAt) <= maxAgeSec
+        else { return nil }
+        return e.slots
+    }
+
+    static func write(_ slots: [WeatherSlot]) {
+        let e = Entry(slots: slots, fetchedAt: Date())
+        if let data = try? JSONEncoder().encode(e) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
 }
 
 private let wmoToIcon: [Int: String] = [
