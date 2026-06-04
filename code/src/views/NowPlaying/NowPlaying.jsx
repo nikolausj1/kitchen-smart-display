@@ -34,7 +34,18 @@ function useNow() {
   return now
 }
 
-function TransportButton({ icon, label, onClick }) {
+// Inline transport glyphs (no baked circle - the .np__btn provides the circle).
+// Filled paths so CSS `fill` controls the color. The previous Figma SVGs were
+// confusingly authored (each baked its own circle, and pause/play were
+// effectively swapped), so we render clean glyphs instead.
+const GLYPHS = {
+  prev: 'M7 5h2.2v14H7V5zm3 7L19 5v14l-9-7z',   // |◄  bar + left triangle
+  play: 'M8 5v14l11-7L8 5z',                     // ►   right triangle
+  pause: 'M6.5 5h3.6v14H6.5zM13.9 5h3.6v14h-3.6z', // ❚❚  two bars
+  next: 'M14.8 5H17v14h-2.2V5zM5 5l9 7-9 7V5z',  // ►|  triangle + bar
+}
+
+function TransportButton({ glyph, label, onClick }) {
   return (
     <button
       type="button"
@@ -45,7 +56,9 @@ function TransportButton({ icon, label, onClick }) {
         onClick?.()
       }}
     >
-      <img src={icon} alt="" aria-hidden="true" draggable="false" />
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="np__btn-icon">
+        <path d={GLYPHS[glyph]} />
+      </svg>
     </button>
   )
 }
@@ -137,21 +150,19 @@ export default function NowPlaying() {
 
         <div className="np__transport">
           <TransportButton
-            icon="/icons/ui/transport-prev-next.svg"
+            glyph="prev"
             label="Previous track"
             onClick={actions.previous}
           />
+          {/* The middle button shows the action a press WILL take: while music
+            * is playing it shows Pause; while paused it shows Play. */}
           <TransportButton
-            icon={
-              playing
-                ? '/icons/ui/transport-pause.svg'
-                : '/icons/ui/transport-next-alt.svg'
-            }
+            glyph={playing ? 'pause' : 'play'}
             label={playing ? 'Pause' : 'Play'}
             onClick={playing ? actions.pause : actions.play}
           />
           <TransportButton
-            icon="/icons/ui/transport-prev-next.svg"
+            glyph="next"
             label="Next track"
             onClick={actions.next}
           />

@@ -96,37 +96,36 @@
   gap: 2vw;
 }
 
+/* Frosted-glass transport buttons (mockup option 6): lighter translucent fill
+ * + subtle border + blur, so they read clearly against the black background. */
 .np__btn {
   width: 5vw;
   height: 5vw;
   min-width: 70px;
   min-height: 70px;
   border-radius: 999px;
-  border: 0;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .np__btn:active {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
-.np__btn img {
-  width: 50%;
-  height: 50%;
-  object-fit: contain;
+.np__btn-icon {
+  width: 46%;
+  height: 46%;
   display: block;
-  filter: invert(1);
-}
-
-/* The first transport button (Previous) flips the prev/next SVG. */
-.np__transport .np__btn:first-child img {
-  transform: scaleX(-1);
+  fill: #ffffff;
 }
 
 /* --- Clock bottom-left --------------------------------------------------- */
