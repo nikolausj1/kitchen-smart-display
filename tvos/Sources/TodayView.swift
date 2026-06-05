@@ -32,6 +32,10 @@ private func bandColor(_ band: TimerBand) -> Color {
 
 struct TodayView: View {
     @EnvironmentObject var model: AppModel
+    // When true, the whole layout is scaled into the mat opening and the mat
+    // border is drawn on top (panels stay clear of the frame). Default off -
+    // the panels were designed full-bleed.
+    var matted: Bool = false
 
     private var departure: DepartureState {
         mirrorKitchenTimer(
@@ -43,30 +47,63 @@ struct TodayView: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Scale type to the render size (design is authored against a
-            // 1920-wide reference; tvOS renders at 1920x1080 for 1080p).
-            let W = geo.size.width
-            let gap = W * 0.0126
-
-            HStack(spacing: gap) {
-                // Left column: time/date over weather (~2946 of 5153 units).
-                VStack(spacing: geo.size.height * 0.0197) {
-                    TimeDatePanel(width: W).frame(maxHeight: .infinity)
-                    WeatherPanel(slots: model.weatherSlots, width: W)
-                        .frame(maxHeight: .infinity)
-                }
-                .frame(width: (W - gap) * (2946.0 / 5153.0))
-
-                // Right column: timer panel fills remaining width + full height.
-                TimerPanel(departure: departure, width: W)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            let full = geo.size
+            // Matted: render the panels inside the opening (so the off-white mat
+            // frames them) and overlay the border. Type scales to the canvas, so
+            // shrinking the canvas shrinks the whole UI to fit. Unmatted = full.
+            let canvas = matted ? MatMetrics.opening(full).size : full
+            ZStack {
+                Palette.bg
+                content(W: canvas.width, H: canvas.height)
+                    .frame(width: canvas.width, height: canvas.height)
+                    .position(x: full.width / 2, y: full.height / 2)
+                if matted { MatBorderOverlay() }
             }
-            .padding(.horizontal, W * 0.0094)
-            .padding(.vertical, geo.size.height * 0.012)
-            .frame(width: geo.size.width, height: geo.size.height)
+            .frame(width: full.width, height: full.height)
             .background(Palette.bg)
         }
         .ignoresSafeArea()
+    }
+
+    // The Today panels, scaled to the given canvas. Type is sized relative to W,
+    // so the same code lays out full-screen or inside the mat opening.
+    @ViewBuilder
+    private func content(W: CGFloat, H: CGFloat) -> some View {
+        let gap = W * 0.0126
+        Group {
+            if departure.active {
+                // Timer active: two columns. Left stacks time/date over weather
+                // (~2946 of 5153 units); right is the timer panel.
+                HStack(spacing: gap) {
+                    stack(W: W, H: H)
+                        .frame(width: (W - gap) * (2946.0 / 5153.0))
+
+                    // Right column: timer fills remaining width + height.
+                    TimerPanel(departure: departure, width: W)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                // No timer: the timer column is removed and the time/date +
+                // weather panels span the full width, content centered.
+                stack(W: W, H: H)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, W * 0.0094)
+        .padding(.vertical, H * 0.012)
+        .frame(width: W, height: H)
+        .background(Palette.bg)
+    }
+
+    // Time/date panel over the weather panel. Used full-width when no timer is
+    // set, or as the left column when a departure timer is active.
+    @ViewBuilder
+    private func stack(W: CGFloat, H: CGFloat) -> some View {
+        VStack(spacing: H * 0.0197) {
+            TimeDatePanel(width: W).frame(maxHeight: .infinity)
+            WeatherPanel(slots: model.weatherSlots, width: W)
+                .frame(maxHeight: .infinity)
+        }
     }
 }
 
@@ -131,25 +168,31 @@ private struct WeatherPanel: View {
     var body: some View {
         ZStack {
             Rectangle().fill(Palette.panel)
-            HStack(alignment: .center, spacing: width * 0.01) {
-                ForEach(displaySlots) { slot in
-                    VStack(spacing: width * 0.012) {
-                        Text(slot.label)
-                            .font(.system(size: width * 0.018, weight: .regular))
-                            .foregroundStyle(.white)
-                        Image(systemName: sfSymbol(forWeatherIcon: slot.icon))
-                            .symbolRenderingMode(.multicolor)
-                            .font(.system(size: width * 0.045))
-                            .frame(height: width * 0.065)
-                        Text(slot.temp.map { "\($0)°" } ?? "--°")
-                            .font(.system(size: width * 0.0233, weight: .bold))
-                            .monospacedDigit()
-                            .foregroundStyle(.white)
+            // Slots distribute across 70% of the panel width (centered), so the
+            // columns sit ~30% closer together than an edge-to-edge spread. Icon
+            // and text sizes are fixed (relative to W), so only the gaps shrink.
+            GeometryReader { g in
+                HStack(alignment: .center, spacing: width * 0.01) {
+                    ForEach(displaySlots) { slot in
+                        VStack(spacing: width * 0.012) {
+                            Text(slot.label)
+                                .font(.system(size: width * 0.018, weight: .regular))
+                                .foregroundStyle(.white)
+                            Image(systemName: sfSymbol(forWeatherIcon: slot.icon))
+                                .symbolRenderingMode(.multicolor)
+                                .font(.system(size: width * 0.045))
+                                .frame(height: width * 0.065)
+                            Text(slot.temp.map { "\($0)°" } ?? "--°")
+                                .font(.system(size: width * 0.0233, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
                 }
+                .frame(width: g.size.width * 0.7, height: g.size.height)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .padding(.horizontal, width * 0.024)
         }
     }
 }

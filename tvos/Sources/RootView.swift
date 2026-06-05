@@ -38,7 +38,9 @@ final class AppRouter: ObservableObject {
     func cycle(_ delta: Int) {
         let all = TVView.allCases
         let old = view
-        let next = all[(view.rawValue + delta + all.count) % all.count]
+        // Linear, non-wrapping: clamp at both ends (Today top, Settings bottom).
+        let idx = min(all.count - 1, max(0, view.rawValue + delta))
+        let next = all[idx]
         if next == .settings { previousView = old }   // remember where to return
         view = next
     }
@@ -100,35 +102,21 @@ struct RootView: View {
             }
     }
 
-    // Photos composes its own z-order (photo -> album art -> mat -> handwritten
-    // metadata), so it is rendered directly and owns the mat. The other views
-    // are wrapped in MatFrame when the mat is enabled.
+    // Each view owns its own mat decision. Photos composes its z-order (photo ->
+    // album art -> mat -> handwritten metadata) and reads `photosMatEnabled`.
+    // Now Playing renders Off/Fit/Framed itself per `musicMatMode`. Today and
+    // Settings are never matted (their content sits at the edges).
     @ViewBuilder
     private var matted: some View {
         switch router.view {
         case .photos:
-            // Photos composes its own mat/z-order.
             PhotosView(remote: photoRemote, sonos: sonos)
         case .today:
-            // Today is structured panels whose content sits near the edges, so
-            // the mat would clip it. Always render full-screen, never matted.
-            TodayView()
-        default:
-            if tvSettings.matEnabled {
-                MatFrame { nonPhotoShell }
-            } else {
-                nonPhotoShell
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var nonPhotoShell: some View {
-        switch router.view {
-        case .today:    TodayView()
-        case .music:    NowPlayingView(controller: sonos)
-        case .settings: SettingsView(nav: settingsNav)
-        case .photos:   EmptyView()   // handled in `matted`
+            TodayView(matted: tvSettings.todayMatEnabled)
+        case .settings:
+            SettingsView(nav: settingsNav)
+        case .music:
+            NowPlayingView(controller: sonos, mat: tvSettings.musicMatMode)
         }
     }
 
@@ -141,8 +129,12 @@ struct RootView: View {
     private func handleMove(_ direction: MoveCommandDirection) {
         if router.view == .settings {
             switch direction {
-            case .up:    settingsNav.move(-1)
-            case .down:  settingsNav.move(1)
+            case .up:
+                // Up from the top row leaves Settings and returns to Music;
+                // otherwise move the row selection up.
+                if settingsNav.selectedRow == 0 { router.cycle(-1) }
+                else { settingsNav.move(-1) }
+            case .down:  settingsNav.move(1)   // clamps; never leaves Settings
             case .left:  adjustSetting(-1)
             case .right: adjustSetting(1)
             default: break
@@ -160,8 +152,13 @@ struct RootView: View {
 
     private func handlePlayPause() {
         if router.view == .settings {
-            // Play/pause toggles a boolean row (Mat); no-op on numeric rows.
-            if settingsNav.current == .mat { tvSettings.toggleMat() }
+            // Play/pause advances the highlighted mat row; no-op on numeric rows.
+            switch settingsNav.current {
+            case .todayMat:  tvSettings.todayMatEnabled.toggle()
+            case .photosMat: tvSettings.photosMatEnabled.toggle()
+            case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
+            default: break
+            }
             return
         }
         sonos.playPause()
@@ -171,7 +168,9 @@ struct RootView: View {
         switch settingsNav.current {
         case .photoDuration: tvSettings.stepDuration(dir)
         case .album:         tvSettings.cycleAlbum(albums: model.photoAlbums, dir: dir)
-        case .mat:           tvSettings.matEnabled = (dir > 0)   // left=Off, right=On
+        case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
+        case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
+        case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed
         }
     }
 

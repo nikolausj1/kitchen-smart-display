@@ -67,13 +67,19 @@ struct PhotosView: View {
             //   photo -> album art (in opening) -> mat border -> handwritten
             //   metadata (printed on the mat). When the mat is OFF, fall back
             //   to the white caption + a plain corner album art.
-            let matOn = tvSettings.matEnabled
+            let matOn = tvSettings.photosMatEnabled
             let showArt = sonos.recentlyPlaying()
             ZStack {
                 Color.black
                 if let item = engine.current {
+                    // When matted, render the photo INSIDE the opening (inset by
+                    // the mat width) so the mat frames the photo instead of
+                    // covering its edges and cropping heads. Unmatted = full bleed.
+                    let stageSize = matOn ? MatMetrics.opening(geo.size).size : geo.size
                     PhotoStage(item: item, settings: model.settings.slideshow,
-                               size: geo.size)
+                               size: stageSize)
+                        .frame(width: stageSize.width, height: stageSize.height)
+                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
                         .id(engine.generation)            // new id per advance
                         .transition(.opacity)             // crossfade
                 }
@@ -370,7 +376,9 @@ private struct HandwrittenMat: View {
                       leadingPad: CGFloat = 0, trailingPad: CGFloat = 0,
                       trailing: Bool) -> some View {
         if let t = text, !t.isEmpty {
-            Text(t)
+            // Trailing space so Caveat's slanted final glyph isn't clipped at the
+            // Text's tight intrinsic bounds (its ink overhangs the advance width).
+            Text(t + " ")
                 .font(HandFont.font(size))
                 .frame(maxWidth: .infinity, maxHeight: .infinity,
                        alignment: trailing ? .topTrailing : .topLeading)

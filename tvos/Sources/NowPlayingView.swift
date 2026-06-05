@@ -1,13 +1,17 @@
 import SwiftUI
 
 // NowPlayingView - native tvOS port of the kitchen Now Playing view
-// (figma music-nowPlaying.png). Black background; left column has the station
-// pill, bold track title, artist, progress bar, three round transport buttons,
-// and a big clock bottom-left; right column is large album art.
+// (figma music-nowPlaying.png). Three picture-frame treatments, chosen from
+// Settings (TVSettings.musicMatMode):
+//   .off    - full-bleed, no mat: metadata column left, big album art right.
+//   .fit    - the same two-column layout shrunk to live inside the mat opening,
+//             with the mat border drawn on top so nothing is clipped.
+//   .framed - the opening is filled with a blurred album-art wash, the crisp
+//             square cover floats centered on top, and the track title/artist
+//             are handwritten on the bottom mat band (cohesive with Photos).
 //
-// Transport is driven both by on-screen focusable buttons (Siri Remote click)
-// and by the shell's remote handler (play/pause/skip). The TV always targets
-// the "Main" Sonos room.
+// Transport (prev/next/play-pause) is driven by the Siri Remote via the shell's
+// handler -> Sonos. The TV always targets the "Main" Sonos room.
 
 struct NowPlayingView: View {
     @EnvironmentObject var model: AppModel
@@ -15,18 +19,39 @@ struct NowPlayingView: View {
     // The shell owns the SonosController (so its remote handler can drive
     // transport from any view) and injects it here as an observed object.
     @ObservedObject var sonos: SonosController
+    let mat: MusicMatMode
 
-    init(controller: SonosController) {
+    init(controller: SonosController, mat: MusicMatMode) {
         self.sonos = controller
+        self.mat = mat
     }
 
-    private var s: SonosState { sonos.state }
+    private var s: SonosState {
+        #if targetEnvironment(simulator)
+        // Sim-only: `defaults write <bundle> debug.fakeMusic -bool YES` fakes a
+        // playing track (with stub cover art) so the Off/Fit/Framed treatments
+        // can be verified without a reachable Sonos. Mirrors PhotosView.
+        if UserDefaults.standard.bool(forKey: "debug.fakeMusic") {
+            return SonosState(
+                playing: true, paused: false,
+                track: NowPlayingTrack(
+                    title: "Landslide", artist: "Fleetwood Mac", album: "Fleetwood Mac",
+                    albumArtURL: URL(string: AppConfig.piBase.absoluteString
+                        + "/stub-photos/immich-f5eea208-1ab6-4e49-800a-e6458a86fbe1.jpg"),
+                    durationMs: 192_000, elapsedMs: 64_000),
+                stationName: "", volume: 30, loaded: true)
+        }
+        #endif
+        return sonos.state
+    }
 
     private var stationLabel: String {
         if !s.stationName.isEmpty { return s.stationName }
         if let al = s.track?.album, !al.isEmpty { return al }
         return "Sonos"
     }
+
+    private var titleText: String { s.track?.title ?? (s.loaded ? "Nothing playing" : "Loading...") }
 
     private var progress: Double {
         guard let t = s.track, t.durationMs > 0 else { return 0 }
@@ -35,57 +60,183 @@ struct NowPlayingView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let W = geo.size.width
-            let H = geo.size.height
-            HStack(spacing: 0) {
-                // Left column: metadata + transport
-                VStack(alignment: .leading, spacing: H * 0.02) {
-                    Spacer()
-                    Text(stationLabel)
-                        .font(.system(size: W * 0.0147, weight: .regular))
-                        .lineLimit(1)
-                        .padding(.vertical, H * 0.014)
-                        .padding(.horizontal, W * 0.02)
-                        .background(Color(white: 0.12), in: Capsule())
-
-                    Text(s.track?.title ?? (s.loaded ? "Nothing playing" : "Loading..."))
-                        .font(.system(size: W * 0.0242, weight: .bold))
-                        .lineLimit(2)
-                        .padding(.top, H * 0.01)
-
-                    Text(s.track?.artist ?? "")
-                        .font(.system(size: W * 0.0242, weight: .regular))
-                        .foregroundStyle(Color(white: 0.85))
-                        .lineLimit(1)
-
-                    if s.track != nil {
-                        ProgressBar(progress: progress, width: W)
-                            .padding(.top, H * 0.02)
-                    }
-
-                    // No on-screen transport controls: prev/next/play-pause are
-                    // driven by the Siri Remote (shell handler -> Sonos).
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                // Leading inset clears the mat border when the mat is on so the
-                // metadata isn't covered; normal margin otherwise.
-                .padding(.leading, tvSettings.matEnabled
-                         ? MatMetrics.safeInset(CGSize(width: W, height: H)) : W * 0.04)
-                .padding(.trailing, W * 0.04)
-                .padding(.vertical, H * 0.04)
-
-                // Right column: album art (its outer edge under the mat is fine).
-                AlbumArt(url: s.track?.albumArtURL, side: H * 0.92)
-                    .padding(.trailing, W * 0.04)
-                    .padding(.vertical, H * 0.04)
+            switch mat {
+            case .off:    fullBleed(geo.size)
+            case .fit:    fitted(geo.size)
+            case .framed: framed(geo.size)
             }
-            .frame(width: W, height: H)
-            .background(Color.black)
         }
         .ignoresSafeArea()
         // The shell owns start/stop of the shared controller.
+    }
+
+    // MARK: - Off: full-bleed two columns (no mat)
+
+    @ViewBuilder
+    private func fullBleed(_ size: CGSize) -> some View {
+        twoColumn(canvas: size)
+    }
+
+    // MARK: - Fit: the SAME layout, uniformly scaled into the mat opening
+
+    @ViewBuilder
+    private func fitted(_ size: CGSize) -> some View {
+        // Render the full-bleed layout against the opening as its canvas, then
+        // center it and draw the mat on top. Because every dimension (type, art,
+        // margins) is relative to the canvas, the whole UI shrinks together and
+        // keeps its 4% margins clear of the frame - nothing sits tight to the mat
+        // or gets clipped.
+        let opening = MatMetrics.opening(size)
+        ZStack {
+            Color.black
+            twoColumn(canvas: opening.size)
+                .frame(width: opening.width, height: opening.height)
+                .position(x: size.width / 2, y: size.height / 2)
+            MatBorderOverlay()
+        }
+    }
+
+    // Metadata-left / art-right layout, sized to the given canvas (full screen
+    // for Off, the mat opening for Fit). All metrics are relative to the canvas.
+    @ViewBuilder
+    private func twoColumn(canvas: CGSize) -> some View {
+        let W = canvas.width, H = canvas.height
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: H * 0.02) {
+                Spacer()
+                Text(stationLabel)
+                    .font(.system(size: W * 0.0147, weight: .regular))
+                    .lineLimit(1)
+                    .padding(.vertical, H * 0.014)
+                    .padding(.horizontal, W * 0.02)
+                    .background(Color(white: 0.12), in: Capsule())
+
+                Text(titleText)
+                    .font(.system(size: W * 0.0242, weight: .bold))
+                    .lineLimit(2)
+                    .padding(.top, H * 0.01)
+
+                Text(s.track?.artist ?? "")
+                    .font(.system(size: W * 0.0242, weight: .regular))
+                    .foregroundStyle(Color(white: 0.85))
+                    .lineLimit(1)
+
+                if s.track != nil {
+                    ProgressBar(progress: progress, width: W)
+                        .padding(.top, H * 0.02)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, W * 0.04)
+            .padding(.trailing, W * 0.04)
+            .padding(.vertical, H * 0.04)
+
+            AlbumArt(url: s.track?.albumArtURL, side: H * 0.92)
+                .padding(.trailing, W * 0.04)
+                .padding(.vertical, H * 0.04)
+        }
+        .frame(width: W, height: H)
+        .background(Color.black)
+    }
+
+    // MARK: - Framed: blurred ambient fill + centered cover + mat metadata
+
+    @ViewBuilder
+    private func framed(_ size: CGSize) -> some View {
+        let W = size.width, H = size.height
+        let opening = MatMetrics.opening(size)
+        let coverSide = opening.height * 0.78
+        ZStack {
+            Color.black
+
+            // Blurred album-art wash filling the opening, synthesized from the
+            // same square cover (Sonos gives no wide imagery).
+            blurredFill(url: s.track?.albumArtURL, opening: opening)
+
+            // Crisp square cover, centered in the opening, with a hairline
+            // progress line riding the very bottom edge of the art.
+            AlbumArt(url: s.track?.albumArtURL, side: coverSide)
+                .overlay(alignment: .bottom) {
+                    if s.track != nil {
+                        hairlineProgress(width: coverSide, height: max(1, H * 0.0015))
+                    }
+                }
+                .position(x: opening.midX, y: opening.midY)
+
+            // Mat border, then handwritten title/artist on the bottom band.
+            MatBorderOverlay()
+            framedMetadata(size: size)
+        }
+        .frame(width: W, height: H)
+        .background(Color.black)
+    }
+
+    // A barely-there progress line that sits flush along the bottom of the cover
+    // (no track chrome): a faint full-width base with a brighter elapsed portion.
+    @ViewBuilder
+    private func hairlineProgress(width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Rectangle().fill(Color.white.opacity(0.25))
+                .frame(width: width, height: height)
+            Rectangle().fill(Color.white.opacity(0.9))
+                .frame(width: width * progress, height: height)
+        }
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func blurredFill(url: URL?, opening: CGRect) -> some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color(white: 0.08)
+                    }
+                }
+            } else {
+                Color(white: 0.08)
+            }
+        }
+        .frame(width: opening.width, height: opening.height)
+        .clipped()
+        .blur(radius: opening.height * 0.06)
+        .frame(width: opening.width, height: opening.height)
+        .clipped()
+        .overlay(Color.black.opacity(0.28))
+        .position(x: opening.midX, y: opening.midY)
+        .allowsHitTesting(false)
+    }
+
+    // Track title over artist, handwritten on the bottom mat band. Uses the SAME
+    // Figma top-y coordinates (titleTop 2005.57 / dateTop 2077, frame 3840x2160)
+    // as the Photos mat, so the title/artist line spacing matches Photos exactly
+    // - just centered horizontally instead of right-aligned.
+    @ViewBuilder
+    private func framedMetadata(size: CGSize) -> some View {
+        let sy = size.height / 2160
+        ZStack(alignment: .top) {
+            handLine(titleText, pt: 64, topY: 2005.57, sy: sy)
+            if let artist = s.track?.artist, !artist.isEmpty {
+                handLine(artist, pt: 42, topY: 2077, sy: sy)
+            }
+        }
+        .foregroundStyle(HandFont.ink)
+        .lineLimit(1)
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+    }
+
+    // One handwritten line, top-anchored at the Figma y and centered horizontally
+    // (mirrors HandwrittenMat.line in PhotosView, but center-aligned).
+    @ViewBuilder
+    private func handLine(_ text: String, pt: CGFloat, topY: CGFloat, sy: CGFloat) -> some View {
+        Text(text)
+            .font(HandFont.font(pt * sy))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, topY * sy)
     }
 }
 

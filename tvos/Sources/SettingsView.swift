@@ -5,7 +5,9 @@ import SwiftUI
 enum SettingsRow: Int, CaseIterable {
     case photoDuration
     case album
-    case mat
+    case todayMat
+    case photosMat
+    case musicMat
 }
 
 // Selection state for the settings list, owned by the shell so its remote
@@ -45,8 +47,14 @@ struct SettingsView: View {
                 row(.album, label: "Photo album", W: W,
                     value: tvSettings.albumLabel(albums: model.photoAlbums))
 
-                row(.mat, label: "Mat", W: W,
-                    value: tvSettings.matEnabled ? "On" : "Off")
+                row(.todayMat, label: "Today Mat", W: W,
+                    value: tvSettings.todayMatEnabled ? "On" : "Off")
+
+                row(.photosMat, label: "Photos Mat", W: W,
+                    value: tvSettings.photosMatEnabled ? "On" : "Off")
+
+                row(.musicMat, label: "Music Mat", W: W,
+                    value: tvSettings.musicMatLabel)
 
                 Text("Use left/right to change. Press Menu to exit.")
                     .font(.system(size: W * 0.016, weight: .regular))

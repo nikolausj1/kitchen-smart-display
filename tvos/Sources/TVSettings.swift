@@ -10,14 +10,37 @@ import SwiftUI
 // Fields:
 //   photoDurationSeconds - slideshow dwell per photo on the TV (from a fixed
 //                          list of choices; independent of the kitchen)
-//   matEnabled           - whether the picture-frame mat is drawn
+//   photosMatEnabled     - whether the picture-frame mat is drawn on Photos
+//   musicMatMode         - how Now Playing relates to the mat: off (full-bleed),
+//                          fit (current layout inside the opening), or framed
+//                          (blurred ambient fill + metadata on the mat)
 //   albumId              - which Immich album the TV shows (nil = All albums),
 //                          independent of the kitchen's album selection
+
+// How the Now Playing screen treats the picture-frame mat. Raw values are
+// persisted, so keep their order stable.
+enum MusicMatMode: Int, CaseIterable {
+    case off    = 0   // full-bleed, no mat
+    case fit    = 1   // current two-column layout, shrunk inside the opening
+    case framed = 2   // blurred ambient fill + handwritten metadata on the mat
+
+    var label: String {
+        switch self {
+        case .off:    return "Off"
+        case .fit:    return "Fit"
+        case .framed: return "Framed"
+        }
+    }
+}
+
 @MainActor
 final class TVSettings: ObservableObject {
     private enum Key {
         static let photoDuration = "tv.photoDurationSeconds"
-        static let matEnabled = "tv.matEnabled"
+        static let legacyMatEnabled = "tv.matEnabled"   // pre per-view split
+        static let photosMatEnabled = "tv.photosMatEnabled"
+        static let musicMatMode = "tv.musicMatMode"
+        static let todayMatEnabled = "tv.todayMatEnabled"
         static let albumId = "tv.albumId"
     }
 
@@ -30,8 +53,14 @@ final class TVSettings: ObservableObject {
     @Published var photoDurationSeconds: Int {
         didSet { UserDefaults.standard.set(photoDurationSeconds, forKey: Key.photoDuration) }
     }
-    @Published var matEnabled: Bool {
-        didSet { UserDefaults.standard.set(matEnabled, forKey: Key.matEnabled) }
+    @Published var photosMatEnabled: Bool {
+        didSet { UserDefaults.standard.set(photosMatEnabled, forKey: Key.photosMatEnabled) }
+    }
+    @Published var musicMatMode: MusicMatMode {
+        didSet { UserDefaults.standard.set(musicMatMode.rawValue, forKey: Key.musicMatMode) }
+    }
+    @Published var todayMatEnabled: Bool {
+        didSet { UserDefaults.standard.set(todayMatEnabled, forKey: Key.todayMatEnabled) }
     }
     // nil = "All albums".
     @Published var albumId: String? {
@@ -46,8 +75,15 @@ final class TVSettings: ObservableObject {
         let stored = d.object(forKey: Key.photoDuration) as? Int
         // Snap any stored value to the nearest allowed choice; default 30s.
         photoDurationSeconds = Self.nearestChoice(stored ?? 30)
-        // Mat defaults ON when unset.
-        matEnabled = (d.object(forKey: Key.matEnabled) as? Bool) ?? true
+        // Photos mat defaults ON; on upgrade, seed from the old global toggle.
+        let legacyMat = d.object(forKey: Key.legacyMatEnabled) as? Bool
+        photosMatEnabled = (d.object(forKey: Key.photosMatEnabled) as? Bool)
+            ?? legacyMat ?? true
+        // Music mat defaults to Framed (the full mat treatment).
+        musicMatMode = (d.object(forKey: Key.musicMatMode) as? Int)
+            .flatMap(MusicMatMode.init(rawValue:)) ?? .framed
+        // Today mat defaults ON (mats are on by default across all views).
+        todayMatEnabled = (d.object(forKey: Key.todayMatEnabled) as? Bool) ?? true
         albumId = d.string(forKey: Key.albumId)   // nil = All
     }
 
@@ -74,9 +110,21 @@ final class TVSettings: ObservableObject {
         return h == 1 ? "1 hour" : "\(h) hours"
     }
 
-    // MARK: - Album
+    // MARK: - Mat
 
-    func toggleMat() { matEnabled.toggle() }
+    var musicMatLabel: String { musicMatMode.label }
+
+    // Step Off -> Fit -> Framed. Left/right clamps at the ends; play/pause wraps.
+    func stepMusicMat(_ dir: Int, wrap: Bool = false) {
+        let all = MusicMatMode.allCases
+        let i = musicMatMode.rawValue
+        let next = wrap
+            ? (i + dir + all.count) % all.count
+            : min(all.count - 1, max(0, i + dir))
+        musicMatMode = all[next]
+    }
+
+    // MARK: - Album
 
     // Cycle through [All, album1, album2, ...]. dir: -1 / +1. `albums` comes
     // from AppModel (the manifest index).
