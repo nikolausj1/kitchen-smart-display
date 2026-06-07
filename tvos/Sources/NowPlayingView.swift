@@ -53,9 +53,18 @@ struct NowPlayingView: View {
 
     private var titleText: String { s.track?.title ?? (s.loaded ? "Nothing playing" : "Loading...") }
 
-    private var progress: Double {
+    // Smoothly-interpolated playback position. Sonos is polled only ~every 1.5s,
+    // so the raw elapsed value steps in visible jumps. We anchor to the most
+    // recent poll and add the wall-clock time since then (while playing), so the
+    // progress bar grows continuously instead of hopping.
+    @State private var anchorElapsedMs: Int = 0
+    @State private var anchorDate: Date = Date()
+
+    private func smoothProgress(_ now: Date) -> Double {
         guard let t = s.track, t.durationMs > 0 else { return 0 }
-        return min(1, Double(t.elapsedMs) / Double(t.durationMs))
+        let extraMs = s.playing ? max(0, now.timeIntervalSince(anchorDate) * 1000) : 0
+        let elapsed = Double(anchorElapsedMs) + extraMs
+        return min(1, elapsed / Double(t.durationMs))
     }
 
     var body: some View {
@@ -67,6 +76,16 @@ struct NowPlayingView: View {
             }
         }
         .ignoresSafeArea()
+        // Re-anchor whenever a poll updates elapsed, the track changes, or
+        // play/pause toggles (initial: true seeds it on appear).
+        .onChange(of: s.track?.elapsedMs, initial: true) { _, newVal in
+            anchorElapsedMs = newVal ?? 0
+            anchorDate = Date()
+        }
+        .onChange(of: s.playing) { _, _ in
+            anchorElapsedMs = s.track?.elapsedMs ?? 0
+            anchorDate = Date()
+        }
         // The shell owns start/stop of the shared controller.
     }
 
@@ -122,8 +141,10 @@ struct NowPlayingView: View {
                     .lineLimit(1)
 
                 if s.track != nil {
-                    ProgressBar(progress: progress, width: W)
-                        .padding(.top, H * 0.02)
+                    TimelineView(.animation) { ctx in
+                        ProgressBar(progress: smoothProgress(ctx.date), width: W)
+                    }
+                    .padding(.top, H * 0.02)
                 }
                 Spacer()
             }
@@ -159,7 +180,11 @@ struct NowPlayingView: View {
             AlbumArt(url: s.track?.albumArtURL, side: coverSide)
                 .overlay(alignment: .bottom) {
                     if s.track != nil {
-                        hairlineProgress(width: coverSide, height: max(1, H * 0.0015))
+                        TimelineView(.animation) { ctx in
+                            hairlineProgress(width: coverSide,
+                                             height: max(1, H * 0.0015),
+                                             progress: smoothProgress(ctx.date))
+                        }
                     }
                 }
                 .position(x: opening.midX, y: opening.midY)
@@ -175,7 +200,7 @@ struct NowPlayingView: View {
     // A barely-there progress line that sits flush along the bottom of the cover
     // (no track chrome): a faint full-width base with a brighter elapsed portion.
     @ViewBuilder
-    private func hairlineProgress(width: CGFloat, height: CGFloat) -> some View {
+    private func hairlineProgress(width: CGFloat, height: CGFloat, progress: Double) -> some View {
         ZStack(alignment: .leading) {
             Rectangle().fill(Color.white.opacity(0.25))
                 .frame(width: width, height: height)
