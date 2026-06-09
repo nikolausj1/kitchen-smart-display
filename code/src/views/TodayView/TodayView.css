@@ -26,6 +26,12 @@
   font-feature-settings: 'cv11', 'ss01';
 }
 
+/* No-school days: drop the timer column; time + weather span the full width
+ * (no message), matching the Apple TV no-timer layout. */
+.today-view--noschool {
+  grid-template-columns: 1fr;
+}
+
 .today-view__left {
   display: grid;
   grid-template-rows: 1903fr 1391fr;

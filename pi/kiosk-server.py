@@ -13,15 +13,19 @@
 # server stays correct even if the cable is plugged into a different HDMI
 # port between reboots).
 
+import datetime
 import json
 import os
 import re
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
+from urllib.parse import parse_qs, urlparse
 
 KIOSK_DIR = '/home/pi/kiosk'
 # Shared settings state synced from the kitchen display to secondary clients
@@ -38,6 +42,146 @@ BIND = '0.0.0.0'
 # through the /api/sonos/* proxy below, so node-sonos-http-api itself does
 # not need to be exposed on the LAN.
 SONOS_UPSTREAM = 'http://127.0.0.1:5005'
+
+# School-schedule data sources, fetched server-side (the kiosk browser would
+# hit CORS) and cached in memory.
+#   GET /api/lunch?school=<slug>  -> today-ish lunch menu, parsed + compact
+#   GET /api/schoolcal            -> no-school ranges + first/last day, from the
+#                                    SPS "School Year Dates" iCal feed
+MEALVIEWER_BASE = 'https://api.mealviewer.com/api/v4/school'
+DEFAULT_SCHOOL_SLUG = 'Lawton'
+SPS_ICS_URL = 'https://www.seattleschools.org/dates/ics/'
+HTTP_TIMEOUT = 10
+HTTP_UA = 'KitchenSmartDisplay/1.0 (+kiosk)'
+LUNCH_TTL = 6 * 3600          # menu changes at most daily
+CAL_TTL = 7 * 24 * 3600       # school calendar is static across the year
+
+_cache_lock = threading.Lock()
+_lunch_cache = {'data': None, 'at': 0.0, 'slug': None}
+_cal_cache = {'data': None, 'at': 0.0}
+
+
+def _http_get(url):
+    req = urllib.request.Request(url, headers={'User-Agent': HTTP_UA, 'Accept': '*/*'})
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+        return r.read()
+
+
+# --- Lunch menu (MealViewer) ------------------------------------------------
+
+def _food_items(line):
+    fil = line.get('foodItemList') or {}
+    items = fil.get('data') if isinstance(fil, dict) else fil
+    return items if isinstance(items, list) else []
+
+
+def fetch_lunch(slug):
+    """Fetch a small window around today and return a compact per-date map."""
+    today = datetime.date.today()
+    start = today - datetime.timedelta(days=1)
+    end = today + datetime.timedelta(days=8)
+    url = f'{MEALVIEWER_BASE}/{slug}/{start:%m-%d-%Y}/{end:%m-%d-%Y}'
+    doc = json.loads(_http_get(url).decode('utf-8'))
+    days = {}
+    for day in doc.get('menuSchedules') or []:
+        di = day.get('dateInformation') or {}
+        dk = str(di.get('dateKey') or '')
+        if len(dk) != 8:
+            continue
+        datekey = f'{dk[0:4]}-{dk[4:6]}-{dk[6:8]}'
+        entrees, grab, items = [], [], []
+        for block in day.get('menuBlocks') or []:
+            if (block.get('blockName') or '').lower() != 'lunch':
+                continue
+            cll = block.get('cafeteriaLineList') or {}
+            lines = cll.get('data') if isinstance(cll, dict) else cll
+            for line in (lines or []):
+                for it in _food_items(line):
+                    name = (it.get('item_Name') or '').strip()
+                    cat = (it.get('item_Type') or '').strip().lower()
+                    if not name:
+                        continue
+                    items.append(name)
+                    if cat == 'entree':
+                        entrees.append(name)
+                    elif cat.startswith('grab'):
+                        grab.append(name)
+        days[datekey] = {'entrees': entrees, 'grabAndGo': grab, 'items': items}
+    return {'days': days, 'fetchedAt': datetime.datetime.now().isoformat()}
+
+
+def get_lunch(slug):
+    now = time.time()
+    with _cache_lock:
+        c = _lunch_cache
+        if c['data'] and c['slug'] == slug and now - c['at'] < LUNCH_TTL:
+            return c['data']
+    data = fetch_lunch(slug)
+    with _cache_lock:
+        _lunch_cache.update(data=data, at=now, slug=slug)
+    return data
+
+
+# --- School calendar (SPS iCal "School Year Dates" feed) ---------------------
+
+def _ics_unfold(text):
+    # RFC 5545 line folding: CRLF + space/tab continues the previous line.
+    return re.sub(r'\r?\n[ \t]', '', text)
+
+
+def _ics_date(val):
+    m = re.search(r'(\d{8})', val or '')
+    if not m:
+        return None
+    s = m.group(1)
+    try:
+        return datetime.date(int(s[0:4]), int(s[4:6]), int(s[6:8]))
+    except ValueError:
+        return None
+
+
+def fetch_school_cal():
+    """Parse all-day VEVENTs; keep 'No School ...' ranges + first/last days.
+
+    DTEND is exclusive for all-day events, so the inclusive end is DTEND - 1 day.
+    """
+    text = _ics_unfold(_http_get(SPS_ICS_URL).decode('utf-8', 'replace'))
+    ranges, first_days, last_days = [], [], []
+    for chunk in text.split('BEGIN:VEVENT')[1:]:
+        body = chunk.split('END:VEVENT')[0]
+        sm = re.search(r'\nSUMMARY:(.+)', body)
+        ds = re.search(r'\nDTSTART[^:\n]*:([0-9T]+)', body)
+        de = re.search(r'\nDTEND[^:\n]*:([0-9T]+)', body)
+        if not sm or not ds:
+            continue
+        summary = sm.group(1).strip()
+        start = _ics_date(ds.group(1))
+        if not start:
+            continue
+        end = _ics_date(de.group(1)) if de else None
+        inc_end = (end - datetime.timedelta(days=1)) if end else start
+        low = summary.lower()
+        if low.startswith('no school'):
+            ranges.append({'start': start.isoformat(), 'end': inc_end.isoformat(),
+                           'summary': summary})
+        if 'first day of school' in low:
+            first_days.append(start.isoformat())
+        if 'last day of school' in low:
+            last_days.append(start.isoformat())
+    return {'noSchoolRanges': ranges, 'firstDays': sorted(first_days),
+            'lastDays': sorted(last_days),
+            'fetchedAt': datetime.datetime.now().isoformat()}
+
+
+def get_school_cal():
+    now = time.time()
+    with _cache_lock:
+        if _cal_cache['data'] and now - _cal_cache['at'] < CAL_TTL:
+            return _cal_cache['data']
+    data = fetch_school_cal()
+    with _cache_lock:
+        _cal_cache.update(data=data, at=now)
+    return data
 
 
 def detect_output():
@@ -190,6 +334,23 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, read_shared_state())
         if self.path == '/api/sonos' or self.path.startswith('/api/sonos/'):
             return self._proxy_sonos()
+        if self.path == '/api/schoolcal' or self.path.startswith('/api/schoolcal?'):
+            try:
+                return self._json(200, get_school_cal())
+            except Exception as e:
+                if _cal_cache['data']:                   # serve stale on error
+                    return self._json(200, _cal_cache['data'])
+                return self._json(502, {'error': str(e), 'noSchoolRanges': [],
+                                        'firstDays': [], 'lastDays': []})
+        if self.path == '/api/lunch' or self.path.startswith('/api/lunch?'):
+            q = parse_qs(urlparse(self.path).query)
+            slug = (q.get('school') or [DEFAULT_SCHOOL_SLUG])[0] or DEFAULT_SCHOOL_SLUG
+            try:
+                return self._json(200, get_lunch(slug))
+            except Exception as e:
+                if _lunch_cache['data']:                 # serve stale on error
+                    return self._json(200, _lunch_cache['data'])
+                return self._json(502, {'error': str(e), 'days': {}})
         return super().do_GET()
 
     def do_POST(self):

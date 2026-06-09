@@ -4,9 +4,17 @@ import WeatherPanel from './WeatherPanel.jsx'
 import TimerPanel from './TimerPanel.jsx'
 import useWeather, { placeholderSlots } from '../../hooks/useWeather.js'
 import useTimer from '../../hooks/useTimer.js'
+import useLunch from '../../hooks/useLunch.js'
+import useSchoolCalendar from '../../hooks/useSchoolCalendar.js'
 import { postTimerState } from '../../lib/settings.js'
 import { useSettings } from '../../lib/settings.js'
 import { decideTravelMode } from '../../lib/travelDefault.js'
+import {
+  isNoSchoolToday,
+  lunchEntreeForToday,
+  grabForToday,
+  activitiesForToday,
+} from '../../lib/schoolDay.js'
 import './TodayView.css'
 
 // Dev-only visual override of the timer state. Lets us preview every Figma
@@ -101,11 +109,51 @@ export default function TodayView() {
     actions: timer.actions,
   }
 
+  // School-schedule data. Dev params for previewing without the Pi endpoints:
+  //   ?noschool=1  force the no-school full-width layout
+  //   ?demo=1      inject a sample lunch + activities band
+  const params = new URLSearchParams(window.location.search)
+  const demo = params.get('demo') === '1'
+  const forceNoSchool = params.get('noschool') === '1'
+
+  const calendar = useSchoolCalendar()
+  const lunch = useLunch()
+  const now = new Date()
+  const noSchool = forceNoSchool || isNoSchoolToday(school, calendar, now)
+
+  const entree = demo ? "Chef's Choice" : lunchEntreeForToday(lunch, now)
+  const grab = demo ? 'Turkey and Cheese Wrap' : grabForToday(lunch, now)
+  const activities = demo
+    ? [{ name: 'Vinny', label: 'Library' }, { name: 'Chase', label: 'Coding' }]
+    : activitiesForToday(school, now)
+
+  // Slim band segments, suppressed on no-school days.
+  const band = noSchool
+    ? []
+    : [
+        ...(entree ? [{ label: 'Lunch', value: entree }] : []),
+        ...(grab ? [{ label: 'Grab & Go', value: grab }] : []),
+        ...activities.map((a) => ({ label: a.name, value: a.label })),
+      ]
+
+  // No school: drop the timer column and let time + weather span full width
+  // (no message), matching the Apple TV no-timer layout.
+  if (noSchool) {
+    return (
+      <div className="today-view today-view--noschool">
+        <div className="today-view__left">
+          <TimeDatePanel />
+          <WeatherPanel slots={slots} band={band} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="today-view">
       <div className="today-view__left">
         <TimeDatePanel />
-        <WeatherPanel slots={slots} />
+        <WeatherPanel slots={slots} band={band} />
       </div>
       <div className="today-view__right">
         <TimerPanel {...timerProps} />

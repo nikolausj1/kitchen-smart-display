@@ -130,6 +130,73 @@ function TimeOfDay({ hour, minute, onChange }) {
   )
 }
 
+// Short id for kids/activities. crypto.randomUUID is available in secure
+// contexts (https and localhost - both apply here); fall back just in case.
+function uid() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `id-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+  }
+}
+
+const DAY_ABBR = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+
+// Compact weekday multi-select (0=Sun..6=Sat). Mirrors the School days row.
+function WeekdayPicker({ value, onChange }) {
+  const set = new Set(value || [])
+  return (
+    <div className="settings-days settings-days--compact">
+      {DAY_ABBR.map((label, i) => {
+        const on = set.has(i)
+        return (
+          <button
+            key={i}
+            type="button"
+            className={'settings-day' + (on ? ' settings-day--on' : '')}
+            onClick={(e) => {
+              e.stopPropagation()
+              const next = new Set(set)
+              next.has(i) ? next.delete(i) : next.add(i)
+              onChange([...next].sort())
+            }}
+            data-interactive="true"
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function TextField({ value, onChange, placeholder }) {
+  return (
+    <input
+      type="text"
+      className="settings-text"
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      data-interactive="true"
+    />
+  )
+}
+
+function OnOffSelect({ on, onChange }) {
+  return (
+    <select
+      className="settings-select"
+      value={on ? 'on' : 'off'}
+      onChange={(e) => onChange(e.target.value === 'on')}
+      data-interactive="true"
+    >
+      <option value="on">On</option>
+      <option value="off">Off</option>
+    </select>
+  )
+}
+
 // --- Sonos room dropdown -----------------------------------------------------
 
 function SonosRoomSelect({ apiBase, value, onChange }) {
@@ -232,6 +299,37 @@ export default function SettingsView() {
     updateSettings({ school: { schoolDays: [...set].sort() } })
   }
 
+  // --- School schedule: kids/activities + no-school overrides ---
+  const kids = school.kids || []
+  const overrides = school.noSchoolOverrides || []
+  const [overrideDate, setOverrideDate] = useState('')
+
+  const updateKids = (next) => updateSettings({ school: { kids: next } })
+  const addKid = () => updateKids([...kids, { id: uid(), name: '', activities: [] }])
+  const removeKid = (id) => updateKids(kids.filter((k) => k.id !== id))
+  const setKidName = (id, name) =>
+    updateKids(kids.map((k) => (k.id === id ? { ...k, name } : k)))
+  const mapActs = (kidId, fn) =>
+    updateKids(kids.map((k) => (k.id === kidId ? { ...k, activities: fn(k.activities || []) } : k)))
+  const addActivity = (kidId) =>
+    mapActs(kidId, (acts) => [...acts, { id: uid(), label: '', weekdays: [] }])
+  const removeActivity = (kidId, actId) =>
+    mapActs(kidId, (acts) => acts.filter((a) => a.id !== actId))
+  const setActivity = (kidId, actId, patch) =>
+    mapActs(kidId, (acts) => acts.map((a) => (a.id === actId ? { ...a, ...patch } : a)))
+
+  function addOverride() {
+    const d = overrideDate
+    if (!d || overrides.includes(d)) {
+      setOverrideDate('')
+      return
+    }
+    updateSettings({ school: { noSchoolOverrides: [...overrides, d].sort() } })
+    setOverrideDate('')
+  }
+  const removeOverride = (d) =>
+    updateSettings({ school: { noSchoolOverrides: overrides.filter((x) => x !== d) } })
+
   function onResetAll() {
     if (confirm('Reset ALL settings to defaults?')) resetSettings()
   }
@@ -291,6 +389,142 @@ export default function SettingsView() {
                   </button>
                 )
               })}
+            </div>
+          </Row>
+        </section>
+
+        {/* --- School schedule (lunch, activities, no-school overrides) --- */}
+        <section className="settings-section">
+          <h2 className="settings-section__title">School schedule</h2>
+          <Row label="Lunch menu" hint="Show today's lunch entree on the Today screen.">
+            <OnOffSelect
+              on={school.lunch?.enabled !== false}
+              onChange={(v) => updateSettings({ school: { lunch: { enabled: v } } })}
+            />
+          </Row>
+          <Row label="School (MealViewer)" hint="School name in the MealViewer URL: schools.mealviewer.com/school/<name>.">
+            <TextField
+              value={school.lunch?.schoolSlug ?? 'Lawton'}
+              placeholder="Lawton"
+              onChange={(v) => updateSettings({ school: { lunch: { schoolSlug: v } } })}
+            />
+          </Row>
+
+          <Row label="Kids &amp; activities" hint="Recurring reminders shown on the Today screen (e.g. Library day).">
+            <div className="settings-kids">
+              {kids.length === 0 && <div className="settings-note">No kids added yet.</div>}
+              {kids.map((kid) => (
+                <div className="settings-kid" key={kid.id}>
+                  <div className="settings-kid__head">
+                    <TextField
+                      value={kid.name}
+                      placeholder="Name"
+                      onChange={(v) => setKidName(kid.id, v)}
+                    />
+                    <button
+                      type="button"
+                      className="settings-mini settings-mini--danger"
+                      data-interactive="true"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeKid(kid.id)
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {(kid.activities || []).map((act) => (
+                    <div className="settings-activity" key={act.id}>
+                      <TextField
+                        value={act.label}
+                        placeholder="Activity (e.g. Library)"
+                        onChange={(v) => setActivity(kid.id, act.id, { label: v })}
+                      />
+                      <WeekdayPicker
+                        value={act.weekdays}
+                        onChange={(wd) => setActivity(kid.id, act.id, { weekdays: wd })}
+                      />
+                      <button
+                        type="button"
+                        className="settings-mini settings-mini--danger"
+                        data-interactive="true"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeActivity(kid.id, act.id)
+                        }}
+                        aria-label="Remove activity"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="settings-mini"
+                    data-interactive="true"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      addActivity(kid.id)
+                    }}
+                  >
+                    + Add activity
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="settings-mini"
+                data-interactive="true"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  addKid()
+                }}
+              >
+                + Add kid
+              </button>
+            </div>
+          </Row>
+
+          <Row label="No-school dates" hint="Extra closures on top of the district calendar (snow days, etc.).">
+            <div className="settings-overrides">
+              <div className="settings-overrides__add">
+                <input
+                  type="date"
+                  className="settings-text"
+                  value={overrideDate}
+                  onChange={(e) => setOverrideDate(e.target.value)}
+                  data-interactive="true"
+                />
+                <button
+                  type="button"
+                  className="settings-mini"
+                  data-interactive="true"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    addOverride()
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+              <div className="settings-chips">
+                {overrides.length === 0 && <span className="settings-note">None.</span>}
+                {overrides.map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    className="settings-chip"
+                    data-interactive="true"
+                    title="Remove"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeOverride(d)
+                    }}
+                  >
+                    {d} &times;
+                  </button>
+                ))}
+              </div>
             </div>
           </Row>
         </section>

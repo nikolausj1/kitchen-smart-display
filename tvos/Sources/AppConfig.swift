@@ -102,6 +102,9 @@ struct AppSettings: Equatable {
     var weatherSlots: [Int]
     var slideshow: SlideshowSettings
     var kitchenTimer: KitchenTimer?    // nil = idle / not posted
+    // Mirrored from the kitchen: true on holidays/breaks/summer so the TV skips
+    // the Today auto-boot (the kitchen owns the no-school decision).
+    var noSchoolToday: Bool
 
     static let defaults = AppSettings(
         location: .defaults,
@@ -109,7 +112,8 @@ struct AppSettings: Equatable {
         timerThresholds: .defaults,
         weatherSlots: [8, 11, 14, 17, 20],
         slideshow: .defaults,
-        kitchenTimer: nil
+        kitchenTimer: nil,
+        noSchoolToday: false
     )
 }
 
@@ -120,6 +124,7 @@ struct SharedStatePayload: Decodable {
     var school: SchoolSettingsLenient?
     var slideshow: SlideshowLenient?
     var timer: TimerLenient?
+    var noSchoolToday: Bool?
 
     struct SchoolSettingsLenient: Decodable {
         var drivingDepart: HourMinute?
@@ -181,6 +186,7 @@ struct SharedStatePayload: Decodable {
                 kind: t.kind
             )
         }
+        if let ns = noSchoolToday { out.noSchoolToday = ns }
         return out
     }
 

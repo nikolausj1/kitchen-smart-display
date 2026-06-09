@@ -26,7 +26,8 @@ final class AppRouter: ObservableObject {
         let cal = Calendar.current
         let weekday = cal.component(.weekday, from: now) - 1   // 0=Sun
         let nowMin = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
-        if settings.school.schoolDays.contains(weekday) {
+        // No-school days (mirrored from the kitchen) never auto-boot to Today.
+        if !settings.noSchoolToday, settings.school.schoolDays.contains(weekday) {
             let start = settings.school.autoShowAt.hour * 60 + settings.school.autoShowAt.minute
             let end = settings.school.morningEndsAt.hour * 60 + settings.school.morningEndsAt.minute
             if nowMin >= start && nowMin < end { return .today }

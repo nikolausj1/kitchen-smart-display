@@ -7,10 +7,12 @@ import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
 import { DebugHud, logEvent } from './DebugLog.jsx'
-import { getSettings } from '../lib/settings.js'
+import { getSettings, postSchoolDayState } from '../lib/settings.js'
 import useDisplaySchedule from './useDisplaySchedule.js'
 import DimOverlay from './DimOverlay.jsx'
 import useSharedState from '../hooks/useSharedState.js'
+import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
+import { isNoSchoolToday } from '../lib/schoolDay.js'
 import { AUTO_MODE, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
 
 // --- Boot-time view selection -----------------------------------------------
@@ -32,11 +34,12 @@ const MORNING_START_HOUR = 5
 
 function computeInitialView(now = new Date()) {
   const { school } = getSettings()
-  const day = now.getDay()
   const hour = now.getHours()
   const minute = now.getMinutes()
-  const isSchoolDay = school?.schoolDays?.includes(day)
-  if (!isSchoolDay) return 'photos'
+  // No-school days (weekends, holidays/breaks, summer, manual overrides) never
+  // boot to Today. Uses the cached SPS calendar; falls back to schoolDays +
+  // overrides if the feed hasn't been fetched yet.
+  if (isNoSchoolToday(school, getCachedCalendar(), now)) return 'photos'
   if (hour < MORNING_START_HOUR) return 'photos'
   // Compare minute precision against school.morningEndsAt so the boot
   // window matches the runtime auto-leave watcher exactly.
@@ -239,9 +242,7 @@ function Shell({ initialView }) {
     function check() {
       const settings = getSettings()
       const now = new Date()
-      const day = now.getDay()
-      const isSchoolDay = settings.school?.schoolDays?.includes(day)
-      if (!isSchoolDay) return
+      if (isNoSchoolToday(settings.school, getCachedCalendar(), now)) return
       const target = settings.school?.autoShowAt
       if (!target) return
       const targetMin = (target.hour | 0) * 60 + (target.minute | 0)
@@ -290,9 +291,7 @@ function Shell({ initialView }) {
     function check() {
       const settings = getSettings()
       const now = new Date()
-      const day = now.getDay()
-      const isSchoolDay = settings.school?.schoolDays?.includes(day)
-      if (!isSchoolDay) return
+      if (isNoSchoolToday(settings.school, getCachedCalendar(), now)) return
       const target = settings.school?.morningEndsAt
       if (!target) return
       const targetMin = (target.hour | 0) * 60 + (target.minute | 0)
@@ -313,6 +312,26 @@ function Shell({ initialView }) {
     const id = setInterval(check, 30 * 1000)
     return () => clearInterval(id)
   }, [view, setView, runScheduleWatchers])
+
+  // Push the derived no-school flag to the Pi so the Apple TV mirrors the
+  // kitchen's suppression. Runs regardless of the current view (so the TV knows
+  // even when the kitchen is on Photos), posting only when the value flips.
+  // Re-runs when the live calendar loads; a 60s tick catches the midnight roll.
+  const schoolCal = useSchoolCalendar()
+  const lastNoSchoolRef = useRef(null)
+  useEffect(() => {
+    if (KIOSK_TV) return undefined
+    function push() {
+      const ns = isNoSchoolToday(getSettings().school, getCachedCalendar(), new Date())
+      if (ns !== lastNoSchoolRef.current) {
+        lastNoSchoolRef.current = ns
+        postSchoolDayState(ns)
+      }
+    }
+    push()
+    const id = setInterval(push, 60 * 1000)
+    return () => clearInterval(id)
+  }, [schoolCal])
 
   function onShellClick(e) {
     const tag = e.target.tagName

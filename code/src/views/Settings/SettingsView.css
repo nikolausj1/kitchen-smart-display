@@ -317,6 +317,110 @@
   font-size: 1.3vw;
 }
 
+/* --- School schedule: text fields, kids/activities, overrides --- */
+.settings-text {
+  background: #2a2d33;
+  color: #ffffff;
+  border: 1px solid #3a3d43;
+  border-radius: 12px;
+  padding: 1.2vh 1.4vw;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 1.2vw;
+  line-height: 1;
+  outline: none;
+  min-width: 12vw;
+}
+
+.settings-days--compact {
+  gap: 0.4vw;
+}
+.settings-days--compact .settings-day {
+  padding: 0.9vh 1vw;
+  font-size: 1.4vw;
+}
+
+.settings-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2vh;
+  align-items: flex-start;
+}
+.settings-kid {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  background: #23262b;
+  border: 1px solid #33363c;
+  border-radius: 14px;
+  padding: 1.4vh 1.4vw;
+  width: 44vw;
+  max-width: 44vw;
+}
+.settings-kid__head {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+}
+.settings-activity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8vw;
+  padding-left: 1.2vw;
+}
+
+.settings-mini {
+  background: #2a2d33;
+  color: #cfd3d7;
+  border: 1px solid #3a3d43;
+  border-radius: 12px;
+  padding: 0.9vh 1.4vw;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 1.1vw;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.settings-mini:active {
+  transform: scale(0.97);
+}
+.settings-mini--danger {
+  background: #3a1a1a;
+  color: #ff9090;
+  border-color: #6b2a2a;
+}
+
+.settings-overrides {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  align-items: flex-start;
+}
+.settings-overrides__add {
+  display: flex;
+  align-items: center;
+  gap: 0.8vw;
+}
+.settings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6vw;
+}
+.settings-chip {
+  background: #2a2d33;
+  color: #cfd3d7;
+  border: 1px solid #3a3d43;
+  border-radius: 16px;
+  padding: 0.9vh 1.3vw;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 1.2vw;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .settings__footer {
   margin-top: 2vh;
   padding: 2vh 0 4vh;

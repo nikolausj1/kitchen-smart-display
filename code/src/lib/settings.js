@@ -58,6 +58,24 @@ export function postTimerState(timer) {
   }
 }
 
+// Push the derived "is today a no-school day" flag to the Pi so the Apple TV
+// mirrors the kitchen's suppression (its boot picker + Today view read it).
+// Derived daily state, not a setting, so it is posted on its own like the timer.
+export function postSchoolDayState(noSchoolToday) {
+  if (IS_TV) return
+  if (typeof fetch === 'undefined') return
+  try {
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ noSchoolToday: !!noSchoolToday }),
+      cache: 'no-store',
+    }).catch(() => {})
+  } catch {
+    // best-effort
+  }
+}
+
 export const DEFAULTS = {
   location: {
     lat: 47.6610608,
@@ -72,6 +90,17 @@ export const DEFAULTS = {
     // Photos (and the boot-time view selector also stops choosing Today).
     morningEndsAt: { hour: 8, minute: 0 },
     schoolDays: [1, 2, 3, 4, 5], // 0=Sun, 1=Mon, ..., 6=Sat
+    // Lunch menu (MealViewer, fetched via the Pi /api/lunch proxy). schoolSlug
+    // is the school name in the MealViewer URL (schools.mealviewer.com/school/<slug>).
+    lunch: { enabled: true, schoolSlug: 'Lawton' },
+    // Manual no-school dates layered on top of the SPS calendar feed: snow days
+    // or Lawton-specific closures the district feed won't have. Array of
+    // 'YYYY-MM-DD' strings.
+    noSchoolOverrides: [],
+    // Per-kid recurring activities surfaced on Today (e.g. Library day so books
+    // go in the bag). Each kid: { id, name, activities: [{ id, label, weekdays }] }
+    // where weekdays is an array of 0=Sun..6=Sat.
+    kids: [],
   },
   timerThresholds: {
     greenAbove: 7,
