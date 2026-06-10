@@ -33,6 +33,10 @@ KIOSK_DIR = '/home/pi/kiosk'
 # TV polls GET /api/state and applies them. Persisted to disk so it survives
 # Pi restarts.
 STATE_FILE = '/home/pi/state.json'
+# Photo-location correction flags. The kitchen long-press-flags a photo whose
+# caption is wrong; flags accumulate here as a list and get triaged later on
+# the Mac. Persisted to disk so they survive Pi restarts.
+FLAGS_FILE = '/home/pi/flags.json'
 PORT = 8080
 # Bind on all interfaces so LAN clients (the Apple TV) can reach the kiosk
 # app and the /api endpoints. The kitchen Chromium still loads via localhost.
@@ -270,6 +274,26 @@ def write_shared_state(obj):
     os.replace(tmp, STATE_FILE)
 
 
+def read_flags():
+    """Return the persisted photo-correction flags list, or [] if absent."""
+    try:
+        with open(FLAGS_FILE, 'r') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def write_flags(items):
+    """Atomically persist the flags list to FLAGS_FILE."""
+    tmp = FLAGS_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(items, f)
+    os.replace(tmp, FLAGS_FILE)
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=KIOSK_DIR, **kwargs)
@@ -298,6 +322,61 @@ class Handler(SimpleHTTPRequestHandler):
             merged.update(obj)
             write_shared_state(merged)
             return self._json(200, {'ok': True})
+        except Exception as e:
+            return self._json(500, {'ok': False, 'error': str(e)})
+
+    def _append_flag(self):
+        # Append a photo-location correction flag, deduped on assetId so the
+        # same photo long-pressed twice just refreshes the existing flag.
+        try:
+            length = int(self.headers.get('Content-Length', 0) or 0)
+            raw = self.rfile.read(length) if length else b'{}'
+            obj = json.loads(raw.decode('utf-8') or '{}')
+            asset_id = obj.get('assetId') if isinstance(obj, dict) else None
+            if not asset_id:
+                return self._json(400, {'ok': False, 'error': 'assetId required'})
+            now = obj.get('ts') or (datetime.datetime.utcnow().isoformat() + 'Z')
+            flags = read_flags()
+            existing = next(
+                (f for f in flags
+                 if f.get('assetId') == asset_id and not f.get('resolved')),
+                None,
+            )
+            if existing:
+                existing['ts'] = now
+                existing['wrongCaption'] = obj.get('wrongCaption', existing.get('wrongCaption', ''))
+            else:
+                flags.append({
+                    'assetId': asset_id,
+                    'wrongCaption': obj.get('wrongCaption', ''),
+                    'ts': now,
+                    'resolved': False,
+                })
+            write_flags(flags)
+            unresolved = len([f for f in flags if not f.get('resolved')])
+            return self._json(200, {'ok': True, 'unresolved': unresolved})
+        except Exception as e:
+            return self._json(500, {'ok': False, 'error': str(e)})
+
+    def _resolve_flags(self):
+        # Mark the given assetIds resolved (called after corrections are
+        # applied + redeployed) so they drop out of the triage list.
+        try:
+            length = int(self.headers.get('Content-Length', 0) or 0)
+            raw = self.rfile.read(length) if length else b'{}'
+            obj = json.loads(raw.decode('utf-8') or '{}')
+            ids = obj.get('assetIds') if isinstance(obj, dict) else None
+            if not isinstance(ids, list):
+                return self._json(400, {'ok': False, 'error': 'assetIds must be a list'})
+            idset = set(ids)
+            flags = read_flags()
+            n = 0
+            for f in flags:
+                if f.get('assetId') in idset and not f.get('resolved'):
+                    f['resolved'] = True
+                    n += 1
+            write_flags(flags)
+            return self._json(200, {'ok': True, 'resolved': n})
         except Exception as e:
             return self._json(500, {'ok': False, 'error': str(e)})
 
@@ -332,6 +411,12 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200, {'output': out, 'on': state})
         if self.path == '/api/state' or self.path.startswith('/api/state?'):
             return self._json(200, read_shared_state())
+        if self.path == '/api/flags' or self.path.startswith('/api/flags?'):
+            q = parse_qs(urlparse(self.path).query)
+            flags = read_flags()
+            if (q.get('unresolved') or ['0'])[0] in ('1', 'true'):
+                flags = [f for f in flags if not f.get('resolved')]
+            return self._json(200, flags)
         if self.path == '/api/sonos' or self.path.startswith('/api/sonos/'):
             return self._proxy_sonos()
         if self.path == '/api/schoolcal' or self.path.startswith('/api/schoolcal?'):
@@ -362,6 +447,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(200 if ok else 500, {'ok': ok, 'output': info if ok else None, 'error': None if ok else info})
         if self.path == '/api/state':
             return self._write_state()
+        if self.path == '/api/flags':
+            return self._append_flag()
+        if self.path == '/api/flags/resolve':
+            return self._resolve_flags()
         self.send_response(404)
         self.end_headers()
 

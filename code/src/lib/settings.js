@@ -76,6 +76,29 @@ export function postSchoolDayState(noSchoolToday) {
   }
 }
 
+// Flag the on-screen photo's location caption as wrong (long-press on the
+// kitchen). Best-effort POST to the Pi, which stores the assetId + caption for
+// later triage. No-op on the TV (read-only) and silent on failure.
+export function postPhotoFlag(assetId, wrongCaption) {
+  if (IS_TV) return
+  if (typeof fetch === 'undefined') return
+  if (!assetId) return
+  try {
+    fetch('/api/flags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId,
+        wrongCaption: wrongCaption || '',
+        ts: new Date().toISOString(),
+      }),
+      cache: 'no-store',
+    }).catch(() => {})
+  } catch {
+    // best-effort
+  }
+}
+
 export const DEFAULTS = {
   location: {
     lat: 47.6610608,

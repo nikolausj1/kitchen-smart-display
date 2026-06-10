@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
-import { useSettings } from '../../lib/settings.js'
+import { useSettings, postPhotoFlag } from '../../lib/settings.js'
 import TimeWidget from './overlays/TimeWidget.jsx'
 import ExifCaption from './overlays/ExifCaption.jsx'
 import AlbumArtWidget from './overlays/AlbumArtWidget.jsx'
+import FlagToast from './overlays/FlagToast.jsx'
 import './PhotoSlideshow.css'
 
 // Fisher-Yates shuffle (returns a new array).
@@ -314,6 +315,7 @@ export default function PhotoSlideshow() {
   const [layers, setLayers] = useState([null, null])
   const [activeIdx, setActiveIdx] = useState(0)
   const [tick, setTick] = useState(0) // bumps each advance so EXIF caption resets
+  const [flagToast, setFlagToast] = useState(null) // brief "Flagged" confirmation
 
   // Swap in a new display item with the crossfade machinery. Used by both
   // forward advance and back-stack replay.
@@ -423,6 +425,38 @@ export default function PhotoSlideshow() {
     }
   }, [advance, goBack])
 
+  // Long-press flags the on-screen photo's location caption as wrong; the flag
+  // (asset id + caption) is posted to the Pi for later triage. On a portrait
+  // pair, the half you pressed is the one flagged.
+  useEffect(() => {
+    function onLongPress(e) {
+      const disp = layers[activeIdx]
+      if (!disp || !disp.photos || disp.photos.length === 0) return
+      let photo = disp.photos[0]
+      if (disp.kind === 'portrait-pair' && disp.photos.length > 1) {
+        const x = e.detail?.x ?? window.innerWidth / 2
+        photo = x < window.innerWidth / 2 ? disp.photos[0] : disp.photos[1]
+      }
+      const assetId = photo?.src?.match(/immich-([^.]+)\.jpg/)?.[1] || null
+      if (!assetId) return
+      const caption = photo?.exif?.location || ''
+      postPhotoFlag(assetId, caption)
+      setFlagToast({ caption, key: assetId + ':' + Date.now() })
+    }
+    window.addEventListener('app-long-press', onLongPress)
+    return () => window.removeEventListener('app-long-press', onLongPress)
+  }, [layers, activeIdx])
+
+  // Suppress the native long-press context menu / iOS callout so flagging
+  // feels clean (global user-select:none already covers text selection).
+  useEffect(() => {
+    function onCtx(e) {
+      e.preventDefault()
+    }
+    window.addEventListener('contextmenu', onCtx)
+    return () => window.removeEventListener('contextmenu', onCtx)
+  }, [])
+
   // EXIF drives off whichever layer is currently active. For portrait-pair
   // we render TWO captions (one under each photo); for landscape and
   // portrait-solo it's a single centered caption.
@@ -478,6 +512,11 @@ export default function PhotoSlideshow() {
         <ExifCaption exif={leftExif} cycleKey={captionKey} position="center" />
       )}
       <AlbumArtWidget />
+      <FlagToast
+        key={flagToast?.key}
+        flag={flagToast}
+        onDone={() => setFlagToast(null)}
+      />
     </div>
   )
 }
