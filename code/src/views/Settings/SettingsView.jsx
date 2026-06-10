@@ -88,6 +88,48 @@ function Stepper({ value, onChange, min = 1, max = 999, step = 1, suffix }) {
 }
 
 // Touch-friendly slider with live readout.
+// Photo-dwell stops: every second from 2-60s, then coarse minute/hour jumps.
+// The slider walks this array by index so the long tail doesn't squash the
+// everyday 2-60s range into a few pixels.
+const DURATION_STEPS = [
+  ...Array.from({ length: 59 }, (_, i) => i + 2), // 2..60 s
+  120, 180, 300, 600, 900, 1800, 3600,            // 2min..60min
+  10800, 21600, 43200, 86400,                     // 3hr..24hr
+]
+
+function fmtDuration(secs) {
+  if (secs < 120) return [secs, 's']
+  if (secs <= 3600) return [Math.round(secs / 60), 'min'] // 60min, per spec
+  return [Math.round(secs / 3600), 'hr']
+}
+
+// Same look as Slider, but non-linear: the thumb picks an index into
+// DURATION_STEPS rather than a raw number.
+function DurationSlider({ seconds, onChange }) {
+  let idx = 0
+  for (let i = 1; i < DURATION_STEPS.length; i++) {
+    if (Math.abs(DURATION_STEPS[i] - seconds) < Math.abs(DURATION_STEPS[idx] - seconds)) idx = i
+  }
+  const [num, unit] = fmtDuration(DURATION_STEPS[idx])
+  return (
+    <div className="settings-slider">
+      <input
+        type="range"
+        min={0}
+        max={DURATION_STEPS.length - 1}
+        step={1}
+        value={idx}
+        onChange={(e) => onChange(DURATION_STEPS[Number(e.target.value)])}
+        data-interactive="true"
+      />
+      <div className="settings-slider__readout">
+        {num}
+        <span className="settings-slider__suffix">{unit}</span>
+      </div>
+    </div>
+  )
+}
+
 function Slider({ value, onChange, min = 1, max = 60, step = 1, suffix }) {
   return (
     <div className="settings-slider">
@@ -635,13 +677,9 @@ export default function SettingsView() {
         {/* --- Photos --- */}
         <section className="settings-section">
           <h2 className="settings-section__title">Photo slideshow</h2>
-          <Row label="Seconds per photo" hint="How long each photo is displayed before crossfading to the next.">
-            <Slider
-              value={Math.round(slideshow.intervalMs / 1000)}
-              min={2}
-              max={60}
-              step={1}
-              suffix="s"
+          <Row label="Time per photo" hint="How long each photo is displayed before crossfading to the next.">
+            <DurationSlider
+              seconds={Math.round(slideshow.intervalMs / 1000)}
               onChange={(secs) =>
                 updateSettings({
                   slideshow: { intervalMs: Math.max(2000, secs * 1000) },
