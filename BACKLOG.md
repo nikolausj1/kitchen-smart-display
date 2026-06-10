@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-06-09
-version: 3.5
+modified: 2026-06-10
+version: 3.6
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -215,6 +215,20 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-10 - Apple TV album multi-select.** TV Settings "Photo albums" is
+  now a wrapped pill grid (alphanumeric order, checkmark + count, left/right
+  highlights, play/pause toggles, "All albums / k of n" summary). TV-local and
+  independent of the kitchen's selection; nil = All so new albums auto-include.
+  Also fixed: the TV's album selection was never actually applied to the
+  slideshow fetch. Deployed to the Living Room Apple TV.
+- **2026-06-10 - Kitchen photo-duration slider extends to 24hr.** Non-linear
+  stops: 2-60s by the second, then 2/3/5/10/15/30/60min and 3/6/12/24hr;
+  readout switches units. Deployed.
+- **2026-06-10 - 2018 album imported + live on both displays.** immich-go
+  Takeout import (354 uploaded, 0 errors), first real-world run of the
+  photo-refresh automation: manifest now 1,835 photos; the Pi's restricted
+  Google key resolved 172 live Places lookups. Surfaced the post-import
+  job-queue caveat now documented in the design doc + Recurring Tasks.
 - **2026-06-09 - Photo-refresh automation (Pi-self-sufficient).** The Pi now
   rebuilds its own photo manifest from Immich: "Refresh photos" button in
   kitchen Settings (POST `/api/photos/refresh` + status endpoint on
