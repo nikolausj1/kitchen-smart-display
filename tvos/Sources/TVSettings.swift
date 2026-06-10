@@ -14,8 +14,10 @@ import SwiftUI
 //   musicMatMode         - how Now Playing relates to the mat: off (full-bleed),
 //                          fit (current layout inside the opening), or framed
 //                          (blurred ambient fill + metadata on the mat)
-//   albumId              - which Immich album the TV shows (nil = All albums),
-//                          independent of the kitchen's album selection
+//   selectedAlbumIds     - which Immich albums the TV shows (nil = All albums,
+//                          so albums added later are auto-included; an explicit
+//                          set after any toggle), independent of the kitchen's
+//                          album selection
 
 // How the Now Playing screen treats the picture-frame mat. Raw values are
 // persisted, so keep their order stable.
@@ -41,7 +43,8 @@ final class TVSettings: ObservableObject {
         static let photosMatEnabled = "tv.photosMatEnabled"
         static let musicMatMode = "tv.musicMatMode"
         static let todayMatEnabled = "tv.todayMatEnabled"
-        static let albumId = "tv.albumId"
+        static let legacyAlbumId = "tv.albumId"          // pre multi-select
+        static let selectedAlbumIds = "tv.selectedAlbumIds"
     }
 
     // Allowed photo durations, in seconds (10s ... 24h).
@@ -62,11 +65,15 @@ final class TVSettings: ObservableObject {
     @Published var todayMatEnabled: Bool {
         didSet { UserDefaults.standard.set(todayMatEnabled, forKey: Key.todayMatEnabled) }
     }
-    // nil = "All albums".
-    @Published var albumId: String? {
+    // nil = "All albums" (albums added to Immich later are auto-included).
+    // Non-nil = the explicit set of album ids to show; empty = show nothing.
+    @Published var selectedAlbumIds: Set<String>? {
         didSet {
-            if let id = albumId { UserDefaults.standard.set(id, forKey: Key.albumId) }
-            else { UserDefaults.standard.removeObject(forKey: Key.albumId) }
+            if let ids = selectedAlbumIds {
+                UserDefaults.standard.set(Array(ids).sorted(), forKey: Key.selectedAlbumIds)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Key.selectedAlbumIds)
+            }
         }
     }
 
@@ -84,7 +91,17 @@ final class TVSettings: ObservableObject {
             .flatMap(MusicMatMode.init(rawValue:)) ?? .framed
         // Today mat defaults ON (mats are on by default across all views).
         todayMatEnabled = (d.object(forKey: Key.todayMatEnabled) as? Bool) ?? true
-        albumId = d.string(forKey: Key.albumId)   // nil = All
+        // Album selection; migrate the old single-album picker if present.
+        if let stored = d.array(forKey: Key.selectedAlbumIds) as? [String] {
+            selectedAlbumIds = Set(stored)
+        } else if let legacy = d.string(forKey: Key.legacyAlbumId) {
+            selectedAlbumIds = [legacy]
+            // didSet does not fire during init; persist the migration by hand.
+            d.set([legacy], forKey: Key.selectedAlbumIds)
+            d.removeObject(forKey: Key.legacyAlbumId)
+        } else {
+            selectedAlbumIds = nil   // All albums
+        }
     }
 
     // MARK: - Duration
@@ -124,24 +141,30 @@ final class TVSettings: ObservableObject {
         musicMatMode = all[next]
     }
 
-    // MARK: - Album
+    // MARK: - Albums (multi-select; mirrors the kitchen's toggle semantics)
 
-    // Cycle through [All, album1, album2, ...]. dir: -1 / +1. `albums` comes
-    // from AppModel (the manifest index).
-    func cycleAlbum(albums: [PhotoAlbum], dir: Int) {
-        // options index 0 = All (nil); 1...n = albums.
-        let optionCount = albums.count + 1
-        guard optionCount > 1 else { return }
-        let currentIndex: Int = {
-            guard let id = albumId, let ai = albums.firstIndex(where: { $0.id == id }) else { return 0 }
-            return ai + 1
-        }()
-        let next = (currentIndex + dir + optionCount) % optionCount
-        albumId = next == 0 ? nil : albums[next - 1].id
+    // A row reads On when the album is in the selection, and everything reads
+    // On in the "All albums" (nil) state.
+    func isAlbumOn(_ id: String) -> Bool {
+        selectedAlbumIds?.contains(id) ?? true
     }
 
-    func albumLabel(albums: [PhotoAlbum]) -> String {
-        guard let id = albumId else { return "All albums" }
-        return albums.first(where: { $0.id == id })?.name ?? "All albums"
+    // Turn one album on/off. Leaving the All state materializes the full set
+    // first; re-selecting the last missing album collapses back to nil so
+    // future albums are auto-included again.
+    func setAlbum(_ id: String, on: Bool, albums: [PhotoAlbum]) {
+        let allIds = Set(albums.map(\.id))
+        var sel = selectedAlbumIds ?? allIds
+        if on { sel.insert(id) } else { sel.remove(id) }
+        selectedAlbumIds = (sel == allIds && !allIds.isEmpty) ? nil : sel
+    }
+
+    func toggleAlbum(_ id: String, albums: [PhotoAlbum]) {
+        setAlbum(id, on: !isAlbumOn(id), albums: albums)
+    }
+
+    // For PhotoService.fetch (nil -> all, [] -> none, ids -> filter).
+    var selectedAlbumIdList: [String]? {
+        selectedAlbumIds.map { Array($0).sorted() }
     }
 }

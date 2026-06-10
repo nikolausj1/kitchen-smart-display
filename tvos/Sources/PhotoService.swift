@@ -62,11 +62,14 @@ struct PhotoService {
         return filterByAlbums(photos, selectedAlbumIds)
     }
 
-    // The album index, for the TV's album picker.
+    // The album index, for the TV's album picker. Sorted alphanumerically
+    // (2018, 2019, ... then named albums) rather than manifest order.
     func fetchAlbums() async -> [PhotoAlbum] {
         guard let manifest: Manifest = await fetchJSON(Self.manifestURL),
               let albums = manifest.albums else { return [] }
-        return albums.map { PhotoAlbum(id: $0.id, name: $0.name ?? "Album", count: $0.count ?? 0) }
+        return albums
+            .map { PhotoAlbum(id: $0.id, name: $0.name ?? "Album", count: $0.count ?? 0) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     private func filterByAlbums(_ photos: [Photo], _ selected: [String]?) -> [Photo] {

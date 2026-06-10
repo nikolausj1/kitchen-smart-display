@@ -153,8 +153,12 @@ struct RootView: View {
 
     private func handlePlayPause() {
         if router.view == .settings {
-            // Play/pause advances the highlighted mat row; no-op on numeric rows.
+            // Play/pause toggles the highlighted row; no-op on numeric rows.
             switch settingsNav.current {
+            case .albums:
+                if let a = settingsNav.cursorAlbum {
+                    tvSettings.toggleAlbum(a.id, albums: settingsNav.albums)
+                }
             case .todayMat:  tvSettings.todayMatEnabled.toggle()
             case .photosMat: tvSettings.photosMatEnabled.toggle()
             case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
@@ -168,7 +172,10 @@ struct RootView: View {
     private func adjustSetting(_ dir: Int) {
         switch settingsNav.current {
         case .photoDuration: tvSettings.stepDuration(dir)
-        case .album:         tvSettings.cycleAlbum(albums: model.photoAlbums, dir: dir)
+        case .albums:
+            // The albums row is a pill grid: left/right move the highlight,
+            // play/pause toggles the highlighted album.
+            settingsNav.moveAlbumCursor(dir)
         case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
         case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
         case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed

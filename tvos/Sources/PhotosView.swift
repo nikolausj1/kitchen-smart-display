@@ -123,8 +123,12 @@ struct PhotosView: View {
             // Cancelled + restarted automatically whenever photosKey changes
             // (album selection / sort / interval).
             while !Task.isCancelled {
+                // Album selection is a TV-LOCAL setting (TVSettings, nil = all
+                // albums), independent of the kitchen's selection - the TV can
+                // show e.g. just an art album while the kitchen shows family
+                // photos.
                 let photos = await PhotoService().fetch(
-                    selectedAlbumIds: model.settings.slideshow.selectedAlbumIds)
+                    selectedAlbumIds: tvSettings.selectedAlbumIdList)
                 // Photo dwell is a TV-LOCAL setting (TVSettings), independent of
                 // the kitchen's interval - the big-screen-across-the-room cadence
                 // wants its own value.
@@ -150,7 +154,8 @@ struct PhotosView: View {
     // TV-local photo duration changes (so the new interval is applied live).
     private var photosKey: String {
         let s = model.settings.slideshow
-        return "\(tvSettings.albumId ?? "all")|\(s.sortOrder)|\(tvSettings.photoDurationSeconds)"
+        let albums = tvSettings.selectedAlbumIdList?.joined(separator: ",") ?? "all"
+        return "\(albums)|\(s.sortOrder)|\(tvSettings.photoDurationSeconds)"
     }
 }
 
