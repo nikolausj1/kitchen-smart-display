@@ -1,5 +1,6 @@
 {
   "_comment": "Schema for custom-places.json. Copy this file to custom-places.json (same directory) and fill in real coordinates. The real file is gitignored.",
+  "home": { "lat": 0.0, "lon": 0.0, "metro_radius_km": 60, "country_code": "US", "_comment": "Center of your home metro. POIs farther than metro_radius_km get a 'City, ST' (or 'City, Country') caption suffix. Defaults to the 'Home' place if omitted." },
   "places": [
     {
       "name": "Home",

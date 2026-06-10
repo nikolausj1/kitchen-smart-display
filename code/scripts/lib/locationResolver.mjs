@@ -8,9 +8,10 @@
 
 import { findMatchingCustomPlace } from './customPlaces.mjs'
 import { nearbySearch, nearbyContextSearch } from './googlePlaces.mjs'
-import { reverseGeocode } from './geocoder.mjs'
+import { reverseGeocode, reverseGeocodeComponents } from './geocoder.mjs'
+import { haversineMeters } from './haversine.mjs'
 
-export function createResolver({ cache, customPlaces, apiKey }) {
+export function createResolver({ cache, customPlaces, apiKey, home }) {
   // Counters so the build script can print "made N new API calls" at the
   // end - lets the user see cost in real time.
   const stats = {
@@ -24,6 +25,22 @@ export function createResolver({ cache, customPlaces, apiKey }) {
     geocodeCalls: 0,
   }
 
+  // Suffix a POI caption with "City, ST" (or "City, Country" abroad) when the
+  // photo is beyond the home-metro radius. Within the radius - or with no home
+  // configured / no city resolved - the bare place name is returned.
+  function composePoi(name, comp, lat, lon) {
+    if (!home || !comp) return name
+    const dist = haversineMeters(lat, lon, home.lat, home.lon)
+    if (dist <= home.metro_radius_km * 1000) return name
+    if (!comp.city) return name
+    if (comp.countryCode && comp.countryCode === home.country_code) {
+      return comp.regionCode
+        ? `${name} - ${comp.city}, ${comp.regionCode}`
+        : `${name} - ${comp.city}`
+    }
+    return comp.country ? `${name} - ${comp.city}, ${comp.country}` : `${name} - ${comp.city}`
+  }
+
   // Drop cache entries that have been overridden by a (new or renamed)
   // custom place. Per doc: cleanest is to walk on app start.
   cache.invalidateForCustomPlaces((lat, lon) =>
@@ -34,7 +51,23 @@ export function createResolver({ cache, customPlaces, apiKey }) {
     const cached = cache.get(lat, lon)
     if (cached !== undefined) {
       stats.cacheHits++
-      return cached.name ? { name: cached.name, source: cached.source } : null
+      if (!cached.name) return null
+      if (cached.source === 'google_places') {
+        // Compose the city/state suffix from stored components. Entries that
+        // predate this feature lack components - backfill once via geocode.
+        let comp = cached.comp
+        if (!('comp' in cached)) {
+          comp = await reverseGeocodeComponents(lat, lon)
+          cache.set(lat, lon, {
+            name: cached.name,
+            source: 'google_places',
+            place_id: cached.place_id,
+            comp: comp || null,
+          })
+        }
+        return { name: composePoi(cached.name, comp, lat, lon), source: 'google_places' }
+      }
+      return { name: cached.name, source: cached.source }
     }
 
     // 1. Custom places.
@@ -58,12 +91,14 @@ export function createResolver({ cache, customPlaces, apiKey }) {
       })
       if (ctx) {
         stats.googleHits++
+        const comp = await reverseGeocodeComponents(lat, lon)
         cache.set(lat, lon, {
           name: ctx.name,
           source: 'google_places',
           place_id: ctx.place_id,
+          comp: comp || null,
         })
-        return { name: ctx.name, source: 'google_places' }
+        return { name: composePoi(ctx.name, comp, lat, lon), source: 'google_places' }
       }
       // Fall back to the venue name itself - skip geographic fallback.
       stats.customHits++
@@ -77,12 +112,14 @@ export function createResolver({ cache, customPlaces, apiKey }) {
       const hit = await nearbySearch({ apiKey, lat, lon, radius_m: 50 })
       if (hit) {
         stats.googleHits++
+        const comp = await reverseGeocodeComponents(lat, lon)
         cache.set(lat, lon, {
           name: hit.name,
           source: 'google_places',
           place_id: hit.place_id,
+          comp: comp || null,
         })
-        return { name: hit.name, source: 'google_places' }
+        return { name: composePoi(hit.name, comp, lat, lon), source: 'google_places' }
       }
     }
 

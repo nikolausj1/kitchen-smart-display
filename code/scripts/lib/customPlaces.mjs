@@ -10,15 +10,18 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { haversineMeters } from './haversine.mjs'
 
+// Returns { places, home }. `home` is the metro-center config used to decide
+// whether a POI gets a "City, ST" caption suffix (see location-resolution
+// -strategy.md). Falls back to the "Home" place's coords if no `home` block.
 export async function loadCustomPlaces(path) {
   if (!existsSync(path)) {
     console.warn(`! custom-places file not found at ${path} - resolver will skip custom matching`)
-    return []
+    return { places: [], home: null }
   }
   try {
     const raw = JSON.parse(await readFile(path, 'utf8'))
     const list = Array.isArray(raw?.places) ? raw.places : []
-    return list
+    const places = list
       .filter((p) => typeof p.lat === 'number' && typeof p.lon === 'number' && typeof p.radius_m === 'number')
       .map((p) => ({
         name: String(p.name || ''),
@@ -29,9 +32,29 @@ export async function loadCustomPlaces(path) {
         mode: p.mode === 'context' ? 'context' : 'label',
         inner_radius_m: p.mode === 'context' ? (p.inner_radius_m || 30) : null,
       }))
+    return { places, home: normalizeHome(raw?.home, places) }
   } catch (e) {
     console.warn(`! custom-places parse failed (${e.message}) - resolver will skip custom matching`)
-    return []
+    return { places: [], home: null }
+  }
+}
+
+// Resolve the home-metro config: an explicit `home` block wins; otherwise fall
+// back to the "Home" place's coordinates. Returns null if no center is known.
+function normalizeHome(home, places) {
+  let lat = home && typeof home.lat === 'number' ? home.lat : null
+  let lon = home && typeof home.lon === 'number' ? home.lon : null
+  if (lat === null || lon === null) {
+    const h = places.find((p) => p.category === 'home') ||
+      places.find((p) => /^home$/i.test(p.name))
+    if (h) { lat = h.lat; lon = h.lon }
+  }
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null
+  return {
+    lat,
+    lon,
+    metro_radius_km: home && typeof home.metro_radius_km === 'number' ? home.metro_radius_km : 60,
+    country_code: String((home && home.country_code) || 'US').toUpperCase(),
   }
 }
 

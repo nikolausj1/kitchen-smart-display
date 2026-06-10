@@ -59,9 +59,12 @@ if (!googleKey) {
 // --- Resolver setup ---------------------------------------------------------
 const cache = new LocationCache(LOCATION_CACHE)
 await cache.load()
-const customPlaces = await loadCustomPlaces(CUSTOM_PLACES_PATH)
+const { places: customPlaces, home: homeConfig } = await loadCustomPlaces(CUSTOM_PLACES_PATH)
 console.log(`Loaded ${customPlaces.length} custom places from ${CUSTOM_PLACES_PATH}`)
-const resolver = createResolver({ cache, customPlaces, apiKey: googleKey })
+if (homeConfig) {
+  console.log(`Home metro: ${homeConfig.metro_radius_km} km around ${homeConfig.lat.toFixed(4)},${homeConfig.lon.toFixed(4)} (${homeConfig.country_code})`)
+}
+const resolver = createResolver({ cache, customPlaces, apiKey: googleKey, home: homeConfig })
 
 // --- Date formatting --------------------------------------------------------
 
