@@ -1,0 +1,12 @@
+# Nightly kiosk photo refresh at 3am (small random delay to be polite to the
+# NAS). Persistent=true runs a missed window at next boot if the Pi was off.
+[Unit]
+Description=Nightly kiosk photo refresh
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

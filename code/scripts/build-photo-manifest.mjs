@@ -16,19 +16,27 @@
 //   - Output dimensions and orientation are computed.
 //   - Manifest sorted oldest -> newest by photo date.
 //
+// The rebuild is safe to run against a LIVE directory (the Pi runs it against
+// the photos the kiosk is actively serving): existing files are kept and
+// reused, new files land via tmp+rename, manifest.json is replaced atomically
+// last, and only then are orphaned photos pruned. Clients polling mid-run
+// always see a consistent manifest whose files all exist.
+//
 // Environment:
 //   - IMMICH_URL, IMMICH_API_KEY:   enables Immich mode.
 //   - GOOGLE_API_KEY:               enables Google Places step (recommended).
 //   - KIOSK_CUSTOM_PLACES_PATH:     custom-places.json path override.
+//   - STUB_PHOTOS_DIR:              output dir override (default
+//                                   code/public/stub-photos; the Pi sets
+//                                   /home/pi/kiosk/stub-photos).
 //
 // Usage:
 //   node --env-file=.env scripts/build-photo-manifest.mjs
 
-import { mkdir, readdir, writeFile, copyFile, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, writeFile, copyFile, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve, extname } from 'node:path'
-import exifr from 'exifr'
 
 import { LocationCache } from './lib/locationCache.mjs'
 import { loadCustomPlaces } from './lib/customPlaces.mjs'
@@ -38,7 +46,9 @@ import { listAlbums, listAlbumAssets, getAsset, downloadPreview } from './lib/im
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = resolve(__dirname, '..', '..')
 const SAMPLES_DIR = join(PROJECT_ROOT, 'samplePhotos')
-const PUBLIC_DIR = join(PROJECT_ROOT, 'code', 'public', 'stub-photos')
+const PUBLIC_DIR =
+  process.env.STUB_PHOTOS_DIR ||
+  join(PROJECT_ROOT, 'code', 'public', 'stub-photos')
 const LOCATION_CACHE = join(__dirname, '.location-cache.json')
 const CUSTOM_PLACES_PATH =
   process.env.KIOSK_CUSTOM_PLACES_PATH ||
@@ -82,13 +92,15 @@ function fmtDate(d) {
 
 await mkdir(PUBLIC_DIR, { recursive: true })
 
-// Wipe old photo files in PUBLIC_DIR (keep manifest.json + non-photo
-// subdirs like icons/, weather/, etc.).
-const existingFiles = await readdir(PUBLIC_DIR)
-for (const name of existingFiles) {
-  if (ALLOWED_EXT.has(extname(name).toLowerCase())) {
-    await rm(join(PUBLIC_DIR, name))
-  }
+// Photos referenced by the manifest being built. Orphans (on disk but not in
+// the new manifest) are pruned only AFTER the new manifest lands, so a client
+// polling mid-run never sees a manifest pointing at deleted files.
+const keepFiles = new Set()
+
+// Sweep stray .part files from a previous interrupted run. Downloads land at
+// their final name only via rename, so anything .part is garbage.
+for (const name of await readdir(PUBLIC_DIR)) {
+  if (name.endsWith('.part')) await rm(join(PUBLIC_DIR, name)).catch(() => {})
 }
 
 // --- Shared per-photo logic -------------------------------------------------
@@ -173,22 +185,35 @@ async function processImmich() {
 
   const entries = []
   let i = 0
+  let downloaded = 0
+  let reused = 0
   for (const { asset, albums: albumIds } of all) {
     i++
     const ex = asset.exifInfo || {}
     const filename = `immich-${asset.id}.jpg`
     const dst = join(PUBLIC_DIR, filename)
 
-    // Download preview. Skip on per-asset error so one bad asset doesn't
-    // sink the whole run.
-    try {
-      await downloadPreview({
-        baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: dst,
-      })
-    } catch (e) {
-      console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e.message}`)
-      continue
+    // Previews are content-stable per asset id, so a file already on disk is
+    // reused (keeps nightly runs fast and spares the Pi's SD card). Partial
+    // files never land at the final name (tmp+rename), so existence implies
+    // a complete file. New assets download on per-asset error tolerance so
+    // one bad asset doesn't sink the whole run.
+    if (existsSync(dst)) {
+      reused++
+    } else {
+      try {
+        await downloadPreview({
+          baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: `${dst}.part`,
+        })
+        await rename(`${dst}.part`, dst)
+        downloaded++
+      } catch (e) {
+        await rm(`${dst}.part`).catch(() => {})
+        console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e.message}`)
+        continue
+      }
     }
+    keepFiles.add(filename)
 
     // Fetch full asset detail to get people[].faces[] geometry, which the
     // album-list endpoint omits. Cheap on LAN.
@@ -244,6 +269,7 @@ async function processImmich() {
     entries.push(entry)
   }
 
+  console.log(`Previews: ${downloaded} downloaded, ${reused} reused from disk`)
   return { entries, albums }
 }
 
@@ -253,6 +279,9 @@ async function processSamplePhotos() {
   if (!existsSync(SAMPLES_DIR)) {
     throw new Error(`samplePhotos/ not found at ${SAMPLES_DIR} - set IMMICH_URL+IMMICH_API_KEY or populate samplePhotos/`)
   }
+  // exifr is only needed in this mode; loading it lazily keeps the Pi's
+  // Immich-mode build free of node_modules entirely.
+  const exifr = (await import('exifr')).default
   const files = (await readdir(SAMPLES_DIR))
     .filter((n) => ALLOWED_EXT.has(extname(n).toLowerCase()))
   console.log(`samplePhotos mode -> ${files.length} files`)
@@ -266,7 +295,9 @@ async function processSamplePhotos() {
 
     let addedAt = 0
     try { addedAt = Math.round((await stat(src)).mtimeMs) } catch {}
-    await copyFile(src, dst)
+    await copyFile(src, `${dst}.part`)
+    await rename(`${dst}.part`, dst)
+    keepFiles.add(name)
 
     let exif = null
     try {
@@ -310,6 +341,13 @@ const { entries, albums } = useImmich
   ? await processImmich()
   : await processSamplePhotos()
 
+// A live display is behind this manifest; an empty result is far more likely
+// an Immich hiccup than a deliberately emptied library. Bail without touching
+// the manifest or pruning (which would otherwise delete every photo).
+if (entries.length === 0) {
+  throw new Error('0 photos processed - aborting without writing manifest or pruning')
+}
+
 // Sort oldest -> newest by date taken.
 entries.sort((a, b) => a.sortKey - b.sortKey)
 for (const e of entries) delete e.sortKey
@@ -321,10 +359,20 @@ const manifest = {
   photos: entries,
 }
 
-await writeFile(
-  join(PUBLIC_DIR, 'manifest.json'),
-  JSON.stringify(manifest, null, 2) + '\n'
-)
+// Atomic replace: clients polling manifest.json never see a partial write.
+const manifestPath = join(PUBLIC_DIR, 'manifest.json')
+await writeFile(`${manifestPath}.tmp`, JSON.stringify(manifest, null, 2) + '\n')
+await rename(`${manifestPath}.tmp`, manifestPath)
+
+// Only now is it safe to drop photos the new manifest no longer references.
+let pruned = 0
+for (const name of await readdir(PUBLIC_DIR)) {
+  if (!ALLOWED_EXT.has(extname(name).toLowerCase())) continue
+  if (keepFiles.has(name)) continue
+  await rm(join(PUBLIC_DIR, name)).catch(() => {})
+  pruned++
+}
+if (pruned > 0) console.log(`Pruned ${pruned} orphaned photo file(s)`)
 
 await cache.save()
 

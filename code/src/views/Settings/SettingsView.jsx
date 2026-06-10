@@ -249,6 +249,97 @@ function SonosRoomSelect({ apiBase, value, onChange }) {
   )
 }
 
+// Trigger + monitor the Pi-side photo manifest rebuild (Immich -> kiosk).
+// POST /api/photos/refresh starts photo-refresh.sh on the Pi; the status
+// endpoint reflects refresh-status.json, which that script owns. See
+// docs/designs/photo-refresh-automation.md.
+function PhotoRefreshControl() {
+  const [status, setStatus] = useState(null)
+  const [posting, setPosting] = useState(false)
+  const [postError, setPostError] = useState(null)
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/api/photos/refresh/status', { cache: 'no-store' })
+      if (res.ok) setStatus(await res.json())
+    } catch {
+      // Dev server / endpoint absent: leave status null, button still renders.
+    }
+  }
+
+  useEffect(() => {
+    loadStatus()
+  }, [])
+
+  // Poll only while a run is active, so an open Settings screen costs nothing.
+  const running = !!status?.running
+  useEffect(() => {
+    if (!running) return undefined
+    const id = setInterval(loadStatus, 4000)
+    return () => clearInterval(id)
+  }, [running])
+
+  async function start(e) {
+    e.stopPropagation()
+    setPosting(true)
+    setPostError(null)
+    try {
+      const res = await fetch('/api/photos/refresh', { method: 'POST' })
+      if (!res.ok && res.status !== 409) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `HTTP ${res.status}`)
+      }
+      // The wrapper may not have written its status file yet; flip to
+      // running optimistically so polling starts immediately.
+      setStatus((s) => ({ ...(s || {}), running: true }))
+    } catch (err) {
+      setPostError(err.message || 'refresh failed')
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  function fmtLastRun(iso) {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    const sameDay = d.toDateString() === new Date().toDateString()
+    if (sameDay) return `today ${time}`
+    return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`
+  }
+
+  let note = null
+  if (running) {
+    note = <div className="settings-note">Checking Immich for new photos&hellip;</div>
+  } else if (postError) {
+    note = <div className="settings-error">{postError}</div>
+  } else if (status?.error) {
+    note = <div className="settings-error">Last run failed: {status.error}</div>
+  } else if (status?.lastRun) {
+    note = (
+      <div className="settings-note">
+        Last refreshed {fmtLastRun(status.lastRun)}
+        {status.photoCount ? ` · ${status.photoCount} photos` : ''}
+      </div>
+    )
+  }
+
+  return (
+    <div className="settings-refresh">
+      <button
+        type="button"
+        className="settings-refresh__btn"
+        onClick={start}
+        disabled={running || posting}
+        data-interactive="true"
+      >
+        {running || posting ? 'Refreshing…' : 'Refresh now'}
+      </button>
+      {note}
+    </div>
+  )
+}
+
 // --- View --------------------------------------------------------------------
 
 export default function SettingsView() {
@@ -656,6 +747,12 @@ export default function SettingsView() {
               </div>
             </Row>
           )}
+          <Row
+            label="Refresh photos"
+            hint="Pull new albums and photos from Immich. Also runs automatically every night at 3am."
+          >
+            <PhotoRefreshControl />
+          </Row>
         </section>
 
         {/* --- Display (night mode schedule) --- */}

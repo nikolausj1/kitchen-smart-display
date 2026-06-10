@@ -2,8 +2,8 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 2.9
-author: Claude Opus 4.8 (claude-opus-4-8)
+version: 3.2
+author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
 
@@ -35,13 +35,9 @@ Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
 
-1. **Photo-refresh automation** (DESIGN) - how new Immich photos (added to an
-   album, or a new album) reach the displays without a manual manifest rebuild +
-   `npm run deploy`. Today it is fully manual. Leaning toward **making the Pi
-   self-sufficient** (install Node + Immich creds on the Pi so it rebuilds the
-   manifest locally; then a "refresh" button and/or nightly cron). Supersedes the
-   old "Automated Immich manifest rebuild (DECISION, BLOCKED)" item. Tradeoff to
-   resolve: secrets + Node on the Pi.
+(none right now - photo-refresh automation shipped 2026-06-09, see Recently
+Shipped. Reminder that outlives it: **if a second photo frame comes up, move
+the photo build to the NAS** - Decisions Log 2026-06-09.)
 
 ---
 
@@ -54,7 +50,7 @@ Jukebox station picker, full Settings, Sonos transport, weather, Immich photos,
 the morning departure timer, and school-schedule awareness are all shipped.
 Remaining:
 
-- **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. 
+- **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home
   "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
   "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic
@@ -116,6 +112,23 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-06-09 - Photo-refresh automation design settled: Pi-first.** Build runs
+  on the kitchen Pi (`/home/pi/photo-build/`), writing into the live
+  `stub-photos/`. Triggers: kitchen Settings "Refresh photos" button
+  (`kiosk-server.py` POST `/api/photos/refresh` + status endpoint, single-flight)
+  and a 3am systemd timer. Secrets on the Pi: read-only Immich key +
+  Places-restricted Google key (POI-quality captions for new places). Prereqs:
+  atomic rebuild (no wipe-first), deploy excludes `stub-photos/` and syncs
+  scripts + `custom-places.json`; `flags-apply.mjs` ends with scp + refresh
+  trigger. Design: `docs/designs/photo-refresh-automation.md`.
+- **2026-06-09 - Photo-refresh: NAS-centralized build identified as the
+  multi-frame architecture.** The Synology (always-on, runs Immich, stores the
+  photos) is the natural build host once there is more than one frame: build
+  once, serve manifest + previews over LAN, frames just point at the URL.
+  Pi-self-sufficient stays the pragmatic single-frame path; the script is
+  portable so migrating later is cheap. Trigger to revisit: a second photo
+  frame. (Windows NUC noted but not relevant unless Immich compute runs there -
+  unconfirmed.)
 - **2026-06-09 - POI captions get city/state by distance from home.** Boundary is
   a configurable home-metro radius (default 60 km in `custom-places.json` `home`
   block), not the state line - so far-WA places get annotated too. US -> "City, ST",
@@ -164,6 +177,18 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-09 - Photo-refresh automation (Pi-self-sufficient).** The Pi now
+  rebuilds its own photo manifest from Immich: "Refresh photos" button in
+  kitchen Settings (POST `/api/photos/refresh` + status endpoint on
+  `kiosk-server.py`, single-flight via flock) and a nightly 3:01am systemd
+  timer, both through `photo-refresh.sh`. Rebuild made atomic (reuse existing
+  previews, tmp+rename, manifest written last, prune after; 0-photo abort
+  guard) - verified live: 1,573 photos, 0 re-downloaded. Secrets on the Pi
+  (`/home/pi/photo-build/.env`, chmod 600): read-only Immich key +
+  Places-restricted Google key, both verified working. Deploy now excludes
+  `stub-photos/` (Pi authoritative) and syncs scripts + `custom-places.json`;
+  `flags-apply.mjs` hand-off is now scp + refresh trigger. Design:
+  `docs/designs/photo-refresh-automation.md`.
 - **2026-06-09 - City/state captions for out-of-metro POIs.** Google-named POIs
   now gain "- City, ST" (or "- City, Country" abroad) when a photo is beyond a
   configurable home-metro radius (default 60 km), including far-WA places

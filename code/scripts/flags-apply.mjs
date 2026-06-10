@@ -2,10 +2,11 @@
 // Apply photo-location corrections.
 //
 // Reads the filled review export (from _inbox/ by default), appends one
-// custom-places.json bubble per correction, and prints the exact rebuild +
-// deploy + resolve commands to finish. We deliberately do NOT auto-rebuild or
-// resolve flags here, so you can eyeball custom-places.json and only resolve
-// the flags after a successful deploy.
+// custom-places.json bubble per correction, and prints the exact push +
+// refresh + resolve commands to finish (the Pi rebuilds its own manifest;
+// see docs/designs/photo-refresh-automation.md). We deliberately do NOT
+// auto-push or resolve flags here, so you can eyeball custom-places.json
+// and only resolve the flags after a successful refresh.
 //
 // Usage:
 //   node scripts/flags-apply.mjs [path-to-flag-corrections.json]
@@ -90,8 +91,10 @@ async function main() {
     console.log(`  - "${a.name}"  (${a.lat.toFixed(5)},${a.lon.toFixed(5)}  r=${a.radius_m}m  ${a.category})`)
   }
   const ids = applied.map((a) => a.assetId).filter(Boolean)
-  console.log('\nNext steps (rebuild applies the new labels, then resolve clears the flags):')
-  console.log('  node --env-file=.env scripts/build-photo-manifest.mjs && npm run deploy')
+  console.log('\nNext steps (push the corrections to the Pi, let it rebuild, then resolve the flags):')
+  console.log(`  scp '${CUSTOM_PLACES}' pi@smartdisplay.local:/home/pi/photo-build/custom-places.json`)
+  console.log(`  curl -s -X POST ${PI_BASE}/api/photos/refresh`)
+  console.log(`  curl -s ${PI_BASE}/api/photos/refresh/status   # wait for running:false, ok:true`)
   console.log(`  curl -s -X POST -H 'Content-Type: application/json' -d '${JSON.stringify({ assetIds: ids })}' ${PI_BASE}/api/flags/resolve`)
 }
 

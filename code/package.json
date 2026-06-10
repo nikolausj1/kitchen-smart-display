@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && rsync -av --delete dist/ pi@smartdisplay.local:/home/pi/kiosk/ && rsync -av ../pi/kiosk-server.py ../pi/labwc-autostart ../pi/kiosk-restart.sh pi@smartdisplay.local:/home/pi/ && ssh pi@smartdisplay.local 'chmod +x /home/pi/kiosk-restart.sh && bash /home/pi/kiosk-restart.sh'"
+    "deploy": "vite build && rsync -av --delete --exclude stub-photos/ dist/ pi@smartdisplay.local:/home/pi/kiosk/ && rsync -av ../pi/kiosk-server.py ../pi/labwc-autostart ../pi/kiosk-restart.sh ../pi/photo-refresh.sh ../pi/photo-refresh.service ../pi/photo-refresh.timer pi@smartdisplay.local:/home/pi/ && ssh pi@smartdisplay.local 'mkdir -p /home/pi/photo-build/scripts' && rsync -av --delete --exclude .location-cache.json scripts/ pi@smartdisplay.local:/home/pi/photo-build/scripts/ && rsync -av ../custom-places.json pi@smartdisplay.local:/home/pi/photo-build/ && ssh pi@smartdisplay.local 'chmod +x /home/pi/kiosk-restart.sh /home/pi/photo-refresh.sh && bash /home/pi/kiosk-restart.sh'"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

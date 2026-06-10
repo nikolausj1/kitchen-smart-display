@@ -37,6 +37,17 @@ STATE_FILE = '/home/pi/state.json'
 # caption is wrong; flags accumulate here as a list and get triaged later on
 # the Mac. Persisted to disk so they survive Pi restarts.
 FLAGS_FILE = '/home/pi/flags.json'
+# Photo-refresh: the Pi rebuilds its own photo manifest from Immich (see
+# docs/designs/photo-refresh-automation.md). photo-refresh.sh owns the status
+# file (flock single-flight, works for both the button and the systemd timer);
+# the endpoints here just spawn it / report it.
+#   POST /api/photos/refresh        -> start a rebuild (409 if one is running)
+#   GET  /api/photos/refresh/status -> contents of refresh-status.json
+REFRESH_SCRIPT = '/home/pi/photo-refresh.sh'
+REFRESH_STATUS_FILE = '/home/pi/photo-build/refresh-status.json'
+# A build that claims to be running for longer than this is a crashed wrapper
+# (the wrapper traps EXIT, so this should never trigger in practice).
+REFRESH_STALE_SECS = 45 * 60
 PORT = 8080
 # Bind on all interfaces so LAN clients (the Apple TV) can reach the kiosk
 # app and the /api endpoints. The kitchen Chromium still loads via localhost.
@@ -294,6 +305,56 @@ def write_flags(items):
     os.replace(tmp, FLAGS_FILE)
 
 
+def read_refresh_status():
+    """Return the photo-refresh status dict written by photo-refresh.sh.
+
+    Downgrades a stale 'running' claim (crashed wrapper) so the Settings UI
+    never shows a spinner forever.
+    """
+    try:
+        with open(REFRESH_STATUS_FILE, 'r') as f:
+            status = json.load(f)
+        if not isinstance(status, dict):
+            return {}
+    except FileNotFoundError:
+        return {'running': False, 'lastRun': None}
+    except Exception:
+        return {}
+    if status.get('running'):
+        try:
+            started = datetime.datetime.fromisoformat(
+                str(status.get('startedAt', '')).replace('Z', '+00:00'))
+            age = (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds()
+            if age > REFRESH_STALE_SECS:
+                status['running'] = False
+                status['ok'] = False
+                status['error'] = 'previous run never finished (stale)'
+        except Exception:
+            pass
+    return status
+
+
+def start_refresh(trigger):
+    """Spawn photo-refresh.sh detached. Returns (started, status_or_error).
+
+    The wrapper's flock is the real single-flight guarantee (it also covers
+    timer-started runs); the status check here just gives the caller a clean
+    409 instead of a silently no-op'd spawn.
+    """
+    status = read_refresh_status()
+    if status.get('running'):
+        return False, status
+    if not os.path.exists(REFRESH_SCRIPT):
+        return False, {'error': f'{REFRESH_SCRIPT} not found'}
+    subprocess.Popen(
+        [REFRESH_SCRIPT, trigger],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return True, None
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=KIOSK_DIR, **kwargs)
@@ -417,6 +478,8 @@ class Handler(SimpleHTTPRequestHandler):
             if (q.get('unresolved') or ['0'])[0] in ('1', 'true'):
                 flags = [f for f in flags if not f.get('resolved')]
             return self._json(200, flags)
+        if self.path == '/api/photos/refresh/status':
+            return self._json(200, read_refresh_status())
         if self.path == '/api/sonos' or self.path.startswith('/api/sonos/'):
             return self._proxy_sonos()
         if self.path == '/api/schoolcal' or self.path.startswith('/api/schoolcal?'):
@@ -451,6 +514,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self._append_flag()
         if self.path == '/api/flags/resolve':
             return self._resolve_flags()
+        if self.path == '/api/photos/refresh':
+            try:
+                started, status = start_refresh('button')
+                if started:
+                    return self._json(200, {'ok': True, 'started': True})
+                if status.get('running'):
+                    return self._json(409, {'ok': False, 'running': True})
+                return self._json(500, {'ok': False, 'error': status.get('error', 'unknown')})
+            except Exception as e:
+                return self._json(500, {'ok': False, 'error': str(e)})
         self.send_response(404)
         self.end_headers()
 
