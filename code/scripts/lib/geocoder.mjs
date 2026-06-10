@@ -67,13 +67,14 @@ export async function reverseGeocodeComponents(lat, lon) {
     const r = await fetchAddress(lat, lon)
     if (!r) return null
     const a = r.address
+    const neighborhood = a.neighbourhood || a.suburb || a.city_district || a.quarter || null
     const city = a.city || a.town || a.village || a.hamlet || a.municipality || null
     const region = a.state || a.region || null
     const countryCode = (a.country_code || '').toUpperCase() || null
     const regionCode =
       countryCode === 'US' && region ? US_STATE_ABBR[region] || null : null
     const country = a.country || null
-    return { city, region, regionCode, country, countryCode }
+    return { neighborhood, city, region, regionCode, country, countryCode }
   } catch (e) {
     console.warn(`  ! nominatim components failed for ${lat},${lon}: ${e.message}`)
     return null

@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 2.7
+version: 2.8
 author: Claude Opus 4.8 (claude-opus-4-8)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -114,8 +114,9 @@ captures decisions made during working sessions.
 - **2026-06-09 - POI captions get city/state by distance from home.** Boundary is
   a configurable home-metro radius (default 60 km in `custom-places.json` `home`
   block), not the state line - so far-WA places get annotated too. US -> "City, ST",
-  abroad -> "City, Country". Only the `google_places` tier; custom + fallback
-  unchanged. Components stored in the cache + composed at build, so radius/format
+  abroad -> "City, Country". Applies to POIs and the geographic fallback (away ->
+  "City, ST", neighborhood dropped); custom labels unchanged. Components stored in
+  the cache + composed at build, so radius/format
   tweaks are rebuild-only. Design: `docs/designs/location-resolution-strategy.md`.
 - **2026-06-09 - Built the photo caption-corrections loop.** Long-press a kitchen
   photo to flag a wrong caption -> Pi `flags.json` (`/api/flags`) -> self-serve
@@ -161,8 +162,9 @@ Newest first.
 - **2026-06-09 - City/state captions for out-of-metro POIs.** Google-named POIs
   now gain "- City, ST" (or "- City, Country" abroad) when a photo is beyond a
   configurable home-metro radius (default 60 km), including far-WA places
-  (Leavenworth, WA). Distance-from-home, not the state line. Custom labels +
-  geographic fallback unchanged. 111 photos gained context on rebuild.
+  (Leavenworth, WA). Distance-from-home, not the state line. The geographic
+  fallback also gains "City, ST" away from home (e.g. "Santa Barbara, CA",
+  "Birch Bay, WA"); custom labels unchanged.
 - **2026-06-09 - Photo caption corrections.** Long-press flagging on the kitchen,
   a Pi flag store, a self-serve `_review/` triage page, and `flags-apply.mjs` that
   encodes corrections into `custom-places.json`. One bubble fixes the whole spot.

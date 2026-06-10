@@ -8,7 +8,7 @@
 
 import { findMatchingCustomPlace } from './customPlaces.mjs'
 import { nearbySearch, nearbyContextSearch } from './googlePlaces.mjs'
-import { reverseGeocode, reverseGeocodeComponents } from './geocoder.mjs'
+import { reverseGeocodeComponents } from './geocoder.mjs'
 import { haversineMeters } from './haversine.mjs'
 
 export function createResolver({ cache, customPlaces, apiKey, home }) {
@@ -41,6 +41,26 @@ export function createResolver({ cache, customPlaces, apiKey, home }) {
     return comp.country ? `${name} - ${comp.city}, ${comp.country}` : `${name} - ${comp.city}`
   }
 
+  // Compose the geographic-fallback caption from components. At home:
+  // "Neighborhood, City" (or city / region / country). Away from home: drop the
+  // neighborhood and append the state ("City, ST" in the US) or country abroad.
+  function composeGeo(comp, lat, lon) {
+    if (!comp) return null
+    const { neighborhood, city, region, regionCode, country, countryCode } = comp
+    const away = home && haversineMeters(lat, lon, home.lat, home.lon) > home.metro_radius_km * 1000
+    if (away && city) {
+      if (countryCode && countryCode === home.country_code) {
+        return regionCode ? `${city}, ${regionCode}` : city
+      }
+      return country ? `${city}, ${country}` : city
+    }
+    if (neighborhood && city) return `${neighborhood}, ${city}`
+    if (city) return city
+    if (region) return region
+    if (country) return country
+    return null
+  }
+
   // Drop cache entries that have been overridden by a (new or renamed)
   // custom place. Per doc: cleanest is to walk on app start.
   cache.invalidateForCustomPlaces((lat, lon) =>
@@ -66,6 +86,14 @@ export function createResolver({ cache, customPlaces, apiKey, home }) {
           })
         }
         return { name: composePoi(cached.name, comp, lat, lon), source: 'google_places' }
+      }
+      if (cached.source === 'geocode') {
+        let comp = cached.comp
+        if (!('comp' in cached)) {
+          comp = await reverseGeocodeComponents(lat, lon)
+          cache.set(lat, lon, { name: cached.name, source: 'geocode', comp: comp || null })
+        }
+        return { name: composeGeo(comp, lat, lon) || cached.name, source: 'geocode' }
       }
       return { name: cached.name, source: cached.source }
     }
@@ -123,12 +151,15 @@ export function createResolver({ cache, customPlaces, apiKey, home }) {
       }
     }
 
-    // 3. Nominatim reverse-geocode (broad fallback).
+    // 3. Nominatim reverse-geocode (broad fallback). Away from home we append
+    // the state/country and drop the neighborhood; at home we keep
+    // "Neighborhood, City".
     stats.geocodeCalls++
-    const place = await reverseGeocode(lat, lon)
+    const geo = await reverseGeocodeComponents(lat, lon)
+    const place = composeGeo(geo, lat, lon)
     if (place) {
       stats.geocodeHits++
-      cache.set(lat, lon, { name: place, source: 'geocode' })
+      cache.set(lat, lon, { name: place, source: 'geocode', comp: geo })
       return { name: place, source: 'geocode' }
     }
 
