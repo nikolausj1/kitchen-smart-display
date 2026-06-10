@@ -2,7 +2,7 @@
 title: "Location Resolution Strategy"
 created: 2026-05-24
 modified: 2026-06-09
-version: 1.3
+version: 1.4
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -13,7 +13,7 @@ tags:
 
 This document defines how the Kitchen Smart Display converts EXIF GPS coordinates from a photo into a meaningful human-readable place name to show on the slideshow overlay. The goal is to display names people actually use ("Tartine", "The Bergers", "Lawton Elementary") rather than generic geographic fallbacks ("Seattle", "Magnolia neighborhood") whenever possible.
 
-This is the living reference for photo place-name captions. The master spec is `../../PRD - Smart Displays.md`; open caption work (e.g. city/state rules) is tracked in `../../BACKLOG.md`.
+This is the living reference for photo place-name captions. The master spec is `../../PRD - Smart Displays.md`; open caption work (e.g. city/state rules) is tracked in `../../BACKLOG.md`. Wrong captions are corrected via the flag-and-triage loop in `photo-corrections-workflow.md`.
 
 ## Design principles
 

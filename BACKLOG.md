@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 2.5
+version: 2.6
 author: Claude Opus 4.8 (claude-opus-4-8)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -47,11 +47,6 @@ decision live here once settled.
    `code/scripts/lib/geocoder.mjs`; would extend
    `docs/designs/location-resolution-strategy.md`. Exact behavior + an editable
    "home region" knob still to be decided.
-3. **Place / restaurant corrections** (TODO) - fix wrong place names by adding
-   overrides to `custom-places.json` (custom always wins; build auto-invalidates
-   conflicting cache entries). Waiting on Justin's list of wrong names + correct
-   labels.
-
 ---
 
 ## Backlog
@@ -120,6 +115,11 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-06-09 - Built the photo caption-corrections loop.** Long-press a kitchen
+  photo to flag a wrong caption -> Pi `flags.json` (`/api/flags`) -> self-serve
+  review page (`flags-review.mjs`) -> `custom-places.json` bubbles
+  (`flags-apply.mjs`) -> rebuild/deploy. GPS kept out of git (recovered from Immich
+  at triage). Design: `docs/designs/photo-corrections-workflow.md`.
 - **2026-06-09 - Ported the tvOS history+cursor nav model to the kitchen slideshow.**
   Replaced the pop-only back stack in `PhotoSlideshow.jsx` so next/previous are a
   reversible cursor walk over an immutable, lazily-extended display sequence.
@@ -156,6 +156,11 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-09 - Photo caption corrections.** Long-press flagging on the kitchen,
+  a Pi flag store, a self-serve `_review/` triage page, and `flags-apply.mjs` that
+  encodes corrections into `custom-places.json`. One bubble fixes the whole spot.
+  Verified end to end (front-end, Pi endpoints, both scripts). See
+  `docs/designs/photo-corrections-workflow.md`.
 - **2026-06-09 - Predictable photo back-navigation (kitchen).** The slideshow now
   uses a history-array + cursor model (ported from `tvos/Sources/SlideshowEngine.swift`)
   instead of a pop-only back stack. next/previous are fully reversible - back then
@@ -182,7 +187,6 @@ Newest first.
 - **Verify album re-select on the kitchen display** (VERIFY) - after the
   2026-06-09 deploy, the saved selection pointed at deleted albums; confirm the 7
   year albums were re-selected in Settings and the slideshow is showing.
-- **Delete stray empty `Art 01` album** in Immich (0 assets).
 - **Rotate/delete the `immich-go-import` API key** - it has all permissions and was
   pasted in chat during the import. The read-only `kitchen_display` key in
   `code/.env` remains for manifest builds.
