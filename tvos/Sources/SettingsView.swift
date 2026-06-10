@@ -76,7 +76,7 @@ struct SettingsView: View {
                     value: tvSettings.musicMatLabel)
 
                 Text(nav.current == .albums
-                     ? "Left/right to highlight an album, play/pause to toggle. Press Menu to exit."
+                     ? "Left/right to highlight an album, press the center button to toggle. Press Menu to exit."
                      : "Use left/right to change. Press Menu to exit.")
                     .font(.system(size: W * 0.016, weight: .regular))
                     .foregroundStyle(.white.opacity(0.45))

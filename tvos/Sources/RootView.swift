@@ -77,6 +77,13 @@ struct RootView: View {
             .focused($focused)
             .onMoveCommand { handleMove($0) }
             .onPlayPauseCommand { handlePlayPause() }
+            // The Siri Remote center (select) button. SwiftUI's TapGesture
+            // does not receive select presses on this custom focusable root
+            // (verified on device), so a UIKit window-level recognizer with
+            // allowedPressTypes=[.select] catches it instead. In Settings it
+            // toggles the highlighted row, same as play/pause - that's the
+            // button thumbs reach for.
+            .background(SelectPressCatcher(onSelect: { handleSelect() }))
             // Menu exits Settings back to the prior view. Only attached while in
             // Settings, so elsewhere Menu keeps its default (exit app) behavior.
             .modifier(ExitToSettingsParent(active: router.view == .settings,
@@ -153,20 +160,32 @@ struct RootView: View {
 
     private func handlePlayPause() {
         if router.view == .settings {
-            // Play/pause toggles the highlighted row; no-op on numeric rows.
-            switch settingsNav.current {
-            case .albums:
-                if let a = settingsNav.cursorAlbum {
-                    tvSettings.toggleAlbum(a.id, albums: settingsNav.albums)
-                }
-            case .todayMat:  tvSettings.todayMatEnabled.toggle()
-            case .photosMat: tvSettings.photosMatEnabled.toggle()
-            case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
-            default: break
-            }
+            toggleCurrentSettingsRow()
             return
         }
         sonos.playPause()
+    }
+
+    // Center (select) button: toggle in Settings, deliberately inert elsewhere
+    // (no accidental Sonos transport from a thumb resting on the touchpad).
+    private func handleSelect() {
+        guard router.view == .settings else { return }
+        toggleCurrentSettingsRow()
+    }
+
+    // Shared by select and play/pause: toggle the highlighted row; no-op on
+    // numeric rows.
+    private func toggleCurrentSettingsRow() {
+        switch settingsNav.current {
+        case .albums:
+            if let a = settingsNav.cursorAlbum {
+                tvSettings.toggleAlbum(a.id, albums: settingsNav.albums)
+            }
+        case .todayMat:  tvSettings.todayMatEnabled.toggle()
+        case .photosMat: tvSettings.photosMatEnabled.toggle()
+        case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
+        default: break
+        }
     }
 
     private func adjustSetting(_ dir: Int) {
@@ -200,6 +219,39 @@ struct RootView: View {
 
 // Conditionally attaches .onExitCommand. When inactive, the view is returned
 // unchanged so the Menu button keeps its system default (exit app).
+// Catches the Siri Remote center (select) button via a UIKit gesture
+// recognizer on the window. Press events route through the focus system, and
+// a window-level recognizer is an ancestor of whatever is focused, so it
+// fires no matter how SwiftUI has arranged focus. (SwiftUI's TapGesture on
+// the focusable root never fires for select on device; see RemoteLayer.swift
+// for the history of remote-input approaches here.)
+private struct SelectPressCatcher: UIViewRepresentable {
+    let onSelect: () -> Void
+
+    func makeUIView(context: Context) -> CatcherView {
+        let v = CatcherView()
+        v.onSelect = onSelect
+        return v
+    }
+    func updateUIView(_ v: CatcherView, context: Context) { v.onSelect = onSelect }
+
+    final class CatcherView: UIView {
+        var onSelect: (() -> Void)?
+        private var recognizer: UITapGestureRecognizer?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard let window, recognizer == nil else { return }
+            let tap = UITapGestureRecognizer(target: self, action: #selector(fire))
+            tap.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+            window.addGestureRecognizer(tap)
+            recognizer = tap
+        }
+
+        @objc private func fire() { onSelect?() }
+    }
+}
+
 private struct ExitToSettingsParent: ViewModifier {
     let active: Bool
     let action: () -> Void
