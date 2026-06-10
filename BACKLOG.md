@@ -2,16 +2,16 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 3.2
+version: 3.5
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
 
 # Kitchen Smart Display - Backlog & Tracker
 
-The single running tracker for this project: **active design topics**, the
-**backlog** of open work, a dated **Decisions Log**, a **Recently Shipped** log,
-and **Housekeeping**. Covers both surfaces - the kitchen Raspberry Pi screen
+The single running tracker for this project: **recurring tasks**, **active
+design topics**, the **backlog** of open work, a dated **Decisions Log**, a
+**Recently Shipped** log, and **Housekeeping**. Covers both surfaces - the kitchen Raspberry Pi screen
 (React web app in `code/`) and the Apple TV / Frame TV app (native SwiftUI in
 `tvos/`).
 
@@ -26,6 +26,44 @@ Where things live:
 Status legend: TODO = not started, DESIGN = being worked out below, DECISION =
 needs a decision before building, BLOCKED = waiting on a dependency, VERIFY =
 built but not confirmed live, POLISH = minor/cosmetic.
+
+---
+
+## Recurring Tasks
+
+The repeatable maintenance workflows (not one-off backlog items).
+
+### 1. Add new photos from Google Photos
+
+How we ran it 2026-06-09 (the 2018 album): **you export, Claude does the rest.**
+
+1. **You:** export from Google Photos via Takeout and unzip into
+   `~/Downloads/Takeout/` (ends up as `Google Photos <MM-DD-YYYY>/` with the
+   album folders + `.json` sidecars inside).
+2. **You:** tell Claude "I downloaded another album, add it to Immich" and
+   paste the `immich-go-import` API key **from 1Password** when asked.
+3. **Claude:** finds the new Takeout folder, dry-runs immich-go (binary:
+   `~/Downloads/immich-go`, server `http://192.168.6.128:2283`), runs the real
+   upload, waits for Immich's thumbnail + metadata jobs to drain (refreshing
+   too early only picks up part of the import - caveat in
+   `docs/designs/photo-refresh-automation.md`), triggers the Pi photo refresh,
+   and verifies the new album landed in the manifest.
+
+Kitchen + TV update within ~5 min of the rebuild. If Claude isn't around for
+steps 2-3, the manual command lives in the import log
+(`archive/import-log-2026-06-08.md`) and the nightly 3am refresh will pick up
+any finished import on its own.
+
+### 2. Triage place corrections
+
+Wrong captions get long-press-flagged on the kitchen display and queue up on
+the Pi. Periodically (when the queue has a few): tell Claude **"let's triage
+place corrections"** - that runs `flags-review.mjs` (self-serve review page in
+`_review/`), you fill in correct labels and export to `_inbox/`, then
+`flags-apply.mjs` writes the bubbles into `custom-places.json`. Finish with
+the printed commands: scp `custom-places.json` to the Pi, trigger a photo
+refresh, resolve the flags. Full flow:
+`docs/designs/photo-corrections-workflow.md`.
 
 ---
 
@@ -50,7 +88,7 @@ Jukebox station picker, full Settings, Sonos transport, weather, Immich photos,
 the morning departure timer, and school-schedule awareness are all shipped.
 Remaining:
 
-- **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
+- **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home
   "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
   "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic

@@ -2,7 +2,7 @@
 title: "Photo-Refresh Automation - Pi-Self-Sufficient Build"
 created: 2026-06-09
 modified: 2026-06-09
-version: 1.1
+version: 1.2
 author: Claude Fable 5 (claude-fable-5)
 tags: [design, photos, immich, raspberry-pi, automation, kitchen-display]
 ---
@@ -141,6 +141,18 @@ minutes of the rebuild finishing.
 - [x] Create `/home/pi/photo-build/.env` with the three values (chmod 600).
 - [x] Seed `.location-cache.json` from the Mac's copy.
 - [x] Install + enable the systemd service/timer (next run 3:01am).
+
+## Caveat: refreshing right after a large import
+
+A refresh fired immediately after an immich-go import races Immich's own
+background jobs: previews 404 until thumbnailGeneration finishes (those
+photos are skipped for that run) and GPS/date captions are empty until
+metadataExtraction finishes. Observed live 2026-06-09: a refresh right after
+the 2018-album import picked up only 12 of ~254 new photos. Not a corruption
+risk (atomic rebuild just skips them); the fix is to wait for Immich's job
+queues to drain (server Administration -> Jobs, or
+`GET /api/jobs` with an admin key) and refresh again - or just let the
+nightly 3am run catch everything.
 
 ## Future: NAS migration (when frame #2 arrives)
 
