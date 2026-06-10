@@ -3723,7 +3723,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Mellisoni Vineyards",
+        "location": "Mellisoni Vineyards - Chelan, WA",
         "date": "Oct 5, 2019",
         "album": ""
       }
@@ -3880,7 +3880,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Chad’s Cafe",
+        "location": "Chad’s Cafe - Santa Barbara, CA",
         "date": "Oct 17, 2019",
         "album": ""
       },
@@ -4022,7 +4022,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "The Funk Zone",
+        "location": "The Funk Zone - Santa Barbara, CA",
         "date": "Oct 17, 2019",
         "album": ""
       },
@@ -4045,7 +4045,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "The Funk Zone",
+        "location": "The Funk Zone - Santa Barbara, CA",
         "date": "Oct 17, 2019",
         "album": ""
       },
@@ -4097,7 +4097,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Brass Bear Funk Zone",
+        "location": "Brass Bear Funk Zone - Santa Barbara, CA",
         "date": "Oct 18, 2019",
         "album": ""
       },
@@ -4126,7 +4126,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Brass Bear Funk Zone",
+        "location": "Brass Bear Funk Zone - Santa Barbara, CA",
         "date": "Oct 18, 2019",
         "album": ""
       },
@@ -4155,7 +4155,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Brass Bear Funk Zone",
+        "location": "Brass Bear Funk Zone - Santa Barbara, CA",
         "date": "Oct 18, 2019",
         "album": ""
       },
@@ -4353,7 +4353,7 @@
         "99c72c25-900f-437b-9473-1b1558fa30f2"
       ],
       "exif": {
-        "location": "Cue Club Of Wisconsin",
+        "location": "Cue Club Of Wisconsin - Waukesha, WI",
         "date": "Oct 25, 2019",
         "album": ""
       },
@@ -4665,6 +4665,29 @@
         "date": "Nov 16, 2019",
         "album": ""
       }
+    },
+    {
+      "src": "/stub-photos/immich-2c2ddcda-b625-46a2-8594-d7a3bc8bb5da.jpg",
+      "width": 3024,
+      "height": 4032,
+      "orientation": "portrait",
+      "addedAt": 1780980955515,
+      "albums": [
+        "99c72c25-900f-437b-9473-1b1558fa30f2"
+      ],
+      "exif": {
+        "location": "Shibuya HiFi",
+        "date": "Nov 22, 2019",
+        "album": ""
+      },
+      "faces": [
+        {
+          "cx": 0.5059027777777778,
+          "cy": 0.3809895833333333,
+          "w": 0.15486111111111112,
+          "h": 0.14947916666666666
+        }
+      ]
     },
     {
       "src": "/stub-photos/immich-a80cbfc8-c97f-4e18-94c5-9c8553262e48.jpg",
@@ -9597,7 +9620,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Stephanie Inn & Dining Room",
+        "location": "Stephanie Inn & Dining Room - Cannon Beach, OR",
         "date": "Apr 12, 2021",
         "album": ""
       }
@@ -9711,7 +9734,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Driftwood Restaurant & Lounge",
+        "location": "Driftwood Restaurant & Lounge - Cannon Beach, OR",
         "date": "Apr 13, 2021",
         "album": ""
       },
@@ -9740,7 +9763,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Apr 14, 2021",
         "album": ""
       },
@@ -9769,7 +9792,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Apr 14, 2021",
         "album": ""
       },
@@ -11051,7 +11074,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Stoughton Tumblers",
+        "location": "Stoughton Tumblers - Stoughton, WI",
         "date": "Jun 26, 2021",
         "album": ""
       }
@@ -13458,7 +13481,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Andreas Keller Restaurant",
+        "location": "Andreas Keller Restaurant - Leavenworth, WA",
         "date": "Nov 13, 2021",
         "album": ""
       }
@@ -13473,7 +13496,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Andreas Keller Restaurant",
+        "location": "Andreas Keller Restaurant - Leavenworth, WA",
         "date": "Nov 13, 2021",
         "album": ""
       },
@@ -13496,7 +13519,7 @@
         "4c093942-0888-4c7f-8bf0-dec6465765ca"
       ],
       "exif": {
-        "location": "Icicle Brewing Company",
+        "location": "Icicle Brewing Company - Leavenworth, WA",
         "date": "Nov 13, 2021",
         "album": ""
       }
@@ -13967,7 +13990,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Church at the Chip",
+        "location": "Church at the Chip - Cave Creek, AZ",
         "date": "Jan 14, 2022",
         "album": ""
       },
@@ -14244,7 +14267,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "El Camino",
+        "location": "El Camino - Scottsdale, AZ",
         "date": "Jan 17, 2022",
         "album": ""
       },
@@ -14267,7 +14290,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Barrio Queen",
+        "location": "Barrio Queen - Scottsdale, AZ",
         "date": "Jan 17, 2022",
         "album": ""
       },
@@ -17778,7 +17801,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Border Grill Mandalay Bay",
+        "location": "Border Grill Mandalay Bay - Paradise, NV",
         "date": "Jun 13, 2022",
         "album": ""
       }
@@ -18283,7 +18306,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Cream City Sports Bar",
+        "location": "Cream City Sports Bar - Brown Deer, WI",
         "date": "Jul 12, 2022",
         "album": ""
       },
@@ -18306,7 +18329,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Cream City Sports Bar",
+        "location": "Cream City Sports Bar - Brown Deer, WI",
         "date": "Jul 12, 2022",
         "album": ""
       },
@@ -18585,7 +18608,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Hill & Vine",
+        "location": "Hill & Vine - Fredericksburg, TX",
         "date": "Jul 21, 2022",
         "album": ""
       },
@@ -18920,7 +18943,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "Luckenbach Texas",
+        "location": "Luckenbach Texas - Luckenbach, TX",
         "date": "Jul 23, 2022",
         "album": ""
       }
@@ -19480,7 +19503,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Aug 20, 2022",
         "album": ""
       },
@@ -20635,7 +20658,7 @@
         "a380452d-dfb6-4f50-a03f-934d7cc0ea92"
       ],
       "exif": {
-        "location": "NASA Mission Control Center",
+        "location": "NASA Mission Control Center - Houston, TX",
         "date": "Dec 2, 2022",
         "album": ""
       },
@@ -22080,7 +22103,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Mountain View Pub",
+        "location": "Mountain View Pub - Cave Creek, AZ",
         "date": "Feb 27, 2023",
         "album": ""
       },
@@ -22109,7 +22132,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Mountain View Pub",
+        "location": "Mountain View Pub - Cave Creek, AZ",
         "date": "Feb 27, 2023",
         "album": ""
       },
@@ -23825,7 +23848,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Northwestern Mutual Community Park",
+        "location": "Northwestern Mutual Community Park - Milwaukee, WI",
         "date": "Jul 29, 2023",
         "album": ""
       }
@@ -23840,7 +23863,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Northwestern Mutual Community Park",
+        "location": "Northwestern Mutual Community Park - Milwaukee, WI",
         "date": "Jul 29, 2023",
         "album": ""
       },
@@ -23869,7 +23892,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Northwestern Mutual Community Park",
+        "location": "Northwestern Mutual Community Park - Milwaukee, WI",
         "date": "Jul 29, 2023",
         "album": ""
       },
@@ -23921,7 +23944,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Eldr+Rime",
+        "location": "Eldr+Rime - Wauwatosa, WI",
         "date": "Jul 29, 2023",
         "album": ""
       },
@@ -25314,7 +25337,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Finney's Crafthouse - Santa Barbara",
+        "location": "Finney's Crafthouse - Santa Barbara - Santa Barbara, CA",
         "date": "Aug 30, 2023",
         "album": ""
       },
@@ -25337,7 +25360,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Finney's Crafthouse - Santa Barbara",
+        "location": "Finney's Crafthouse - Santa Barbara - Santa Barbara, CA",
         "date": "Aug 30, 2023",
         "album": ""
       },
@@ -25360,7 +25383,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "The Funk Zone",
+        "location": "The Funk Zone - Santa Barbara, CA",
         "date": "Aug 31, 2023",
         "album": ""
       },
@@ -25389,7 +25412,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Margerum Santa Barbara Tasting Room",
+        "location": "Margerum Santa Barbara Tasting Room - Santa Barbara, CA",
         "date": "Aug 31, 2023",
         "album": ""
       }
@@ -25504,7 +25527,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Santo Mezcal",
+        "location": "Santo Mezcal - Santa Barbara, CA",
         "date": "Aug 31, 2023",
         "album": ""
       }
@@ -25519,7 +25542,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Chad’s Cafe",
+        "location": "Chad’s Cafe - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25548,7 +25571,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Chad’s Cafe",
+        "location": "Chad’s Cafe - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25592,7 +25615,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "The Funk Zone",
+        "location": "The Funk Zone - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25621,7 +25644,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Loquita Santa Barbara",
+        "location": "Loquita Santa Barbara - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25662,7 +25685,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Goat Tree",
+        "location": "Goat Tree - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25697,7 +25720,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Goat Tree",
+        "location": "Goat Tree - Santa Barbara, CA",
         "date": "Sep 1, 2023",
         "album": ""
       },
@@ -25726,7 +25749,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Jeannine's Restaurant & Bakery",
+        "location": "Jeannine's Restaurant & Bakery - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       },
@@ -25778,7 +25801,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Santa Barbara Museum of Natural History Sea Center",
+        "location": "Santa Barbara Museum of Natural History Sea Center - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       }
@@ -25793,7 +25816,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Santa Barbara Museum of Natural History Sea Center",
+        "location": "Santa Barbara Museum of Natural History Sea Center - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       }
@@ -25808,7 +25831,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Santa Barbara Museum of Natural History Sea Center",
+        "location": "Santa Barbara Museum of Natural History Sea Center - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       }
@@ -25823,7 +25846,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Deep Sea Tasting Room",
+        "location": "Deep Sea Tasting Room - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       },
@@ -25846,7 +25869,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Deep Sea Tasting Room",
+        "location": "Deep Sea Tasting Room - Santa Barbara, CA",
         "date": "Sep 2, 2023",
         "album": ""
       },
@@ -26769,7 +26792,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "The Brick Saloon",
+        "location": "The Brick Saloon - Roslyn, WA",
         "date": "Sep 23, 2023",
         "album": ""
       }
@@ -26807,7 +26830,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 24, 2023",
         "album": ""
       }
@@ -26822,7 +26845,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 24, 2023",
         "album": ""
       }
@@ -26837,7 +26860,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 24, 2023",
         "album": ""
       },
@@ -26860,7 +26883,7 @@
         "77a7066b-32c1-46b1-b374-a2250df98ddd"
       ],
       "exif": {
-        "location": "Little Pangea Kitchen",
+        "location": "Little Pangea Kitchen - Roslyn, WA",
         "date": "Sep 24, 2023",
         "album": ""
       }
@@ -28590,7 +28613,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Bay Coffee & Tea Company @ TPA",
+        "location": "Bay Coffee & Tea Company @ TPA - Tampa, FL",
         "date": "Apr 4, 2024",
         "album": ""
       }
@@ -28605,7 +28628,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Sloppy Joe's Bar",
+        "location": "Sloppy Joe's Bar - Key West, FL",
         "date": "Apr 5, 2024",
         "album": ""
       },
@@ -29012,7 +29035,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Sanctuary Camelback Mountain Resort & Spa",
+        "location": "Sanctuary Camelback Mountain Resort & Spa - Paradise Valley, AZ",
         "date": "May 4, 2024",
         "album": ""
       },
@@ -29416,7 +29439,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Jun 9, 2024",
         "album": ""
       }
@@ -29431,7 +29454,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Jun 9, 2024",
         "album": ""
       },
@@ -29454,7 +29477,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Brick Saloon",
+        "location": "The Brick Saloon - Roslyn, WA",
         "date": "Jun 9, 2024",
         "album": ""
       },
@@ -30044,7 +30067,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Old Fashioned",
+        "location": "The Old Fashioned - Madison, WI",
         "date": "Jun 28, 2024",
         "album": ""
       },
@@ -30067,7 +30090,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Old Fashioned",
+        "location": "The Old Fashioned - Madison, WI",
         "date": "Jun 28, 2024",
         "album": ""
       },
@@ -30102,7 +30125,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Old Fashioned",
+        "location": "The Old Fashioned - Madison, WI",
         "date": "Jun 28, 2024",
         "album": ""
       },
@@ -30137,7 +30160,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Daily Scoop in Memorial Union",
+        "location": "Daily Scoop in Memorial Union - Madison, WI",
         "date": "Jun 28, 2024",
         "album": ""
       },
@@ -30160,7 +30183,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Daily Scoop in Memorial Union",
+        "location": "Daily Scoop in Memorial Union - Madison, WI",
         "date": "Jun 28, 2024",
         "album": ""
       },
@@ -30195,7 +30218,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Betty Brinn Children's Museum",
+        "location": "Betty Brinn Children's Museum - Milwaukee, WI",
         "date": "Jun 29, 2024",
         "album": ""
       },
@@ -30224,7 +30247,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Betty Brinn Children's Museum",
+        "location": "Betty Brinn Children's Museum - Milwaukee, WI",
         "date": "Jun 29, 2024",
         "album": ""
       },
@@ -30253,7 +30276,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Betty Brinn Children's Museum",
+        "location": "Betty Brinn Children's Museum - Milwaukee, WI",
         "date": "Jun 29, 2024",
         "album": ""
       },
@@ -30288,7 +30311,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "sweetgreen - Healthy Salads, Wraps, and Bowls",
+        "location": "sweetgreen - Healthy Salads, Wraps, and Bowls - Milwaukee, WI",
         "date": "Jun 30, 2024",
         "album": ""
       },
@@ -30637,7 +30660,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Grill19",
+        "location": "Grill19 - Sartell, MN",
         "date": "Jul 18, 2024",
         "album": ""
       },
@@ -30666,7 +30689,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Grill19",
+        "location": "Grill19 - Sartell, MN",
         "date": "Jul 18, 2024",
         "album": ""
       }
@@ -31183,7 +31206,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Brick Saloon",
+        "location": "The Brick Saloon - Roslyn, WA",
         "date": "Aug 10, 2024",
         "album": ""
       },
@@ -31212,7 +31235,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Aug 10, 2024",
         "album": ""
       },
@@ -31496,7 +31519,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Nipps Drive-Through",
+        "location": "Nipps Drive-Through - Longview, WA",
         "date": "Aug 29, 2024",
         "album": ""
       },
@@ -31542,7 +31565,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Aug 30, 2024",
         "album": ""
       },
@@ -31571,7 +31594,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Aug 30, 2024",
         "album": ""
       },
@@ -31796,7 +31819,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Captain Kid Amusement Park",
+        "location": "Captain Kid Amusement Park - Seaside, OR",
         "date": "Sep 1, 2024",
         "album": ""
       },
@@ -31819,7 +31842,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Relief Pitcher",
+        "location": "Relief Pitcher - Seaside, OR",
         "date": "Sep 1, 2024",
         "album": ""
       },
@@ -31848,7 +31871,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Captain Kid Amusement Park",
+        "location": "Captain Kid Amusement Park - Seaside, OR",
         "date": "Sep 1, 2024",
         "album": ""
       }
@@ -31863,7 +31886,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Winery at Manzanita",
+        "location": "The Winery at Manzanita - Manzanita, OR",
         "date": "Sep 1, 2024",
         "album": ""
       }
@@ -32442,7 +32465,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 14, 2024",
         "album": ""
       }
@@ -32457,7 +32480,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 14, 2024",
         "album": ""
       }
@@ -32546,7 +32569,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Sep 14, 2024",
         "album": ""
       },
@@ -33612,7 +33635,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "The Canal Club",
+        "location": "The Canal Club - Scottsdale, AZ",
         "date": "Nov 9, 2024",
         "album": ""
       },
@@ -33785,7 +33808,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Nov 29, 2024",
         "album": ""
       }
@@ -33800,7 +33823,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Nov 29, 2024",
         "album": ""
       },
@@ -33823,7 +33846,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "RR hospital",
+        "location": "RR hospital - Ronald, WA",
         "date": "Nov 30, 2024",
         "album": ""
       },
@@ -34043,7 +34066,7 @@
         "3f99e4b8-aa1b-4296-baba-c962a4846c87"
       ],
       "exif": {
-        "location": "Starbucks",
+        "location": "Starbucks - Fort Snelling Unorganized Territory, MN",
         "date": "Dec 28, 2024",
         "album": ""
       }
@@ -34684,7 +34707,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Pine Lakes Tavern",
+        "location": "Pine Lakes Tavern - Myrtle Beach, SC",
         "date": "Jun 25, 2025",
         "album": ""
       },
@@ -34731,7 +34754,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Pine Lakes Tavern",
+        "location": "Pine Lakes Tavern - Myrtle Beach, SC",
         "date": "Jun 25, 2025",
         "album": ""
       },
@@ -34796,7 +34819,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "7 West TapHouse",
+        "location": "7 West TapHouse - Saint Cloud, MN",
         "date": "Jul 5, 2025",
         "album": ""
       }
@@ -34989,7 +35012,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Sartell Rotary Park",
+        "location": "Sartell Rotary Park - Sartell, MN",
         "date": "Jul 8, 2025",
         "album": ""
       },
@@ -35024,7 +35047,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Target Field Champions Club",
+        "location": "Target Field Champions Club - Minneapolis, MN",
         "date": "Jul 8, 2025",
         "album": ""
       },
@@ -35053,7 +35076,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Target Field",
+        "location": "Target Field - Minneapolis, MN",
         "date": "Jul 8, 2025",
         "album": ""
       },
@@ -35103,7 +35126,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Target Field Champions Club",
+        "location": "Target Field Champions Club - Minneapolis, MN",
         "date": "Jul 8, 2025",
         "album": ""
       },
@@ -35193,7 +35216,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Culver’s",
+        "location": "Culver’s - Eau Claire, WI",
         "date": "Jul 11, 2025",
         "album": ""
       },
@@ -35228,7 +35251,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Johnny Manhattan's",
+        "location": "Johnny Manhattan's - Village of Richfield, WI",
         "date": "Jul 12, 2025",
         "album": ""
       }
@@ -35243,7 +35266,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Johnny Manhattan's",
+        "location": "Johnny Manhattan's - Village of Richfield, WI",
         "date": "Jul 12, 2025",
         "album": ""
       },
@@ -35272,7 +35295,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Johnny Manhattan's",
+        "location": "Johnny Manhattan's - Village of Richfield, WI",
         "date": "Jul 12, 2025",
         "album": ""
       }
@@ -35484,7 +35507,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Weissgerber's Golden Mast Inn",
+        "location": "Weissgerber's Golden Mast Inn - Okauchee Lake, WI",
         "date": "Jul 13, 2025",
         "album": ""
       },
@@ -35519,7 +35542,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Veterans Memorial Park",
+        "location": "Veterans Memorial Park - Hartford, WI",
         "date": "Jul 14, 2025",
         "album": ""
       },
@@ -35799,7 +35822,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Little Pangea Kitchen",
+        "location": "Little Pangea Kitchen - Roslyn, WA",
         "date": "Aug 9, 2025",
         "album": ""
       }
@@ -35814,7 +35837,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Little Pangea Kitchen",
+        "location": "Little Pangea Kitchen - Roslyn, WA",
         "date": "Aug 9, 2025",
         "album": ""
       }
@@ -36551,7 +36574,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Entranceway to the Brooklyn Heights Promenade",
+        "location": "Entranceway to the Brooklyn Heights Promenade - New York, NY",
         "date": "Sep 19, 2025",
         "album": ""
       },
@@ -36595,7 +36618,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Starbucks Coffee Company",
+        "location": "Starbucks Coffee Company - Village of East Hampton, NY",
         "date": "Sep 20, 2025",
         "album": ""
       },
@@ -36653,7 +36676,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Lindens",
+        "location": "Lindens - New York, NY",
         "date": "Sep 21, 2025",
         "album": ""
       },
@@ -36682,7 +36705,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Pier 57 Rooftop Park",
+        "location": "Pier 57 Rooftop Park - New York, NY",
         "date": "Sep 22, 2025",
         "album": ""
       },
@@ -36711,7 +36734,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Ghostbusters Headquarters",
+        "location": "Ghostbusters Headquarters - New York, NY",
         "date": "Sep 22, 2025",
         "album": ""
       }
@@ -36726,7 +36749,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Ghostbusters Headquarters",
+        "location": "Ghostbusters Headquarters - New York, NY",
         "date": "Sep 22, 2025",
         "album": ""
       },
@@ -37398,7 +37421,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Big Earl's Greasy Eats",
+        "location": "Big Earl's Greasy Eats - Cave Creek, AZ",
         "date": "Nov 24, 2025",
         "album": ""
       }
@@ -37442,7 +37465,7 @@
         "3de82ff9-7144-4fa1-931e-7c2780be1239"
       ],
       "exif": {
-        "location": "Harold's Cave Creek Corral",
+        "location": "Harold's Cave Creek Corral - Cave Creek, AZ",
         "date": "Nov 27, 2025",
         "album": ""
       }

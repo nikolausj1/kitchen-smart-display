@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 2.6
+version: 2.7
 author: Claude Opus 4.8 (claude-opus-4-8)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -42,11 +42,7 @@ decision live here once settled.
    manifest locally; then a "refresh" button and/or nightly cron). Supersedes the
    old "Automated Immich manifest rebuild (DECISION, BLOCKED)" item. Tradeoff to
    resolve: secrets + Node on the Pi.
-2. **Photo captions: city/state rules** (DESIGN) - show state when a photo is
-   outside WA, and country when outside the US. Build-time change in
-   `code/scripts/lib/geocoder.mjs`; would extend
-   `docs/designs/location-resolution-strategy.md`. Exact behavior + an editable
-   "home region" knob still to be decided.
+
 ---
 
 ## Backlog
@@ -115,6 +111,12 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-06-09 - POI captions get city/state by distance from home.** Boundary is
+  a configurable home-metro radius (default 60 km in `custom-places.json` `home`
+  block), not the state line - so far-WA places get annotated too. US -> "City, ST",
+  abroad -> "City, Country". Only the `google_places` tier; custom + fallback
+  unchanged. Components stored in the cache + composed at build, so radius/format
+  tweaks are rebuild-only. Design: `docs/designs/location-resolution-strategy.md`.
 - **2026-06-09 - Built the photo caption-corrections loop.** Long-press a kitchen
   photo to flag a wrong caption -> Pi `flags.json` (`/api/flags`) -> self-serve
   review page (`flags-review.mjs`) -> `custom-places.json` bubbles
@@ -156,6 +158,11 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-09 - City/state captions for out-of-metro POIs.** Google-named POIs
+  now gain "- City, ST" (or "- City, Country" abroad) when a photo is beyond a
+  configurable home-metro radius (default 60 km), including far-WA places
+  (Leavenworth, WA). Distance-from-home, not the state line. Custom labels +
+  geographic fallback unchanged. 111 photos gained context on rebuild.
 - **2026-06-09 - Photo caption corrections.** Long-press flagging on the kitchen,
   a Pi flag store, a self-serve `_review/` triage page, and `flags-apply.mjs` that
   encodes corrections into `custom-places.json`. One bubble fixes the whole spot.

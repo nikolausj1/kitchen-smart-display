@@ -2,7 +2,7 @@
 title: "Location Resolution Strategy"
 created: 2026-05-24
 modified: 2026-06-09
-version: 1.4
+version: 1.5
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -60,6 +60,23 @@ Format the display as the most-specific level available. If a neighborhood is fo
 ### 4. Null
 
 If geographic fallback fails (no internet, API error, no useful components), return null. The display layer hides the location chip entirely rather than showing a placeholder.
+
+## POI caption suffix: city/state by distance from home
+
+Google-named POIs (the `google_places` tier only) gain a location suffix when the photo was taken away from home, so a trip photo reads "Lola - San Francisco, CA" while a local one stays "Lola". Custom labels and the geographic fallback are unchanged (the fallback already carries the city).
+
+Rule, by distance from a configurable home center:
+- Within `metro_radius_km` of home (default 60 km) - just the place name.
+- Beyond, in the home country (US) - `Name - City, ST` (USPS abbr), including far-but-in-state places (e.g. "Andreas Keller Restaurant - Leavenworth, WA").
+- Beyond, abroad - `Name - City, Country`.
+- No resolvable city - no suffix (graceful).
+
+Home config lives at the top of `custom-places.json` (falls back to the "Home" place's coords):
+```json
+"home": { "lat": 47.66, "lon": -122.40, "metro_radius_km": 60, "country_code": "US" }
+```
+
+Implementation: `reverseGeocodeComponents()` (geocoder.mjs, Nominatim + `us-states.mjs` abbreviation map) yields `{ city, regionCode, country, countryCode }`; the resolver stores these on the cache entry and composes the caption at build time - so tuning the radius or format only needs a rebuild, never a re-query. Wrong POI names are fixed via `photo-corrections-workflow.md`.
 
 ## POI category whitelist
 
