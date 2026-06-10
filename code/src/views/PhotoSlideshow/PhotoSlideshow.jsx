@@ -294,9 +294,15 @@ export default function PhotoSlideshow() {
   const queueIndexRef = useRef(0)
   const portraitBufferRef = useRef([])
   const advanceCountRef = useRef(0)
-  // Manual-back history: when the user swipes right we push the
-  // currently-shown item onto here and replay it on the next swipe-right.
-  const backStackRef = useRef([])
+  // Reversible navigation: every shown display item is appended to `history`
+  // and `cursor` is the index of the one currently on screen. next/previous
+  // are cursor moves over this immutable list; only stepping past the end
+  // generates a fresh item via pickNextDisplay. Ported from the tvOS
+  // SlideshowEngine so back/forward are fully predictable - and a portrait
+  // pair replays as the same pair (the whole display item is stored).
+  const historyRef = useRef([])
+  const cursorRef = useRef(-1)
+  const HISTORY_MAX = 30
   // While the user is browsing backwards, suppress auto-advance for this
   // long so they have time to look at the photo they just rewound to.
   const PAUSE_AFTER_BACK_MS = 60_000
@@ -340,6 +346,15 @@ export default function PhotoSlideshow() {
           Date.now() + intervalMs
         )
       }
+      // If the user had stepped back, walk forward through the existing
+      // history instead of generating a new item - so back-then-forward
+      // returns to the same photos, in order.
+      if (cursorRef.current < historyRef.current.length - 1) {
+        cursorRef.current += 1
+        showItem(historyRef.current[cursorRef.current])
+        return
+      }
+      // At the end of history: generate a fresh display item and remember it.
       const next = pickNextDisplay({
         photos,
         queueIndexRef,
@@ -347,26 +362,21 @@ export default function PhotoSlideshow() {
         advanceCountRef,
       })
       if (!next) return
-      // Push current onto back stack BEFORE replacing it.
-      setLayers((curr) => {
-        setActiveIdx((idx) => {
-          const cur = curr[idx]
-          if (cur) backStackRef.current.push(cur)
-          if (backStackRef.current.length > 30) backStackRef.current.shift()
-          return idx
-        })
-        return curr
-      })
+      historyRef.current.push(next)
+      if (historyRef.current.length > HISTORY_MAX) historyRef.current.shift()
+      cursorRef.current = historyRef.current.length - 1
       showItem(next)
     },
     [photos, showItem, intervalMs]
   )
 
   const goBack = useCallback(() => {
-    const prev = backStackRef.current.pop()
-    if (!prev) return
+    // Step the cursor back through history; the item is replayed unchanged
+    // (same photo, same portrait pairing). No-op at the oldest remembered item.
+    if (cursorRef.current <= 0) return
+    cursorRef.current -= 1
     pausedUntilRef.current = Date.now() + PAUSE_AFTER_BACK_MS
-    showItem(prev)
+    showItem(historyRef.current[cursorRef.current])
   }, [showItem])
 
   // Initial display once photos are loaded. Even for deterministic sort
