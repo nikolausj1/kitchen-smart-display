@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-09
-version: 2.8
+version: 2.9
 author: Claude Opus 4.8 (claude-opus-4-8)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -54,6 +54,11 @@ Jukebox station picker, full Settings, Sonos transport, weather, Immich photos,
 the morning departure timer, and school-schedule awareness are all shipped.
 Remaining:
 
+- **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. 
+- **Custom-label city/state suffix** (DECISION) - extend the away-from-home
+  "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
+  "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic
+  fallback get the suffix; custom labels are typed by hand.
 - **Google Calendar / agenda** (TODO) - the one real feature gap. Direct OAuth
   via a `useCalendarEvents` hook, agenda on the Today view.
 - **Today "what to wear"** (TODO) - jacket weight, shorts vs. pants from weather
@@ -193,9 +198,10 @@ Newest first.
 
 ## Housekeeping / Ops
 
-- **Verify album re-select on the kitchen display** (VERIFY) - after the
-  2026-06-09 deploy, the saved selection pointed at deleted albums; confirm the 7
-  year albums were re-selected in Settings and the slideshow is showing.
+- **Photo-flag triage queue** - 9 flags remain on the Pi
+  (`GET /api/flags?unresolved=1`): 7 have no GPS (can't anchor a `custom-places`
+  bubble - would need GPS added in Immich + re-import), 2 were skipped
+  (`Bridgehaven`, a 2nd `Cave Creek`). Run `flags-review.mjs` to label or clear.
 - **Rotate/delete the `immich-go-import` API key** - it has all permissions and was
   pasted in chat during the import. The read-only `kitchen_display` key in
   `code/.env` remains for manifest builds.
