@@ -1,8 +1,8 @@
 ---
 title: "Smart Displays - Kitchen Display Project"
 created: 2026-03-01
-modified: 2026-06-03
-version: 17.0
+modified: 2026-06-09
+version: 17.1
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -472,7 +472,7 @@ Note: The following are configurable via the Settings page and don't need to be 
 
 ### Secondary Display: Apple TV / Frame TV
 
-Status as of 2026-06-03: Phase 1 SHIPPED and running on the living-room Frame TV. All three views (Today, Photos, Now Playing) plus a TV-local Settings screen are live. Detailed source of truth for this thread is `Apple-TV-Display-PRD.md`.
+Status as of 2026-06-03: Phase 1 SHIPPED and running on the living-room Frame TV. All three views (Today, Photos, Now Playing) plus a TV-local Settings screen are live. Detailed source of truth for this thread is `docs/Apple-TV-Display-PRD.md`. Open work and decisions are tracked in `BACKLOG.md`.
 
 The dashboard also runs on the living-room Frame TV via an Apple TV. The TV is a mostly-independent companion view of the same data: it pulls shared settings read-only from the kitchen, but has its own TV-local preferences and mirrors the kitchen's live Today timer.
 

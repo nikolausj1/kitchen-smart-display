@@ -3,7 +3,7 @@ import { useSettings } from '../lib/settings.js'
 import { useView } from '../shell/ViewContext.jsx'
 
 // Timer state machine for the Today view countdown panel.
-// See Smart Displays.md "Today view interactions / Timer states" for the
+// See PRD - Smart Displays.md "Today view interactions / Timer states" for the
 // full behavior contract. All tunable values come from Settings.
 
 const POST_EXPIRY_LIFETIME_MS = 15 * 60 * 1000

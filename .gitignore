@@ -1,3 +1,10 @@
+# Transient workspaces - track the folder (via README) but ignore dropped/created
+# files. _inbox/ is you -> Claude; _review/ is Claude -> you.
+_inbox/*
+!_inbox/README.md
+_review/*
+!_review/README.md
+
 # Dependencies
 node_modules/
 
