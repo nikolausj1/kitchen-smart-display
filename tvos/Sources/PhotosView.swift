@@ -459,9 +459,7 @@ private struct HandwrittenMat: View {
         static let dateTop: CGFloat = 2077       // both subtitles' top y
         static let titlePt: CGFloat = 64
         static let datePt: CGFloat = 42
-        static let factTop: CGFloat = 2008       // fun fact block top y
-        static let factPt: CGFloat = 34
-        static let factMaxW: CGFloat = 1500      // keeps clear of both placard blocks
+        static let factMaxW: CGFloat = 1400      // keeps clear of both placard blocks
     }
 
     var body: some View {
@@ -488,23 +486,44 @@ private struct HandwrittenMat: View {
             // Artwork year + movement (right corner, same slots as music).
             line(artYear, size: titleSize, top: titleTop, trailingPad: rightPad, trailing: true)
             line(artMovement, size: dateSize, top: dateTop, trailingPad: rightPad, trailing: true)
-            // Fun fact, bottom-center between the two placard blocks. Up to
-            // two lines of a smaller hand (its own lineLimit overrides the
-            // ZStack-wide single-line default).
+            // Fun fact, bottom-center between the two placard blocks, in the
+            // same hand as the artist line. Long facts are pre-broken near
+            // their midpoint into two balanced lines (rather than one
+            // screen-wide line), and the block is top-anchored at the same
+            // mat inset as the other text (titleTop), so a two-line fact
+            // shares the title+date blocks' vertical rhythm. Its own
+            // lineLimit overrides the ZStack-wide single-line default.
             if let f = artFact, !f.isEmpty {
-                Text(f)
-                    .font(HandFont.font(Fig.factPt * sy))
+                Text(Self.balancedFact(f))
+                    .font(HandFont.font(dateSize))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .frame(maxWidth: Fig.factMaxW * sx)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, Fig.factTop * sy)
+                    .padding(.top, titleTop)
             }
         }
         .foregroundStyle(HandFont.ink)
         .lineLimit(1)
         .frame(width: W, height: H)
         .allowsHitTesting(false)
+    }
+
+    // Break a long fact near its midpoint at a word boundary so it renders as
+    // two balanced handwritten lines instead of one super-wide one. Short
+    // facts stay on a single line.
+    static func balancedFact(_ s: String) -> String {
+        guard s.count > 60 else { return s }
+        let chars = Array(s)
+        let mid = chars.count / 2
+        var best: Int?
+        for (i, c) in chars.enumerated() where c == " " {
+            if best == nil || abs(i - mid) < abs(best! - mid) { best = i }
+        }
+        guard let b = best else { return s }
+        var out = chars
+        out[b] = "\n"
+        return String(out)
     }
 
     // One absolutely-positioned text line (top-anchored at the Figma y).
