@@ -21,6 +21,8 @@ import SwiftUI
 //   autoDim              - sunset-anchored evening/night dimming (the software
 //                          stand-in for the Frame's light sensor; see Dimmer.swift)
 //   manualBrightness     - fixed brightness when autoDim is OFF (1.0 = full)
+//   artFacts             - show a rotating curated fun fact on the mat while
+//                          an artwork is up (one per showing, bottom-center)
 
 // How the Now Playing screen treats the picture-frame mat. Raw values are
 // persisted, so keep their order stable.
@@ -50,6 +52,7 @@ final class TVSettings: ObservableObject {
         static let selectedAlbumIds = "tv.selectedAlbumIds"
         static let autoDim = "tv.autoDim"
         static let manualBrightness = "tv.manualBrightness"
+        static let artFacts = "tv.artFacts"
     }
 
     // Manual brightness choices (fraction of full). 0.2 is still readable in a
@@ -82,6 +85,9 @@ final class TVSettings: ObservableObject {
     @Published var manualBrightness: Double {
         didSet { UserDefaults.standard.set(manualBrightness, forKey: Key.manualBrightness) }
     }
+    @Published var artFacts: Bool {
+        didSet { UserDefaults.standard.set(artFacts, forKey: Key.artFacts) }
+    }
 
     // nil = "All albums" (albums added to Immich later are auto-included).
     // Non-nil = the explicit set of album ids to show; empty = show nothing.
@@ -112,6 +118,8 @@ final class TVSettings: ObservableObject {
         // Auto Dim defaults ON - the whole point is hands-off evening dimming.
         autoDim = (d.object(forKey: Key.autoDim) as? Bool) ?? true
         manualBrightness = (d.object(forKey: Key.manualBrightness) as? Double) ?? 1.0
+        // Art facts default ON - the educational half of the art feature.
+        artFacts = (d.object(forKey: Key.artFacts) as? Bool) ?? true
         // Album selection; migrate the old single-album picker if present.
         if let stored = d.array(forKey: Key.selectedAlbumIds) as? [String] {
             selectedAlbumIds = Set(stored)

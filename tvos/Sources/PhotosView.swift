@@ -80,6 +80,16 @@ struct PhotosView: View {
         }
     }
 
+    // One curated fun fact for the current artwork, rotated per showing:
+    // generation increments on every advance, so the same piece surfaces a
+    // different fact on different visits (and the pick is stable while the
+    // piece is on screen).
+    private var currentArtFact: String? {
+        guard tvSettings.artFacts,
+              let facts = currentArt?.facts, !facts.isEmpty else { return nil }
+        return facts[engine.generation % facts.count]
+    }
+
     var body: some View {
         GeometryReader { geo in
             // Z-order (bottom -> top):
@@ -143,7 +153,8 @@ struct PhotosView: View {
                                    musicTitle: showMusic ? m.title : nil,
                                    musicArtist: showMusic ? m.artist : nil,
                                    artYear: currentArt?.year,
-                                   artMovement: currentArt?.movement)
+                                   artMovement: currentArt?.movement,
+                                   artFact: currentArtFact)
                 } else if let item = engine.current {
                     // Unmatted fallback: white caption over the photo.
                     ExifCaptionOverlay(item: item,
@@ -430,6 +441,10 @@ private struct HandwrittenMat: View {
     // metadata keeps the corner.
     var artYear: String? = nil
     var artMovement: String? = nil
+    // Curated fun fact, bottom-center of the mat between the placard blocks
+    // (up to two lines, smaller hand). nil when Art Facts is off or the
+    // current item isn't art.
+    var artFact: String? = nil
 
     // Exact Figma coordinates (frame authored at 3840x2160). Each line is
     // placed by its top-left/top-right corner so it lands exactly where the
@@ -444,6 +459,9 @@ private struct HandwrittenMat: View {
         static let dateTop: CGFloat = 2077       // both subtitles' top y
         static let titlePt: CGFloat = 64
         static let datePt: CGFloat = 42
+        static let factTop: CGFloat = 2008       // fun fact block top y
+        static let factPt: CGFloat = 34
+        static let factMaxW: CGFloat = 1500      // keeps clear of both placard blocks
     }
 
     var body: some View {
@@ -470,6 +488,18 @@ private struct HandwrittenMat: View {
             // Artwork year + movement (right corner, same slots as music).
             line(artYear, size: titleSize, top: titleTop, trailingPad: rightPad, trailing: true)
             line(artMovement, size: dateSize, top: dateTop, trailingPad: rightPad, trailing: true)
+            // Fun fact, bottom-center between the two placard blocks. Up to
+            // two lines of a smaller hand (its own lineLimit overrides the
+            // ZStack-wide single-line default).
+            if let f = artFact, !f.isEmpty {
+                Text(f)
+                    .font(HandFont.font(Fig.factPt * sy))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .frame(maxWidth: Fig.factMaxW * sx)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, Fig.factTop * sy)
+            }
         }
         .foregroundStyle(HandFont.ink)
         .lineLimit(1)

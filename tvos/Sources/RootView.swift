@@ -192,6 +192,7 @@ struct RootView: View {
         case .todayMat:  tvSettings.todayMatEnabled.toggle()
         case .photosMat: tvSettings.photosMatEnabled.toggle()
         case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
+        case .artFacts:  tvSettings.artFacts.toggle()
         case .autoDim:   tvSettings.autoDim.toggle()
         default: break
         }
@@ -207,6 +208,7 @@ struct RootView: View {
         case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
         case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
         case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed
+        case .artFacts:      tvSettings.artFacts = (dir > 0)          // left=Off, right=On
         case .autoDim:       tvSettings.autoDim = (dir > 0)           // left=Off, right=On
         case .brightness:
             // Manual level only matters with Auto Dim off; the row reads

@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-10
-version: 4.0
+version: 4.1
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -123,6 +123,10 @@ Remaining:
 - **Smart-crop (face) feedback loop** (TODO) - like the geolocation
   corrections: when the face-aware crop gets it wrong, mark the photo on the
   display so it queues for fixing later (and so we learn why it was wrong).
+- **Kitchen: display art fun facts** (TODO) - the TV side shipped 2026-06-10
+  (rotating fact bottom-center on the mat, "Art Facts" toggle); the facts
+  already ride the manifest's `art.facts`, so the kitchen needs only a
+  display slot (caption pill extension or a separate lower line).
 
 ### Apple TV / Frame TV app
 
@@ -155,10 +159,6 @@ progress bar). Remaining:
 - **Framed Now Playing: subtle background motion** (POLISH) - make the blurred
   Framed backdrop feel slightly alive: a slow swirl/drift of the album colors
   rather than a static blur.
-- **Display art fun facts** (TODO) - 1-3 curated facts per piece already live
-  in `art-metadata.json` (and ride the manifest's `art.facts`); design how they
-  show (leading idea: rotate one per showing, handwritten on the mat, centered on bottom). Kitchen
-  counterpart welcome.
 - **Auto-show Now Playing when music starts** (DECISION) - the PRD currently
   forbids mid-session auto-switching. Counterpart to the kitchen auto-interrupt.
 - **Multi-room Sonos** (TODO) - transport/volume target "Main" only.
@@ -261,6 +261,12 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-10 - Art fun facts on the Apple TV.** One curated fact per piece,
+  handwritten bottom-center on the mat between the placard blocks (up to two
+  lines, smaller hand), rotating per showing (advance counter modulo the
+  piece's fact count, so repeat visits surface different facts). New "Art
+  Facts" Settings toggle (default On). Kitchen counterpart stays in the
+  backlog.
 - **2026-06-10 - Apple TV auto-dim (dimming phase 1).** Software dimming
   overlay (black scrim + warm tint that scales with dim, so the mat reads as
   paper in lamplight): sunset-anchored auto curve (full by day; ramp to 70%

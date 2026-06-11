@@ -8,6 +8,7 @@ enum SettingsRow: Int, CaseIterable {
     case todayMat
     case photosMat
     case musicMat
+    case artFacts
     case autoDim
     case brightness
 }
@@ -81,6 +82,9 @@ struct SettingsView: View {
 
                         row(.musicMat, label: "Music Mat", W: W,
                             value: tvSettings.musicMatLabel)
+
+                        row(.artFacts, label: "Art Facts", W: W,
+                            value: tvSettings.artFacts ? "On" : "Off")
 
                         row(.autoDim, label: "Auto Dim", W: W,
                             value: tvSettings.autoDim ? "On" : "Off")
