@@ -489,18 +489,22 @@ private struct HandwrittenMat: View {
             // Fun fact, bottom-center between the two placard blocks, in the
             // same hand as the artist line. Long facts are pre-broken near
             // their midpoint into two balanced lines (rather than one
-            // screen-wide line), and the block is top-anchored at the same
-            // mat inset as the other text (titleTop), so a two-line fact
-            // shares the title+date blocks' vertical rhythm. Its own
-            // lineLimit overrides the ZStack-wide single-line default.
+            // screen-wide line). The block is vertically CENTERED in the
+            // bottom mat band (one- and two-line facts both float with even
+            // space above and below) instead of hugging the band's inner
+            // edge. Its own lineLimit overrides the ZStack-wide single-line
+            // default.
             if let f = artFact, !f.isEmpty {
+                let bandH = MatMetrics.matWidth(size)
                 Text(Self.balancedFact(f))
                     .font(HandFont.font(dateSize))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .frame(maxWidth: Fig.factMaxW * sx)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, titleTop)
+                    .frame(width: W, height: bandH)          // band-sized box,
+                    // centered in the band, nudged up a touch (per Justin's
+                    // eye - optical center sits slightly above geometric).
+                    .position(x: W / 2, y: H - bandH / 2 - bandH * 0.08)
             }
         }
         .foregroundStyle(HandFont.ink)
