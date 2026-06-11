@@ -68,11 +68,18 @@ struct RootView: View {
     @StateObject private var sonos = SonosController()
     @StateObject private var photoRemote = PhotoRemoteSignal()
     @StateObject private var settingsNav = SettingsNav()
+    @StateObject private var dim = DimModel()
     @FocusState private var focused: Bool
 
     var body: some View {
         matted
             .background(Color.black.ignoresSafeArea())
+            // Software evening/night dimming above everything the app draws
+            // (see Dimmer.swift). Never intercepts the remote.
+            .overlay(DimOverlay(model: dim,
+                                autoDim: tvSettings.autoDim,
+                                manualBrightness: tvSettings.manualBrightness,
+                                inSettings: router.view == .settings))
             .focusable(true)
             .focused($focused)
             .onMoveCommand { handleMove($0) }
@@ -90,6 +97,7 @@ struct RootView: View {
                                            action: { router.exitSettings() }))
             .onAppear {
                 sonos.start()
+                dim.start(location: model.settings.location)
                 focused = true
             }
             .task(id: bootKey) {
@@ -184,6 +192,7 @@ struct RootView: View {
         case .todayMat:  tvSettings.todayMatEnabled.toggle()
         case .photosMat: tvSettings.photosMatEnabled.toggle()
         case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
+        case .autoDim:   tvSettings.autoDim.toggle()
         default: break
         }
     }
@@ -198,6 +207,11 @@ struct RootView: View {
         case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
         case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
         case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed
+        case .autoDim:       tvSettings.autoDim = (dir > 0)           // left=Off, right=On
+        case .brightness:
+            // Manual level only matters with Auto Dim off; the row reads
+            // "Auto" otherwise and stepping is a no-op.
+            if !tvSettings.autoDim { tvSettings.stepBrightness(dir) }
         }
     }
 

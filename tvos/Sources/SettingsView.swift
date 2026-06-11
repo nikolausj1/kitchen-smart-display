@@ -8,6 +8,8 @@ enum SettingsRow: Int, CaseIterable {
     case todayMat
     case photosMat
     case musicMat
+    case autoDim
+    case brightness
 }
 
 // Selection state for the settings list, owned by the shell so its remote
@@ -55,38 +57,50 @@ struct SettingsView: View {
         GeometryReader { geo in
             let W = geo.size.width
             let H = geo.size.height
-            VStack(alignment: .leading, spacing: H * 0.018) {
-                Text("Apple TV Settings")
-                    .font(.system(size: W * 0.030, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.bottom, H * 0.008)
+            // Scrollable: the row list has outgrown one screen (album pill
+            // grid + 7 rows). The remote moves nav.selectedRow; scrollTo
+            // keeps the highlighted row in view.
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: H * 0.018) {
+                        Text("Apple TV Settings")
+                            .font(.system(size: W * 0.030, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.bottom, H * 0.008)
 
-                row(.photoDuration, label: "Photo duration", W: W,
-                    value: tvSettings.photoDurationLabel)
+                        row(.photoDuration, label: "Photo duration", W: W,
+                            value: tvSettings.photoDurationLabel)
 
-                albumsBlock(W: W)
+                        albumsBlock(W: W)
 
-                row(.todayMat, label: "Today Mat", W: W,
-                    value: tvSettings.todayMatEnabled ? "On" : "Off")
+                        row(.todayMat, label: "Today Mat", W: W,
+                            value: tvSettings.todayMatEnabled ? "On" : "Off")
 
-                row(.photosMat, label: "Photos Mat", W: W,
-                    value: tvSettings.photosMatEnabled ? "On" : "Off")
+                        row(.photosMat, label: "Photos Mat", W: W,
+                            value: tvSettings.photosMatEnabled ? "On" : "Off")
 
-                row(.musicMat, label: "Music Mat", W: W,
-                    value: tvSettings.musicMatLabel)
+                        row(.musicMat, label: "Music Mat", W: W,
+                            value: tvSettings.musicMatLabel)
 
-                Text(nav.current == .albums
-                     ? "Left/right to highlight an album, press the center button to toggle. Press Menu to exit."
-                     : "Use left/right to change. Press Menu to exit.")
-                    .font(.system(size: W * 0.016, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .padding(.top, H * 0.02)
+                        row(.autoDim, label: "Auto Dim", W: W,
+                            value: tvSettings.autoDim ? "On" : "Off")
 
-                Spacer()
+                        row(.brightness, label: "Brightness", W: W,
+                            value: tvSettings.autoDim ? "Auto" : tvSettings.brightnessLabel)
+
+                        Text(hint)
+                            .font(.system(size: W * 0.016, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .padding(.top, H * 0.02)
+                    }
+                    .padding(.horizontal, W * 0.06)
+                    .padding(.vertical, H * 0.05)
+                }
+                .onChange(of: nav.selectedRow) { _, rowIndex in
+                    withAnimation { proxy.scrollTo(rowIndex, anchor: .center) }
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.horizontal, W * 0.06)
-            .padding(.vertical, H * 0.05)
             .background(Color.black)
         }
         .ignoresSafeArea()
@@ -94,6 +108,17 @@ struct SettingsView: View {
         // the manifest index the remote handler navigates over.
         .onAppear { nav.albums = model.photoAlbums }
         .onChange(of: model.photoAlbums) { _, albums in nav.albums = albums }
+    }
+
+    private var hint: String {
+        switch nav.current {
+        case .albums:
+            return "Left/right to highlight an album, press the center button to toggle. Press Menu to exit."
+        case .brightness where tvSettings.autoDim:
+            return "Turn Auto Dim off to set a fixed brightness. Press Menu to exit."
+        default:
+            return "Use left/right to change. Press Menu to exit."
+        }
     }
 
     // The albums row: header (label + summary) with the album pills wrapped
@@ -124,6 +149,7 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(selected ? Color.white.opacity(0.10) : .clear)
         )
+        .id(SettingsRow.albums.rawValue)   // scroll target for ScrollViewReader
     }
 
     private func pill(_ a: PhotoAlbum, highlighted: Bool, W: CGFloat) -> some View {
@@ -178,6 +204,7 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(selected ? Color.white.opacity(0.10) : .clear)
         )
+        .id(r.rawValue)   // scroll target for ScrollViewReader
     }
 
     private func chevron(_ name: String, W: CGFloat) -> some View {

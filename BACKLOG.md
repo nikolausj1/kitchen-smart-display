@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-10
-version: 3.8
+version: 3.9
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -140,10 +140,14 @@ progress bar). Remaining:
   is on Photos in the morning instead of Today (likely the app has been running
   since the prior evening, so the boot picker never re-fires). Needs a
   time-aware re-pick, not just boot-time logic.
-- **Dimming options** (DECISION) - the TV sometimes looks too bright. The
-  Frame TV's art mode adjusts brightness from room lux (plus a schedule);
-  explore an equivalent: schedule-based dim first, lux-based if there's a
-  sensor ingress (Home Assistant?).
+- **Dimming phase 2: lux-driven auto** (TODO, BLOCKED on Home Assistant) -
+  phase 1 (sunset-anchored auto-dim + manual brightness) shipped 2026-06-10.
+  When HA + an illuminance sensor exist: HA publishes living-room lux to the
+  Pi's `/api/state`, the TV maps lux -> brightness continuously (with
+  hysteresis so a lamp doesn't strobe the art); the schedule becomes the
+  fallback. The kitchen's blocked presence-dimming item can consume the same
+  signal. Code-tuned curve constants (evening 70%, night 45% at 22:30) may
+  deserve Settings rows if the defaults prove wrong.
 - **Review inset + drop shadows** (POLISH) - mat shadows read a bit too dark
   on the real screen. Nothing major.
 - **Favorite-station picker** (TODO, not P0) - pick a Jukebox station from the
@@ -258,6 +262,15 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-10 - Apple TV auto-dim (dimming phase 1).** Software dimming
+  overlay (black scrim + warm tint that scales with dim, so the mat reads as
+  paper in lamplight): sunset-anchored auto curve (full by day; ramp to 70%
+  over 45 min from sunset via Open-Meteo sunrise/sunset, fetched twice daily
+  with a fixed-time fallback; 45% after 22:30; restore at sunrise) or a fixed
+  manual level. Settings: "Auto Dim" On/Off + "Brightness" row (reads "Auto"
+  while auto is on, 20-100% stepper when off); Settings view itself never dims
+  below 85% so it stays adjustable. Settings list is now scrollable (rows
+  outgrew one screen). Phase 2 (HA lux sensor) stays in the backlog.
 - **2026-06-10 - Art albums: museum placards + shadow-box rendering.** Immich
   "Art *" albums (71 pieces curated: Monet, van Gogh, Hokusai, Krasner, ...)
   display as gallery art on both screens: TV shadow box (blurred wash in the

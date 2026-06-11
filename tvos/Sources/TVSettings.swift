@@ -18,6 +18,9 @@ import SwiftUI
 //                          so albums added later are auto-included; an explicit
 //                          set after any toggle), independent of the kitchen's
 //                          album selection
+//   autoDim              - sunset-anchored evening/night dimming (the software
+//                          stand-in for the Frame's light sensor; see Dimmer.swift)
+//   manualBrightness     - fixed brightness when autoDim is OFF (1.0 = full)
 
 // How the Now Playing screen treats the picture-frame mat. Raw values are
 // persisted, so keep their order stable.
@@ -45,7 +48,13 @@ final class TVSettings: ObservableObject {
         static let todayMatEnabled = "tv.todayMatEnabled"
         static let legacyAlbumId = "tv.albumId"          // pre multi-select
         static let selectedAlbumIds = "tv.selectedAlbumIds"
+        static let autoDim = "tv.autoDim"
+        static let manualBrightness = "tv.manualBrightness"
     }
+
+    // Manual brightness choices (fraction of full). 0.2 is still readable in a
+    // dark room; full list keeps the left/right stepper grammar.
+    static let brightnessChoices: [Double] = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     // Allowed photo durations, in seconds (10s ... 24h).
     static let durationChoices = [
@@ -65,6 +74,15 @@ final class TVSettings: ObservableObject {
     @Published var todayMatEnabled: Bool {
         didSet { UserDefaults.standard.set(todayMatEnabled, forKey: Key.todayMatEnabled) }
     }
+    @Published var autoDim: Bool {
+        didSet { UserDefaults.standard.set(autoDim, forKey: Key.autoDim) }
+    }
+    // Effective only when autoDim is OFF (the Brightness row reads "Auto"
+    // otherwise). 1.0 = no dimming.
+    @Published var manualBrightness: Double {
+        didSet { UserDefaults.standard.set(manualBrightness, forKey: Key.manualBrightness) }
+    }
+
     // nil = "All albums" (albums added to Immich later are auto-included).
     // Non-nil = the explicit set of album ids to show; empty = show nothing.
     @Published var selectedAlbumIds: Set<String>? {
@@ -91,6 +109,9 @@ final class TVSettings: ObservableObject {
             .flatMap(MusicMatMode.init(rawValue:)) ?? .framed
         // Today mat defaults ON (mats are on by default across all views).
         todayMatEnabled = (d.object(forKey: Key.todayMatEnabled) as? Bool) ?? true
+        // Auto Dim defaults ON - the whole point is hands-off evening dimming.
+        autoDim = (d.object(forKey: Key.autoDim) as? Bool) ?? true
+        manualBrightness = (d.object(forKey: Key.manualBrightness) as? Double) ?? 1.0
         // Album selection; migrate the old single-album picker if present.
         if let stored = d.array(forKey: Key.selectedAlbumIds) as? [String] {
             selectedAlbumIds = Set(stored)
@@ -167,4 +188,16 @@ final class TVSettings: ObservableObject {
     var selectedAlbumIdList: [String]? {
         selectedAlbumIds.map { Array($0).sorted() }
     }
+
+    // MARK: - Brightness (manual mode)
+
+    func stepBrightness(_ dir: Int) {
+        let choices = Self.brightnessChoices
+        let i = choices.firstIndex(where: { abs($0 - manualBrightness) < 0.001 })
+            ?? choices.count - 1
+        let next = min(choices.count - 1, max(0, i + dir))
+        manualBrightness = choices[next]
+    }
+
+    var brightnessLabel: String { "\(Int((manualBrightness * 100).rounded()))%" }
 }
