@@ -13,8 +13,8 @@
 # (one run's worth, truncated at start).
 #
 # Expects /home/pi/photo-build/ to hold: scripts/ (synced by deploy),
-# custom-places.json (synced by deploy), .env (secrets, created by hand:
-# IMMICH_URL, IMMICH_API_KEY, GOOGLE_API_KEY).
+# custom-places.json + art-metadata.json (synced by deploy), .env (secrets,
+# created by hand: IMMICH_URL, IMMICH_API_KEY, GOOGLE_API_KEY).
 
 set -u
 
@@ -85,6 +85,7 @@ fi
 
 STUB_PHOTOS_DIR=$KIOSK_PHOTOS \
 KIOSK_CUSTOM_PLACES_PATH=$BUILD_DIR/custom-places.json \
+ART_METADATA_PATH=$BUILD_DIR/art-metadata.json \
 "$NODE_BIN" "$BUILD_DIR/scripts/build-photo-manifest.mjs" >"$LOG_FILE" 2>&1
 RC=$?
 

@@ -43,7 +43,9 @@ export async function listAlbums({ baseUrl, apiKey }) {
 // width/height, dates, etc.).
 //
 // Note: this endpoint does NOT include people[].faces[] geometry. Use
-// getAsset(id) per-asset if you need face bounding boxes.
+// getAsset(id) per-asset if you need face bounding boxes. Because the raw
+// objects pass through unmapped, callers can rely on fields like
+// originalFileName (the art-metadata placard join keys off it).
 export async function listAlbumAssets({ baseUrl, apiKey, albumId }) {
   const url = `${baseUrl}/api/albums/${albumId}?withoutAssets=false`
   const res = await fetch(url, { headers: authHeaders(apiKey) })

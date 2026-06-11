@@ -17,6 +17,17 @@ struct PhotoExif: Decodable, Equatable {
     var album: String?
 }
 
+// Curated artwork metadata, present only on photos from "Art *" albums (the
+// build script joins art-metadata.json by filename). Drives the museum
+// placard + shadow-box rendering; `facts` are curated but not displayed yet.
+struct PhotoArt: Decodable, Equatable {
+    var title: String?
+    var artist: String?
+    var year: String?
+    var movement: String?
+    var facts: [String]?
+}
+
 struct Photo: Decodable, Equatable, Identifiable {
     var src: String
     var width: Int
@@ -25,6 +36,7 @@ struct Photo: Decodable, Equatable, Identifiable {
     var addedAt: Double?
     var albums: [String]?
     var exif: PhotoExif?
+    var art: PhotoArt?
     var faces: [PhotoFace]?
 
     var id: String { src }

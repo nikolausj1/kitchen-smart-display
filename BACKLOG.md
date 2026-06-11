@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-10
-version: 3.6
+version: 3.8
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -54,7 +54,17 @@ steps 2-3, the manual command lives in the import log
 (`archive/import-log-2026-06-08.md`) and the nightly 3am refresh will pick up
 any finished import on its own.
 
-### 2. Triage place corrections
+### 2. Add or curate an art album
+
+Albums named "Art *" in Immich display as gallery art (museum placard,
+shadow-box mat, never cropped). After adding artworks to one (filename should
+contain at least title + artist): tell Claude **"curate the art albums"** -
+that runs `scripts/art-metadata-check.mjs` to diff Immich against
+`art-metadata.json`, Claude researches and fills in the missing pieces
+(title/artist/year/movement + fun facts), then deploy + refresh photos. Full
+design: `docs/designs/art-albums.md`.
+
+### 3. Triage place corrections
 
 Wrong captions get long-press-flagged on the kitchen display and queue up on
 the Pi. Periodically (when the queue has a few): tell Claude **"let's triage
@@ -106,6 +116,13 @@ Remaining:
 - **Security hardening** (TODO) - noted as a future enhancement in the spec.
 - **Cleanup** (POLISH) - remove the dead `ComingSoonView`; confirm/add touch-swipe
   photo gestures (programmatic nav exists, gestures unverified).
+- **Voice assistant visual feedback** (TODO, down the road) - if a voice
+  assistant gets added to Home Assistant, the kitchen display shows its visual
+  feedback (timers, shopping-list additions, etc.). Goal: retire the Alexas,
+  at least in the kitchen.
+- **Smart-crop (face) feedback loop** (TODO) - like the geolocation
+  corrections: when the face-aware crop gets it wrong, mark the photo on the
+  display so it queues for fixing later (and so we learn why it was wrong).
 
 ### Apple TV / Frame TV app
 
@@ -114,10 +131,31 @@ progress bar). Remaining:
 
 - **Cold-threshold (35F) Settings row** (TODO) - currently hard-coded; expose as a
   TV-local setting.
-- **App icon / Brand Assets** (TODO) - no icon set yet.
+- **App name + icon / Brand Assets** (TODO) - no icon set yet; pick the app's
+  display name too.
 - **Merge `feature/apple-tv-display` into main** (TODO) - once proven in daily use.
 - **Home Assistant auto-launch** (TODO) - school mornings open Today, guests scene
   opens Now Playing. Pursued in a separate session.
+- **Launch to Today on school-day mornings** (TODO/VERIFY) - sometimes the TV
+  is on Photos in the morning instead of Today (likely the app has been running
+  since the prior evening, so the boot picker never re-fires). Needs a
+  time-aware re-pick, not just boot-time logic.
+- **Dimming options** (DECISION) - the TV sometimes looks too bright. The
+  Frame TV's art mode adjusts brightness from room lux (plus a schedule);
+  explore an equivalent: schedule-based dim first, lux-based if there's a
+  sensor ingress (Home Assistant?).
+- **Review inset + drop shadows** (POLISH) - mat shadows read a bit too dark
+  on the real screen. Nothing major.
+- **Favorite-station picker** (TODO, not P0) - pick a Jukebox station from the
+  remote on the TV. Open: what the ingress is (the kitchen's station list
+  lives in the web app; the Pi serves `/api/state` + Sonos proxy).
+- **Framed Now Playing: subtle background motion** (POLISH) - make the blurred
+  Framed backdrop feel slightly alive: a slow swirl/drift of the album colors
+  rather than a static blur.
+- **Display art fun facts** (TODO) - 1-3 curated facts per piece already live
+  in `art-metadata.json` (and ride the manifest's `art.facts`); design how they
+  show (leading idea: rotate one per showing, handwritten on the mat). Kitchen
+  counterpart welcome.
 - **Auto-show Now Playing when music starts** (DECISION) - the PRD currently
   forbids mid-session auto-switching. Counterpart to the kitchen auto-interrupt.
 - **Multi-room Sonos** (TODO) - transport/volume target "Main" only.
@@ -133,6 +171,11 @@ progress bar). Remaining:
   today (covers snow days).
 - **Early-dismissal handling** for the morning countdown (TODO) - treated as a
   normal morning today.
+- **Photos with no geolocation** (DECISION) - some photos have no GPS at all,
+  so they get no caption and can't be fixed by the radius bubbles. Open: where
+  to fix - set location in Immich (it supports editing asset location), or
+  extend the kitchen press-and-hold flag flow to cover "no location" photos
+  (flag exists, but the triage page needs coords to anchor a bubble).
 
 ### Cross-cutting themes (design once, use on both surfaces)
 
@@ -215,6 +258,17 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-10 - Art albums: museum placards + shadow-box rendering.** Immich
+  "Art *" albums (71 pieces curated: Monet, van Gogh, Hokusai, Krasner, ...)
+  display as gallery art on both screens: TV shadow box (blurred wash in the
+  mat opening, crisp canvas floating with a soft shadow) with a handwritten
+  placard - title + artist bottom-left, year + movement bottom-right (music
+  keeps the right corner while playing); kitchen shows full canvas + the
+  caption pill (title / artist-year / movement). Art never crops and never
+  pairs. Curated `art-metadata.json` (incl. fun facts for a future feature)
+  joined by the Pi build; `art-metadata-check.mjs` keeps it honest. Also fixed
+  the sim-only debug.fakeMusic flag (was ignored by PhotosView). Design:
+  `docs/designs/art-albums.md`.
 - **2026-06-10 - Apple TV album multi-select.** TV Settings "Photo albums" is
   now a wrapped pill grid (alphanumeric order, checkmark + count, left/right
   highlights, play/pause toggles, "All albums / k of n" summary). TV-local and

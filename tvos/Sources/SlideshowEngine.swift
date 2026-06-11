@@ -48,6 +48,13 @@ final class SlideshowEngine: ObservableObject {
             let portraits = photos.filter { $0.isPortrait }
             if !portraits.isEmpty { photos = portraits }
         }
+        // Sim-only: `defaults write <bundle> debug.forceArt -bool YES` keeps
+        // only art-album photos so the shadow-box stage + placard can be
+        // verified without waiting on shuffle order.
+        if UserDefaults.standard.bool(forKey: "debug.forceArt") {
+            let art = photos.filter { $0.art != nil }
+            if !art.isEmpty { photos = art }
+        }
         #endif
         let ordered = Self.order(photos, sortOrder: sortOrder)
         // Only reset if the photo set actually changed (avoid restarting the
@@ -145,6 +152,14 @@ final class SlideshowEngine: ObservableObject {
             }
             let next = photos[queueIndex % photos.count]
             queueIndex += 1
+            // Artworks always show solo - a painting half-framed next to a
+            // family portrait reads wrong, and the shadow-box stage is built
+            // for one canvas. They never enter the portrait buffer, so they
+            // also never delay a waiting portrait's pairing.
+            if next.art != nil {
+                advanceCount += 1
+                return next.orientation == "landscape" ? .landscape(next) : .portraitSolo(next)
+            }
             if next.orientation == "landscape" {
                 advanceCount += 1
                 return .landscape(next)

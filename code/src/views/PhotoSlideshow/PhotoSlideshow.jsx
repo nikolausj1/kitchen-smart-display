@@ -74,6 +74,17 @@ function pickNextDisplay({ photos, queueIndexRef, portraitBufferRef, advanceCoun
     const next = photos[queueIndexRef.current % photos.length]
     queueIndexRef.current += 1
 
+    // Artworks (curated "Art *" albums) always show solo - a painting
+    // half-framed next to a family portrait reads wrong. They skip the
+    // portrait buffer entirely, mirroring the tvOS engine.
+    if (next.art) {
+      advanceCountRef.current += 1
+      return {
+        kind: next.orientation === 'landscape' ? 'landscape' : 'portrait-solo',
+        photos: [next],
+      }
+    }
+
     if (next.orientation === 'landscape') {
       advanceCountRef.current += 1
       return { kind: 'landscape', photos: [next] }
@@ -162,6 +173,12 @@ function computeFillCrop(photoW, photoH, containerW, containerH, faces) {
 // Faces. Returns { mode: 'fill' | 'fit', objectPosition: 'X% Y%' }.
 function resolveCell(photo, containerW, containerH, opts) {
   const { displayMode, smartThreshold, smartFaces } = opts
+  // Artworks are never cropped, whatever the user's display mode: the whole
+  // canvas shows in fit mode over the blurred backdrop (art entries also
+  // carry no faces, so the smart-crop paths stay inert by construction).
+  if (photo.art) {
+    return { mode: 'fit', objectPosition: '50% 50%' }
+  }
   if (displayMode === 'fill') {
     // Explicit Fill: still use face-aware positioning if we can, but never
     // bail to Fit (the user asked for Fill).

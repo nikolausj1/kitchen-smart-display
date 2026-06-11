@@ -22,10 +22,20 @@
 // last, and only then are orphaned photos pruned. Clients polling mid-run
 // always see a consistent manifest whose files all exist.
 //
+// Art albums (Immich mode only): albums whose name starts with "Art" hold
+// professional copies of famous artworks. Their photos skip GPS resolution
+// and face fetch; instead curated metadata from art-metadata.json (keyed by
+// originalFileName, see docs/designs/art-albums.md) becomes a museum placard:
+// exif.location = title, exif.date = "artist, year", exif.album = movement,
+// plus a structured `art` field for clients that want the parts. sortKey
+// comes from the artwork's creation year, so date-taken ordering doubles as
+// art-history chronology.
+//
 // Environment:
 //   - IMMICH_URL, IMMICH_API_KEY:   enables Immich mode.
 //   - GOOGLE_API_KEY:               enables Google Places step (recommended).
 //   - KIOSK_CUSTOM_PLACES_PATH:     custom-places.json path override.
+//   - ART_METADATA_PATH:            art-metadata.json path override.
 //   - STUB_PHOTOS_DIR:              output dir override (default
 //                                   code/public/stub-photos; the Pi sets
 //                                   /home/pi/kiosk/stub-photos).
@@ -33,7 +43,7 @@
 // Usage:
 //   node --env-file=.env scripts/build-photo-manifest.mjs
 
-import { mkdir, readdir, writeFile, copyFile, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile, copyFile, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve, extname } from 'node:path'
@@ -53,6 +63,9 @@ const LOCATION_CACHE = join(__dirname, '.location-cache.json')
 const CUSTOM_PLACES_PATH =
   process.env.KIOSK_CUSTOM_PLACES_PATH ||
   join(PROJECT_ROOT, 'custom-places.json')
+const ART_METADATA_PATH =
+  process.env.ART_METADATA_PATH ||
+  join(PROJECT_ROOT, 'art-metadata.json')
 
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic'])
 
@@ -75,6 +88,25 @@ if (homeConfig) {
   console.log(`Home metro: ${homeConfig.metro_radius_km} km around ${homeConfig.lat.toFixed(4)},${homeConfig.lon.toFixed(4)} (${homeConfig.country_code})`)
 }
 const resolver = createResolver({ cache, customPlaces, apiKey: googleKey, home: homeConfig })
+
+// --- Art metadata (curated placards for "Art *" albums) ----------------------
+// Keys are originalFileName, NFC-normalized on both sides: macOS uploads land
+// in Immich NFD-decomposed, while the curated JSON is authored NFC.
+const nfcName = (s) => (s || '').normalize('NFC')
+let artPieces = new Map()
+if (existsSync(ART_METADATA_PATH)) {
+  try {
+    const doc = JSON.parse(await readFile(ART_METADATA_PATH, 'utf8'))
+    artPieces = new Map(
+      Object.entries(doc.pieces || {}).map(([k, v]) => [nfcName(k), v])
+    )
+    console.log(`Loaded ${artPieces.size} art pieces from ${ART_METADATA_PATH}`)
+  } catch (e) {
+    console.warn(`! failed to parse ${ART_METADATA_PATH}: ${e.message} - art albums get no placards`)
+  }
+} else {
+  console.warn(`! ${ART_METADATA_PATH} not found - art albums get no placards`)
+}
 
 // --- Date formatting --------------------------------------------------------
 
@@ -165,6 +197,13 @@ async function processImmich() {
   console.log(`Found ${albums.length} albums:`)
   for (const a of albums) console.log(`  - ${a.name}  (${a.count} assets)  ${a.id}`)
 
+  // Albums named "Art", "Art 01", "Art - Landscapes", ... hold curated
+  // artworks (\b so e.g. "Artisan Market" stays a photo album). A photo in
+  // both an art album and a family album is treated as art.
+  const artAlbumIds = new Set(
+    albums.filter((a) => /^Art\b/.test(a.name)).map((a) => a.id)
+  )
+
   // Map of assetId -> { asset, albums: Set<albumId> }. We dedupe so a photo
   // in two albums is downloaded + resolved once.
   const byAsset = new Map()
@@ -215,14 +254,19 @@ async function processImmich() {
     }
     keepFiles.add(filename)
 
+    const isArt = [...albumIds].some((id) => artAlbumIds.has(id))
+
     // Fetch full asset detail to get people[].faces[] geometry, which the
-    // album-list endpoint omits. Cheap on LAN.
+    // album-list endpoint omits. Cheap on LAN. Skipped for art: face boxes on
+    // painted figures would drag the kitchen's smart crop around a canvas.
     let faces = []
-    try {
-      const detail = await getAsset({ baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id })
-      faces = extractFaces(detail)
-    } catch (e) {
-      console.warn(`  [${i}/${all.length}] ! face fetch failed for ${asset.id}: ${e.message}`)
+    if (!isArt) {
+      try {
+        const detail = await getAsset({ baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id })
+        faces = extractFaces(detail)
+      } catch (e) {
+        console.warn(`  [${i}/${all.length}] ! face fetch failed for ${asset.id}: ${e.message}`)
+      }
     }
 
     // Dimensions: prefer asset-level width/height (Immich normalizes for
@@ -242,6 +286,46 @@ async function processImmich() {
     // addedAt = when added to Immich (best proxy for "new in library").
     const addedAt = asset.createdAt ? new Date(asset.createdAt).getTime() : 0
 
+    const entry = {
+      src: `/stub-photos/${filename}`,
+      width: rawW,
+      height: rawH,
+      orientation,
+      sortKey,
+      addedAt,
+      albums: [...albumIds],
+      exif: { location: '', date: '', album: '' },
+    }
+
+    if (isArt) {
+      // Museum placard from curated metadata; no GPS work at all. A miss
+      // degrades to an uncaptioned photo and is fixed by re-running the
+      // curation workflow (docs/designs/art-albums.md).
+      const meta = artPieces.get(nfcName(asset.originalFileName))
+      if (meta) {
+        entry.exif = {
+          location: meta.title || '',
+          date: meta.artist ? `${meta.artist}, ${meta.year || ''}`.replace(/, $/, '') : '',
+          album: meta.movement || '',
+        }
+        entry.art = {
+          title: meta.title || '',
+          artist: meta.artist || '',
+          year: meta.year || '',
+          movement: meta.movement || '',
+          facts: Array.isArray(meta.facts) ? meta.facts : [],
+        }
+        if (Number.isFinite(meta.sortYear)) {
+          entry.sortKey = Date.UTC(meta.sortYear, 0, 1)
+        }
+        console.log(`  [${i}/${all.length}] ${filename}  ${rawW}x${rawH}  [art] ${meta.title} - ${meta.artist} (${meta.year})`)
+      } else {
+        console.warn(`  [${i}/${all.length}] ! art asset missing from art-metadata.json: ${asset.originalFileName}`)
+      }
+      entries.push(entry)
+      continue
+    }
+
     // GPS.
     const lat = typeof ex.latitude === 'number' ? ex.latitude : null
     const lon = typeof ex.longitude === 'number' ? ex.longitude : null
@@ -251,19 +335,10 @@ async function processImmich() {
     const faceTag = faces.length > 0 ? ` ${faces.length}f` : ''
     console.log(`  [${i}/${all.length}] ${filename}  ${rawW}x${rawH}${faceTag}  ${dateStr || '(no date)'}  ${tag}${location || '(no location)'}`)
 
-    const entry = {
-      src: `/stub-photos/${filename}`,
-      width: rawW,
-      height: rawH,
-      orientation,
-      sortKey,
-      addedAt,
-      albums: [...albumIds],
-      exif: {
-        location: location || '',
-        date: dateStr || '',
-        album: '',
-      },
+    entry.exif = {
+      location: location || '',
+      date: dateStr || '',
+      album: '',
     }
     if (faces.length > 0) entry.faces = faces
     entries.push(entry)
