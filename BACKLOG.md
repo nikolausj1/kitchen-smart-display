@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-06-10
-version: 3.9
+version: 4.0
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -133,7 +133,6 @@ progress bar). Remaining:
   TV-local setting.
 - **App name + icon / Brand Assets** (TODO) - no icon set yet; pick the app's
   display name too.
-- **Merge `feature/apple-tv-display` into main** (TODO) - once proven in daily use.
 - **Home Assistant auto-launch** (TODO) - school mornings open Today, guests scene
   opens Now Playing. Pursued in a separate session.
 - **Launch to Today on school-day mornings** (TODO/VERIFY) - sometimes the TV
@@ -158,7 +157,7 @@ progress bar). Remaining:
   rather than a static blur.
 - **Display art fun facts** (TODO) - 1-3 curated facts per piece already live
   in `art-metadata.json` (and ride the manifest's `art.facts`); design how they
-  show (leading idea: rotate one per showing, handwritten on the mat). Kitchen
+  show (leading idea: rotate one per showing, handwritten on the mat, centered on bottom). Kitchen
   counterpart welcome.
 - **Auto-show Now Playing when music starts** (DECISION) - the PRD currently
   forbids mid-session auto-switching. Counterpart to the kitchen auto-interrupt.
@@ -342,6 +341,9 @@ Newest first.
 
 ## Housekeeping / Ops
 
+- **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
+  31d6af4) after the TV app proved out in daily use. Day-to-day work continues
+  on main; origin (GitHub) has not been pushed - push when ready.
 - **Photo-flag triage queue** - 9 flags remain on the Pi
   (`GET /api/flags?unresolved=1`): 7 have no GPS (can't anchor a `custom-places`
   bubble - would need GPS added in Immich + re-import), 2 were skipped
