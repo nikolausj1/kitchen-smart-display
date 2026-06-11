@@ -89,8 +89,12 @@ struct PhotosView: View {
             let matOn = tvSettings.photosMatEnabled
             // Via the `music` property (not sonos directly) so the sim-only
             // debug.fakeMusic flag actually fakes the corner + music line.
+            // The whole Now Playing presence (album-art corner + handwritten
+            // track lines) is suppressed while an ARTWORK is up - a gallery
+            // wall has no album covers - so the art placard's year/movement
+            // never has to yield the right corner.
             let m = music
-            let showArt = m.show
+            let showMusic = m.show && currentArt == nil
             ZStack {
                 Color.black
                 if let item = engine.current {
@@ -117,8 +121,9 @@ struct PhotosView: View {
                 }
 
                 // Album art corner (inside the opening), shown when music is on
-                // or recently was. White inner border + shadow only when matted.
-                if showArt, let art = m.art {
+                // or recently was - but never over an artwork. White inner
+                // border + shadow only when matted.
+                if showMusic, let art = m.art {
                     AlbumArtCorner(url: art, size: geo.size, matted: matOn)
                 }
 
@@ -135,10 +140,10 @@ struct PhotosView: View {
                                    photoDate: currentArt != nil ? currentArt?.artist : currentExif?.date,
                                    rightPhotoLocation: rightExif?.location,
                                    rightPhotoDate: rightExif?.date,
-                                   musicTitle: showArt ? m.title : nil,
-                                   musicArtist: showArt ? m.artist : nil,
-                                   artYear: showArt ? nil : currentArt?.year,
-                                   artMovement: showArt ? nil : currentArt?.movement)
+                                   musicTitle: showMusic ? m.title : nil,
+                                   musicArtist: showMusic ? m.artist : nil,
+                                   artYear: currentArt?.year,
+                                   artMovement: currentArt?.movement)
                 } else if let item = engine.current {
                     // Unmatted fallback: white caption over the photo.
                     ExifCaptionOverlay(item: item,
