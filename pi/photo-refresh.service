@@ -1,0 +1,13 @@
+# Rebuild the kiosk photo manifest from Immich (one shot; scheduled by
+# photo-refresh.timer, also runnable via `sudo systemctl start photo-refresh`).
+# Installed by deploy to /etc/systemd/system/. See
+# docs/designs/photo-refresh-automation.md.
+[Unit]
+Description=Rebuild kiosk photo manifest from Immich
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+ExecStart=/home/pi/photo-refresh.sh timer

@@ -5,6 +5,35 @@ import { useSettings } from '../lib/settings.js'
 // Docs: https://open-meteo.com/en/docs
 
 const REFRESH_MS = 15 * 60 * 1000
+const ERROR_RETRY_MS = 2 * 60 * 1000  // shorter retry when the API is down
+const CACHE_KEY = 'kioskWeatherCache'
+const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000  // 12 hours - older than this isn't useful
+
+function readCache() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.slots || !parsed?.fetchedAt) return null
+    if (Date.now() - parsed.fetchedAt > CACHE_MAX_AGE_MS) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeCache(slots) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ slots, fetchedAt: Date.now() })
+    )
+  } catch {
+    // ignore (quota, etc.)
+  }
+}
 
 function wmoToIcon(code) {
   if (code === 0 || code === 1) return 'clear'
@@ -58,14 +87,26 @@ function pickSlots(payload, hours) {
 
 export default function useWeather() {
   const { location, weatherSlots } = useSettings()
-  const [state, setState] = useState({
-    slots: null,
-    loading: true,
-    error: null,
+  // Seed initial state from the cache so a transient Open-Meteo outage
+  // doesn't leave us showing --° placeholders. Stale cache (>12h) is
+  // ignored - we'd rather show placeholders than yesterday's forecast.
+  const [state, setState] = useState(() => {
+    const cached = readCache()
+    return {
+      slots: cached?.slots || null,
+      loading: !cached,
+      error: null,
+      stale: !!cached,  // true when we're showing cached (not fresh) data
+      // Today's raw hourly arrays from the live payload, for arbitrary-hour
+      // lookups (e.g. the departure-time forecast that drives the travel
+      // default). Null until a live fetch succeeds (not cached).
+      hourly: null,
+    }
   })
 
   useEffect(() => {
     let cancelled = false
+    let timer = null
 
     async function load() {
       const url = new URL('https://api.open-meteo.com/v1/forecast')
@@ -81,30 +122,61 @@ export default function useWeather() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const payload = await res.json()
         if (cancelled) return
+        const slots = pickSlots(payload, weatherSlots)
+        writeCache(slots)
         setState({
-          slots: pickSlots(payload, weatherSlots),
+          slots,
           loading: false,
           error: null,
+          stale: false,
+          hourly: payload?.hourly || null,
         })
+        schedule(REFRESH_MS)
       } catch (err) {
         if (cancelled) return
-        setState({
-          slots: null,
+        // Keep showing prior slots (live or cached) - don't blank them.
+        setState((prev) => ({
+          slots: prev.slots,
           loading: false,
           error: err.message || 'fetch failed',
-        })
+          stale: !!prev.slots,
+          hourly: prev.hourly,
+        }))
+        schedule(ERROR_RETRY_MS)
       }
     }
 
+    function schedule(delay) {
+      if (cancelled) return
+      clearTimeout(timer)
+      timer = setTimeout(load, delay)
+    }
+
     load()
-    const id = setInterval(load, REFRESH_MS)
     return () => {
       cancelled = true
-      clearInterval(id)
+      clearTimeout(timer)
     }
   }, [location.lat, location.lon, location.timezone, weatherSlots])
 
-  return state
+  // Look up today's forecast for a specific local hour (0-23) from the live
+  // hourly arrays. Returns { code, tempF } or null if unavailable. Used by the
+  // travel-mode default to read the departure-time forecast.
+  const forecastForHour = (hour) => {
+    const h = state.hourly
+    if (!h?.time) return null
+    const stamp = `${todayLocalIsoDate()}T${String(hour).padStart(2, '0')}:00`
+    const idx = h.time.indexOf(stamp)
+    if (idx === -1) return null
+    const code = h.weather_code?.[idx]
+    const temp = h.temperature_2m?.[idx]
+    return {
+      code: typeof code === 'number' ? code : null,
+      tempF: typeof temp === 'number' ? Math.round(temp) : null,
+    }
+  }
+
+  return { ...state, forecastForHour }
 }
 
 export function placeholderSlots(hours = [8, 11, 14, 17, 20]) {

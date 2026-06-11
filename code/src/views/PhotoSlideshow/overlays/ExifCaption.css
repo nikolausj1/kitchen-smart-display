@@ -8,13 +8,28 @@
 
 .exif-caption {
   position: fixed;
-  left: 50%;
   bottom: 4vh;
-  transform: translateX(-50%);
   opacity: 0;
   transition: opacity 0.8s ease-out;
   pointer-events: none;
   z-index: 9;
+  max-width: 40vw;
+}
+
+/* Horizontal placement. 'center' is the single-photo default. 'left' and
+ * 'right' sit under each half of a portrait-pair display, centered on the
+ * 25% / 75% screen positions. */
+.exif-caption--center {
+  left: 50%;
+  transform: translateX(-50%);
+}
+.exif-caption--left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+.exif-caption--right {
+  left: 75%;
+  transform: translateX(-50%);
 }
 
 .exif-caption--visible {
@@ -35,6 +50,20 @@
   font-size: 1.05vw;
   line-height: 1.4;
   font-weight: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5vw;
+}
+
+/* Small white icon prefixed to the location/date lines. Sized relative to
+ * the line's font so the pair scales together. drop-shadow matches the
+ * text shadow so the icon reads cleanly on light photo backgrounds. */
+.exif-caption__icon {
+  width: 0.8em;
+  height: 0.8em;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0.1vw 0.2vw rgba(0, 0, 0, 0.4));
 }
 
 .exif-caption__line--primary {

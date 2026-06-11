@@ -1,0 +1,750 @@
+{
+  "_comment": "Curated metadata for Immich 'Art *' albums, keyed by originalFileName (NFC). Joined into the photo manifest by build-photo-manifest.mjs; curation workflow in docs/designs/art-albums.md. 'year' is the display string; 'sortYear' drives chronological ordering; 'facts' are curated now and displayed by a future feature.",
+  "pieces": {
+    "A Broad Valley at Sunset - Hippolyte Petitjeanc. 1897.jpg": {
+      "title": "A Broad Valley at Sunset",
+      "artist": "Hippolyte Petitjean",
+      "year": "c. 1897",
+      "sortYear": 1897,
+      "movement": "Pointillism",
+      "facts": [
+        "Petitjean learned the dot-by-dot technique directly from Georges Seurat, applying color in tiny touches the eye blends at a distance."
+      ]
+    },
+    "Almond Blossom - Vincent van GoghFebruary 1890.jpg": {
+      "title": "Almond Blossom",
+      "artist": "Vincent van Gogh",
+      "year": "February 1890",
+      "sortYear": 1890,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Painted as a gift for his newborn nephew, also named Vincent, to hang over the baby's bed.",
+        "The branching style borrows openly from Japanese woodblock prints van Gogh collected."
+      ]
+    },
+    "Banks of the Seine at Argenteuil - Édouard Manet 1874.jpg": {
+      "title": "Banks of the Seine at Argenteuil",
+      "artist": "Édouard Manet",
+      "year": "1874",
+      "sortYear": 1874,
+      "movement": "Impressionism",
+      "facts": [
+        "Painted the summer Manet worked side by side with Monet at Argenteuil, the closest he ever came to pure Impressionism."
+      ]
+    },
+    "Banks of the Seine, Vétheuil - Claude Monet 1880.jpg": {
+      "title": "Banks of the Seine, Vétheuil",
+      "artist": "Claude Monet",
+      "year": "1880",
+      "sortYear": 1880,
+      "movement": "Impressionism",
+      "facts": [
+        "Monet moved to the small village of Vétheuil in 1878 and painted the Seine there more than 150 times."
+      ]
+    },
+    "Boat with Sail (Panormos, Tinos) - Lytras Nikosca 1925.jpg": {
+      "title": "Boat with Sail (Panormos, Tinos)",
+      "artist": "Nikos Lytras",
+      "year": "c. 1925",
+      "sortYear": 1925,
+      "movement": "Greek Modernism",
+      "facts": [
+        "Lytras painted the harsh Aegean light of his family's island, Tinos, with thick strokes that pushed Greek painting toward Expressionism."
+      ]
+    },
+    "Boulevard Montmartre, Spring - Camille Pissarro 1897.jpg": {
+      "title": "Boulevard Montmartre, Spring",
+      "artist": "Camille Pissarro",
+      "year": "1897",
+      "sortYear": 1897,
+      "movement": "Impressionism",
+      "facts": [
+        "One of fourteen views of the same boulevard Pissarro painted from a hotel window, tracking the street through seasons and times of day."
+      ]
+    },
+    "Canal of Overschie Paul Signac1906.jpg": {
+      "title": "Canal of Overschie",
+      "artist": "Paul Signac",
+      "year": "1906",
+      "sortYear": 1906,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Signac sailed his own boat to Rotterdam in 1906, painting the Dutch canals in mosaic-like squares of color."
+      ]
+    },
+    "Cliff Walk at Pourville - Claude Monet 1882.jpg": {
+      "title": "Cliff Walk at Pourville",
+      "artist": "Claude Monet",
+      "year": "1882",
+      "sortYear": 1882,
+      "movement": "Impressionism",
+      "facts": [
+        "The two women on the cliff are likely the daughters of Alice Hoschedé, Monet's future wife.",
+        "Conservators found Monet scraped out a third figure to open up the view of the sea."
+      ]
+    },
+    "Coffee Table at Lake Starnberg - Wilhelm Trübner 1909.jpg": {
+      "title": "Coffee Table at Lake Starnberg",
+      "artist": "Wilhelm Trübner",
+      "year": "1909",
+      "sortYear": 1909,
+      "movement": "German Impressionism",
+      "facts": [
+        "Trübner treated everyday subjects with deliberate seriousness, arguing a well-painted table mattered as much as any grand history scene."
+      ]
+    },
+    "Conway Castle, North Wales (1798)-Joseph Mallord William Turner.jpg": {
+      "title": "Conway Castle, North Wales",
+      "artist": "J.M.W. Turner",
+      "year": "1798",
+      "sortYear": 1798,
+      "movement": "Romanticism",
+      "facts": [
+        "Turner toured Wales in his early twenties, sketching medieval castles that became some of his first celebrated watercolors."
+      ]
+    },
+    "Dipinto - Sam Francis 1957.jpg": {
+      "title": "Dipinto",
+      "artist": "Sam Francis",
+      "year": "1957",
+      "sortYear": 1957,
+      "movement": "Abstract Expressionism",
+      "facts": [
+        "Francis began painting while recovering from a plane crash in a body cast, working on canvases propped above his hospital bed."
+      ]
+    },
+    "Dusty Road II - Mihály Munkácsy 1884.jpg": {
+      "title": "Dusty Road II",
+      "artist": "Mihály Munkácsy",
+      "year": "1884",
+      "sortYear": 1884,
+      "movement": "Realism",
+      "facts": [
+        "Hungary's most famous painter of the era, Munkácsy was such a celebrity in Paris that crowds queued around the block for single-painting shows."
+      ]
+    },
+    "Four sunflowers gone to seed - Vincent van GoghAugust - October 1887.jpg": {
+      "title": "Four Sunflowers Gone to Seed",
+      "artist": "Vincent van Gogh",
+      "year": "1887",
+      "sortYear": 1887,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Painted in Paris two years before the famous vase sunflowers - here the flowers lie cut and drying, almost life-size.",
+        "Paul Gauguin admired the Paris sunflower studies and traded his own work to own two of them."
+      ]
+    },
+    "Frost at Giverny - Claude Monet 1885.jpg": {
+      "title": "Frost at Giverny",
+      "artist": "Claude Monet",
+      "year": "1885",
+      "sortYear": 1885,
+      "movement": "Impressionism",
+      "facts": [
+        "Monet painted outdoors in all weather, once with a hot water bottle and three coats, chasing the pink light that frost gives a field at dawn."
+      ]
+    },
+    "Gardiner's Bay from Sag Harbor - George Bellows 1899.jpg": {
+      "title": "Gardiner's Bay from Sag Harbor",
+      "artist": "George Bellows",
+      "year": "1899",
+      "sortYear": 1899,
+      "movement": "American Realism",
+      "facts": [
+        "A teenage work - Bellows was about 17 - painted years before the gritty New York boxing scenes that made him famous."
+      ]
+    },
+    "Grainstacks at Giverny the Evening Sun - Claude Monet 1888.jpg": {
+      "title": "Grainstacks at Giverny, the Evening Sun",
+      "artist": "Claude Monet",
+      "year": "1888",
+      "sortYear": 1888,
+      "movement": "Impressionism",
+      "facts": [
+        "An early entry in the grainstack obsession that became Monet's famous series - he eventually painted the stacks more than 25 times.",
+        "The stacks stood just outside his door at Giverny; he had canvases carried out in a wheelbarrow to catch each light."
+      ]
+    },
+    "Haystacks, end of Summer - Claude Monet 1891.jpg": {
+      "title": "Haystacks, End of Summer",
+      "artist": "Claude Monet",
+      "year": "1891",
+      "sortYear": 1891,
+      "movement": "Impressionism",
+      "facts": [
+        "From the series that made Monet rich: fifteen were shown together in 1891 and sold out within days.",
+        "Kandinsky later said seeing one of these haystacks was the moment he realized painting didn't need a subject."
+      ]
+    },
+    "Helene's Florist Richard Estes1971.jpg": {
+      "title": "Helene's Florist",
+      "artist": "Richard Estes",
+      "year": "1971",
+      "sortYear": 1971,
+      "movement": "Photorealism",
+      "facts": [
+        "Estes painted New York storefronts from his own photographs, sharpening reflections until the painting outdoes the photo.",
+        "Look closely: every pane of glass carries its own reflected street scene, painted by hand."
+      ]
+    },
+    "Icarus, 1964 © Pollock-Krasner Foundation - Lee Krasner1964.jpg": {
+      "title": "Icarus",
+      "artist": "Lee Krasner",
+      "year": "1964",
+      "sortYear": 1964,
+      "movement": "Abstract Expressionism",
+      "facts": [
+        "Krasner painted her boldest large canvases at night during bouts of insomnia after Jackson Pollock's death, working in his old barn studio."
+      ]
+    },
+    "Irises - Vincent van Gogh 1890.jpg": {
+      "title": "Irises",
+      "artist": "Vincent van Gogh",
+      "year": "1890",
+      "sortYear": 1890,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Painted in the asylum garden at Saint-Rémy, where van Gogh called painting 'the lightning conductor for my illness'.",
+        "He thought of the irises as studies, but they now rank among his most loved works."
+      ]
+    },
+    "Katsushika Hokusai - The Great Wave.jpg": {
+      "title": "The Great Wave off Kanagawa",
+      "artist": "Katsushika Hokusai",
+      "year": "c. 1831",
+      "sortYear": 1831,
+      "movement": "Ukiyo-e",
+      "facts": [
+        "Hokusai was about 70 when he cut this design - he claimed nothing he made before 70 was worth counting.",
+        "It's a woodblock print, not a painting: thousands of impressions were sold cheaply, about the price of a bowl of noodles.",
+        "Mount Fuji, the real subject of the series, hides in the trough of the wave."
+      ]
+    },
+    "Key West, Hauling Anchor - Winslow Homer 1903.jpg": {
+      "title": "Key West, Hauling Anchor",
+      "artist": "Winslow Homer",
+      "year": "1903",
+      "sortYear": 1903,
+      "movement": "American Realism",
+      "facts": [
+        "One of the luminous late watercolors Homer made on winter trips to Florida and the Caribbean - he finished some in a single sitting."
+      ]
+    },
+    "La Pointe de la Hève, Sainte-Adresse - Claude Monet 1864.jpg": {
+      "title": "La Pointe de la Hève, Sainte-Adresse",
+      "artist": "Claude Monet",
+      "year": "1864",
+      "sortYear": 1864,
+      "movement": "Impressionism",
+      "facts": [
+        "Monet was 24, painting the beaches of his Normandy childhood a decade before the word 'Impressionism' existed."
+      ]
+    },
+    "Landscape near Pontoise, the Auvers Road, 1881 - Camille Pissarro1881.jpg": {
+      "title": "Landscape near Pontoise, the Auvers Road",
+      "artist": "Camille Pissarro",
+      "year": "1881",
+      "sortYear": 1881,
+      "movement": "Impressionism",
+      "facts": [
+        "Pissarro was the only painter to show in all eight Impressionist exhibitions, and mentored both Cézanne and Gauguin around Pontoise."
+      ]
+    },
+    "Mountain Landscape with two Figures at the Right - Alphonse Legros 1905.jpg": {
+      "title": "Mountain Landscape with Two Figures",
+      "artist": "Alphonse Legros",
+      "year": "1905",
+      "sortYear": 1905,
+      "movement": "Realism",
+      "facts": [
+        "French-born Legros spent his career in London teaching at the Slade, where he painted entire demonstration pictures in front of his students."
+      ]
+    },
+    "Napoleon at the Great St. Bernard - Jacques-Louis David 1801.jpg": {
+      "title": "Napoleon Crossing the Alps",
+      "artist": "Jacques-Louis David",
+      "year": "1801",
+      "sortYear": 1801,
+      "movement": "Neoclassicism",
+      "facts": [
+        "Pure propaganda: Napoleon actually crossed the pass on a sure-footed mule, not a rearing stallion.",
+        "Napoleon refused to sit for it, telling David nobody cares whether portraits are good likenesses.",
+        "David's studio produced five versions; Napoleon's name is carved into the rocks beside Hannibal's and Charlemagne's."
+      ]
+    },
+    "Nighthawks - Edward Hopper 1942.jpg": {
+      "title": "Nighthawks",
+      "artist": "Edward Hopper",
+      "year": "1942",
+      "sortYear": 1942,
+      "movement": "American Realism",
+      "facts": [
+        "Painted in the weeks right after Pearl Harbor, when New York held nightly blackout drills - the diner glows like the only lit thing in the city.",
+        "The diner has no door to the street: the customers are sealed in behind glass.",
+        "Hopper's wife Jo posed for the woman in red and named the painting in their ledger."
+      ]
+    },
+    "On the Banks of a River - Paul Cézanneca. 1904.jpg": {
+      "title": "On the Banks of a River",
+      "artist": "Paul Cézanne",
+      "year": "c. 1904",
+      "sortYear": 1904,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "A late work built from patches of color rather than outlines - the approach Picasso credited when he called Cézanne 'the father of us all'."
+      ]
+    },
+    "Paris Street Rainy Day - Gustave Caillebotte 1877.jpg": {
+      "title": "Paris Street; Rainy Day",
+      "artist": "Gustave Caillebotte",
+      "year": "1877",
+      "sortYear": 1877,
+      "movement": "Impressionism",
+      "facts": [
+        "The boulevards look new because they were: Haussmann had just rebuilt Paris, and Caillebotte painted the city still feeling unfamiliar to its own residents.",
+        "Caillebotte was also the Impressionists' patron - his fortune paid for their exhibitions and bought the Monets and Renoirs now in the Musée d'Orsay."
+      ]
+    },
+    "Poplars on the Epte - Claude Monet 1891.jpg": {
+      "title": "Poplars on the Epte",
+      "artist": "Claude Monet",
+      "year": "1891",
+      "sortYear": 1891,
+      "movement": "Impressionism",
+      "facts": [
+        "When the township put the trees up for auction mid-series, Monet paid a timber merchant to leave them standing until he finished painting."
+      ]
+    },
+    "Poppies, Isles of Shoals - Childe Hassam 1891.jpg": {
+      "title": "Poppies, Isles of Shoals",
+      "artist": "Childe Hassam",
+      "year": "1891",
+      "sortYear": 1891,
+      "movement": "American Impressionism",
+      "facts": [
+        "Painted in poet Celia Thaxter's island garden off the New Hampshire coast, a summer colony for artists and writers."
+      ]
+    },
+    "Regattas at Argenteuil - Claude Monetcirca 1872.jpg": {
+      "title": "Regattas at Argenteuil",
+      "artist": "Claude Monet",
+      "year": "c. 1872",
+      "sortYear": 1872,
+      "movement": "Impressionism",
+      "facts": [
+        "The sailboats' reflections are single broad strokes of pure color - shorthand that scandalized critics used to polished finish.",
+        "Monet painted Argenteuil's river scene from a floating studio boat he fitted out himself."
+      ]
+    },
+    "Ricketts Point, Beaumaris - Charles Conder 1890.jpg": {
+      "title": "Ricketts Point, Beaumaris",
+      "artist": "Charles Conder",
+      "year": "1890",
+      "sortYear": 1890,
+      "movement": "Australian Impressionism",
+      "facts": [
+        "Conder was part of the Heidelberg School, the painters who first captured Australia's harsh sunlight on canvases sometimes no bigger than a cigar-box lid."
+      ]
+    },
+    "Rotterdam - The Steams Paul Signac1906.jpg": {
+      "title": "Steamboats, Rotterdam",
+      "artist": "Paul Signac",
+      "year": "1906",
+      "sortYear": 1906,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Signac loved working harbors - he sailed to dozens of European ports and painted the smoke, cranes, and steam in confetti-like dabs."
+      ]
+    },
+    "Snow, Boulevard de Clichy, Paris - Paul Signac1886.jpg": {
+      "title": "Snow, Boulevard de Clichy, Paris",
+      "artist": "Paul Signac",
+      "year": "1886",
+      "sortYear": 1886,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Painted the year Signac and Seurat unveiled Pointillism at the final Impressionist exhibition - this snowy street is one of its first tests."
+      ]
+    },
+    "States of Mind Those Who Go - Umberto Boccioni 1912.jpg": {
+      "title": "States of Mind II: Those Who Go",
+      "artist": "Umberto Boccioni",
+      "year": "1911",
+      "sortYear": 1911,
+      "movement": "Futurism",
+      "facts": [
+        "Part of a triptych about a railway station farewell - this panel is the rush of passengers leaving, splintered by speed and slanting lines.",
+        "The Futurists wanted to paint motion and noise itself; Boccioni reworked the whole series after seeing Cubism in Paris."
+      ]
+    },
+    "Sunset at Eragny Camille Pissarro1890.jpg": {
+      "title": "Sunset at Éragny",
+      "artist": "Camille Pissarro",
+      "year": "1890",
+      "sortYear": 1890,
+      "movement": "Impressionism",
+      "facts": [
+        "Éragny was Pissarro's final home - Monet lent him the money to buy the farmhouse whose meadows fill his late canvases."
+      ]
+    },
+    "The Beach at Fécamp - Gustave Loiseau 1893.jpg": {
+      "title": "The Beach at Fécamp",
+      "artist": "Gustave Loiseau",
+      "year": "1893",
+      "sortYear": 1893,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Loiseau, a baker's son who took up painting with an inheritance, became known for cross-hatched brushwork he called 'en treillis' - like lattice."
+      ]
+    },
+    "The Channel Sketchbook 29 (ca. 1845)-Joseph Mallord William Turner.jpg": {
+      "title": "The Channel Sketchbook, page 29",
+      "artist": "J.M.W. Turner",
+      "year": "c. 1845",
+      "sortYear": 1845,
+      "movement": "Romanticism",
+      "facts": [
+        "From a pocket sketchbook Turner carried on Channel crossings in his last decade - sea and sky dissolved to almost pure color.",
+        "Turner left more than 30,000 sketches and watercolors to the British nation."
+      ]
+    },
+    "The Channel Sketchbook 48 -Joseph Mallord William Turner.jpg": {
+      "title": "The Channel Sketchbook, page 48",
+      "artist": "J.M.W. Turner",
+      "year": "c. 1845",
+      "sortYear": 1845,
+      "movement": "Romanticism",
+      "facts": [
+        "These late watercolor pages were private experiments never meant for sale - closer to abstraction than anything publicly shown for another 60 years."
+      ]
+    },
+    "The Coming Storm - Winslow Homer 1901.jpg": {
+      "title": "The Coming Storm",
+      "artist": "Winslow Homer",
+      "year": "1901",
+      "sortYear": 1901,
+      "movement": "American Realism",
+      "facts": [
+        "Homer spent his last decades in a studio on the Maine coast, painting the sea fifty feet from his door in every mood it offered."
+      ]
+    },
+    "The Dogana and Santa Maria della Salute, Venice (1843)-Joseph Mallord William Turner.jpg": {
+      "title": "The Dogana and Santa Maria della Salute, Venice",
+      "artist": "J.M.W. Turner",
+      "year": "1843",
+      "sortYear": 1843,
+      "movement": "Romanticism",
+      "facts": [
+        "Turner visited Venice only three times but made it his signature subject, dissolving the city into light on water.",
+        "Critics mocked these late Venices as 'soapsuds and whitewash'; Monet and the Impressionists studied them like textbooks."
+      ]
+    },
+    "The Eclipse - Alma Thomas 1970.jpg": {
+      "title": "The Eclipse",
+      "artist": "Alma Thomas",
+      "year": "1970",
+      "sortYear": 1970,
+      "movement": "Washington Color School",
+      "facts": [
+        "Thomas taught junior-high art in Washington for 35 years and began her abstract career in her seventies.",
+        "In 2015 she became the first Black woman to have a painting enter the White House collection."
+      ]
+    },
+    "The Houses of Parliament Sunset - Claude Monet 1903.jpg": {
+      "title": "The Houses of Parliament, Sunset",
+      "artist": "Claude Monet",
+      "year": "1903",
+      "sortYear": 1903,
+      "movement": "Impressionism",
+      "facts": [
+        "Monet painted Parliament from a terrace at St Thomas' Hospital, always at dusk, working on dozens of canvases at once as the light shifted.",
+        "He loved London's fog and said without it the city wouldn't be beautiful."
+      ]
+    },
+    "The Little Maure Mountains - Henri-Edmond Cross1909.jpg": {
+      "title": "The Little Maure Mountains",
+      "artist": "Henri-Edmond Cross",
+      "year": "1909",
+      "sortYear": 1909,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Cross moved to the wild Côte d'Azur for his health and painted it in blocks of violet and gold that pointed straight toward Fauvism - Matisse came to visit and learn."
+      ]
+    },
+    "The Palazzo Ducale - Claude Monet 1908.jpg": {
+      "title": "The Palazzo Ducale",
+      "artist": "Claude Monet",
+      "year": "1908",
+      "sortYear": 1908,
+      "movement": "Impressionism",
+      "facts": [
+        "From Monet's only trip to Venice, at age 68 - he called the city 'too beautiful to paint' and then made 37 canvases."
+      ]
+    },
+    "The Sawmill, December sun - Ester Almqvist1914.jpg": {
+      "title": "The Sawmill, December Sun",
+      "artist": "Ester Almqvist",
+      "year": "1914",
+      "sortYear": 1914,
+      "movement": "Expressionism",
+      "facts": [
+        "One of Sweden's pioneering women modernists; her drawing 'The Meeting' was chosen for the UN's Universal Declaration of Human Rights stamp."
+      ]
+    },
+    "The Seine - Henry Ossawa Tannerc. 1902.jpg": {
+      "title": "The Seine",
+      "artist": "Henry Ossawa Tanner",
+      "year": "c. 1902",
+      "sortYear": 1902,
+      "movement": "American Realism",
+      "facts": [
+        "Tanner left American racism for Paris, where he became the first African American painter with international acclaim.",
+        "This quiet river view hangs in the National Gallery of Art in Washington."
+      ]
+    },
+    "The Seine at Giverny - Claude Monet 1897.jpg": {
+      "title": "The Seine at Giverny",
+      "artist": "Claude Monet",
+      "year": "1897",
+      "sortYear": 1897,
+      "movement": "Impressionism",
+      "facts": [
+        "For his 'Mornings on the Seine' series Monet rose at 3:30am and rowed out to anchor before first light, painting the same bend day after day."
+      ]
+    },
+    "The Starry Night - Vincent van Gogh 1889.jpg": {
+      "title": "The Starry Night",
+      "artist": "Vincent van Gogh",
+      "year": "June 1889",
+      "sortYear": 1889,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Painted from his asylum room at Saint-Rémy - but from memory and imagination, since he wasn't allowed to paint in his bedroom.",
+        "The village is invented; the cypress and swirling sky came from his head, not the window.",
+        "Van Gogh considered it a failure and sold not one painting like it in his lifetime."
+      ]
+    },
+    "The Tugboat, Canal in Samois - Paul Signac1901.jpg": {
+      "title": "The Tugboat, Canal in Samois",
+      "artist": "Paul Signac",
+      "year": "1901",
+      "sortYear": 1901,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "By 1901 Signac's dots had widened into small bricks of color - he compared the method to mosaics he'd admired in Venice."
+      ]
+    },
+    "The Water Lily Pond in the Evening - Claude Monet 1916.jpg": {
+      "title": "The Water Lily Pond in the Evening",
+      "artist": "Claude Monet",
+      "year": "c. 1916",
+      "sortYear": 1916,
+      "movement": "Impressionism",
+      "facts": [
+        "Monet dug the pond himself at Giverny and diverted a river branch to feed it, then painted it for thirty years.",
+        "Painted while cataracts dimmed his sight - the late pond pictures burn with oranges and purples he partly saw and partly remembered."
+      ]
+    },
+    "The harvest - Vincent van GoghJune 1888 .jpg": {
+      "title": "The Harvest",
+      "artist": "Vincent van Gogh",
+      "year": "June 1888",
+      "sortYear": 1888,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Van Gogh painted this view of the Crau plain near Arles in a single furious week of harvest weather and judged it his best landscape yet.",
+        "He wrote to Theo that the canvas 'kills all the rest' he had done that summer."
+      ]
+    },
+    "Thirty-Six Views of Mount Fuji The Great Wave Off the Coast of Kanagawa HokusaiEdo period 19th century.jpg": {
+      "title": "The Great Wave off Kanagawa",
+      "artist": "Katsushika Hokusai",
+      "year": "c. 1831",
+      "sortYear": 1831,
+      "movement": "Ukiyo-e",
+      "facts": [
+        "The opening print of the series 'Thirty-Six Views of Mount Fuji' - the mountain sits tiny and calm in the trough of the wave.",
+        "The deep blue is Prussian blue, a pigment newly imported to Japan that helped make the series a sensation.",
+        "Debussy kept a copy in his study while composing 'La Mer'."
+      ]
+    },
+    "Two Breton women in a meadow - Émile Bernard1886.jpg": {
+      "title": "Two Breton Women in a Meadow",
+      "artist": "Émile Bernard",
+      "year": "1888",
+      "sortYear": 1888,
+      "movement": "Cloisonnism",
+      "facts": [
+        "Bernard was barely 20 when he developed Cloisonnism - flat color inside bold outlines, named after enamel work.",
+        "He traded paintings with Gauguin at Pont-Aven, and van Gogh kept this canvas's sister work in his collection."
+      ]
+    },
+    "Untitled #21 - Howardena Pindell 1978.jpg": {
+      "title": "Untitled #21",
+      "artist": "Howardena Pindell",
+      "year": "1978",
+      "sortYear": 1978,
+      "movement": "Abstract art",
+      "facts": [
+        "Pindell built shimmering surfaces from thousands of hand-punched paper dots, sometimes numbering each one.",
+        "She spent 12 years as a MoMA curator while making her own art at night."
+      ]
+    },
+    "Untitled - Alma Thomas 1973.jpg": {
+      "title": "Untitled",
+      "artist": "Alma Thomas",
+      "year": "1973",
+      "sortYear": 1973,
+      "movement": "Washington Color School",
+      "facts": [
+        "Thomas's rhythmic color daubs were inspired by watching wind move through the holly tree outside her Washington window.",
+        "She painted her most celebrated work in her 80s, arthritis and all, steadying one arm with the other."
+      ]
+    },
+    "Untitled, 1946 Pollock-Krasner Foundation - Lee Krasner1946.jpg": {
+      "title": "Untitled",
+      "artist": "Lee Krasner",
+      "year": "1946",
+      "sortYear": 1946,
+      "movement": "Abstract Expressionism",
+      "facts": [
+        "From Krasner's 'Little Image' period, painted at a table in a small bedroom studio while Pollock worked in the barn.",
+        "Critics long filed her under 'Pollock's wife'; retrospectives since the 1980s placed her among the movement's founders."
+      ]
+    },
+    "Venice - Henri-Edmond Crossc. 1903.jpg": {
+      "title": "Venice",
+      "artist": "Henri-Edmond Cross",
+      "year": "c. 1903",
+      "sortYear": 1903,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Cross anglicized his name from Delacroix to avoid comparison with the famous Romantic painter."
+      ]
+    },
+    "View of Bazincourt, Sunset - Camille Pissarro1892.jpg": {
+      "title": "View of Bazincourt, Sunset",
+      "artist": "Camille Pissarro",
+      "year": "1892",
+      "sortYear": 1892,
+      "movement": "Impressionism",
+      "facts": [
+        "An eye ailment forced Pissarro to give up painting outdoors in bad weather - many late landscapes were painted through a window, including views toward Bazincourt."
+      ]
+    },
+    "View of a Valley in Normandy - Paul Huetabout 1825.jpg": {
+      "title": "View of a Valley in Normandy",
+      "artist": "Paul Huet",
+      "year": "c. 1825",
+      "sortYear": 1825,
+      "movement": "Romanticism",
+      "facts": [
+        "Huet painted outdoors a generation before the Impressionists, helping free French landscape from the studio."
+      ]
+    },
+    "View of the Seine at Herblay (1889) - Paul Signac.jpg": {
+      "title": "View of the Seine at Herblay",
+      "artist": "Paul Signac",
+      "year": "1889",
+      "sortYear": 1889,
+      "movement": "Neo-Impressionism",
+      "facts": [
+        "Painted the summer Signac anchored his boat at Herblay - the calm horizontal dots make the river feel like held breath."
+      ]
+    },
+    "View of İstanbul - Félix Ziem 1821.jpg": {
+      "title": "View of Istanbul",
+      "artist": "Félix Ziem",
+      "year": "c. 1870s",
+      "sortYear": 1875,
+      "movement": "Orientalism",
+      "facts": [
+        "Ziem returned obsessively to Istanbul and Venice, painting golden harbors so popular he became one of the era's wealthiest artists.",
+        "He was the first living artist to have a work bought by the Louvre."
+      ]
+    },
+    "Weymouth (ca. 1811)-Joseph Mallord William Turner.jpg": {
+      "title": "Weymouth",
+      "artist": "J.M.W. Turner",
+      "year": "c. 1811",
+      "sortYear": 1811,
+      "movement": "Romanticism",
+      "facts": [
+        "Turner toured the Dorset coast for an engraving series, sketching fishing towns from cliff paths in all weathers."
+      ]
+    },
+    "Wheat Field with Cypresses - Vincent van Gogh 1889.jpg": {
+      "title": "Wheat Field with Cypresses",
+      "artist": "Vincent van Gogh",
+      "year": "1889",
+      "sortYear": 1889,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "Painted near the Saint-Rémy asylum the same summer as The Starry Night - the cypress was, he wrote, 'as beautiful as an Egyptian obelisk'.",
+        "He liked the composition so much he painted three versions, one as a gift for his mother and sister."
+      ]
+    },
+    "Wheatfield - Claude Monet 1881.jpg": {
+      "title": "Wheatfield",
+      "artist": "Claude Monet",
+      "year": "1881",
+      "sortYear": 1881,
+      "movement": "Impressionism",
+      "facts": [
+        "A decade before the grainstack series, Monet was already drawn to wheat - here as a whole shimmering field under summer wind."
+      ]
+    },
+    "Wheatfield under Thunderclouds - Vincent van GoghJuly 1890.jpg": {
+      "title": "Wheatfield under Thunderclouds",
+      "artist": "Vincent van Gogh",
+      "year": "July 1890",
+      "sortYear": 1890,
+      "movement": "Post-Impressionism",
+      "facts": [
+        "From his final weeks at Auvers, painted on an unusual double-square canvas - he said these wheat fields expressed 'sadness, extreme loneliness' but also health and strength."
+      ]
+    },
+    "Winter Shadows - Alma Thomasc. 1960.jpg": {
+      "title": "Winter Shadows",
+      "artist": "Alma Thomas",
+      "year": "c. 1960",
+      "sortYear": 1960,
+      "movement": "Washington Color School",
+      "facts": [
+        "A transitional work from the years Thomas was moving from representation toward the pure color abstraction of her famous late style."
+      ]
+    },
+    "study-for-a-sunday-on-la-grande-jatte-georges-seurat.jpg": {
+      "title": "Study for A Sunday on La Grande Jatte",
+      "artist": "Georges Seurat",
+      "year": "1884",
+      "sortYear": 1884,
+      "movement": "Pointillism",
+      "facts": [
+        "Seurat made over 60 studies for the final Grande Jatte, hauling his canvas to the island every morning for months.",
+        "The finished painting took two years of dots; this oil sketch shows the looser hand he hid in the final work."
+      ]
+    },
+    "Édouard Vuillard - Across the Fields (1899).jpg": {
+      "title": "Across the Fields",
+      "artist": "Édouard Vuillard",
+      "year": "1899",
+      "sortYear": 1899,
+      "movement": "Les Nabis",
+      "facts": [
+        "Vuillard belonged to the Nabis ('prophets'), who flattened scenes into decorative patches of pattern and color."
+      ]
+    },
+    "Édouard Vuillard - Square Berlioz (1915).jpg": {
+      "title": "Square Berlioz (La Place Vintimille)",
+      "artist": "Édouard Vuillard",
+      "year": "1915",
+      "sortYear": 1915,
+      "movement": "Les Nabis",
+      "facts": [
+        "Vuillard painted the small Paris square below his apartment window for decades, like a private weather diary.",
+        "This view was painted during wartime Paris, the square's calm a quiet act of normalcy."
+      ]
+    }
+  }
+}

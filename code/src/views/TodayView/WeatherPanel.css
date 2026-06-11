@@ -9,6 +9,46 @@
   justify-content: center;
 }
 
+/* With the school-data band the weather row sits up and the band hugs the
+ * bottom edge of the panel. */
+.weather--withband {
+  justify-content: space-between;
+}
+
+/* Slim school-data band: lunch entree + per-kid activities, one compact row
+ * with a thin divider above. */
+.weather__band {
+  margin-top: 1.8vh;
+  padding-top: 1.6vh;
+  border-top: 0.1vw solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  row-gap: 0.8vh;
+  column-gap: 1.1vw;
+  font-size: 1.45vw;
+  font-weight: 500;
+  color: #dfe3e6;
+  letter-spacing: 0.01em;
+}
+
+.weather__band-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7vw;
+  white-space: nowrap;
+}
+
+.weather__band-seg b {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.weather__band-dot {
+  color: #5b6064;
+}
+
 .weather__row {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

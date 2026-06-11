@@ -48,8 +48,10 @@
   background: transparent;
   border: 0;
   color: #ffffff;
-  font: 600 1.5vw/1 inherit;
   font-family: inherit;
+  font-weight: 600;
+  font-size: 1.5vw;
+  line-height: 1;
   cursor: pointer;
   padding: 1vh 1vw;
   border-radius: 10px;
@@ -63,7 +65,10 @@
 }
 
 .jb-title {
-  font: 700 1.4vw/1 inherit;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 1.4vw;
+  line-height: 1;
   letter-spacing: 0.18em;
   color: #ffffff;
 }

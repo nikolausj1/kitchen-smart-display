@@ -1,91 +1,111 @@
 #!/usr/bin/env node
-// Build a fresh manifest.json from samplePhotos/ at the project root.
+// Build a fresh manifest.json. Two modes:
 //
-// For each photo:
-//   - Reads EXIF via exifr (dimensions, DateTimeOriginal, GPS).
-//   - If GPS is present, reverse-geocodes via Nominatim (rate-limited to
-//     1 req/sec, with a polite User-Agent and an on-disk cache).
-//   - Computes orientation from width/height.
+//   1. Immich mode (preferred): IMMICH_URL + IMMICH_API_KEY env vars set.
+//      Pulls every album from Immich, downloads preview-sized JPEGs into
+//      code/public/stub-photos/, and writes a manifest with per-photo
+//      album tags plus a top-level albums[] index.
 //
-// Side effects:
-//   - Wipes any *.jpg / *.jpeg / *.png / *.JPG / *.JPEG / *.PNG in
-//     code/public/stub-photos/ (keeps icons/, weather/, etc. untouched).
-//   - Copies every photo from samplePhotos/ into code/public/stub-photos/.
-//   - Writes code/public/stub-photos/manifest.json sorted oldest->newest.
+//   2. samplePhotos mode (fallback for offline dev): no IMMICH_* env vars.
+//      Walks samplePhotos/ on disk, parses EXIF via exifr, copies files in.
 //
-// Usage: node scripts/build-photo-manifest.mjs
+// In both modes:
+//   - GPS coordinates flow through the location resolver (custom places ->
+//     Google Places -> Nominatim) and are cached on disk so the same
+//     coordinates never re-query an API.
+//   - Output dimensions and orientation are computed.
+//   - Manifest sorted oldest -> newest by photo date.
+//
+// The rebuild is safe to run against a LIVE directory (the Pi runs it against
+// the photos the kiosk is actively serving): existing files are kept and
+// reused, new files land via tmp+rename, manifest.json is replaced atomically
+// last, and only then are orphaned photos pruned. Clients polling mid-run
+// always see a consistent manifest whose files all exist.
+//
+// Art albums (Immich mode only): albums whose name starts with "Art" hold
+// professional copies of famous artworks. Their photos skip GPS resolution
+// and face fetch; instead curated metadata from art-metadata.json (keyed by
+// originalFileName, see docs/designs/art-albums.md) becomes a museum placard:
+// exif.location = title, exif.date = "artist, year", exif.album = movement,
+// plus a structured `art` field for clients that want the parts. sortKey
+// comes from the artwork's creation year, so date-taken ordering doubles as
+// art-history chronology.
+//
+// Environment:
+//   - IMMICH_URL, IMMICH_API_KEY:   enables Immich mode.
+//   - GOOGLE_API_KEY:               enables Google Places step (recommended).
+//   - KIOSK_CUSTOM_PLACES_PATH:     custom-places.json path override.
+//   - ART_METADATA_PATH:            art-metadata.json path override.
+//   - STUB_PHOTOS_DIR:              output dir override (default
+//                                   code/public/stub-photos; the Pi sets
+//                                   /home/pi/kiosk/stub-photos).
+//
+// Usage:
+//   node --env-file=.env scripts/build-photo-manifest.mjs
 
-import { mkdir, readdir, readFile, writeFile, copyFile, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile, copyFile, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join, resolve, extname, basename } from 'node:path'
-import exifr from 'exifr'
+import { dirname, join, resolve, extname } from 'node:path'
+
+import { LocationCache } from './lib/locationCache.mjs'
+import { loadCustomPlaces } from './lib/customPlaces.mjs'
+import { createResolver } from './lib/locationResolver.mjs'
+import { listAlbums, listAlbumAssets, getAsset, downloadPreview } from './lib/immich.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = resolve(__dirname, '..', '..')
 const SAMPLES_DIR = join(PROJECT_ROOT, 'samplePhotos')
-const PUBLIC_DIR = join(PROJECT_ROOT, 'code', 'public', 'stub-photos')
-const GEOCODE_CACHE = join(__dirname, '.geocode-cache.json')
+const PUBLIC_DIR =
+  process.env.STUB_PHOTOS_DIR ||
+  join(PROJECT_ROOT, 'code', 'public', 'stub-photos')
+const LOCATION_CACHE = join(__dirname, '.location-cache.json')
+const CUSTOM_PLACES_PATH =
+  process.env.KIOSK_CUSTOM_PLACES_PATH ||
+  join(PROJECT_ROOT, 'custom-places.json')
+const ART_METADATA_PATH =
+  process.env.ART_METADATA_PATH ||
+  join(PROJECT_ROOT, 'art-metadata.json')
 
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.heic'])
 
-// --- Geocode cache ----------------------------------------------------------
-let cache = {}
-if (existsSync(GEOCODE_CACHE)) {
+const googleKey = process.env.GOOGLE_API_KEY || ''
+const immichUrl = (process.env.IMMICH_URL || '').replace(/\/+$/, '')
+const immichKey = process.env.IMMICH_API_KEY || ''
+const useImmich = !!(immichUrl && immichKey)
+
+if (!googleKey) {
+  console.warn('! GOOGLE_API_KEY not set - Google Places step will be skipped')
+  console.warn('  Cascade will be: custom places -> Nominatim -> null')
+}
+
+// --- Resolver setup ---------------------------------------------------------
+const cache = new LocationCache(LOCATION_CACHE)
+await cache.load()
+const { places: customPlaces, home: homeConfig } = await loadCustomPlaces(CUSTOM_PLACES_PATH)
+console.log(`Loaded ${customPlaces.length} custom places from ${CUSTOM_PLACES_PATH}`)
+if (homeConfig) {
+  console.log(`Home metro: ${homeConfig.metro_radius_km} km around ${homeConfig.lat.toFixed(4)},${homeConfig.lon.toFixed(4)} (${homeConfig.country_code})`)
+}
+const resolver = createResolver({ cache, customPlaces, apiKey: googleKey, home: homeConfig })
+
+// --- Art metadata (curated placards for "Art *" albums) ----------------------
+// Keys are originalFileName, NFC-normalized on both sides: macOS uploads land
+// in Immich NFD-decomposed, while the curated JSON is authored NFC.
+const nfcName = (s) => (s || '').normalize('NFC')
+let artPieces = new Map()
+if (existsSync(ART_METADATA_PATH)) {
   try {
-    cache = JSON.parse(await readFile(GEOCODE_CACHE, 'utf8'))
-  } catch {
-    cache = {}
-  }
-}
-
-async function saveCache() {
-  await writeFile(GEOCODE_CACHE, JSON.stringify(cache, null, 2))
-}
-
-// Round to ~100m precision so nearby photos share a cache key + look-up.
-function gpsKey(lat, lon) {
-  return `${lat.toFixed(3)},${lon.toFixed(3)}`
-}
-
-let lastGeocodeAt = 0
-async function reverseGeocode(lat, lon) {
-  const key = gpsKey(lat, lon)
-  if (cache[key] !== undefined) return cache[key]
-
-  // Nominatim TOS: max 1 request per second.
-  const wait = Math.max(0, 1100 - (Date.now() - lastGeocodeAt))
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait))
-  lastGeocodeAt = Date.now()
-
-  const url = new URL('https://nominatim.openstreetmap.org/reverse')
-  url.searchParams.set('lat', lat)
-  url.searchParams.set('lon', lon)
-  url.searchParams.set('format', 'json')
-  url.searchParams.set('zoom', '13')
-
-  let place = null
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'kitchen-smart-display/0.1 (personal kiosk photo manifest build)',
-      },
-    })
-    if (res.ok) {
-      const data = await res.json()
-      const a = data.address || {}
-      const locality =
-        a.neighbourhood || a.suburb || a.village || a.town || a.city || a.hamlet || a.county
-      const region = a.state || a.region || a.country
-      place = [locality, region].filter(Boolean).join(', ') || data.display_name || null
-    }
+    const doc = JSON.parse(await readFile(ART_METADATA_PATH, 'utf8'))
+    artPieces = new Map(
+      Object.entries(doc.pieces || {}).map(([k, v]) => [nfcName(k), v])
+    )
+    console.log(`Loaded ${artPieces.size} art pieces from ${ART_METADATA_PATH}`)
   } catch (e) {
-    console.warn(`  ! geocode failed for ${key}: ${e.message}`)
+    console.warn(`! failed to parse ${ART_METADATA_PATH}: ${e.message} - art albums get no placards`)
   }
-
-  cache[key] = place
-  await saveCache()
-  return place
+} else {
+  console.warn(`! ${ART_METADATA_PATH} not found - art albums get no placards`)
 }
 
 // --- Date formatting --------------------------------------------------------
@@ -100,119 +120,346 @@ function fmtDate(d) {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
-// --- Main -------------------------------------------------------------------
+// --- Output dir housekeeping ------------------------------------------------
 
-if (!existsSync(SAMPLES_DIR)) {
-  console.error(`samplePhotos/ not found at ${SAMPLES_DIR}`)
-  process.exit(1)
-}
 await mkdir(PUBLIC_DIR, { recursive: true })
 
-// Wipe old photo files in PUBLIC_DIR (keep manifest.json for now; we
-// rewrite it at the end. Do NOT touch icons/ or other subdirs).
-const existing = await readdir(PUBLIC_DIR)
-for (const name of existing) {
-  if (ALLOWED_EXT.has(extname(name).toLowerCase())) {
-    await rm(join(PUBLIC_DIR, name))
+// Photos referenced by the manifest being built. Orphans (on disk but not in
+// the new manifest) are pruned only AFTER the new manifest lands, so a client
+// polling mid-run never sees a manifest pointing at deleted files.
+const keepFiles = new Set()
+
+// Sweep stray .part files from a previous interrupted run. Downloads land at
+// their final name only via rename, so anything .part is garbage.
+for (const name of await readdir(PUBLIC_DIR)) {
+  if (name.endsWith('.part')) await rm(join(PUBLIC_DIR, name)).catch(() => {})
+}
+
+// --- Shared per-photo logic -------------------------------------------------
+
+async function resolveLocation(lat, lon) {
+  if (typeof lat !== 'number' || typeof lon !== 'number') {
+    return { name: null, source: null }
+  }
+  const r = await resolver.resolve(lat, lon)
+  return { name: r?.name || null, source: r?.source || null }
+}
+
+// Pull face bounding boxes out of an Immich asset detail response.
+// Returns an array of { cx, cy, w, h } normalized 0..1 in the face's own
+// reference frame (which is the same frame across all faces on one asset).
+// Filters to faces whose area is at least 2% of the image so background
+// strangers don't drag the crop sideways.
+function extractFaces(assetDetail) {
+  const out = []
+  const people = assetDetail?.people || []
+  for (const p of people) {
+    for (const f of p.faces || []) {
+      const iw = Number(f.imageWidth) || 0
+      const ih = Number(f.imageHeight) || 0
+      if (!iw || !ih) continue
+      const x1 = Number(f.boundingBoxX1)
+      const y1 = Number(f.boundingBoxY1)
+      const x2 = Number(f.boundingBoxX2)
+      const y2 = Number(f.boundingBoxY2)
+      const w = (x2 - x1) / iw
+      const h = (y2 - y1) / ih
+      if (!(w > 0) || !(h > 0)) continue
+      if (w * h < 0.02) continue // skip tiny background faces
+      out.push({
+        cx: ((x1 + x2) / 2) / iw,
+        cy: ((y1 + y2) / 2) / ih,
+        w,
+        h,
+      })
+    }
+  }
+  return out
+}
+
+function classifyOrientation(w, h, exifOrientation) {
+  let ww = w, hh = h
+  if (exifOrientation >= 5 && exifOrientation <= 8) {
+    ;[ww, hh] = [hh, ww]
+  }
+  return {
+    width: ww,
+    height: hh,
+    orientation: ww && hh ? (ww >= hh ? 'landscape' : 'portrait') : 'landscape',
   }
 }
 
-const files = (await readdir(SAMPLES_DIR))
-  .filter((n) => ALLOWED_EXT.has(extname(n).toLowerCase()))
+// --- Mode 1: Immich ---------------------------------------------------------
 
-console.log(`Processing ${files.length} photos...`)
+async function processImmich() {
+  console.log(`Immich mode -> ${immichUrl}`)
+  const albums = await listAlbums({ baseUrl: immichUrl, apiKey: immichKey })
+  console.log(`Found ${albums.length} albums:`)
+  for (const a of albums) console.log(`  - ${a.name}  (${a.count} assets)  ${a.id}`)
 
-const entries = []
-let i = 0
-for (const name of files) {
-  i++
-  const src = join(SAMPLES_DIR, name)
-  const dst = join(PUBLIC_DIR, name)
+  // Albums named "Art", "Art 01", "Art - Landscapes", ... hold curated
+  // artworks (\b so e.g. "Artisan Market" stays a photo album). A photo in
+  // both an art album and a family album is treated as art.
+  const artAlbumIds = new Set(
+    albums.filter((a) => /^Art\b/.test(a.name)).map((a) => a.id)
+  )
 
-  // Capture "date added" from the source file's modification time before
-  // we copy (which would reset mtime on the destination).
-  let addedAt = 0
-  try {
-    const st = await stat(src)
-    addedAt = Math.round(st.mtimeMs)
-  } catch {
-    // leave 0
-  }
-
-  // Copy the file in.
-  await copyFile(src, dst)
-
-  // Read EXIF. Use { gps: true } so exifr returns synthesized decimal
-  // latitude/longitude (otherwise GPSLatitude is the raw dms array).
-  let exif = null
-  try {
-    exif = await exifr.parse(src, {
-      tiff: true,
-      exif: true,
-      gps: true,
+  // Map of assetId -> { asset, albums: Set<albumId> }. We dedupe so a photo
+  // in two albums is downloaded + resolved once.
+  const byAsset = new Map()
+  for (const album of albums) {
+    const assets = await listAlbumAssets({
+      baseUrl: immichUrl, apiKey: immichKey, albumId: album.id,
     })
-  } catch {
-    // No EXIF; fall through with nulls.
+    for (const a of assets) {
+      if (a.type !== 'IMAGE') continue
+      if (a.isTrashed) continue
+      const slot = byAsset.get(a.id) || { asset: a, albums: new Set() }
+      slot.albums.add(album.id)
+      byAsset.set(a.id, slot)
+    }
   }
+  const all = [...byAsset.values()]
+  console.log(`Processing ${all.length} unique image assets...`)
 
-  // Dimensions. iPhone (and other) photos shot in portrait have sensor
-  // dimensions in landscape (e.g. 4032x3024) but an EXIF Orientation tag
-  // of 5-8 that rotates them 90deg for display. Swap w/h in those cases so
-  // our portrait/landscape classification matches what the user sees.
-  let w = exif?.ExifImageWidth || exif?.PixelXDimension || exif?.ImageWidth || 0
-  let h = exif?.ExifImageHeight || exif?.PixelYDimension || exif?.ImageHeight || 0
-  const exifOri = exif?.Orientation || 1
-  if (exifOri >= 5 && exifOri <= 8) {
-    const tmp = w
-    w = h
-    h = tmp
-  }
-  const orientation = w && h ? (w >= h ? 'landscape' : 'portrait') : 'landscape'
+  const entries = []
+  let i = 0
+  let downloaded = 0
+  let reused = 0
+  for (const { asset, albums: albumIds } of all) {
+    i++
+    const ex = asset.exifInfo || {}
+    const filename = `immich-${asset.id}.jpg`
+    const dst = join(PUBLIC_DIR, filename)
 
-  // Date.
-  const dateObj = exif?.DateTimeOriginal || exif?.CreateDate || null
-  const dateStr = fmtDate(dateObj)
-  const sortKey = dateObj ? new Date(dateObj).getTime() : 0
+    // Previews are content-stable per asset id, so a file already on disk is
+    // reused (keeps nightly runs fast and spares the Pi's SD card). Partial
+    // files never land at the final name (tmp+rename), so existence implies
+    // a complete file. New assets download on per-asset error tolerance so
+    // one bad asset doesn't sink the whole run.
+    if (existsSync(dst)) {
+      reused++
+    } else {
+      try {
+        await downloadPreview({
+          baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: `${dst}.part`,
+        })
+        await rename(`${dst}.part`, dst)
+        downloaded++
+      } catch (e) {
+        await rm(`${dst}.part`).catch(() => {})
+        console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e.message}`)
+        continue
+      }
+    }
+    keepFiles.add(filename)
 
-  // GPS -> place name. exifr exposes decimal lat/lon as `latitude` /
-  // `longitude` when { gps: true } is passed.
-  let location = null
-  const lat = typeof exif?.latitude === 'number' ? exif.latitude : null
-  const lon = typeof exif?.longitude === 'number' ? exif.longitude : null
-  if (lat != null && lon != null) {
-    location = await reverseGeocode(lat, lon)
-  }
+    const isArt = [...albumIds].some((id) => artAlbumIds.has(id))
 
-  console.log(`  [${i}/${files.length}] ${name}  ${w}x${h}  ${dateStr || '(no date)'}  ${location || '(no location)'}`)
+    // Fetch full asset detail to get people[].faces[] geometry, which the
+    // album-list endpoint omits. Cheap on LAN. Skipped for art: face boxes on
+    // painted figures would drag the kitchen's smart crop around a canvas.
+    let faces = []
+    if (!isArt) {
+      try {
+        const detail = await getAsset({ baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id })
+        faces = extractFaces(detail)
+      } catch (e) {
+        console.warn(`  [${i}/${all.length}] ! face fetch failed for ${asset.id}: ${e.message}`)
+      }
+    }
 
-  entries.push({
-    src: `/stub-photos/${name}`,
-    width: w,
-    height: h,
-    orientation,
-    sortKey,
-    addedAt,
-    exif: {
+    // Dimensions: prefer asset-level width/height (Immich normalizes for
+    // orientation already, in most cases). Fall back to exifInfo.
+    const rawW = asset.width || ex.exifImageWidth || 0
+    const rawH = asset.height || ex.exifImageHeight || 0
+    // Immich asset.width/height appear to already reflect display
+    // orientation, so we don't re-rotate. Trust them as-is.
+    const orientation = rawW && rawH
+      ? (rawW >= rawH ? 'landscape' : 'portrait') : 'landscape'
+
+    // Date: dateTimeOriginal is ISO. fileCreatedAt is when uploaded.
+    const takenAt = ex.dateTimeOriginal ? new Date(ex.dateTimeOriginal) : null
+    const dateStr = fmtDate(takenAt)
+    const sortKey = takenAt ? takenAt.getTime() : 0
+
+    // addedAt = when added to Immich (best proxy for "new in library").
+    const addedAt = asset.createdAt ? new Date(asset.createdAt).getTime() : 0
+
+    const entry = {
+      src: `/stub-photos/${filename}`,
+      width: rawW,
+      height: rawH,
+      orientation,
+      sortKey,
+      addedAt,
+      albums: [...albumIds],
+      exif: { location: '', date: '', album: '' },
+    }
+
+    if (isArt) {
+      // Museum placard from curated metadata; no GPS work at all. A miss
+      // degrades to an uncaptioned photo and is fixed by re-running the
+      // curation workflow (docs/designs/art-albums.md).
+      const meta = artPieces.get(nfcName(asset.originalFileName))
+      if (meta) {
+        entry.exif = {
+          location: meta.title || '',
+          date: meta.artist ? `${meta.artist}, ${meta.year || ''}`.replace(/, $/, '') : '',
+          album: meta.movement || '',
+        }
+        entry.art = {
+          title: meta.title || '',
+          artist: meta.artist || '',
+          year: meta.year || '',
+          movement: meta.movement || '',
+          facts: Array.isArray(meta.facts) ? meta.facts : [],
+        }
+        if (Number.isFinite(meta.sortYear)) {
+          entry.sortKey = Date.UTC(meta.sortYear, 0, 1)
+        }
+        console.log(`  [${i}/${all.length}] ${filename}  ${rawW}x${rawH}  [art] ${meta.title} - ${meta.artist} (${meta.year})`)
+      } else {
+        console.warn(`  [${i}/${all.length}] ! art asset missing from art-metadata.json: ${asset.originalFileName}`)
+      }
+      entries.push(entry)
+      continue
+    }
+
+    // GPS.
+    const lat = typeof ex.latitude === 'number' ? ex.latitude : null
+    const lon = typeof ex.longitude === 'number' ? ex.longitude : null
+    const { name: location, source: locationSource } = await resolveLocation(lat, lon)
+
+    const tag = locationSource ? `[${locationSource}] ` : ''
+    const faceTag = faces.length > 0 ? ` ${faces.length}f` : ''
+    console.log(`  [${i}/${all.length}] ${filename}  ${rawW}x${rawH}${faceTag}  ${dateStr || '(no date)'}  ${tag}${location || '(no location)'}`)
+
+    entry.exif = {
       location: location || '',
       date: dateStr || '',
       album: '',
-    },
-  })
+    }
+    if (faces.length > 0) entry.faces = faces
+    entries.push(entry)
+  }
+
+  console.log(`Previews: ${downloaded} downloaded, ${reused} reused from disk`)
+  return { entries, albums }
 }
 
-// Sort oldest -> newest so the slideshow walks chronologically.
+// --- Mode 2: samplePhotos/ (fallback) ---------------------------------------
+
+async function processSamplePhotos() {
+  if (!existsSync(SAMPLES_DIR)) {
+    throw new Error(`samplePhotos/ not found at ${SAMPLES_DIR} - set IMMICH_URL+IMMICH_API_KEY or populate samplePhotos/`)
+  }
+  // exifr is only needed in this mode; loading it lazily keeps the Pi's
+  // Immich-mode build free of node_modules entirely.
+  const exifr = (await import('exifr')).default
+  const files = (await readdir(SAMPLES_DIR))
+    .filter((n) => ALLOWED_EXT.has(extname(n).toLowerCase()))
+  console.log(`samplePhotos mode -> ${files.length} files`)
+
+  const entries = []
+  let i = 0
+  for (const name of files) {
+    i++
+    const src = join(SAMPLES_DIR, name)
+    const dst = join(PUBLIC_DIR, name)
+
+    let addedAt = 0
+    try { addedAt = Math.round((await stat(src)).mtimeMs) } catch {}
+    await copyFile(src, `${dst}.part`)
+    await rename(`${dst}.part`, dst)
+    keepFiles.add(name)
+
+    let exif = null
+    try {
+      exif = await exifr.parse(src, { tiff: true, exif: true, gps: true })
+    } catch {}
+
+    const rawW = exif?.ExifImageWidth || exif?.PixelXDimension || exif?.ImageWidth || 0
+    const rawH = exif?.ExifImageHeight || exif?.PixelYDimension || exif?.ImageHeight || 0
+    const { width, height, orientation } =
+      classifyOrientation(rawW, rawH, exif?.Orientation || 1)
+
+    const takenAt = exif?.DateTimeOriginal || exif?.CreateDate || null
+    const dateStr = fmtDate(takenAt)
+    const sortKey = takenAt ? new Date(takenAt).getTime() : 0
+
+    const lat = typeof exif?.latitude === 'number' ? exif.latitude : null
+    const lon = typeof exif?.longitude === 'number' ? exif.longitude : null
+    const { name: location, source: locationSource } = await resolveLocation(lat, lon)
+
+    const tag = locationSource ? `[${locationSource}] ` : ''
+    console.log(`  [${i}/${files.length}] ${name}  ${width}x${height}  ${dateStr || '(no date)'}  ${tag}${location || '(no location)'}`)
+
+    entries.push({
+      src: `/stub-photos/${name}`,
+      width,
+      height,
+      orientation,
+      sortKey,
+      addedAt,
+      albums: [],
+      exif: { location: location || '', date: dateStr || '', album: '' },
+    })
+  }
+
+  return { entries, albums: [] }
+}
+
+// --- Main -------------------------------------------------------------------
+
+const { entries, albums } = useImmich
+  ? await processImmich()
+  : await processSamplePhotos()
+
+// A live display is behind this manifest; an empty result is far more likely
+// an Immich hiccup than a deliberately emptied library. Bail without touching
+// the manifest or pruning (which would otherwise delete every photo).
+if (entries.length === 0) {
+  throw new Error('0 photos processed - aborting without writing manifest or pruning')
+}
+
+// Sort oldest -> newest by date taken.
 entries.sort((a, b) => a.sortKey - b.sortKey)
 for (const e of entries) delete e.sortKey
 
 const manifest = {
   _comment:
-    'Generated by scripts/build-photo-manifest.mjs from samplePhotos/. Re-run that script after adding/removing photos.',
+    `Generated by scripts/build-photo-manifest.mjs (${useImmich ? 'Immich mode' : 'samplePhotos mode'}). Re-run to refresh.`,
+  albums,
   photos: entries,
 }
 
-await writeFile(
-  join(PUBLIC_DIR, 'manifest.json'),
-  JSON.stringify(manifest, null, 2) + '\n'
-)
+// Atomic replace: clients polling manifest.json never see a partial write.
+const manifestPath = join(PUBLIC_DIR, 'manifest.json')
+await writeFile(`${manifestPath}.tmp`, JSON.stringify(manifest, null, 2) + '\n')
+await rename(`${manifestPath}.tmp`, manifestPath)
+
+// Only now is it safe to drop photos the new manifest no longer references.
+let pruned = 0
+for (const name of await readdir(PUBLIC_DIR)) {
+  if (!ALLOWED_EXT.has(extname(name).toLowerCase())) continue
+  if (keepFiles.has(name)) continue
+  await rm(join(PUBLIC_DIR, name)).catch(() => {})
+  pruned++
+}
+if (pruned > 0) console.log(`Pruned ${pruned} orphaned photo file(s)`)
+
+await cache.save()
 
 console.log(`\nWrote ${entries.length} entries to ${join(PUBLIC_DIR, 'manifest.json')}`)
+if (albums.length > 0) console.log(`Albums in manifest: ${albums.length}`)
+
+const s = resolver.stats
+console.log('\nResolver stats:')
+console.log(`  cache hits:        ${s.cacheHits}`)
+console.log(`  custom matches:    ${s.customHits}`)
+console.log(`  google API calls:  ${s.googleCalls + s.contextGoogleCalls}  (${s.googleHits} matched)`)
+console.log(`  nominatim calls:   ${s.geocodeCalls}  (${s.geocodeHits} matched)`)
+console.log(`  null cached:       ${s.nullCached}`)
+const cs = cache.stats()
+console.log(`  cache size:        ${cs.total} entries  (${cs.nulls} null)`)

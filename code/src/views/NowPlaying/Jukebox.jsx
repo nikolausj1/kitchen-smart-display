@@ -1,43 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../../lib/settings.js'
 import { useSonosActions, cleanStationName } from '../../hooks/useSonosState.js'
+import { detectSource } from '../../lib/sonosSource.js'
 import './Jukebox.css'
-
-// Sonos exposes the music service per favorite in two places:
-//   - the URI's sid= query param (numeric service ID)
-//   - the metadata's <desc>SA_RINCONxxx_...</desc> token
-// Map the ones we actually see in this household to a friendly name.
-const SID_TO_SOURCE = {
-  '9': 'Spotify',
-  '12': 'Pandora',
-  '236': 'Pandora',
-  '151': 'Amazon Music',
-  '160': 'SoundCloud',
-  '184': 'Tidal',
-  '254': 'YouTube Music',
-  '255': 'YouTube Music',
-}
-const SA_TO_SOURCE = {
-  '3079': 'Spotify',
-  '60423': 'Pandora',
-  '38663': 'Pandora',
-}
-
-function detectSource(item) {
-  const uri = item?.uri || ''
-  const meta = item?.metadata || ''
-
-  const sidMatch = uri.match(/[?&]sid=(\d+)/)
-  if (sidMatch && SID_TO_SOURCE[sidMatch[1]]) return SID_TO_SOURCE[sidMatch[1]]
-
-  const saMatch = meta.match(/SA_RINCON(\d+)/)
-  if (saMatch && SA_TO_SOURCE[saMatch[1]]) return SA_TO_SOURCE[saMatch[1]]
-
-  if (uri.startsWith('x-sonosapi-stream:')) return 'Radio'
-  if (uri.startsWith('x-rincon-playlist:')) return 'Sonos playlist'
-  if (uri.startsWith('file:')) return 'Library'
-  return 'Sonos'
-}
 
 // Jukebox - the station/playlist picker. Opens centered over Now Playing
 // (Figma 171:20). Lists all Sonos Favorites as a 2-column grid; tap a

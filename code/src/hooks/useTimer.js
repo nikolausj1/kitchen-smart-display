@@ -3,7 +3,7 @@ import { useSettings } from '../lib/settings.js'
 import { useView } from '../shell/ViewContext.jsx'
 
 // Timer state machine for the Today view countdown panel.
-// See Smart Displays.md "Today view interactions / Timer states" for the
+// See PRD - Smart Displays.md "Today view interactions / Timer states" for the
 // full behavior contract. All tunable values come from Settings.
 
 const POST_EXPIRY_LIFETIME_MS = 15 * 60 * 1000
@@ -30,7 +30,7 @@ function colourBandForMinutes(minutesLeft, t) {
   return 'green'
 }
 
-export default function useTimer() {
+export default function useTimer({ weatherDefaultMode } = {}) {
   const { school, timerThresholds } = useSettings()
   const { setView } = useView()
 
@@ -41,8 +41,16 @@ export default function useTimer() {
     travelMode: 'driving',
     dismissedDate: null,
     autoArmedDate: null,
+    // isoDate of the last MANUAL travel toggle. While this equals today, the
+    // weather default does not override the user's explicit choice.
+    travelManualDate: null,
     noTimerEnteredAt: Date.now(),
   })
+
+  // Keep the latest weather default in a ref so effects can read it without
+  // re-subscribing every render.
+  const weatherDefaultRef = useRef(weatherDefaultMode)
+  weatherDefaultRef.current = weatherDefaultMode
 
   // Tick once a second.
   const [, setTick] = useState(0)
@@ -73,18 +81,45 @@ export default function useTimer() {
     ) {
       const autoShowStart = new Date(now)
       autoShowStart.setHours(school.autoShowAt.hour, school.autoShowAt.minute, 0, 0)
-      const target = departureTimeFor(school, s.travelMode, now)
+      // Default travel mode comes from the weather (driving when wet/cold) unless
+      // the user already toggled manually today. Falls back to the prior mode.
+      const armMode =
+        s.travelManualDate === today
+          ? s.travelMode
+          : weatherDefaultRef.current || s.travelMode
+      const target = departureTimeFor(school, armMode, now)
       const dropoff = new Date(target.getTime() + POST_EXPIRY_LIFETIME_MS)
       if (now >= autoShowStart && now <= dropoff) {
         setState((prev) => ({
           ...prev,
           mode: 'active',
           kind: 'default',
+          travelMode: armMode,
           target,
           autoArmedDate: today,
         }))
         return
       }
+    }
+
+    // Keep an active DEFAULT timer's travel mode synced to the weather default
+    // until the user manually toggles today. Handles the common case where the
+    // timer auto-arms at 6 AM (weather maybe still loading) and the departure-
+    // hour forecast resolves later, or the forecast updates.
+    if (
+      s.mode === 'active' &&
+      s.kind === 'default' &&
+      s.travelManualDate !== today &&
+      weatherDefaultRef.current &&
+      weatherDefaultRef.current !== s.travelMode
+    ) {
+      const wm = weatherDefaultRef.current
+      setState((prev) => ({
+        ...prev,
+        travelMode: wm,
+        target: departureTimeFor(school, wm, now),
+      }))
+      return
     }
 
     // Post-expiry: revert to no-timer (Photos handoff disabled for now).
@@ -151,16 +186,37 @@ export default function useTimer() {
   const toggleTravel = useCallback(() => {
     setState((prev) => {
       const next = prev.travelMode === 'driving' ? 'walking' : 'driving'
+      // Mark a manual override for today so the weather default stops fighting
+      // the user's explicit choice for the rest of the day.
+      const travelManualDate = isoDate(new Date())
       if (prev.mode === 'active' && prev.kind === 'default') {
         return {
           ...prev,
           travelMode: next,
+          travelManualDate,
           target: departureTimeFor(school, next, new Date()),
         }
       }
-      return { ...prev, travelMode: next }
+      return { ...prev, travelMode: next, travelManualDate }
     })
   }, [school])
+
+  // Mirror the current timer mode + target to localStorage so other parts
+  // of the app (specifically the morning-end auto-leave watcher in
+  // AppShell) can tell whether a timer is in flight when Today isn't
+  // mounted. Updated on every state change.
+  useEffect(() => {
+    try {
+      localStorage.setItem('kioskTimerMode', state.mode || 'no-timer')
+      if (state.target instanceof Date && !Number.isNaN(state.target.getTime())) {
+        localStorage.setItem('kioskTimerTarget', state.target.toISOString())
+      } else {
+        localStorage.removeItem('kioskTimerTarget')
+      }
+    } catch {
+      // no-op if storage unavailable
+    }
+  }, [state.mode, state.target])
 
   // --- Derived view-model ---
 
@@ -177,6 +233,7 @@ export default function useTimer() {
     mode: state.mode,
     kind: state.kind,
     travelMode: state.travelMode,
+    target: state.target,   // absolute departure Date (or null); used to mirror to the TV
     minutesLeft,
     band,
     actions: {

@@ -6,9 +6,12 @@
 # there is no panel, no desktop file manager, and no swayidle. With swayidle
 # absent the display never blanks, which is the behaviour we want for a kiosk.
 
-# Serve the built kiosk app over local HTTP. The app only ever loads "/", so
-# the lack of SPA route fallback in http.server does not matter.
-python3 -m http.server 8080 --directory /home/pi/kiosk --bind 127.0.0.1 &
+# Serve the built kiosk app over local HTTP. The script also exposes
+# /api/display/{on,off,state} for the night-mode schedule; those endpoints
+# shell out to wlr-randr to DPMS the panel. Run inside a self-restarting
+# supervisor loop so that `pkill -f kiosk-server.py` during a deploy will
+# pick up the new code within a couple of seconds.
+( while true; do python3 /home/pi/kiosk-server.py; sleep 2; done ) &
 
 # Wait until the server accepts connections before launching the browser.
 until curl -s -o /dev/null http://127.0.0.1:8080/; do

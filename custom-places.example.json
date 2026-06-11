@@ -1,0 +1,51 @@
+{
+  "_comment": "Schema for custom-places.json. Copy this file to custom-places.json (same directory) and fill in real coordinates. The real file is gitignored.",
+  "home": { "lat": 0.0, "lon": 0.0, "metro_radius_km": 60, "country_code": "US", "_comment": "Center of your home metro. POIs farther than metro_radius_km get a 'City, ST' (or 'City, Country') caption suffix. Defaults to the 'Home' place if omitted." },
+  "places": [
+    {
+      "name": "Home",
+      "lat": 0.0,
+      "lon": 0.0,
+      "radius_m": 40,
+      "category": "home"
+    },
+    {
+      "name": "Work",
+      "lat": 0.0,
+      "lon": 0.0,
+      "radius_m": 120,
+      "category": "work"
+    },
+    {
+      "name": "Kid's School",
+      "lat": 0.0,
+      "lon": 0.0,
+      "radius_m": 80,
+      "category": "school"
+    },
+    {
+      "name": "Local park",
+      "lat": 0.0,
+      "lon": 0.0,
+      "radius_m": 150,
+      "category": "park"
+    },
+    {
+      "name": "Friend's house",
+      "lat": 0.0,
+      "lon": 0.0,
+      "radius_m": 40,
+      "category": "friend"
+    },
+    {
+      "name": "Universal Studios Orlando",
+      "lat": 28.4762,
+      "lon": -81.467,
+      "radius_m": 1500,
+      "category": "venue",
+      "mode": "context",
+      "inner_radius_m": 30,
+      "_comment": "Context-mode example: large venue with sub-POIs (rides, areas). Resolver drills deeper inside the bubble instead of returning 'Universal Studios Orlando' directly."
+    }
+  ]
+}

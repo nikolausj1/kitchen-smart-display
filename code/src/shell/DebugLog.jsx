@@ -44,12 +44,44 @@ if (typeof window !== 'undefined' && !window.__debugPointerInstalled) {
   // Chromium handles taps natively now, so no synthetic click needed.
   const SWIPE_MIN_DX = 90
   const SWIPE_AXIS_RATIO = 1.5
+  // Long-press to flag the current photo's location caption as wrong. Fires
+  // if the finger stays down ~550ms without moving more than a few px, so it
+  // never competes with a swipe. PhotoSlideshow listens for 'app-long-press'.
+  const LONG_PRESS_MS = 550
+  const LONG_PRESS_MOVE_MAX = 16
   let __tStart = null
+  let __lpTimer = null
+  function __clearLongPress() {
+    if (__lpTimer) {
+      clearTimeout(__lpTimer)
+      __lpTimer = null
+    }
+  }
   window.addEventListener('touchstart', (e) => {
     const t = e.touches[0]
-    if (t) __tStart = { x: t.clientX, y: t.clientY, time: Date.now() }
+    if (!t) return
+    __tStart = { x: t.clientX, y: t.clientY, time: Date.now() }
+    __clearLongPress()
+    const x = t.clientX
+    const y = t.clientY
+    __lpTimer = setTimeout(() => {
+      __lpTimer = null
+      window.dispatchEvent(new CustomEvent('app-long-press', { detail: { x, y } }))
+    }, LONG_PRESS_MS)
+  }, { capture: true, passive: true })
+  window.addEventListener('touchmove', (e) => {
+    if (!__tStart || !__lpTimer) return
+    const t = e.touches[0]
+    if (!t) return
+    if (
+      Math.abs(t.clientX - __tStart.x) > LONG_PRESS_MOVE_MAX ||
+      Math.abs(t.clientY - __tStart.y) > LONG_PRESS_MOVE_MAX
+    ) {
+      __clearLongPress()
+    }
   }, { capture: true, passive: true })
   window.addEventListener('touchend', (e) => {
+    __clearLongPress()
     const t = e.changedTouches[0]
     const start = __tStart
     __tStart = null
