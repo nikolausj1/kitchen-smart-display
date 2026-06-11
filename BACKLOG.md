@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-06-10
-version: 4.1
+modified: 2026-06-11
+version: 4.2
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -97,7 +97,8 @@ The app is largely complete: Today, Photos slideshow, Music / Now Playing with t
 Jukebox station picker, full Settings, Sonos transport, weather, Immich photos,
 the morning departure timer, and school-schedule awareness are all shipped.
 Remaining:
-
+ 
+-  help me find the right HDMI cable to make sure that the screen works.  it has a 90° thin profile connector to the screen.  it doesn't affect the image by making it widescreen 
 - **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home
   "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
@@ -156,9 +157,6 @@ progress bar). Remaining:
 - **Favorite-station picker** (TODO, not P0) - pick a Jukebox station from the
   remote on the TV. Open: what the ingress is (the kitchen's station list
   lives in the web app; the Pi serves `/api/state` + Sonos proxy).
-- **Framed Now Playing: subtle background motion** (POLISH) - make the blurred
-  Framed backdrop feel slightly alive: a slow swirl/drift of the album colors
-  rather than a static blur.
 - **Auto-show Now Playing when music starts** (DECISION) - the PRD currently
   forbids mid-session auto-switching. Counterpart to the kitchen auto-interrupt.
 - **Multi-room Sonos** (TODO) - transport/volume target "Main" only.
@@ -261,6 +259,13 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-11 - Framed Now Playing: breathing backdrop.** The blurred album
+  wash now drifts on a slow Lissajous wander (x/y on ~53s/67s periods, never
+  visibly repeating) with a gentle scale breathe (~75s), transform applied
+  after the blur so the GPU re-composites a cached texture (~10 sub-pixel
+  updates/s). Cover, hairline progress, and metadata stay still. If it still
+  feels too static someday: palette-extracted drifting color blobs (Apple
+  Music style) compose underneath - discussed as option B.
 - **2026-06-10 - Art fun facts on the Apple TV.** One curated fact per piece,
   handwritten bottom-center on the mat between the placard blocks (up to two
   lines, smaller hand), rotating per showing (advance counter modulo the

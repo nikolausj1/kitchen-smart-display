@@ -210,29 +210,52 @@ struct NowPlayingView: View {
         .allowsHitTesting(false)
     }
 
+    // Slow "breathing" drift for the blurred wash: a Lissajous wander (x/y on
+    // different ~1-minute periods, so the path never visibly repeats) plus a
+    // gentle scale breathe. Amplitudes are small enough that the motion reads
+    // as the album's colors slowly pooling, not an image sliding. The minimum
+    // scale (1.06) always covers the maximum offset (1.8%), so edges never
+    // reveal. Framed music mode only.
+    private static func drift(_ date: Date, opening: CGRect) -> (scale: CGFloat, offset: CGSize) {
+        let t = date.timeIntervalSinceReferenceDate
+        let scale = 1.12 + 0.06 * sin(t * 2 * .pi / 75)
+        let dx = opening.width * 0.018 * sin(t * 2 * .pi / 53)
+        let dy = opening.height * 0.015 * sin(t * 2 * .pi / 67)
+        return (CGFloat(scale), CGSize(width: dx, height: dy))
+    }
+
     @ViewBuilder
     private func blurredFill(url: URL?, opening: CGRect) -> some View {
-        Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    if let img = phase.image {
-                        img.resizable().scaledToFill()
-                    } else {
-                        Color(white: 0.08)
+        // ~10 updates/s: at these speeds each step is sub-pixel, so it looks
+        // continuous while costing a fraction of a per-frame timeline. The
+        // transform sits AFTER .blur, so the GPU re-composites the cached
+        // blurred texture and never re-runs the blur.
+        TimelineView(.periodic(from: .now, by: 0.1)) { ctx in
+            let d = Self.drift(ctx.date, opening: opening)
+            Group {
+                if let url {
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFill()
+                        } else {
+                            Color(white: 0.08)
+                        }
                     }
+                } else {
+                    Color(white: 0.08)
                 }
-            } else {
-                Color(white: 0.08)
             }
+            .frame(width: opening.width, height: opening.height)
+            .clipped()
+            .blur(radius: opening.height * 0.06)
+            .scaleEffect(d.scale)
+            .offset(d.offset)
+            .frame(width: opening.width, height: opening.height)
+            .clipped()
+            .overlay(Color.black.opacity(0.28))
+            .position(x: opening.midX, y: opening.midY)
+            .allowsHitTesting(false)
         }
-        .frame(width: opening.width, height: opening.height)
-        .clipped()
-        .blur(radius: opening.height * 0.06)
-        .frame(width: opening.width, height: opening.height)
-        .clipped()
-        .overlay(Color.black.opacity(0.28))
-        .position(x: opening.midX, y: opening.midY)
-        .allowsHitTesting(false)
     }
 
     // Track title over artist, handwritten on the bottom mat band. Uses the SAME
