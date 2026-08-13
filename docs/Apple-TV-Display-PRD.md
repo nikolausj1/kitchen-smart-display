@@ -1,8 +1,8 @@
 ---
 title: Apple TV / Frame TV Display PRD
 created: 2026-05-30
-modified: 2026-06-09
-version: 2.0.2
+modified: 2026-06-16
+version: 2.1.0
 author: Justin Nikolaus
 tags: [smart-display, apple-tv, frame-tv, prd, tvos]
 ---
@@ -10,6 +10,10 @@ tags: [smart-display, apple-tv, frame-tv, prd, tvos]
 # Apple TV / Frame TV Display PRD
 
 > Status: In progress (native pivot). Today view built; Photos and Now Playing next.
+
+> Recently shipped (2026-06-16):
+> - Morning auto-show on the TV: on a school morning the app shows the Today screen, re-checked on app wake (scenePhase active) and on a 60s timer, with a once-per-calendar-day latch that respects a manual choice. See 5.5 and `tvos/Sources/RootView.swift`.
+> - Hi-res art on the TV: art assets are now delivered at ~4K (3840px long edge) instead of the ~1920px preview, since the Frame TV is a 4K panel and shows art uncropped. See 7.4.
 
 > IMPORTANT ARCHITECTURE CHANGE (v2.0.0, 2026-05-30): The original plan was a tvOS WKWebView wrapping the kitchen React app. That is IMPOSSIBLE: tvOS ships no WebKit (no UIWebView / WKWebView) by Apple's deliberate design, confirmed by compiler error (WebKit.framework absent from the tvOS SDK). The app is now NATIVE SwiftUI, reimplementing the three views and hitting the same Pi backend endpoints (/api/state, /api/sonos) plus Open-Meteo directly. The Pi-side work (LAN bind, /api/state, /api/sonos proxy) is unchanged and reused. The web-side TV bridge code (kioskMode.js, useSharedState.js, window.tvAction/photoNav, data-kiosk CSS) is now DEAD for the TV but harmless (gated behind ?kiosk=tv, which the native app never sends); flagged for later cleanup.
 
@@ -137,6 +141,8 @@ When the app loads with `?view=auto` (or no `?view=` param), in priority order:
 
 The logic lives in `code/src/shell/AppShell.jsx` (React side, not Swift) so it can be iterated without rebuilding the tvOS app. It reuses the existing `computeInitialView()` for the school-morning decision, with one difference from the kitchen: on the TV, Today wins over Sonos during the school-morning window (the kitchen lets Sonos override).
 
+Morning auto-show (SHIPPED 2026-06-16, native tvOS). The native app no longer relies on a boot-only picker for the school-morning case. `tvos/Sources/RootView.swift` re-checks the school-morning Today auto-show on app wake (scenePhase becomes active) and on a 60s timer, with a once-per-calendar-day latch (`lastAutoTodayDay`) that respects a manual choice (it will not override a view the user picked by hand). This fixes the earlier behavior where the boot-only picker never re-ran when tvOS resumed a suspended app, so a TV left on overnight would miss the morning. Deployed to the Living Room Apple TV.
+
 ### 5.6 Home Assistant launch contract
 
 Deferred from Phase 1. Phase 1 is manually launched by Justin on the Apple TV. Home Assistant-driven launches (school-morning auto-trigger, guests scene) move to Phase 2.
@@ -204,6 +210,7 @@ Data layer (shared across views):
 Views (Phase 1 build order):
 - `TodayView.swift` (DONE): clock + date, departure countdown card with color bands (logic in `DepartureTimer.swift`, mirroring `useTimer.js` band thresholds), weather timeline. Read-only; driving is the default travel mode.
 - Photos (next): native slideshow from the Immich manifest with smart-crop / face-aware positioning / portrait pairing.
+  - Hi-res art (SHIPPED 2026-06-16). For art assets only, the photo-manifest build now delivers the image at ~4K (3840px long edge) instead of the ~1920px Immich preview, because the Frame TV is a 4K panel and shows art uncropped. The build downloads the Immich ORIGINAL and downscales (shrink-only, so masters under 3840 are left as-is); non-art still uses the ~1920px preview, and the ~1080p kitchen panel is unaffected.
 - Now Playing (next): album art + transport via the `/api/sonos` proxy.
 
 Siri Remote (lands with the view switcher):

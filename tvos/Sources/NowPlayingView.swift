@@ -67,15 +67,44 @@ struct NowPlayingView: View {
         return min(1, elapsed / Double(t.durationMs))
     }
 
+    // Transient label shown after the center button cycles the Framed
+    // backdrop (RootView.handleSelect), so Still/Drift-style near-twins are
+    // distinguishable without a Settings trip.
+    @State private var backdropToast: String?
+    @State private var backdropToastID = 0
+
     var body: some View {
         GeometryReader { geo in
-            switch mat {
-            case .off:    fullBleed(geo.size)
-            case .fit:    fitted(geo.size)
-            case .framed: framed(geo.size)
+            ZStack(alignment: .topTrailing) {
+                switch mat {
+                case .off:    fullBleed(geo.size)
+                case .fit:    fitted(geo.size)
+                case .framed: framed(geo.size)
+                }
+                if let toast = backdropToast, mat == .framed {
+                    Text(toast)
+                        .font(.system(size: geo.size.width * 0.018, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .padding(.vertical, geo.size.width * 0.006)
+                        .padding(.horizontal, geo.size.width * 0.014)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .padding(MatMetrics.safeInset(geo.size))
+                        .transition(.opacity)
+                }
             }
         }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.3), value: backdropToast)
+        // Center-button backdrop cycling feedback: flash the new mode's name.
+        .onChange(of: tvSettings.framedBackdrop) { _, newVal in
+            backdropToast = newVal.label
+            backdropToastID += 1
+            let id = backdropToastID
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if id == backdropToastID { backdropToast = nil }
+            }
+        }
         // Re-anchor whenever a poll updates elapsed, the track changes, or
         // play/pause toggles (initial: true seeds it on appear).
         .onChange(of: s.track?.elapsedMs, initial: true) { _, newVal in
@@ -210,52 +239,80 @@ struct NowPlayingView: View {
         .allowsHitTesting(false)
     }
 
-    // Slow "breathing" drift for the blurred wash: a Lissajous wander (x/y on
-    // different ~1-minute periods, so the path never visibly repeats) plus a
-    // gentle scale breathe. Amplitudes are small enough that the motion reads
-    // as the album's colors slowly pooling, not an image sliding. The minimum
-    // scale (1.06) always covers the maximum offset (1.8%), so edges never
-    // reveal. Framed music mode only.
+    // "Breathing" drift for the blurred wash: a Lissajous wander (x/y on
+    // different ~30s periods, so the path never visibly repeats) plus a scale
+    // breathe (~40s). Amplitudes tuned on the real TV - the first pass (1.8%
+    // offsets over ~1-minute periods) read as static from the couch. The
+    // minimum scale (1.13) always covers the maximum offset (4.5%), so edges
+    // never reveal. Framed music mode only.
     private static func drift(_ date: Date, opening: CGRect) -> (scale: CGFloat, offset: CGSize) {
         let t = date.timeIntervalSinceReferenceDate
-        let scale = 1.12 + 0.06 * sin(t * 2 * .pi / 75)
-        let dx = opening.width * 0.018 * sin(t * 2 * .pi / 53)
-        let dy = opening.height * 0.015 * sin(t * 2 * .pi / 67)
+        let scale = 1.25 + 0.12 * sin(t * 2 * .pi / 40)
+        let dx = opening.width * 0.045 * sin(t * 2 * .pi / 28)
+        let dy = opening.height * 0.040 * sin(t * 2 * .pi / 34)
         return (CGFloat(scale), CGSize(width: dx, height: dy))
     }
 
+    // The opening fill behind the cover, per the Framed Backdrop setting:
+    // Still (original static wash), Drift (wash on a slow wander), Lava
+    // (palette blobs, LavaBackdrop.swift), or the Metal fluids Marble / Ink
+    // (FluidBackdrop.swift + Backdrop.metal).
     @ViewBuilder
     private func blurredFill(url: URL?, opening: CGRect) -> some View {
-        // ~10 updates/s: at these speeds each step is sub-pixel, so it looks
-        // continuous while costing a fraction of a per-frame timeline. The
-        // transform sits AFTER .blur, so the GPU re-composites the cached
-        // blurred texture and never re-runs the blur.
-        TimelineView(.periodic(from: .now, by: 0.1)) { ctx in
-            let d = Self.drift(ctx.date, opening: opening)
-            Group {
-                if let url {
-                    AsyncImage(url: url) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFill()
-                        } else {
-                            Color(white: 0.08)
-                        }
-                    }
-                } else {
-                    Color(white: 0.08)
-                }
+        switch tvSettings.framedBackdrop {
+        case .still:
+            washBody(url: url, opening: opening, scale: 1, offset: .zero)
+        case .drift:
+            // ~20 updates/s keeps steps sub-pixel at these speeds while
+            // costing a fraction of a per-frame timeline. The transform sits
+            // AFTER .blur, so the GPU re-composites the cached blurred
+            // texture and never re-runs the blur.
+            TimelineView(.periodic(from: .now, by: 0.05)) { ctx in
+                let d = Self.drift(ctx.date, opening: opening)
+                washBody(url: url, opening: opening, scale: d.scale, offset: d.offset)
             }
-            .frame(width: opening.width, height: opening.height)
-            .clipped()
-            .blur(radius: opening.height * 0.06)
-            .scaleEffect(d.scale)
-            .offset(d.offset)
-            .frame(width: opening.width, height: opening.height)
-            .clipped()
-            .overlay(Color.black.opacity(0.28))
-            .position(x: opening.midX, y: opening.midY)
-            .allowsHitTesting(false)
+        case .lava:
+            LavaBackdrop(url: url, opening: opening)
+        case .smoke:
+            FluidBackdrop(url: url, opening: opening, style: .smoke)
+        case .caustics:
+            FluidBackdrop(url: url, opening: opening, style: .caustics)
+        case .ripple:
+            FluidBackdrop(url: url, opening: opening, style: .ripple)
+        case .bars:
+            FluidBackdrop(url: url, opening: opening, style: .bars)
+        case .marble:
+            FluidBackdrop(url: url, opening: opening, style: .marble)
         }
+    }
+
+    // The blurred-wash fill (shared by Still and Drift; Drift animates the
+    // post-blur transform).
+    @ViewBuilder
+    private func washBody(url: URL?, opening: CGRect, scale: CGFloat, offset: CGSize) -> some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color(white: 0.08)
+                    }
+                }
+            } else {
+                Color(white: 0.08)
+            }
+        }
+        .frame(width: opening.width, height: opening.height)
+        .clipped()
+        .blur(radius: opening.height * 0.06)
+        .scaleEffect(scale)
+        .offset(offset)
+        .frame(width: opening.width, height: opening.height)
+        .clipped()
+        .overlay(Color.black.opacity(0.28))
+        .position(x: opening.midX, y: opening.midY)
+        .allowsHitTesting(false)
     }
 
     // Track title over artist, handwritten on the bottom mat band. Uses the SAME

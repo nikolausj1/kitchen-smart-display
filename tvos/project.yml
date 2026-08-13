@@ -26,9 +26,11 @@ targets:
         # 66R634SR25 string embedded in the cert's display name.)
         DEVELOPMENT_TEAM: "6A4J2GTB6F"
         CODE_SIGN_STYLE: Automatic
-        # No app icon asset for Phase 1 simulator validation. A Brand Assets
-        # icon set is required before a real-device / App Store build.
-        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        # Shadow-box app icon: a layered tvOS Brand Assets stack (5 parallax
+        # layers - back wash, floating canvas, recess shadow, mat board, front
+        # bevel) under Resources/Assets.xcassets. Source PNGs in
+        # _inbox/tvos_shadowbox_icon_assets. Top Shelf banners still TODO.
+        ASSETCATALOG_COMPILER_APPICON_NAME: "App Icon & Top Shelf Image"
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
     info:
       path: Sources/Info.plist

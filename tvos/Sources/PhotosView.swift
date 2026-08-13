@@ -99,21 +99,27 @@ struct PhotosView: View {
             let matOn = tvSettings.photosMatEnabled
             // Via the `music` property (not sonos directly) so the sim-only
             // debug.fakeMusic flag actually fakes the corner + music line.
-            // The whole Now Playing presence (album-art corner + handwritten
-            // track lines) is suppressed while an ARTWORK is up - a gallery
-            // wall has no album covers - so the art placard's year/movement
-            // never has to yield the right corner.
+            // The Now Playing presence (album-art corner + handwritten track
+            // lines) is suppressed while an ARTWORK is up - a gallery wall
+            // has no album covers - UNLESS the art display is Fill + Music,
+            // which deliberately invites it back (year/movement move to the
+            // mat's bottom-center to free the right corner). Fill + Music
+            // renders as plain Fill while nothing is playing.
             let m = music
-            let showMusic = m.show && currentArt == nil
+            let artDisplay: ArtDisplay = {
+                let d = tvSettings.artDisplay
+                return (d == .fillMusic && !m.show) ? .fill : d
+            }()
+            let showMusic = m.show && (currentArt == nil || artDisplay == .fillMusic)
             ZStack {
                 Color.black
                 if let item = engine.current {
                     if matOn, let artPhoto = currentArtPhoto {
-                        // Artworks get the shadow-box stage: blurred wash of
-                        // the painting filling the opening, the crisp canvas
-                        // floating centered with a soft shadow (the Framed
-                        // Now Playing treatment, see docs/designs/art-albums.md).
-                        ArtStage(photo: artPhoto, size: geo.size)
+                        // Artworks get the art stage (Shadow Box or Fill per
+                        // the Art Display setting; Fill + Music shares the
+                        // Fill stage; see docs/designs/art-albums.md).
+                        ArtStage(photo: artPhoto, size: geo.size,
+                                 display: artDisplay == .shadowBox ? .shadowBox : .fill)
                             .id(engine.generation)        // new id per advance
                             .transition(.opacity)         // crossfade
                     } else {
@@ -137,14 +143,22 @@ struct PhotosView: View {
                     AlbumArtCorner(url: art, size: geo.size, matted: matOn)
                 }
 
-                // Mat border sits above the photo + album art...
-                if matOn { MatBorderOverlay() }
+                // Mat border sits above the photo + album art. Artworks in
+                // Fill mode get the gallery-tuned depth spec (tight edge
+                // shadows + ambient recess + contact line + chunky bevel).
+                if matOn {
+                    let artFillUp = currentArtPhoto != nil && artDisplay != .shadowBox
+                    MatBorderOverlay(depth: artFillUp ? .artFill : .standard)
+                }
 
                 // ...and the handwritten metadata is printed on top of the mat.
                 // Artworks get a museum placard: title + artist bottom-left,
                 // year + movement bottom-right. The music block keeps priority
                 // over the right corner while something is playing.
                 if matOn {
+                    // Fill + Music: year/movement move to the mat's center
+                    // (music owns the right corner) and the fun fact rests.
+                    let centered = currentArt != nil && artDisplay == .fillMusic
                     HandwrittenMat(size: geo.size,
                                    photoLocation: currentArt?.title ?? currentExif?.location,
                                    photoDate: currentArt != nil ? currentArt?.artist : currentExif?.date,
@@ -152,9 +166,11 @@ struct PhotosView: View {
                                    rightPhotoDate: rightExif?.date,
                                    musicTitle: showMusic ? m.title : nil,
                                    musicArtist: showMusic ? m.artist : nil,
-                                   artYear: currentArt?.year,
-                                   artMovement: currentArt?.movement,
-                                   artFact: currentArtFact)
+                                   artYear: centered ? nil : currentArt?.year,
+                                   artMovement: centered ? nil : currentArt?.movement,
+                                   artFact: centered ? nil : currentArtFact,
+                                   artCenterYear: centered ? currentArt?.year : nil,
+                                   artCenterMovement: centered ? currentArt?.movement : nil)
                 } else if let item = engine.current {
                     // Unmatted fallback: white caption over the photo.
                     ExifCaptionOverlay(item: item,
@@ -162,9 +178,25 @@ struct PhotosView: View {
                                        generation: engine.generation,
                                        edgeInset: 40)
                 }
+
+                // Center-button Art Display toggle feedback (mirrors the
+                // Now Playing backdrop toast).
+                if let toast = artToast, currentArtPhoto != nil {
+                    Text(toast)
+                        .font(.system(size: geo.size.width * 0.018, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .padding(.vertical, geo.size.width * 0.006)
+                        .padding(.horizontal, geo.size.width * 0.014)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .padding(MatMetrics.safeInset(geo.size))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity,
+                               alignment: .topTrailing)
+                        .transition(.opacity)
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .animation(.easeInOut(duration: 0.8), value: engine.generation)
+            .animation(.easeInOut(duration: 0.3), value: artToast)
         }
         .ignoresSafeArea()
         .task(id: photosKey) {
@@ -199,9 +231,29 @@ struct PhotosView: View {
             switch remote.action {
             case .next: engine.next()
             case .previous: engine.previous()
+            case .select:
+                // Center button while an artwork is up (inert on regular
+                // photos): Shadow Box <-> Fill, with Fill + Music joining
+                // the rotation only while a track is playing.
+                if currentArtPhoto != nil, tvSettings.photosMatEnabled {
+                    tvSettings.cycleArtDisplay(musicActive: music.show)
+                }
+            }
+        }
+        // Flash the new mode's name after a center-button toggle.
+        .onChange(of: tvSettings.artDisplay) { _, newVal in
+            artToast = newVal.label
+            artToastID += 1
+            let id = artToastID
+            Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if id == artToastID { artToast = nil }
             }
         }
     }
+
+    @State private var artToast: String?
+    @State private var artToastID = 0
 
     // Re-run the slideshow task when album selection / sort change, or when the
     // TV-local photo duration changes (so the new interval is applied live).
@@ -245,46 +297,64 @@ private struct PhotoStage: View {
     }
 }
 
-// MARK: - Art stage (shadow box inside the mat opening)
+// MARK: - Art stage (inside the mat opening)
 
-// One artwork rendered like a shadow box: the mat opening is filled with a
-// blurred wash of the same painting, and the crisp canvas floats centered at
-// its natural aspect with a soft drop shadow. Ported from the Framed Now
-// Playing treatment (NowPlayingView.framed()/blurredFill()).
+// One artwork rendered per the Art Display setting:
+//   .shadowBox - the opening filled with a blurred wash of the painting, the
+//                crisp canvas floating centered at its natural aspect with a
+//                soft shadow (the Framed Now Playing treatment).
+//   .fill      - the canvas fills the opening edge-to-edge (center-cropped),
+//                reading like a mat cut exactly for the piece.
 private struct ArtStage: View {
     let photo: Photo
     let size: CGSize
+    let display: ArtDisplay
 
     var body: some View {
         let opening = MatMetrics.opening(size)
         ZStack {
-            AsyncImage(url: photo.url, transaction: Transaction(animation: .none)) { phase in
-                if let img = phase.image {
-                    img.resizable().scaledToFill()
-                } else {
-                    Color(white: 0.08)
+            switch display {
+            case .shadowBox:
+                AsyncImage(url: photo.url, transaction: Transaction(animation: .none)) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color(white: 0.08)
+                    }
                 }
-            }
-            .frame(width: opening.width, height: opening.height)
-            .clipped()
-            .blur(radius: opening.height * 0.06)
-            .frame(width: opening.width, height: opening.height)
-            .clipped()
-            .overlay(Color.black.opacity(0.28))
-            .position(x: opening.midX, y: opening.midY)
+                .frame(width: opening.width, height: opening.height)
+                .clipped()
+                .blur(radius: opening.height * 0.06)
+                .frame(width: opening.width, height: opening.height)
+                .clipped()
+                .overlay(Color.black.opacity(0.28))
+                .position(x: opening.midX, y: opening.midY)
 
-            AsyncImage(url: photo.url, transaction: Transaction(animation: .none)) { phase in
-                if let img = phase.image {
-                    img.resizable().scaledToFit()
-                        .shadow(color: .black.opacity(0.45),
-                                radius: opening.height * 0.025,
-                                y: opening.height * 0.008)
-                } else {
-                    Color.clear
+                AsyncImage(url: photo.url, transaction: Transaction(animation: .none)) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFit()
+                            .shadow(color: .black.opacity(0.45),
+                                    radius: opening.height * 0.025,
+                                    y: opening.height * 0.008)
+                    } else {
+                        Color.clear
+                    }
                 }
+                .frame(width: opening.width * 0.95, height: opening.height * 0.95)
+                .position(x: opening.midX, y: opening.midY)
+
+            case .fill, .fillMusic:
+                AsyncImage(url: photo.url, transaction: Transaction(animation: .none)) { phase in
+                    if let img = phase.image {
+                        img.resizable().scaledToFill()
+                    } else {
+                        Color(white: 0.08)
+                    }
+                }
+                .frame(width: opening.width, height: opening.height)
+                .clipped()
+                .position(x: opening.midX, y: opening.midY)
             }
-            .frame(width: opening.width * 0.95, height: opening.height * 0.95)
-            .position(x: opening.midX, y: opening.midY)
         }
         .frame(width: size.width, height: size.height)
         .allowsHitTesting(false)
@@ -445,6 +515,10 @@ private struct HandwrittenMat: View {
     // (up to two lines, smaller hand). nil when Art Facts is off or the
     // current item isn't art.
     var artFact: String? = nil
+    // Fill + Music: year over movement, bottom-CENTER (music has the right
+    // corner; mutually exclusive with artYear/artMovement/artFact).
+    var artCenterYear: String? = nil
+    var artCenterMovement: String? = nil
 
     // Exact Figma coordinates (frame authored at 3840x2160). Each line is
     // placed by its top-left/top-right corner so it lands exactly where the
@@ -486,6 +560,22 @@ private struct HandwrittenMat: View {
             // Artwork year + movement (right corner, same slots as music).
             line(artYear, size: titleSize, top: titleTop, trailingPad: rightPad, trailing: true)
             line(artMovement, size: dateSize, top: dateTop, trailingPad: rightPad, trailing: true)
+            // Fill + Music: year over movement at bottom-center, mirroring
+            // the left block's line rhythm (the right corner belongs to the
+            // music block in this mode).
+            if let cy = artCenterYear, !cy.isEmpty {
+                Text(cy + " ")
+                    .font(HandFont.font(titleSize))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, titleTop)
+            }
+            if let cm = artCenterMovement, !cm.isEmpty {
+                Text(cm + " ")
+                    .font(HandFont.font(dateSize))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, dateTop)
+            }
+
             // Fun fact, bottom-center between the two placard blocks, in the
             // same hand as the artist line. Long facts are pre-broken near
             // their midpoint into two balanced lines (rather than one

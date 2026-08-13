@@ -1,8 +1,8 @@
 ---
 title: "Photo-Refresh Automation - Pi-Self-Sufficient Build"
 created: 2026-06-09
-modified: 2026-06-09
-version: 1.2
+modified: 2026-06-16
+version: 1.3
 author: Claude Fable 5 (claude-fable-5)
 tags: [design, photos, immich, raspberry-pi, automation, kitchen-display]
 ---
@@ -59,6 +59,10 @@ Kitchen Chromium + Apple TV (5-min manifest polls)
 ### What lands on the Pi
 
 - **Node 20+** (script uses `fetch` and `--env-file`).
+- **`libvips-tools`** (system package, installed on the Pi). The build resizes
+  art via the `vipsthumbnail` CLI rather than an npm image library, so the build
+  still has no npm image deps - vips is a system package, not a Node module. See
+  "Hi-res art on the TV" below.
 - **`code/scripts/`** (build script + `lib/`) and a minimal `node_modules`
   (`exifr` is the only dependency; pure JS, fine on ARM). Synced by deploy.
 - **`.env`** with `IMMICH_URL`, `IMMICH_API_KEY` (read-only key),
@@ -86,6 +90,25 @@ regardless of where the build runs):
 
 The displays then never observe a torn state: the old manifest keeps
 pointing at files that still exist until the new one lands in one rename.
+
+## Hi-res art on the TV
+
+The build treats ART assets specially. For art (the four `Art - <movement>`
+albums, delivered via the Immich external library "Art (NAS)", separate from
+the managed family library) it downloads the Immich ORIGINAL
+(`GET /api/assets/{id}/original`) and downscales it to 3840px on the long edge
+for the 4K TV, writing an `immich-<id>-hi.jpg` stub. Non-art assets still use
+the ~1920px preview (`?size=preview`); the kitchen panel is ~1080p and
+unaffected.
+
+Resizing uses a CLI tool so the build stays free of npm image deps:
+`vipsthumbnail` (libvips) on the Pi, `sips` on macOS dev. It only ever shrinks
+(never upscales), so masters smaller than 3840 are left as-is. This is why the
+build host needs `libvips-tools` (see "What lands on the Pi"), and why the Pi's
+Immich API key was granted `asset.download` in addition to read access (needed
+to fetch originals). First build after adding art is heavier (downloads the
+originals once); stubs are reused by filename afterward, so nightly runs stay
+fast.
 
 ## Triggers
 
@@ -138,6 +161,8 @@ minutes of the rebuild finishing.
 - [x] Create a read-only API key in Immich for the Pi.
 - [x] Create a Google Cloud API key restricted to "Places API (New)".
 - [x] Node 20+ on the Pi (v20.19.2 was already installed).
+- [x] Install `libvips-tools` on the Pi (for `vipsthumbnail`, art hi-res resize).
+- [x] Grant the Pi's Immich API key `asset.download` (fetch originals for art).
 - [x] Create `/home/pi/photo-build/.env` with the three values (chmod 600).
 - [x] Seed `.location-cache.json` from the Mac's copy.
 - [x] Install + enable the systemd service/timer (next run 3:01am).
@@ -153,6 +178,13 @@ risk (atomic rebuild just skips them); the fix is to wait for Immich's job
 queues to drain (server Administration -> Jobs, or
 `GET /api/jobs` with an admin key) and refresh again - or just let the
 nightly 3am run catch everything.
+
+The same race applies to the Immich EXTERNAL-LIBRARY scan for art. Right after
+scanning newly-added art into the "Art (NAS)" library, Immich's
+thumbnailGeneration jobs lag, so a refresh fired too soon skips any art whose
+previews/thumbnails are not ready yet. Observed this session: a refresh caught
+only 154 of 257 art assets until the thumbnails finished draining. Same fix -
+wait for the job queue to drain, then refresh again.
 
 ## Future: NAS migration (when frame #2 arrives)
 

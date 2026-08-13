@@ -40,6 +40,58 @@ enum MusicMatMode: Int, CaseIterable {
     }
 }
 
+// How artworks render inside the mat on the Photos view. Raw values are
+// persisted, so keep their order stable.
+enum ArtDisplay: Int, CaseIterable {
+    case shadowBox = 0   // blurred wash + canvas floating with a soft shadow
+    case fill      = 1   // canvas fills the opening edge-to-edge (cropped),
+                         // like a mat cut exactly for the piece
+    case fillMusic = 2   // fill + the Now Playing presence (album-art corner
+                         // and track lines bottom-right; year/movement move
+                         // to the mat's bottom-center, fun fact suppressed).
+                         // Only reachable from the remote while music plays;
+                         // renders as plain Fill when nothing is playing.
+
+    var label: String {
+        switch self {
+        case .shadowBox: return "Shadow Box"
+        case .fill:      return "Fill"
+        case .fillMusic: return "Fill + Music"
+        }
+    }
+}
+
+// What fills the mat opening behind the cover in Framed music mode, ordered
+// subtle -> aggressive (Justin's curation). Raw values are persisted; the
+// 2026-06-11 reorder (Marble to last, Ink renamed Smoke, Ripple added) was a
+// one-time remap of stored values - keep them stable from here.
+enum FramedBackdrop: Int, CaseIterable {
+    case still    = 0   // the original static blurred wash
+    case drift    = 1   // the wash on a slow Lissajous wander + scale breathe
+    case lava     = 2   // palette-extracted color blobs on slow orbits
+    case smoke    = 3   // Metal shader: palette colors billowing like smoke
+    case caustics = 4   // Metal shader: sunlit-pool light webs in palette colors
+    case ripple   = 5   // Metal shader: sound-waves of palette color radiating
+                        // out from behind the cover, prismatic crests
+    case bars     = 6   // Metal shader: faux EQ bars in palette colors
+                        // (noise-driven - Sonos exposes no audio analysis)
+    case marble   = 7   // Metal shader: scrambled album texture folding like
+                        // stirred paint (the most aggressive)
+
+    var label: String {
+        switch self {
+        case .still:    return "Still"
+        case .drift:    return "Drift"
+        case .lava:     return "Lava"
+        case .smoke:    return "Smoke"
+        case .caustics: return "Caustics"
+        case .ripple:   return "Ripple"
+        case .bars:     return "Bars"
+        case .marble:   return "Marble"
+        }
+    }
+}
+
 @MainActor
 final class TVSettings: ObservableObject {
     private enum Key {
@@ -53,11 +105,16 @@ final class TVSettings: ObservableObject {
         static let autoDim = "tv.autoDim"
         static let manualBrightness = "tv.manualBrightness"
         static let artFacts = "tv.artFacts"
+        static let framedBackdrop = "tv.framedBackdrop"
+        static let artDisplay = "tv.artDisplay"
     }
 
     // Manual brightness choices (fraction of full). 0.2 is still readable in a
     // dark room; full list keeps the left/right stepper grammar.
-    static let brightnessChoices: [Double] = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    static let brightnessChoices: [Double] = [
+        0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6,
+        0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0,
+    ]
 
     // Allowed photo durations, in seconds (10s ... 24h).
     static let durationChoices = [
@@ -87,6 +144,12 @@ final class TVSettings: ObservableObject {
     }
     @Published var artFacts: Bool {
         didSet { UserDefaults.standard.set(artFacts, forKey: Key.artFacts) }
+    }
+    @Published var framedBackdrop: FramedBackdrop {
+        didSet { UserDefaults.standard.set(framedBackdrop.rawValue, forKey: Key.framedBackdrop) }
+    }
+    @Published var artDisplay: ArtDisplay {
+        didSet { UserDefaults.standard.set(artDisplay.rawValue, forKey: Key.artDisplay) }
     }
 
     // nil = "All albums" (albums added to Immich later are auto-included).
@@ -120,6 +183,12 @@ final class TVSettings: ObservableObject {
         manualBrightness = (d.object(forKey: Key.manualBrightness) as? Double) ?? 1.0
         // Art facts default ON - the educational half of the art feature.
         artFacts = (d.object(forKey: Key.artFacts) as? Bool) ?? true
+        // Framed music backdrop defaults to the new lava blobs.
+        framedBackdrop = (d.object(forKey: Key.framedBackdrop) as? Int)
+            .flatMap(FramedBackdrop.init(rawValue:)) ?? .lava
+        // Art rendering defaults to the shadow box (the chosen-from-comps look).
+        artDisplay = (d.object(forKey: Key.artDisplay) as? Int)
+            .flatMap(ArtDisplay.init(rawValue:)) ?? .shadowBox
         // Album selection; migrate the old single-album picker if present.
         if let stored = d.array(forKey: Key.selectedAlbumIds) as? [String] {
             selectedAlbumIds = Set(stored)
@@ -195,6 +264,51 @@ final class TVSettings: ObservableObject {
     // For PhotoService.fetch (nil -> all, [] -> none, ids -> filter).
     var selectedAlbumIdList: [String]? {
         selectedAlbumIds.map { Array($0).sorted() }
+    }
+
+    // MARK: - Art display
+
+    var artDisplayLabel: String { artDisplay.label }
+
+    // Center-button cycle on the Photos view. Fill + Music only makes sense
+    // with a track up, so it is only in the rotation while music plays;
+    // otherwise the button just swaps Shadow Box <-> Fill (and exits
+    // Fill + Music if the mode was left set when the music stopped).
+    func cycleArtDisplay(musicActive: Bool) {
+        if musicActive {
+            switch artDisplay {
+            case .shadowBox: artDisplay = .fill
+            case .fill:      artDisplay = .fillMusic
+            case .fillMusic: artDisplay = .shadowBox
+            }
+        } else {
+            artDisplay = (artDisplay == .shadowBox) ? .fill : .shadowBox
+        }
+    }
+
+    // Settings-row stepping (all three values selectable deliberately there;
+    // Fill + Music simply renders as Fill until a track plays).
+    func stepArtDisplay(_ dir: Int, wrap: Bool = false) {
+        let all = ArtDisplay.allCases
+        let i = artDisplay.rawValue
+        let next = wrap
+            ? (i + dir + all.count) % all.count
+            : min(all.count - 1, max(0, i + dir))
+        artDisplay = all[next]
+    }
+
+    // MARK: - Framed backdrop
+
+    var framedBackdropLabel: String { framedBackdrop.label }
+
+    // Step Still -> Drift -> Lava. Left/right clamps; play/pause wraps.
+    func stepFramedBackdrop(_ dir: Int, wrap: Bool = false) {
+        let all = FramedBackdrop.allCases
+        let i = framedBackdrop.rawValue
+        let next = wrap
+            ? (i + dir + all.count) % all.count
+            : min(all.count - 1, max(0, i + dir))
+        framedBackdrop = all[next]
     }
 
     // MARK: - Brightness (manual mode)

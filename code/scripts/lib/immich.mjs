@@ -76,3 +76,18 @@ export async function downloadPreview({ baseUrl, apiKey, assetId, outPath }) {
   await writeFile(outPath, buf)
   return buf.length
 }
+
+// Download the full original file for an asset to disk. Used for art assets,
+// which the build then downscales to ~4K locally (the preview is only ~1920px
+// while the TV is 4K and shows art uncropped). Returns the byte size written.
+export async function downloadOriginal({ baseUrl, apiKey, assetId, outPath }) {
+  const url = `${baseUrl}/api/assets/${assetId}/original`
+  const res = await fetch(url, { headers: { 'x-api-key': apiKey } })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`immich original ${assetId} HTTP ${res.status}: ${text.slice(0, 120)}`)
+  }
+  const buf = Buffer.from(await res.arrayBuffer())
+  await writeFile(outPath, buf)
+  return buf.length
+}

@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-06-11
-version: 4.2
+modified: 2026-06-22
+version: 4.6
 author: Claude Fable 5 (claude-fable-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -54,15 +54,23 @@ steps 2-3, the manual command lives in the import log
 (`archive/import-log-2026-06-08.md`) and the nightly 3am refresh will pick up
 any finished import on its own.
 
-### 2. Add or curate an art album
+### 2. Add art to the collection
 
-Albums named "Art *" in Immich display as gallery art (museum placard,
-shadow-box mat, never cropped). After adding artworks to one (filename should
-contain at least title + artist): tell Claude **"curate the art albums"** -
-that runs `scripts/art-metadata-check.mjs` to diff Immich against
-`art-metadata.json`, Claude researches and fills in the missing pieces
-(title/artist/year/movement + fun facts), then deploy + refresh photos. Full
-design: `docs/designs/art-albums.md`.
+The art collection lives as a single full-res copy in the NAS `Art/` folder,
+indexed in place by an **Immich external library** ("Art (NAS)"), organized into
+four **movement-based** `Art - <movement>` albums (full design:
+`docs/designs/art-collection-lifecycle.md`; acquisition + naming + tone:
+`docs/designs/art-metadata-style-guide.md`). Flow: Claude acquires into
+`_inbox/art-downloads/` (`dezoomify-rs` for Google Arts & Culture, Wikimedia for
+public-domain originals), names them `Title - Artist Year.ext`, and builds a
+review contact sheet in `_review/art-review.html`. **You review/cull and assign
+the movement** (exported to `_inbox/art-decisions.json`); then approved files
+drop into `Art/Art - <movement>/`, the Immich external library scans them in
+(auto or on demand), Claude curates `art-metadata.json`
+(`scripts/art-metadata-check.mjs` -> fill missing
+title/artist/year/movement + optional `rights` + fun facts), and a photo refresh
+lands it on both screens. Family photos still use the separate `immich-go`
+managed import. Rendering/schema detail: `docs/designs/art-albums.md`.
 
 ### 3. Triage place corrections
 
@@ -97,7 +105,16 @@ The app is largely complete: Today, Photos slideshow, Music / Now Playing with t
 Jukebox station picker, full Settings, Sonos transport, weather, Immich photos,
 the morning departure timer, and school-schedule awareness are all shipped.
 Remaining:
- 
+
+- **Hardware backlight dimming (DDC/CI)** (TODO, ready to build) - replace the
+  night-mode CSS black overlay with a real backlight dim over HDMI via `ddcutil`
+  (`setvcp 10`). Feasibility confirmed on the panel 2026-06-22: it answers DDC/CI
+  (Realtek, VCP 2.2, bus `/dev/i2c-13`) and the Pi 5 `setvcp` bug does not affect
+  it. DDC stays primary, the overlay becomes the fallback + guaranteed-black "off"
+  layer, so any failure degrades to today's behavior. Touch-to-wake survives
+  because DDC never disables the output. Full plan + guardrails:
+  `docs/designs/hardware-brightness-ddc.md`. Prereq `ddcutil` already installed on
+  the Pi.
 -  help me find the right HDMI cable to make sure that the screen works.  it has a 90° thin profile connector to the screen.  it doesn't affect the image by making it widescreen 
 - **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home
@@ -136,8 +153,19 @@ progress bar). Remaining:
 
 - **Cold-threshold (35F) Settings row** (TODO) - currently hard-coded; expose as a
   TV-local setting.
-- **App name + icon / Brand Assets** (TODO) - no icon set yet; pick the app's
-  display name too.
+- **App name + Brand Assets** (IN PROGRESS) - the **app icon is done**
+  (2026-06-12): a layered **wood-frame** parallax icon (back wood frame ->
+  art canvas -> inner shadow -> off-white mat -> front bevel) wired into
+  `Resources/Assets.xcassets/App Icon & Top Shelf Image.brandassets`, both
+  the App Store (1280x768) and Home Screen (400x240/800x480) stacks. Source
+  PNGs in `_inbox/tvos_layered_app_icon_wood_frame_assets` (3-layer set: wood
+  frame -> artwork -> mat). tvOS requires the backmost stack layer opaque, so
+  the wood-frame layer is flattened over a deep-brown (#1E110A) backing at
+  build (the frame's transparent corners would otherwise fail actool). Still
+  open: **(a)** the app's display name
+  (currently "Kitchen Display" - name brainstorm done, not chosen), and
+  **(b)** Top Shelf banners (1920x720 + wide 2320x720, needed for App Store
+  but not to build/run).
 - **Home Assistant auto-launch** (TODO) - school mornings open Today, guests scene
   opens Now Playing. Pursued in a separate session.
 - **Launch to Today on school-day mornings** (TODO/VERIFY) - sometimes the TV
@@ -160,6 +188,10 @@ progress bar). Remaining:
 - **Auto-show Now Playing when music starts** (DECISION) - the PRD currently
   forbids mid-session auto-switching. Counterpart to the kitchen auto-interrupt.
 - **Multi-room Sonos** (TODO) - transport/volume target "Main" only.
+- **Playback-reactive backdrop** (TODO) - the Framed music backdrops (Drift /
+  Lava / Marble / Ink) flow at full energy while music plays and settle to
+  near-still when paused. No beat sync (Sonos exposes no audio analysis) -
+  just ease a speed multiplier on the play/pause state the app already polls.
 - **Live school-morning verification** (VERIFY) - weather-aware walk/drive default
   + timer mirroring are unit-tested but not confirmed on a real morning.
 - **Polish** (POLISH) - tune Framed handwritten metadata size/placement on the real
@@ -194,6 +226,48 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-06-16 - Art albums settled on the MOVEMENT-based "4B" scheme.** The four
+  albums are by art movement, not subject theme: `Art - Impressionism &
+  Post-Impressionism`, `Art - Romantic, Symbolist & Landscape`, `Art - Early
+  Modern & Abstraction (pre-1945)`, and `Art - Postwar & Contemporary (1945+)`.
+  The two representational albums split by temperament; the modern bucket splits
+  at 1945 for balance and to give a clean "hide the modern stuff" toggle. Albums
+  are the screens' only curation lever (`selectedAlbumIds`); a piece may live in
+  several. This SUPERSEDES the subject-theme starter set in the 2026-06-15
+  decision below. Copyright is treated identically (personal household display):
+  copyrighted and public-domain art are archived, indexed, and displayed the same
+  way, with an optional `art-metadata.json` `rights` field
+  ("public-domain" | "in-copyright") recording status only - it does not affect
+  display. Design: `docs/designs/art-collection-lifecycle.md`.
+- **2026-06-16 - Immich EXTERNAL LIBRARY is the delivery mechanism for art
+  (LIVE).** The art collection is indexed in place from the NAS
+  `/volume1/Media/Art` (one copy, no duplication) by an Immich external library
+  "Art (NAS)" (import path `/mnt/media/Art` mounted read-only into the
+  immich-server container, exclusion `**/_culled/**`). 257 assets scanned, four
+  `Art - <movement>` albums assigned by folder. The old managed "Art 01" album
+  was retired (deleted; its 90 superseded managed-upload assets trashed). TWO
+  Immich libraries now run side by side: the external library (art, in-place) and
+  the existing managed `immich-go` library (family / Google Photos + iOS backup);
+  the family-photo flow is unchanged.
+- **2026-06-16 - Hi-res 4K art on the TV shipped.** For art assets ONLY, the build
+  now downloads the Immich original (`GET /api/assets/{id}/original`) and
+  downscales it to 3840px long edge (libvips `vipsthumbnail` on the Pi, `sips` on
+  macOS; only ever shrinks). Non-art still uses the ~1920px preview. New
+  build-host dependency: `libvips-tools` (installed on the Pi); the Pi's
+  `pi-photo-refresh` Immich key was granted `asset.download`. First build after
+  adding art is heavier (originals fetched once, then reused by filename).
+- **2026-06-15 - Art collection organization settled: NAS external library +
+  thematic albums.** The growing art collection lives as a single full-res copy in
+  the NAS `Art/` folder, indexed in place by an **Immich external library** (no
+  duplication, no routine downscaling - the build only pulls Immich's preview).
+  Organized into thematic `Art - <Theme>` albums so the screens can curate per
+  room via `selectedAlbumIds`. Family photos keep the separate `immich-go` managed
+  library. Personal display only the household views, so copyrighted and
+  public-domain art are treated identically (optional `rights` metadata field
+  retains the distinction). A user review gate (HTML contact sheet in `_review/`)
+  precedes any move to the NAS. Backfilling the staged works (~96). Deferred: TV
+  hi-res via art-specific ~4K stubs (build change). Design:
+  `docs/designs/art-collection-lifecycle.md`.
 - **2026-06-09 - Photo-refresh automation design settled: Pi-first.** Build runs
   on the kitchen Pi (`/home/pi/photo-build/`), writing into the live
   `stub-photos/`. Triggers: kitchen Settings "Refresh photos" button
@@ -259,6 +333,37 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-06-16 - Art collection overhaul: 257 works, NAS-organized.** Curated and
+  organized the full art collection on the NAS `/volume1/Media/Art` (one full-res
+  copy) into four movement-based `Art - <movement>` albums (97 / 67 / 45 / 48),
+  plus a recoverable `_culled/` holding folder (14 confirmed duplicates + junk).
+  Indexed in place by a new Immich external library "Art (NAS)" (mounted read-only
+  into the container, `**/_culled/**` excluded); the old managed "Art 01" album
+  retired (90 superseded assets trashed). Acquisition via `dezoomify-rs` (Google
+  Arts & Culture) + Wikimedia/museum open-access, staged in
+  `_inbox/art-downloads/`, reviewed/culled/assigned via `_review/art-review.html`.
+  `art-metadata.json` curated to 257 entries (was 90), 0 orphans, each with a
+  specific `movement` and optional `rights`. Design:
+  `docs/designs/art-collection-lifecycle.md`.
+- **2026-06-16 - Hi-res 4K art on the TV.** The build now fetches the Immich
+  original for art assets and downscales to 3840px long edge (libvips
+  `vipsthumbnail` on the Pi, `sips` on macOS dev; shrink-only, masters under 3840
+  left as-is), writing `immich-<id>-hi.jpg` stubs; non-art keeps the ~1920px
+  preview. New `downloadOriginal()` in `code/scripts/lib/immich.mjs` and a
+  `resizeMaxEdge` helper + art hi-res path (with preview fallback) in
+  `code/scripts/build-photo-manifest.mjs`. Build-host now needs `libvips-tools`
+  (installed on the Pi) and the Pi's `pi-photo-refresh` Immich key gained
+  `asset.download`. The 4K TV benefits; the ~1080p kitchen panel is unaffected.
+- **2026-06-16 - TV morning auto-show fix.** `tvos/Sources/RootView.swift` now
+  re-checks the school-morning Today auto-show on app wake (scenePhase active) and
+  on a 60s timer, with a once-per-calendar-day latch (`lastAutoTodayDay`) that
+  respects a manual choice. Fixes that the boot-only picker never re-ran when tvOS
+  resumed a suspended app. Deployed to the Living Room Apple TV.
+- **2026-06-16 - Kitchen weather-icon mapping fix.** `code/src/hooks/useWeather.js`:
+  WMO code 3 now maps to `overcast` (was `mostly-cloudy`, which left the overcast
+  icon unused); snow rebucketed so 73 (moderate) + 85 (slight showers) ->
+  `snow` and only 75 + 86 -> `heavy-snow`. (The TV renders weather via SF Symbols
+  separately.)
 - **2026-06-11 - Framed Now Playing: breathing backdrop.** The blurred album
   wash now drifts on a slow Lissajous wander (x/y on ~53s/67s periods, never
   visibly repeating) with a gentle scale breathe (~75s), transform applied

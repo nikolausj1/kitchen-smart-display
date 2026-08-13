@@ -16,22 +16,64 @@ final class AppRouter: ObservableObject {
     var previousView: TVView = .photos
     private var didBoot = false
 
+    // Local day-stamp (e.g. "2026-6-15") of the morning we last surfaced Today.
+    // Persisted so a cold relaunch later the same morning still respects a manual
+    // dismissal - Today is auto-shown at most once per calendar day.
+    private var lastAutoTodayDay: String {
+        get { UserDefaults.standard.string(forKey: "router.lastAutoTodayDay") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "router.lastAutoTodayDay") }
+    }
+
     func bootIfNeeded(settings: AppSettings, sonosPlaying: Bool) {
         guard !didBoot else { return }
         didBoot = true
-        view = Self.pick(settings: settings, sonosPlaying: sonosPlaying, now: Date())
+        let now = Date()
+        view = Self.pick(settings: settings, sonosPlaying: sonosPlaying, now: now)
+        // pick() only returns .today inside the school-morning window, so this
+        // latches the morning as delivered and keeps the runtime auto-show below
+        // from pulling the user back if they navigate away afterwards.
+        if view == .today { lastAutoTodayDay = Self.dayStamp(now) }
+    }
+
+    // Runtime morning auto-show, driven by the foreground/wake hook and a minute
+    // timer in RootView. The boot picker only runs on a true cold launch, but
+    // tvOS usually just resumes a suspended app - so without this the Today
+    // morning switch never fires when the TV simply wakes (the bug we hit).
+    // Fires at most once per calendar day (the latch), only inside the
+    // school-morning window, and never interrupts Settings - so once Today has
+    // been shown it leaves a later manual choice alone for the rest of the day.
+    func autoShowTodayIfDue(settings: AppSettings, now: Date = Date()) {
+        guard didBoot, view != .settings else { return }
+        guard Self.inSchoolMorning(settings: settings, now: now) else { return }
+        let stamp = Self.dayStamp(now)
+        guard lastAutoTodayDay != stamp else { return }
+        lastAutoTodayDay = stamp        // this morning is now delivered
+        if view != .today { view = .today }
+    }
+
+    // True on a school weekday (mirrored no-school flag honored) when the local
+    // clock sits in [autoShowAt, morningEndsAt).
+    static func inSchoolMorning(settings: AppSettings, now: Date) -> Bool {
+        let cal = Calendar.current
+        let weekday = cal.component(.weekday, from: now) - 1   // 0=Sun
+        guard !settings.noSchoolToday,
+              settings.school.schoolDays.contains(weekday) else { return false }
+        let nowMin = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
+        let start = settings.school.autoShowAt.hour * 60 + settings.school.autoShowAt.minute
+        let end = settings.school.morningEndsAt.hour * 60 + settings.school.morningEndsAt.minute
+        return nowMin >= start && nowMin < end
+    }
+
+    static func dayStamp(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(c.year ?? 0)-\(c.month ?? 0)-\(c.day ?? 0)"
     }
 
     static func pick(settings: AppSettings, sonosPlaying: Bool, now: Date) -> TVView {
-        let cal = Calendar.current
-        let weekday = cal.component(.weekday, from: now) - 1   // 0=Sun
-        let nowMin = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
-        // No-school days (mirrored from the kitchen) never auto-boot to Today.
-        if !settings.noSchoolToday, settings.school.schoolDays.contains(weekday) {
-            let start = settings.school.autoShowAt.hour * 60 + settings.school.autoShowAt.minute
-            let end = settings.school.morningEndsAt.hour * 60 + settings.school.morningEndsAt.minute
-            if nowMin >= start && nowMin < end { return .today }
-        }
+        // A school morning shows Today and WINS over Sonos (the kitchen lets
+        // Sonos override; the TV deliberately does not). Never auto-selects
+        // Settings - that's reachable only by the user navigating there.
+        if inSchoolMorning(settings: settings, now: now) { return .today }
         if sonosPlaying { return .music }
         return .photos
     }
@@ -70,6 +112,10 @@ struct RootView: View {
     @StateObject private var settingsNav = SettingsNav()
     @StateObject private var dim = DimModel()
     @FocusState private var focused: Bool
+    @Environment(\.scenePhase) private var scenePhase
+    // Minute tick so the morning auto-show fires even when the TV is already
+    // awake and resident before the school-morning window opens.
+    private let morningTick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         matted
@@ -116,6 +162,15 @@ struct RootView: View {
                 }
                 #endif
             }
+            // Resuming a suspended app (the common "TV just woke" path) doesn't
+            // re-run boot, so re-check the morning auto-show on every wake.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { router.autoShowTodayIfDue(settings: model.settings) }
+            }
+            // And catch the already-awake case where the window opens with no wake.
+            .onReceive(morningTick) { _ in
+                router.autoShowTodayIfDue(settings: model.settings)
+            }
     }
 
     // Each view owns its own mat decision. Photos composes its z-order (photo ->
@@ -130,7 +185,7 @@ struct RootView: View {
         case .today:
             TodayView(matted: tvSettings.todayMatEnabled)
         case .settings:
-            SettingsView(nav: settingsNav)
+            SettingsView(nav: settingsNav, dim: dim)
         case .music:
             NowPlayingView(controller: sonos, mat: tvSettings.musicMatMode)
         }
@@ -174,11 +229,25 @@ struct RootView: View {
         sonos.playPause()
     }
 
-    // Center (select) button: toggle in Settings, deliberately inert elsewhere
-    // (no accidental Sonos transport from a thumb resting on the touchpad).
+    // Center (select) button: toggle in Settings; on Now Playing it cycles
+    // the Framed backdrop live (no Settings trip needed). Deliberately inert
+    // elsewhere (no accidental Sonos transport from a resting thumb).
     private func handleSelect() {
-        guard router.view == .settings else { return }
-        toggleCurrentSettingsRow()
+        switch router.view {
+        case .settings:
+            toggleCurrentSettingsRow()
+        case .music:
+            // Only meaningful when the backdrop is visible (Framed mat).
+            if tvSettings.musicMatMode == .framed {
+                tvSettings.stepFramedBackdrop(1, wrap: true)
+            }
+        case .photos:
+            // PhotosView decides: toggles Art Display (Shadow Box / Fill)
+            // when an artwork is up, inert on regular photos.
+            photoRemote.send(.select)
+        default:
+            break
+        }
     }
 
     // Shared by select and play/pause: toggle the highlighted row; no-op on
@@ -192,6 +261,8 @@ struct RootView: View {
         case .todayMat:  tvSettings.todayMatEnabled.toggle()
         case .photosMat: tvSettings.photosMatEnabled.toggle()
         case .musicMat:  tvSettings.stepMusicMat(1, wrap: true)
+        case .musicBackdrop: tvSettings.stepFramedBackdrop(1, wrap: true)
+        case .artDisplay: tvSettings.stepArtDisplay(1, wrap: true)
         case .artFacts:  tvSettings.artFacts.toggle()
         case .autoDim:   tvSettings.autoDim.toggle()
         default: break
@@ -208,6 +279,8 @@ struct RootView: View {
         case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
         case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
         case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed
+        case .musicBackdrop: tvSettings.stepFramedBackdrop(dir)       // Still/Drift/Lava/...
+        case .artDisplay:    tvSettings.stepArtDisplay(dir)               // SB/Fill/Fill+Music
         case .artFacts:      tvSettings.artFacts = (dir > 0)          // left=Off, right=On
         case .autoDim:       tvSettings.autoDim = (dir > 0)           // left=Off, right=On
         case .brightness:
@@ -282,7 +355,7 @@ private struct ExitToSettingsParent: ViewModifier {
 // (PhotosView observes `seq`, not the action enum — observing the enum would
 // drop a second identical press because SwiftUI's onChange only fires on change).
 final class PhotoRemoteSignal: ObservableObject {
-    enum Action: Equatable { case next, previous }
+    enum Action: Equatable { case next, previous, select }
     @Published private(set) var seq: Int = 0
     private(set) var action: Action = .next
     func send(_ a: Action) { action = a; seq += 1 }

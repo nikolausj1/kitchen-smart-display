@@ -8,6 +8,8 @@ enum SettingsRow: Int, CaseIterable {
     case todayMat
     case photosMat
     case musicMat
+    case musicBackdrop
+    case artDisplay
     case artFacts
     case autoDim
     case brightness
@@ -53,6 +55,9 @@ struct SettingsView: View {
     @EnvironmentObject var tvSettings: TVSettings
     @EnvironmentObject var model: AppModel
     @ObservedObject var nav: SettingsNav
+    // For the live auto-brightness readout on the Brightness row. Observed so the
+    // percentage tracks the dim curve (dim.now ticks ~every 30s).
+    @ObservedObject var dim: DimModel
 
     var body: some View {
         GeometryReader { geo in
@@ -83,6 +88,12 @@ struct SettingsView: View {
                         row(.musicMat, label: "Music Mat", W: W,
                             value: tvSettings.musicMatLabel)
 
+                        row(.musicBackdrop, label: "Music Backdrop", W: W,
+                            value: tvSettings.framedBackdropLabel)
+
+                        row(.artDisplay, label: "Art Display", W: W,
+                            value: tvSettings.artDisplayLabel)
+
                         row(.artFacts, label: "Art Facts", W: W,
                             value: tvSettings.artFacts ? "On" : "Off")
 
@@ -90,7 +101,7 @@ struct SettingsView: View {
                             value: tvSettings.autoDim ? "On" : "Off")
 
                         row(.brightness, label: "Brightness", W: W,
-                            value: tvSettings.autoDim ? "Auto" : tvSettings.brightnessLabel)
+                            value: brightnessValue)
 
                         Text(hint)
                             .font(.system(size: W * 0.016, weight: .regular))
@@ -112,6 +123,17 @@ struct SettingsView: View {
         // the manifest index the remote handler navigates over.
         .onAppear { nav.albums = model.photoAlbums }
         .onChange(of: model.photoAlbums) { _, albums in nav.albums = albums }
+    }
+
+    // Brightness row value: a fixed percentage when Auto Dim is off, or
+    // "Auto (NN%)" showing the live auto-curve level when it is on. The
+    // percentage is the raw curve value (what the panel is actually dimmed to),
+    // not the Settings-readability floor the overlay applies while this view is up.
+    private var brightnessValue: String {
+        guard tvSettings.autoDim else { return tvSettings.brightnessLabel }
+        let b = dim.brightness(at: dim.now, autoDim: true,
+                               manual: tvSettings.manualBrightness)
+        return "Auto (\(Int((b * 100).rounded()))%)"
     }
 
     private var hint: String {

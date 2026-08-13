@@ -1,0 +1,17 @@
+{
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "layers": [
+    {
+      "filename": "Layer3_Front_Mat.imagestacklayer"
+    },
+    {
+      "filename": "Layer2_Artwork.imagestacklayer"
+    },
+    {
+      "filename": "Layer1_Wood_Frame.imagestacklayer"
+    }
+  ]
+}
