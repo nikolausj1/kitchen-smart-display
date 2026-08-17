@@ -112,6 +112,105 @@ function startRefresh(trigger) {
   return true
 }
 
+// --- device registry ---------------------------------------------------------
+// devices.json is the source of truth for what each screen shows. It replaces
+// the old model where the kitchen's localStorage was master and pushed a
+// three-key subset to the Pi's /api/state, which could not express "the living
+// room shows different albums than the kitchen".
+//
+//   { shared:  { location, school, timerThresholds, weatherSlots },
+//     devices: { "<id>": { name, kind, createdAt, config: { slideshow, display, sonos } } } }
+//
+// Shared = one value for the family. Config = per screen. Values are stored
+// per-field rather than as opaque blobs so a `locked` flag could be added later
+// without reshaping the file (locking is deliberately not implemented).
+const REGISTRY_FILE = join(ROOT, 'devices.json')
+
+function readRegistry() {
+  try {
+    const r = JSON.parse(readFileSync(REGISTRY_FILE, 'utf8'))
+    return { shared: r.shared || {}, devices: r.devices || {} }
+  } catch {
+    return { shared: {}, devices: {} }
+  }
+}
+
+function writeRegistry(reg) {
+  const tmp = REGISTRY_FILE + '.tmp'
+  writeFileSync(tmp, JSON.stringify(reg, null, 2))
+  renameSync(tmp, REGISTRY_FILE) // atomic: clients poll this
+}
+
+// Mirrors deepMerge in code/src/lib/settings.js: objects merge, arrays replace
+// wholesale. Replacing arrays matters - selectedAlbumIds and schoolDays are
+// sets the user edits by replacement, not by append.
+function deepMerge(base, override) {
+  if (override == null || typeof override !== 'object') return base
+  if (Array.isArray(override)) return override
+  const out = { ...base }
+  for (const k of Object.keys(override)) {
+    const b = base?.[k]
+    const o = override[k]
+    out[k] = b && o && typeof b === 'object' && typeof o === 'object' &&
+             !Array.isArray(b) && !Array.isArray(o)
+      ? deepMerge(b, o)
+      : o
+  }
+  return out
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = ''
+    req.on('data', (c) => {
+      raw += c
+      if (raw.length > 1_000_000) reject(new Error('body too large'))
+    })
+    req.on('end', () => {
+      if (!raw) return resolve({})
+      try { resolve(JSON.parse(raw)) } catch (e) { reject(e) }
+    })
+    req.on('error', reject)
+  })
+}
+
+// Register (or look up) a device. A device that already exists is NEVER
+// overwritten by its own registration - it just gets its stored config back.
+// That is what makes registration self-seeding: the first run of a new build
+// hands over whatever the device had locally, so live values survive the
+// migration instead of being reset to code defaults. The kitchen is currently
+// running drivingDepart 7:38 against a 7:42 default; resetting that would shift
+// the family's morning timer by four minutes.
+function registerDevice({ id, name, kind, config, shared }) {
+  const reg = readRegistry()
+  const existing = reg.devices[id]
+  let changed = false
+
+  if (!existing) {
+    reg.devices[id] = {
+      name: name || id,
+      kind: kind || 'unknown',
+      createdAt: new Date().toISOString(),
+      config: config && typeof config === 'object' ? config : {},
+    }
+    changed = true
+  } else if (name && existing.name !== name) {
+    existing.name = name
+    changed = true
+  }
+
+  // Seed house-wide settings from the first device that offers them, and only
+  // while they are still empty. Later registrations must not clobber values the
+  // dashboard or another screen has since edited.
+  if (shared && typeof shared === 'object' && Object.keys(reg.shared).length === 0) {
+    reg.shared = shared
+    changed = true
+  }
+
+  if (changed) writeRegistry(reg)
+  return { id, ...reg.devices[id], shared: reg.shared }
+}
+
 // --- http --------------------------------------------------------------------
 
 function cors(res) {
@@ -176,6 +275,72 @@ const server = createServer(async (req, res) => {
   }
 
   if (path === '/api/photos/refresh/status') return json(res, 200, readStatus())
+
+  // --- device registry ---
+  if (path === '/api/devices' && req.method === 'GET') {
+    const reg = readRegistry()
+    return json(res, 200, {
+      devices: Object.entries(reg.devices).map(([id, d]) => ({ id, ...d })),
+      shared: reg.shared,
+    })
+  }
+
+  if (path === '/api/devices/register' && req.method === 'POST') {
+    try {
+      const body = await readBody(req)
+      if (!body.id) return json(res, 400, { error: 'id required' })
+      return json(res, 200, registerDevice(body))
+    } catch (e) {
+      return json(res, 400, { error: String(e.message || e) })
+    }
+  }
+
+  if (path === '/api/settings/shared') {
+    if (req.method === 'GET') return json(res, 200, readRegistry().shared)
+    if (req.method === 'PATCH' || req.method === 'POST') {
+      try {
+        const reg = readRegistry()
+        reg.shared = deepMerge(reg.shared, await readBody(req))
+        writeRegistry(reg)
+        return json(res, 200, reg.shared)
+      } catch (e) {
+        return json(res, 400, { error: String(e.message || e) })
+      }
+    }
+    return json(res, 405, { error: 'GET or PATCH' })
+  }
+
+  const devDel = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})$/)
+  if (devDel && req.method === 'DELETE') {
+    const reg = readRegistry()
+    if (!reg.devices[devDel[1]]) return json(res, 404, { error: 'unknown device' })
+    delete reg.devices[devDel[1]]
+    writeRegistry(reg)
+    // A deleted device that reconnects re-registers and seeds itself again from
+    // whatever it still has cached locally, so this is recoverable, not fatal.
+    return json(res, 200, { ok: true, removed: devDel[1] })
+  }
+
+  const devCfg = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})\/config$/)
+  if (devCfg) {
+    const id = devCfg[1]
+    const reg = readRegistry()
+    if (!reg.devices[id]) return json(res, 404, { error: `unknown device: ${id}` })
+
+    if (req.method === 'GET') {
+      return json(res, 200, { id, ...reg.devices[id], shared: reg.shared })
+    }
+    if (req.method === 'PATCH' || req.method === 'POST') {
+      try {
+        reg.devices[id].config = deepMerge(reg.devices[id].config || {}, await readBody(req))
+        writeRegistry(reg)
+        return json(res, 200, { id, ...reg.devices[id], shared: reg.shared })
+      } catch (e) {
+        return json(res, 400, { error: String(e.message || e) })
+      }
+    }
+    return json(res, 405, { error: 'GET or PATCH' })
+  }
 
   if (path === '/api/photos/refresh') {
     if (req.method !== 'POST') return json(res, 405, { error: 'POST only' })
