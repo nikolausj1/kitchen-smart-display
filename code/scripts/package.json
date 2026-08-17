@@ -1,0 +1,13 @@
+{
+  "name": "frameserver-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Photo manifest build for FrameServer (C:\\Services\\FrameServer on the NUC). The legacy Pi build runs the same scripts with no node_modules and falls back to the vipsthumbnail CLI, so this package.json is only installed on the hub.",
+  "type": "module",
+  "scripts": {
+    "build": "node --env-file=../.env build-photo-manifest.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}
