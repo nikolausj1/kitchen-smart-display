@@ -120,6 +120,30 @@ write, because the tvOS app reads house-wide settings (location, school, timer)
 from there. Drop that call once tvOS reads shared config from the hub too; the
 per-device half already comes from the hub.
 
+## The dashboard (Phase 3)
+
+`http://nuc.local:8095/admin` - a sidebar of screens plus a House-wide entry,
+and per-screen rows for albums, slideshow behaviour, display/dimming, Sonos
+room, and the TV-only settings. The album picker shows asset counts so the mix
+being created is visible while selecting.
+
+**It is one self-contained HTML file**, not a second Vite entry. The plan
+originally said to reuse the React `SettingsView`, but that would have meant a
+separate bundle deployed to the hub - and its styling is in viewport units for a
+fixed kiosk panel, which is wrong in a resizable browser window, so there was no
+stylesheet to reuse anyway. Vanilla JS with no build step means deployment is
+`scp admin.html`.
+
+**No Save button, on purpose.** Every edit PATCHes immediately. This is the same
+store the on-screen pickers write to, so a half-saved draft would be a second
+source of truth - exactly what the registry exists to remove.
+
+`GET /api/albums` returns just the album index, so the picker does not pull the
+1.5 MB manifest to render checkboxes.
+
+Desktop-first. Phone needs real work on the row layout and is a deliberate
+fast-follow.
+
 ## Not built, on purpose
 
 Capabilities negotiation (defer until the e-ink panel needs it), heartbeat /
