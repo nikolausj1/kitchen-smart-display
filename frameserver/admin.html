@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FrameServer</title>
 <style>
   /* Desktop-first on purpose. The kiosk app is styled in viewport units for a
@@ -20,6 +20,10 @@
     }
   }
   * { box-sizing: border-box; }
+  /* Lets native controls - the time picker's clock and popover, checkbox
+     glyphs, focus rings - follow the theme instead of forcing a light widget
+     onto a dark page. */
+  :root { color-scheme: light dark; accent-color: var(--accent); }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -32,8 +36,14 @@
   header h1 { font-size: 1rem; margin: 0; letter-spacing: .01em; }
   header .stat { color: var(--muted); font-size: .85rem; }
   header .spacer { flex: 1; }
-  .layout { display: grid; grid-template-columns: 230px 1fr; gap: 1.25rem; padding: 1.25rem; align-items: start; }
-  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .layout {
+    display: grid; grid-template-columns: 230px 1fr; gap: 1.25rem;
+    padding: 1.25rem;
+    padding-left: max(1.25rem, env(safe-area-inset-left));
+    padding-right: max(1.25rem, env(safe-area-inset-right));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    align-items: start;
+  }
   nav { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
   nav button {
     display: block; width: 100%; text-align: left; padding: .7rem .9rem;
@@ -57,9 +67,14 @@
   .row:first-of-type { border-top: 0; }
   .row label { font-size: .9rem; }
   .row label small { display: block; color: var(--muted); font-size: .78rem; font-weight: 400; }
-  input[type=number], input[type=text], select {
+  /* input[type=time] must be listed explicitly - it does not inherit these and
+     falls back to a white browser default, which is invisible in dark mode. */
+  input[type=number], input[type=text], input[type=time], select {
     background: var(--bg); color: var(--ink); border: 1px solid var(--line);
     border-radius: 6px; padding: .4rem .5rem; font: inherit; min-width: 8rem;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
   }
   button.action {
     background: var(--accent); color: var(--accent-ink); border: 0;
@@ -80,12 +95,71 @@
   }
   #toast.show { opacity: .95; }
   code { font-size: .82rem; color: var(--muted); }
+
+  /* ---- Narrow screens -------------------------------------------------
+     Two breakpoints on purpose. A tablet in portrait (~768px) still has room
+     for the label/control split, so only the sidebar needs to move; a phone
+     does not, so rows stack there. */
+
+  /* Tablet and below: the sidebar becomes a horizontal strip of pills so the
+     content starts near the top instead of below a stacked device list. */
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; gap: .9rem; }
+    nav {
+      display: flex; gap: .5rem; overflow-x: auto; padding: .5rem;
+      border-radius: var(--radius); -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    nav::-webkit-scrollbar { display: none; }
+    nav button {
+      width: auto; flex: 0 0 auto; border: 1px solid var(--line);
+      border-radius: 999px; padding: .5rem .85rem; white-space: nowrap;
+    }
+    nav button:last-child { border: 1px solid var(--line); }
+    nav .kind { display: none; }   /* the name alone is enough in a pill */
+  }
+
+  /* Phone: stack every row. A 220px label column leaves ~150px for the
+     control at 390px wide, which is unusable. */
+  @media (max-width: 620px) {
+    body { font-size: 16px; }      /* keeps iOS from zooming on input focus */
+    /* One line, not two. The header is sticky, so every extra line permanently
+       covers content on a short screen. */
+    header {
+      padding: .6rem 1rem; padding-top: max(.6rem, env(safe-area-inset-top));
+      flex-wrap: nowrap; gap: .5rem;
+    }
+    header h1 { font-size: .95rem; flex: 0 0 auto; }
+    header .stat { font-size: .8rem; white-space: nowrap; }
+    #statScreens { display: none; }          /* the screen count is in the nav pills */
+    #refreshBtn { flex: 0 0 auto; padding: .4rem .7rem; font-size: .85rem; }
+    .layout { padding: .9rem; padding-bottom: max(.9rem, env(safe-area-inset-bottom)); }
+    section.card { padding: .9rem 1rem; margin-bottom: .9rem; }
+    .row { grid-template-columns: 1fr; gap: .4rem; padding: .8rem 0; }
+    .row label small { margin-top: .1rem; }
+    /* Full-width, finger-sized controls. */
+    .row select, .row input[type=number], .row input[type=text], .row input[type=time] {
+      width: 100%; min-width: 0; min-height: 44px; font-size: 16px;
+    }
+    .row button { min-height: 44px; width: 100%; }
+    .albums { grid-template-columns: 1fr; gap: 0; }
+    .albums label { padding: .6rem .1rem; border-bottom: 1px solid var(--line); min-height: 44px; align-items: center; }
+    .albums label:last-child { border-bottom: 0; }
+    .albums input[type=checkbox] { width: 20px; height: 20px; flex: 0 0 auto; }
+    /* The school-days picker reuses .albums; three across reads better than
+       one tall column of seven. */
+    .row .albums { grid-template-columns: repeat(3, 1fr); }
+    .row .albums label { border-bottom: 0; }
+    .toolbar { gap: .4rem; }
+    .toolbar button { min-height: 44px; }
+    #toast { left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom)); text-align: center; }
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>FrameServer</h1>
-  <span class="stat" id="stat">loading…</span>
+  <span class="stat" id="stat">loading…</span><span class="stat" id="statScreens"></span>
   <span class="spacer"></span>
   <button class="action" id="refreshBtn">Rebuild photos</button>
 </header>
@@ -134,7 +208,8 @@ async function loadAll() {
     api('/api/devices'), api('/api/albums').catch(() => ({ albums: [] })), api('/healthz'),
   ])
   devices = d.devices; shared = d.shared || {}; albums = a.albums || []
-  $('#stat').textContent = `${h.photos} photos · ${devices.length} screens`
+  $('#stat').textContent = `${h.photos} photos`
+  $('#statScreens').textContent = `· ${devices.length} screens`
   if (!selected || (selected !== '__shared__' && !devices.find((x) => x.id === selected))) {
     selected = devices[0]?.id || '__shared__'
   }

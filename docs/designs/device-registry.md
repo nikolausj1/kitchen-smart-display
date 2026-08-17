@@ -141,8 +141,29 @@ source of truth - exactly what the registry exists to remove.
 `GET /api/albums` returns just the album index, so the picker does not pull the
 1.5 MB manifest to render checkboxes.
 
-Desktop-first. Phone needs real work on the row layout and is a deliberate
-fast-follow.
+**Responsive**, on two breakpoints chosen for a reason:
+
+- **760px** - the sidebar becomes a horizontal strip of pills, so content starts
+  near the top instead of below a stacked device list. A tablet in portrait
+  still has room for the label/control split, so nothing else changes.
+- **620px** - rows stack, label above control. A 220px label column leaves about
+  150px for the control at 390px wide, which is unusable. Controls go
+  full-width with 44px minimum height, the album list becomes single-column
+  rows, and the school-days picker goes three across rather than a tall column
+  of seven.
+
+Details that matter on a phone and are easy to miss:
+
+- `body { font-size: 16px }` under 620px - **iOS zooms the page when a focused
+  input is under 16px**.
+- The sticky header is forced to one line (the screen count moves to the nav
+  pills), because every extra header line permanently covers content.
+- `env(safe-area-inset-*)` padding for notched devices.
+- `:root { color-scheme: light dark }` so native widgets follow the theme, and
+  `input[type=time]` is listed **explicitly** in the styled selector - it does
+  not inherit and otherwise falls back to a white browser default that is
+  invisible in dark mode. That was a real bug, caught only by looking at a dark
+  phone render.
 
 ## Not built, on purpose
 
