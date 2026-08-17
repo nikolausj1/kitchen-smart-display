@@ -10,17 +10,31 @@ tags: [design, frameserver, settings, multi-device, kitchen-display, apple-tv]
 # Device Registry - Per-Screen Settings on FrameServer
 
 **Status: shipped 2026-08-17 (Phase 2).** Both screens are registered and running
-with independent config: the kitchen shows 10 albums, the Apple TV shows 3, with
-zero overlap.
+from hub-held config.
 
 ## Why
 
 Before this, the kitchen's `localStorage` was the master and pushed a three-key
-subset (`location`, `school`, `slideshow`) to the Pi's `/api/state`. Every web
-client shared one blob, so two web screens could not show different albums. The
-Apple TV only escaped that by keeping its settings device-local - which meant
-they existed nowhere else, could not be changed except with the Siri Remote, and
-were lost on reinstall.
+subset (`location`, `school`, `slideshow`) to the Pi's `/api/state`.
+
+Note what was and was not already possible. The Apple TV **already** showed
+different albums from the kitchen - its picker had been TV-local and independent
+since 2026-06-10. So kitchen-vs-TV divergence is not what this unlocked, and the
+current 10-albums-vs-3 split predates the registry.
+
+What was impossible was **two web clients differing from each other**: both would
+have read the same `slideshow` blob, so the kitchen and a future ROADOM screen
+could not have shown different albums. And the TV's independence came at a cost -
+its settings existed nowhere but its own `UserDefaults`, could not be changed
+except with the Siri Remote, and were lost on reinstall.
+
+So the registry buys three things:
+
+1. Any two screens can differ, web included - verified during rollout with a
+   second web device holding `intervalMs 12345` while the kitchen held `60000`.
+2. Settings survive a reflash or reinstall.
+3. Settings are readable and writable off-device, which is what the Phase 3
+   dashboard needs.
 
 ## The model
 
