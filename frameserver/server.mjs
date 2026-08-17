@@ -276,6 +276,35 @@ const server = createServer(async (req, res) => {
 
   if (path === '/api/photos/refresh/status') return json(res, 200, readStatus())
 
+  // The album index only, so the dashboard's album picker does not have to pull
+  // the whole 1.5 MB manifest to render a list of checkboxes.
+  if (path === '/api/albums' && req.method === 'GET') {
+    try {
+      const m = JSON.parse(readFileSync(join(PHOTOS_DIR, 'manifest.json'), 'utf8'))
+      return json(res, 200, { albums: m.albums || [] })
+    } catch (e) {
+      return json(res, 500, { error: String(e.message || e) })
+    }
+  }
+
+  // The dashboard. A single self-contained file rather than a second Vite
+  // entry: the kiosk app is styled in viewport units for a fixed panel, which
+  // is wrong for a desktop browser, so there was no stylesheet to reuse anyway.
+  if (path === '/admin' || path === '/admin/') {
+    try {
+      const html = readFileSync(join(ROOT, 'admin.html'))
+      cors(res)
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Content-Length': html.length,
+        'Cache-Control': 'no-store',
+      })
+      return res.end(html)
+    } catch {
+      return json(res, 404, { error: 'admin.html not deployed' })
+    }
+  }
+
   // --- device registry ---
   if (path === '/api/devices' && req.method === 'GET') {
     const reg = readRegistry()

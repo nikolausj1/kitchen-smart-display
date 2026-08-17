@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FrameServer</title>
+<style>
+  /* Desktop-first on purpose. The kiosk app is styled in viewport units for a
+     fixed panel; this needs to behave in a resizable browser window instead, so
+     it uses rem and a plain grid. Phone is a deliberate fast-follow. */
+  :root {
+    --bg: #f6f6f4; --panel: #fff; --ink: #1c1c1a; --muted: #6b6b66;
+    --line: #e2e2dd; --accent: #3f6f4f; --accent-ink: #fff; --warn: #9a4a2f;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16171a; --panel: #1e2024; --ink: #e9e9e6; --muted: #9a9a94;
+      --line: #2e3138; --accent: #6f9d7c; --accent-ink: #10120f; --warn: #d98b6a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    padding: .9rem 1.25rem; background: var(--panel); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 1rem; margin: 0; letter-spacing: .01em; }
+  header .stat { color: var(--muted); font-size: .85rem; }
+  header .spacer { flex: 1; }
+  .layout { display: grid; grid-template-columns: 230px 1fr; gap: 1.25rem; padding: 1.25rem; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  nav { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  nav button {
+    display: block; width: 100%; text-align: left; padding: .7rem .9rem;
+    background: none; border: 0; border-bottom: 1px solid var(--line);
+    color: var(--ink); font: inherit; cursor: pointer;
+  }
+  nav button:last-child { border-bottom: 0; }
+  nav button:hover { background: var(--bg); }
+  nav button[aria-current="true"] { background: var(--accent); color: var(--accent-ink); }
+  nav .kind { display: block; font-size: .75rem; opacity: .7; }
+  section.card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem;
+  }
+  section.card > h2 { margin: 0 0 .25rem; font-size: .95rem; }
+  section.card > p.hint { margin: 0 0 1rem; color: var(--muted); font-size: .85rem; }
+  .row {
+    display: grid; grid-template-columns: 220px 1fr; gap: 1rem;
+    align-items: center; padding: .55rem 0; border-top: 1px solid var(--line);
+  }
+  .row:first-of-type { border-top: 0; }
+  .row label { font-size: .9rem; }
+  .row label small { display: block; color: var(--muted); font-size: .78rem; font-weight: 400; }
+  input[type=number], input[type=text], select {
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 6px; padding: .4rem .5rem; font: inherit; min-width: 8rem;
+  }
+  button.action {
+    background: var(--accent); color: var(--accent-ink); border: 0;
+    border-radius: 6px; padding: .45rem .8rem; font: inherit; cursor: pointer;
+  }
+  button.ghost { background: none; border: 1px solid var(--line); color: var(--ink); }
+  button.danger { background: none; border: 1px solid var(--warn); color: var(--warn); }
+  button:disabled { opacity: .5; cursor: default; }
+  .albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem .9rem; }
+  .albums label { display: flex; gap: .5rem; align-items: baseline; font-size: .88rem; }
+  .albums .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  .toolbar { display: flex; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; align-items: center; }
+  .toolbar .note { color: var(--muted); font-size: .82rem; }
+  #toast {
+    position: fixed; right: 1rem; bottom: 1rem; background: var(--ink); color: var(--bg);
+    padding: .5rem .8rem; border-radius: 6px; font-size: .85rem; opacity: 0;
+    transition: opacity .2s; pointer-events: none;
+  }
+  #toast.show { opacity: .95; }
+  code { font-size: .82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>FrameServer</h1>
+  <span class="stat" id="stat">loading…</span>
+  <span class="spacer"></span>
+  <button class="action" id="refreshBtn">Rebuild photos</button>
+</header>
+
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s)
+let devices = [], shared = {}, albums = [], selected = null
+
+const toast = (msg) => {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show')
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800)
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, { cache: 'no-store', ...opts })
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
+  return res.json()
+}
+
+// Every edit PATCHes immediately. There is no Save button on purpose: this is
+// the same store the on-screen pickers write to, so a half-saved draft would be
+// a second source of truth.
+async function patchDevice(id, body) {
+  await api(`/api/devices/${encodeURIComponent(id)}/config`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  toast('Saved — screens pick it up within 30s')
+}
+async function patchShared(body) {
+  await api('/api/settings/shared', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  toast('Saved — applies to every screen')
+}
+
+async function loadAll() {
+  const [d, a, h] = await Promise.all([
+    api('/api/devices'), api('/api/albums').catch(() => ({ albums: [] })), api('/healthz'),
+  ])
+  devices = d.devices; shared = d.shared || {}; albums = a.albums || []
+  $('#stat').textContent = `${h.photos} photos · ${devices.length} screens`
+  if (!selected || (selected !== '__shared__' && !devices.find((x) => x.id === selected))) {
+    selected = devices[0]?.id || '__shared__'
+  }
+  render()
+}
+
+function render() {
+  const nav = $('#nav')
+  nav.innerHTML = ''
+  for (const dev of devices) {
+    const b = document.createElement('button')
+    b.innerHTML = `${escapeHtml(dev.name || dev.id)}<span class="kind">${escapeHtml(dev.kind || '')}</span>`
+    b.setAttribute('aria-current', String(dev.id === selected))
+    b.onclick = () => { selected = dev.id; render() }
+    nav.appendChild(b)
+  }
+  const s = document.createElement('button')
+  s.innerHTML = `House-wide<span class="kind">every screen</span>`
+  s.setAttribute('aria-current', String(selected === '__shared__'))
+  s.onclick = () => { selected = '__shared__'; render() }
+  nav.appendChild(s)
+
+  $('#main').innerHTML = ''
+  if (selected === '__shared__') renderShared()
+  else renderDevice(devices.find((d) => d.id === selected))
+}
+
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+function card(title, hint) {
+  const el = document.createElement('section')
+  el.className = 'card'
+  el.innerHTML = `<h2>${escapeHtml(title)}</h2>` + (hint ? `<p class="hint">${escapeHtml(hint)}</p>` : '')
+  $('#main').appendChild(el)
+  return el
+}
+
+function row(parent, label, hint, control) {
+  const r = document.createElement('div')
+  r.className = 'row'
+  const l = document.createElement('label')
+  l.innerHTML = escapeHtml(label) + (hint ? `<small>${escapeHtml(hint)}</small>` : '')
+  r.appendChild(l); r.appendChild(control); parent.appendChild(r)
+  return r
+}
+
+function select(options, value, onChange) {
+  const el = document.createElement('select')
+  for (const [v, text] of options) {
+    const o = document.createElement('option')
+    o.value = String(v); o.textContent = text
+    o.selected = String(v) === String(value)
+    el.appendChild(o)
+  }
+  el.onchange = () => onChange(el.value)
+  return el
+}
+
+function numberInput(value, onChange, opts = {}) {
+  const el = document.createElement('input')
+  el.type = 'number'; el.value = value ?? ''
+  if (opts.min !== undefined) el.min = opts.min
+  if (opts.max !== undefined) el.max = opts.max
+  if (opts.step !== undefined) el.step = opts.step
+  el.onchange = () => onChange(el.value === '' ? null : Number(el.value))
+  return el
+}
+
+const DURATIONS = [
+  [10, '10 seconds'], [30, '30 seconds'], [60, '1 minute'], [180, '3 minutes'],
+  [300, '5 minutes'], [600, '10 minutes'], [900, '15 minutes'], [1800, '30 minutes'],
+  [3600, '1 hour'], [7200, '2 hours'], [10800, '3 hours'], [21600, '6 hours'],
+  [43200, '12 hours'], [86400, '24 hours'],
+]
+
+function renderDevice(dev) {
+  if (!dev) return
+  const cfg = dev.config || {}
+  const isTV = dev.kind === 'tvos'
+
+  // --- albums ---
+  const c = card('Photo albums',
+    isTV ? 'What this Apple TV shows. Independent of every other screen.'
+         : 'What this screen shows. Independent of every other screen.')
+  const all = (cfg.slideshow || {}).selectedAlbumIds == null
+  const chosen = new Set((cfg.slideshow || {}).selectedAlbumIds || [])
+
+  const bar = document.createElement('div')
+  bar.className = 'toolbar'
+  const allBtn = document.createElement('button')
+  allBtn.className = 'action' + (all ? '' : ' ghost')
+  allBtn.textContent = all ? 'Showing all albums' : 'Show all albums'
+  allBtn.onclick = async () => {
+    await patchDevice(dev.id, { slideshow: { selectedAlbumIds: null } })
+    ;(dev.config.slideshow ||= {}).selectedAlbumIds = null; render()
+  }
+  bar.appendChild(allBtn)
+  const note = document.createElement('span')
+  note.className = 'note'
+  note.textContent = all
+    ? 'New albums added to Immich are included automatically.'
+    : `${chosen.size} of ${albums.length} selected`
+  bar.appendChild(note)
+  c.appendChild(bar)
+
+  const grid = document.createElement('div')
+  grid.className = 'albums'
+  for (const a of albums) {
+    const l = document.createElement('label')
+    const cb = document.createElement('input')
+    cb.type = 'checkbox'
+    cb.checked = all ? false : chosen.has(a.id)
+    cb.onchange = async () => {
+      const next = new Set(all ? [] : chosen)
+      cb.checked ? next.add(a.id) : next.delete(a.id)
+      const arr = [...next]
+      await patchDevice(dev.id, { slideshow: { selectedAlbumIds: arr } })
+      ;(dev.config.slideshow ||= {}).selectedAlbumIds = arr; render()
+    }
+    const span = document.createElement('span')
+    span.textContent = a.name
+    const cnt = document.createElement('span')
+    cnt.className = 'count'
+    cnt.textContent = a.count ?? ''
+    l.append(cb, span, cnt)
+    grid.appendChild(l)
+  }
+  c.appendChild(grid)
+
+  // --- slideshow behaviour ---
+  const b = card('Slideshow')
+  if (isTV) {
+    const tv = cfg.tv || {}
+    row(b, 'Photo duration', 'How long each photo stays up',
+      select(DURATIONS, tv.photoDurationSeconds,
+        (v) => patchDevice(dev.id, { tv: { photoDurationSeconds: Number(v) } })))
+    row(b, 'Art facts', 'Rotating fact on the mat for artworks',
+      select([[true, 'On'], [false, 'Off']], tv.artFacts,
+        (v) => patchDevice(dev.id, { tv: { artFacts: v === 'true' } })))
+    row(b, 'Art display', 'How artworks are presented',
+      select([[0, 'Shadow box'], [1, 'Fill'], [2, 'Fill + music']], tv.artDisplay,
+        (v) => patchDevice(dev.id, { tv: { artDisplay: Number(v) } })))
+    row(b, 'Music backdrop', 'Framed Now Playing background',
+      select([[0, 'Drift'], [1, 'Lava'], [2, 'Marble'], [3, 'Ink'], [7, 'Current']], tv.framedBackdrop,
+        (v) => patchDevice(dev.id, { tv: { framedBackdrop: Number(v) } })))
+
+    const m = card('Mats', 'Picture-frame mat per view')
+    for (const [key, label] of [['todayMatEnabled', 'Today mat'], ['photosMatEnabled', 'Photos mat']]) {
+      row(m, label, '', select([[true, 'On'], [false, 'Off']], tv[key],
+        (v) => patchDevice(dev.id, { tv: { [key]: v === 'true' } })))
+    }
+    row(m, 'Music mat', '', select([[0, 'Off'], [1, 'Fit'], [2, 'Framed']], tv.musicMatMode,
+      (v) => patchDevice(dev.id, { tv: { musicMatMode: Number(v) } })))
+
+    const d = card('Dimming')
+    row(d, 'Auto dim', 'Sunset-anchored dimming curve',
+      select([[true, 'On'], [false, 'Off']], tv.autoDim,
+        (v) => patchDevice(dev.id, { tv: { autoDim: v === 'true' } })))
+    row(d, 'Brightness', 'Used only when Auto dim is off',
+      select([[0.2, '20%'], [0.4, '40%'], [0.6, '60%'], [0.8, '80%'], [1.0, '100%']],
+        tv.manualBrightness, (v) => patchDevice(dev.id, { tv: { manualBrightness: Number(v) } })))
+  } else {
+    const s = cfg.slideshow || {}
+    row(b, 'Photo duration', 'How long each photo stays up',
+      select(DURATIONS, Math.round((s.intervalMs ?? 6000) / 1000),
+        (v) => patchDevice(dev.id, { slideshow: { intervalMs: Number(v) * 1000 } })))
+    row(b, 'Sort order', '',
+      select([['random', 'Random'], ['date-taken', 'Date taken'], ['date-added', 'Date added']],
+        s.sortOrder, (v) => patchDevice(dev.id, { slideshow: { sortOrder: v } })))
+    row(b, 'Display mode', 'Smart picks per photo: fill when little is cropped',
+      select([['smart', 'Smart'], ['fill', 'Fill'], ['fit', 'Fit']], s.displayMode,
+        (v) => patchDevice(dev.id, { slideshow: { displayMode: v } })))
+    row(b, 'Smart faces', 'Shift the crop so faces stay in frame',
+      select([[true, 'On'], [false, 'Off']], s.smartFaces,
+        (v) => patchDevice(dev.id, { slideshow: { smartFaces: v === 'true' } })))
+    row(b, 'Caption auto-hide', 'Fade the location caption after a few seconds',
+      select([[true, 'On'], [false, 'Off']], s.autoDismissExif,
+        (v) => patchDevice(dev.id, { slideshow: { autoDismissExif: v === 'true' } })))
+
+    const d = card('Display', 'Panel brightness and the night schedule')
+    const disp = cfg.display || {}
+    row(d, 'Daytime brightness', '',
+      select([[0.4, '40%'], [0.6, '60%'], [0.8, '80%'], [0.9, '90%'], [1.0, '100%']],
+        disp.wakeBrightness, (v) => patchDevice(dev.id, { display: { wakeBrightness: Number(v) } })))
+    row(d, 'Evening brightness', 'After the dim time below',
+      select([[0.1, '10%'], [0.2, '20%'], [0.3, '30%'], [0.4, '40%'], [0.6, '60%']],
+        disp.eveningBrightness, (v) => patchDevice(dev.id, { display: { eveningBrightness: Number(v) } })))
+    for (const [key, label] of [['dimAt', 'Dim at'], ['offAt', 'Off at'], ['wakeAt', 'Wake at']]) {
+      row(d, label, '', timeControl(disp[key], (hm) => patchDevice(dev.id, { display: { [key]: hm } })))
+    }
+
+    const so = card('Music')
+    row(so, 'Sonos room', 'Which zone this screen controls',
+      textControl((cfg.sonos || {}).room, (v) => patchDevice(dev.id, { sonos: { room: v } })))
+  }
+
+  // --- device management ---
+  const dm = card('This screen', `id: ${dev.id}  ·  registered ${(dev.createdAt || '').slice(0, 10)}`)
+  row(dm, 'Name', 'Shown in this list only',
+    textControl(dev.name, async (v) => {
+      await api('/api/devices/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: dev.id, name: v }),
+      })
+      toast('Renamed'); loadAll()
+    }))
+  const del = document.createElement('button')
+  del.className = 'danger'
+  del.textContent = 'Remove from registry'
+  del.onclick = async () => {
+    if (!confirm(`Remove "${dev.name}"?\n\nIts settings here are deleted. If the screen is still running it will re-register and re-seed from whatever it has cached locally.`)) return
+    await api(`/api/devices/${encodeURIComponent(dev.id)}`, { method: 'DELETE' })
+    selected = null; toast('Removed'); loadAll()
+  }
+  row(dm, 'Remove', 'The screen re-registers itself if it is still running', del)
+}
+
+function timeControl(hm, onChange) {
+  const el = document.createElement('input')
+  el.type = 'time'
+  const pad = (n) => String(n).padStart(2, '0')
+  if (hm && typeof hm.hour === 'number') el.value = `${pad(hm.hour)}:${pad(hm.minute || 0)}`
+  el.onchange = () => {
+    const [h, m] = el.value.split(':').map(Number)
+    if (!Number.isNaN(h)) onChange({ hour: h, minute: m || 0 })
+  }
+  return el
+}
+
+function textControl(value, onChange) {
+  const el = document.createElement('input')
+  el.type = 'text'; el.value = value ?? ''
+  el.onchange = () => onChange(el.value)
+  return el
+}
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function renderShared() {
+  const sch = shared.school || {}
+  const c = card('School mornings', 'One value for the family — every screen uses these')
+  row(c, 'Driving departure', 'When the countdown expects you to leave by car',
+    timeControl(sch.drivingDepart, (v) => patchShared({ school: { drivingDepart: v } })))
+  row(c, 'Walking departure', '',
+    timeControl(sch.walkingDepart, (v) => patchShared({ school: { walkingDepart: v } })))
+  row(c, 'Auto-show Today at', 'When screens switch to Today on a school morning',
+    timeControl(sch.autoShowAt, (v) => patchShared({ school: { autoShowAt: v } })))
+  row(c, 'Morning ends at', 'After this, screens go back to Photos',
+    timeControl(sch.morningEndsAt, (v) => patchShared({ school: { morningEndsAt: v } })))
+
+  const dayWrap = document.createElement('div')
+  dayWrap.className = 'albums'
+  const days = new Set(sch.schoolDays || [])
+  DAYS.forEach((label, i) => {
+    const l = document.createElement('label')
+    const cb = document.createElement('input')
+    cb.type = 'checkbox'; cb.checked = days.has(i)
+    cb.onchange = () => {
+      cb.checked ? days.add(i) : days.delete(i)
+      patchShared({ school: { schoolDays: [...days].sort() } })
+    }
+    l.append(cb, document.createTextNode(label))
+    dayWrap.appendChild(l)
+  })
+  row(c, 'School days', '', dayWrap)
+
+  const lu = card('Lunch')
+  const lunch = sch.lunch || {}
+  row(lu, 'Show lunch menu', '',
+    select([[true, 'On'], [false, 'Off']], lunch.enabled,
+      (v) => patchShared({ school: { lunch: { enabled: v === 'true' } } })))
+  row(lu, 'MealViewer school', 'The slug in schools.mealviewer.com/school/<slug>',
+    textControl(lunch.schoolSlug, (v) => patchShared({ school: { lunch: { schoolSlug: v } } })))
+
+  const loc = card('Location', 'Used for the weather forecast and sunset timing')
+  const l = shared.location || {}
+  row(loc, 'Latitude', '', numberInput(l.lat, (v) => patchShared({ location: { lat: v } }), { step: 'any' }))
+  row(loc, 'Longitude', '', numberInput(l.lon, (v) => patchShared({ location: { lon: v } }), { step: 'any' }))
+}
+
+$('#refreshBtn').onclick = async () => {
+  const b = $('#refreshBtn')
+  b.disabled = true; b.textContent = 'Rebuilding…'
+  try {
+    await api('/api/photos/refresh', { method: 'POST' })
+    const poll = setInterval(async () => {
+      const s = await api('/api/photos/refresh/status')
+      if (!s.running) {
+        clearInterval(poll)
+        b.disabled = false; b.textContent = 'Rebuild photos'
+        toast(s.ok === false ? `Build failed: ${s.error || ''}` : `Rebuilt — ${s.photoCount ?? '?'} photos`)
+        loadAll()
+      }
+    }, 3000)
+  } catch (e) {
+    b.disabled = false; b.textContent = 'Rebuild photos'
+    toast(String(e.message || e))
+  }
+}
+
+loadAll().catch((e) => { $('#stat').textContent = 'error: ' + e.message })
+// Pick up screens that register while this page is open.
+setInterval(() => loadAll().catch(() => {}), 30000)
+</script>
+</body>
+</html>

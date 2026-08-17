@@ -64,8 +64,8 @@ if [ "$TARGET" = all ] || [ "$TARGET" = hub ]; then
   # re-query Google Places for everything it forgot.
   nuc_scp custom-places.json art-metadata.json "$NUC_HOST:$NUC_DIR/"
 
-  echo "==> FrameServer: service"
-  nuc_scp frameserver/server.mjs "$NUC_HOST:$NUC_DIR/"
+  echo "==> FrameServer: service + dashboard"
+  nuc_scp frameserver/server.mjs frameserver/admin.html "$NUC_HOST:$NUC_DIR/"
   nuc_ssh 'powershell -NoProfile -Command "Restart-Service SmartDisplayFrameServer; Start-Sleep -Seconds 2; (Invoke-WebRequest http://127.0.0.1:8095/healthz -UseBasicParsing).Content"'
 fi
 
