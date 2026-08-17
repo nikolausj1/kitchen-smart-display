@@ -3,10 +3,14 @@
 //
 // Reads the filled review export (from _inbox/ by default), appends one
 // custom-places.json bubble per correction, and prints the exact push +
-// refresh + resolve commands to finish (the Pi rebuilds its own manifest;
-// see docs/designs/photo-refresh-automation.md). We deliberately do NOT
-// auto-push or resolve flags here, so you can eyeball custom-places.json
-// and only resolve the flags after a successful refresh.
+// refresh + resolve commands to finish. We deliberately do NOT auto-push or
+// resolve flags here, so you can eyeball custom-places.json and only resolve
+// the flags after a successful refresh.
+//
+// Since the 2026-08 migration this hand-off spans TWO hosts:
+//   FrameServer (nuc.local:8095)  owns custom-places.json and the rebuild
+//   kitchen Pi  (smartdisplay)    still owns the flag queue (/api/flags)
+// See docs/designs/photo-refresh-automation.md.
 //
 // Usage:
 //   node scripts/flags-apply.mjs [path-to-flag-corrections.json]
@@ -23,7 +27,11 @@ const PROJECT_ROOT = resolve(__dirname, '..', '..')
 const INBOX = join(PROJECT_ROOT, '_inbox')
 const CUSTOM_PLACES =
   process.env.KIOSK_CUSTOM_PLACES_PATH || join(PROJECT_ROOT, 'custom-places.json')
+// The Pi still holds the flag queue; FrameServer holds the build inputs.
 const PI_BASE = (process.env.PI_BASE || 'http://smartdisplay.local:8080').replace(/\/+$/, '')
+const HUB_BASE = (process.env.HUB_BASE || 'http://nuc.local:8095').replace(/\/+$/, '')
+const HUB_SSH = process.env.HUB_SSH || 'micro@nuc.local'
+const HUB_DIR = process.env.HUB_DIR || 'C:/Services/FrameServer'
 
 // Default bubble radius (meters) by category. A property with grounds wants a
 // larger bubble than a single restaurant.
@@ -91,10 +99,11 @@ async function main() {
     console.log(`  - "${a.name}"  (${a.lat.toFixed(5)},${a.lon.toFixed(5)}  r=${a.radius_m}m  ${a.category})`)
   }
   const ids = applied.map((a) => a.assetId).filter(Boolean)
-  console.log('\nNext steps (push the corrections to the Pi, let it rebuild, then resolve the flags):')
-  console.log(`  scp '${CUSTOM_PLACES}' pi@smartdisplay.local:/home/pi/photo-build/custom-places.json`)
-  console.log(`  curl -s -X POST ${PI_BASE}/api/photos/refresh`)
-  console.log(`  curl -s ${PI_BASE}/api/photos/refresh/status   # wait for running:false, ok:true`)
+  console.log('\nNext steps (push the corrections to FrameServer, let it rebuild, then resolve')
+  console.log('the flags on the Pi, which still owns the flag queue):')
+  console.log(`  scp '${CUSTOM_PLACES}' ${HUB_SSH}:${HUB_DIR}/custom-places.json`)
+  console.log(`  curl -s -X POST ${HUB_BASE}/api/photos/refresh`)
+  console.log(`  curl -s ${HUB_BASE}/api/photos/refresh/status   # wait for running:false, ok:true`)
   console.log(`  curl -s -X POST -H 'Content-Type: application/json' -d '${JSON.stringify({ assetIds: ids })}' ${PI_BASE}/api/flags/resolve`)
 }
 
