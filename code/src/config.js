@@ -49,3 +49,19 @@ export const SONOS = {
   room: 'Main',
   pollIntervalMs: 1500,
 }
+
+// --- Photo hub (FrameServer) -------------------------------------------------
+// FrameServer runs on the NUC (C:\Services\FrameServer) and serves the manifest
+// plus every photo derivative to all the screens in the house. Before the 2026-08
+// migration this was the kitchen Pi itself, which made the kitchen display a
+// single point of failure for the Apple TV.
+//
+// mDNS name, never a hard-coded IP: the Pi's lease moved from .127 to .131 and
+// left a dead address baked into the tvOS app. `nuc.local` has a DHCP
+// reservation as well, so both halves are pinned.
+//
+// Empty string falls back to same-origin, which is what the samplePhotos dev
+// mode and any pre-migration rollback want.
+export const PHOTOS = {
+  baseUrl: 'http://nuc.local:8095',
+}
