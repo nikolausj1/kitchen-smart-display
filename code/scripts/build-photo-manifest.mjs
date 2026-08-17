@@ -45,13 +45,17 @@
 
 import { mkdir, readdir, readFile, writeFile, copyFile, rename, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve, extname } from 'node:path'
 
 import { LocationCache } from './lib/locationCache.mjs'
 import { loadCustomPlaces } from './lib/customPlaces.mjs'
 import { createResolver } from './lib/locationResolver.mjs'
-import { listAlbums, listAlbumAssets, getAsset, downloadPreview } from './lib/immich.mjs'
+import { listAlbums, listAlbumAssets, getAsset, downloadPreview, downloadOriginal } from './lib/immich.mjs'
+
+const pexec = promisify(execFile)
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = resolve(__dirname, '..', '..')
@@ -189,6 +193,51 @@ function classifyOrientation(w, h, exifOrientation) {
   }
 }
 
+// Art is shown full-frame on a 4K TV, so it gets a higher-res stub than the
+// ~1920px preview the rest of the photos use: the build fetches the original
+// and downscales it to ART_MAX_EDGE locally. Resizing uses whatever CLI is
+// present (libvips on the Pi, sips on macOS dev) so the Pi build stays
+// node_modules-free. vipsthumbnail/convert only shrink (never upscale).
+const ART_MAX_EDGE = 3840
+let _resizer // undefined = not yet detected, null = none found, else tool name
+let _sharp   // lazily imported sharp module, when installed
+async function resizeMaxEdge(src, dst, max) {
+  if (_resizer === undefined) {
+    _resizer = null
+    // Prefer sharp when installed (FrameServer on the NUC). It bundles libvips,
+    // so Windows needs no system package and behaves identically to macOS. The
+    // CLI fallbacks stay because the Pi build has no node_modules and remains
+    // the rollback path for this migration.
+    try {
+      _sharp = (await import('sharp')).default
+      _resizer = 'sharp'
+    } catch {
+      const probe = process.platform === 'win32' ? 'where' : 'which'
+      for (const cmd of ['vipsthumbnail', 'magick', 'convert', 'sips']) {
+        try { await pexec(probe, [cmd]); _resizer = cmd; break } catch {}
+      }
+    }
+    console.log(`Art hi-res resizer: ${_resizer || 'NONE (art falls back to preview)'}`)
+  }
+  if (!_resizer) throw new Error('no resize tool available')
+  if (_resizer === 'sharp') {
+    // fit:'inside' + withoutEnlargement matches vipsthumbnail's shrink-only
+    // behavior; rotate() applies EXIF orientation before the metadata is
+    // dropped, which is what vipsthumbnail does by default.
+    await _sharp(src)
+      .rotate()
+      .resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 88 })
+      .toFile(dst)
+  } else if (_resizer === 'vipsthumbnail') {
+    await pexec('vipsthumbnail', [src, '--size', `${max}x${max}`, '-o', `${dst}[Q=88,strip]`])
+  } else if (_resizer === 'magick' || _resizer === 'convert') {
+    await pexec(_resizer, [src, '-resize', `${max}x${max}>`, '-quality', '88', '-strip', dst])
+  } else { // sips (macOS dev); -Z may upscale smaller images, acceptable for dev
+    await pexec('sips', ['-s', 'format', 'jpeg', '-Z', String(max), src, '--out', dst])
+  }
+}
+
 // --- Mode 1: Immich ---------------------------------------------------------
 
 async function processImmich() {
@@ -229,32 +278,66 @@ async function processImmich() {
   for (const { asset, albums: albumIds } of all) {
     i++
     const ex = asset.exifInfo || {}
-    const filename = `immich-${asset.id}.jpg`
+    const isArt = [...albumIds].some((id) => artAlbumIds.has(id))
+    // Art gets a hi-res (~4K) stub under a distinct "-hi" name; everything else
+    // gets the ~1920px preview. Stub is stable per asset id, so a file already
+    // on disk is reused (keeps nightly runs fast and spares the Pi's SD card).
+    // Partial files never land at the final name (tmp+rename), so existence
+    // implies a complete file. Per-asset error tolerance keeps one bad asset
+    // from sinking the whole run.
+    const filename = isArt ? `immich-${asset.id}-hi.jpg` : `immich-${asset.id}.jpg`
     const dst = join(PUBLIC_DIR, filename)
 
-    // Previews are content-stable per asset id, so a file already on disk is
-    // reused (keeps nightly runs fast and spares the Pi's SD card). Partial
-    // files never land at the final name (tmp+rename), so existence implies
-    // a complete file. New assets download on per-asset error tolerance so
-    // one bad asset doesn't sink the whole run.
     if (existsSync(dst)) {
       reused++
     } else {
       try {
-        await downloadPreview({
-          baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: `${dst}.part`,
-        })
-        await rename(`${dst}.part`, dst)
+        if (isArt) {
+          // Hi-res: fetch the original and downscale to 4K (art is shown
+          // uncropped, so resolution matters most). vips/sips pick the output
+          // format from the file extension, so the resize target must end in
+          // .jpg - not the generic .part used elsewhere.
+          const orig = `${dst}.orig`
+          const tmp = `${dst}.4k.jpg`
+          try {
+            await downloadOriginal({ baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: orig })
+            await resizeMaxEdge(orig, tmp, ART_MAX_EDGE)
+            await rename(tmp, dst)
+          } finally {
+            await rm(orig).catch(() => {})
+            await rm(tmp).catch(() => {})
+          }
+        } else {
+          await downloadPreview({
+            baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: `${dst}.part`,
+          })
+          await rename(`${dst}.part`, dst)
+        }
         downloaded++
       } catch (e) {
         await rm(`${dst}.part`).catch(() => {})
-        console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e.message}`)
-        continue
+        if (isArt) {
+          // Hi-res path failed (no resizer / original unavailable) -> fall back
+          // to the standard preview so the piece still shows, just at ~1920px.
+          try {
+            await downloadPreview({
+              baseUrl: immichUrl, apiKey: immichKey, assetId: asset.id, outPath: `${dst}.part`,
+            })
+            await rename(`${dst}.part`, dst)
+            downloaded++
+            console.warn(`  [${i}/${all.length}] art hi-res failed for ${asset.id} (${e.message}); used preview`)
+          } catch (e2) {
+            await rm(`${dst}.part`).catch(() => {})
+            console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e2.message}`)
+            continue
+          }
+        } else {
+          console.warn(`  [${i}/${all.length}] ! download failed for ${asset.id}: ${e.message}`)
+          continue
+        }
       }
     }
     keepFiles.add(filename)
-
-    const isArt = [...albumIds].some((id) => artAlbumIds.has(id))
 
     // Fetch full asset detail to get people[].faces[] geometry, which the
     // album-list endpoint omits. Cheap on LAN. Skipped for art: face boxes on
