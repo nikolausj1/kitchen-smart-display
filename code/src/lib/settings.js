@@ -1,16 +1,64 @@
 import { useSyncExternalStore } from 'react'
+import { PHOTOS } from '../config.js'
 
-// Settings store - the single source of truth for runtime-configurable
-// values. Reads/writes localStorage so changes survive reloads. The
-// SettingsView writes; every hook reads via useSettings().
+// Settings store.
+//
+// FrameServer (the hub) is the source of truth; localStorage is a cache that
+// keeps this screen working when the hub is unreachable. Before Phase 2 the
+// kitchen's localStorage WAS the master and pushed a three-key subset to the
+// Pi's /api/state - a model that could not express "the living room shows
+// different albums than the kitchen", because every web client shared one blob.
+//
+// Two scopes now:
+//   SHARED  one value for the family (location, school, timer colours)
+//   DEVICE  per screen (albums, display mode, brightness, Sonos room)
+//
+// The SettingsView writes; every hook reads via useSettings().
 
 const STORAGE_KEY = 'kitchenDisplaySettings'
+const DEVICE_ID_KEY = 'kitchenDisplayDeviceId'
 
-// True when this instance is the read-only Apple TV surface. Parsed directly
-// from the URL (not via kioskMode.js) to avoid an import cycle.
+const HUB = (PHOTOS.baseUrl || '').replace(/\/+$/, '')
+
+// House-wide vs per-screen. Anything not listed here stays local-only.
+const SHARED_SCOPE = ['location', 'school', 'timerThresholds', 'weatherSlots']
+const DEVICE_SCOPE = ['slideshow', 'display', 'sonos']
+
+// Identity comes from the kiosk URL (?device=living-room), extending the
+// existing ?kiosk=tv pattern, and is remembered so a reload without the param
+// keeps the same identity. The hub assigns nothing - devices name themselves,
+// and the dashboard can re-point an existing config at a new device, so
+// reflashing a Pi never loses its settings.
+function resolveDeviceId() {
+  if (typeof window === 'undefined') return 'kitchen'
+  const q = new URLSearchParams(window.location.search).get('device')
+  if (q) {
+    try { localStorage.setItem(DEVICE_ID_KEY, q) } catch { /* storage disabled */ }
+    return q
+  }
+  try {
+    const saved = localStorage.getItem(DEVICE_ID_KEY)
+    if (saved) return saved
+  } catch { /* storage disabled */ }
+  return IS_TV ? 'web-tv' : 'kitchen'
+}
+
+function pick(obj, keys) {
+  const out = {}
+  for (const k of keys) if (obj?.[k] !== undefined) out[k] = obj[k]
+  return out
+}
+
+// True when this instance is the secondary web TV surface. Parsed directly
+// from the URL (not via kioskMode.js) to avoid an import cycle. It no longer
+// implies read-only: every screen owns its own device config. It still gates
+// the kitchen-authoritative pushes below (timer, no-school flag).
 const IS_TV =
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).get('kiosk') === 'tv'
+
+// Resolved once at module load, after IS_TV exists.
+const DEVICE_ID = resolveDeviceId()
 
 // Settings keys mirrored to the Pi shared-state endpoint for secondary
 // displays (the TV). The kitchen is the sole writer; the TV reads these.
@@ -35,6 +83,110 @@ function postSharedState(next) {
     }).catch(() => {})
   } catch {
     // best-effort
+  }
+}
+
+// --- hub sync ----------------------------------------------------------------
+// Writes are optimistic. updateSettings() has already applied the change and
+// written the localStorage cache before any of this runs, so a failed PATCH
+// costs nothing visible and the next poll reconciles. Failing silently is
+// deliberate: a hub outage must never stop someone changing a setting on the
+// panel in front of them.
+
+let lastLocalWriteAt = 0
+let patchTimer = null
+let queuedDevice = {}
+let queuedShared = {}
+
+function hubPatch(path, body) {
+  if (!HUB || typeof fetch === 'undefined') return
+  fetch(`${HUB}${path}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  }).catch(() => {})
+}
+
+// Debounced so dragging a slider does not fire a PATCH per pixel.
+function flushPatches() {
+  patchTimer = null
+  if (Object.keys(queuedDevice).length) {
+    hubPatch(`/api/devices/${encodeURIComponent(DEVICE_ID)}/config`, queuedDevice)
+    queuedDevice = {}
+  }
+  if (Object.keys(queuedShared).length) {
+    hubPatch('/api/settings/shared', queuedShared)
+    queuedShared = {}
+  }
+}
+
+function syncToHub(next) {
+  if (!HUB) return
+  Object.assign(queuedDevice, pick(next, DEVICE_SCOPE))
+  Object.assign(queuedShared, pick(next, SHARED_SCOPE))
+  lastLocalWriteAt = Date.now()
+  if (patchTimer) clearTimeout(patchTimer)
+  patchTimer = setTimeout(flushPatches, 400)
+}
+
+// Apply a hub payload without echoing it straight back as a PATCH - otherwise
+// every poll would rewrite what it just read.
+function applyFromHub(payload) {
+  if (!payload) return
+  const patch = {
+    ...pick(payload.shared || {}, SHARED_SCOPE),
+    ...pick(payload.config || {}, DEVICE_SCOPE),
+  }
+  if (!Object.keys(patch).length) return
+  currentValue = deepMerge(currentValue, patch)
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentValue))
+  } catch { /* storage disabled */ }
+  listeners.forEach((fn) => fn())
+}
+
+// Self-seeding registration. The hub NEVER overwrites a device that already
+// exists, so handing it our current merged settings on first contact is what
+// carries live values across the migration instead of resetting them to code
+// defaults. This screen is running drivingDepart 7:38 against a 7:42 default;
+// silently shifting the family's morning timer by four minutes is exactly the
+// kind of small wrongness that makes people stop trusting the display.
+async function registerWithHub() {
+  if (!HUB || typeof fetch === 'undefined') return
+  try {
+    const res = await fetch(`${HUB}/api/devices/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: DEVICE_ID,
+        name: DEVICE_ID,
+        kind: IS_TV ? 'web-tv' : 'web',
+        config: pick(currentValue, DEVICE_SCOPE),
+        shared: pick(currentValue, SHARED_SCOPE),
+      }),
+      cache: 'no-store',
+    })
+    if (res.ok) applyFromHub(await res.json())
+  } catch {
+    // Hub unreachable: keep running on the localStorage cache.
+  }
+}
+
+// Poll so a change made from the dashboard reaches this screen. Skipped right
+// after a local edit, or a poll in flight during a change would revert it.
+const HUB_POLL_MS = 30 * 1000
+async function pollHub() {
+  if (!HUB || typeof fetch === 'undefined') return
+  if (Date.now() - lastLocalWriteAt < 5000) return
+  try {
+    const res = await fetch(`${HUB}/api/devices/${encodeURIComponent(DEVICE_ID)}/config`, {
+      cache: 'no-store',
+    })
+    if (res.ok) applyFromHub(await res.json())
+    else if (res.status === 404) registerWithHub() // device was removed; re-seed
+  } catch {
+    // Hub unreachable: keep the cache.
   }
 }
 
@@ -241,6 +393,14 @@ const listeners = new Set()
 // the user happens to change a setting. No-op on the TV (read-only).
 postSharedState(currentValue)
 
+// Register with the hub and start polling for dashboard-side changes. Both are
+// no-ops without a hub URL, which keeps samplePhotos dev mode and the rollback
+// path working unchanged.
+if (HUB && typeof window !== 'undefined') {
+  registerWithHub()
+  setInterval(pollHub, HUB_POLL_MS)
+}
+
 function subscribe(fn) {
   listeners.add(fn)
   return () => listeners.delete(fn)
@@ -263,7 +423,11 @@ export function updateSettings(updater) {
   } catch {
     // no-op if storage is full / disabled
   }
+  // Dual-write during the transition: the hub is the new source of truth, but
+  // the native Apple TV still reads settings from the Pi's /api/state. Drop the
+  // postSharedState call once tvOS reads its config from the hub instead.
   postSharedState(next)
+  syncToHub(next)
   listeners.forEach((fn) => fn())
 }
 
