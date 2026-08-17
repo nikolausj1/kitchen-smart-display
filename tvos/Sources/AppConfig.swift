@@ -3,15 +3,23 @@ import Foundation
 // Static config + defaults. The Pi host is where the kitchen kiosk server
 // runs; /api/state and /api/sonos are served from the same origin.
 enum AppConfig {
-    // The real Apple TV resolves smartdisplay.local over mDNS fine. The iOS/
-    // tvOS SIMULATOR resolves .local unreliably, so for simulator builds we use
-    // the Pi's LAN IP directly. (Update SIM_PI_IP if the Pi's DHCP lease moves;
-    // it's only used in the simulator dev loop, never in shipped builds.)
+    // The real Apple TV resolves .local names over mDNS fine. The iOS/tvOS
+    // SIMULATOR resolves .local unreliably, so simulator builds use LAN IPs
+    // directly. Both hosts now have DHCP reservations on the eero, so these
+    // stay put - but prefer the mDNS name anywhere it works, because a stale
+    // hard-coded IP here is exactly what broke the simulator when the Pi's
+    // lease moved from .4.127 to .7.131.
     #if targetEnvironment(simulator)
-    static let piBase = URL(string: "http://192.168.4.127:8080")!
+    static let piBase = URL(string: "http://192.168.7.131:8080")!
+    static let photosBase = URL(string: "http://192.168.4.61:8095")!
     #else
     static let piBase = URL(string: "http://smartdisplay.local:8080")!
+    static let photosBase = URL(string: "http://nuc.local:8095")!
     #endif
+    // piBase      -> the kitchen Pi: /api/state and /api/sonos still live there.
+    // photosBase  -> FrameServer on the NUC: the manifest and every derivative.
+    // These were one host until the 2026-08 migration; keep them separate so a
+    // later move of state/Sonos to the hub is a one-line change here.
     static var stateURL: URL { piBase.appendingPathComponent("api/state") }
     static func sonos(_ path: String) -> URL {
         // path like "/Main/playpause"

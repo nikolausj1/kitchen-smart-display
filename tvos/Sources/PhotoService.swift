@@ -44,9 +44,10 @@ struct Photo: Decodable, Equatable, Identifiable {
     var aspect: Double { height > 0 ? Double(width) / Double(height) : 1 }
 
     // Absolute URL for loading (manifest stores app-relative paths).
+    // Derivatives come from FrameServer, not the Pi, since the 2026-08 migration.
     var url: URL? {
         if src.hasPrefix("http") { return URL(string: src) }
-        return URL(string: AppConfig.piBase.absoluteString + src)
+        return URL(string: AppConfig.photosBase.absoluteString + src)
     }
 }
 
@@ -65,7 +66,7 @@ private struct Manifest: Decodable {
 
 struct PhotoService {
     static var manifestURL: URL {
-        AppConfig.piBase.appendingPathComponent("stub-photos/manifest.json")
+        AppConfig.photosBase.appendingPathComponent("stub-photos/manifest.json")
     }
 
     func fetch(selectedAlbumIds: [String]?) async -> [Photo] {
