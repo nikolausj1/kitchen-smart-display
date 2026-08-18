@@ -843,6 +843,24 @@ export default function SettingsView() {
               }
             />
           </Row>
+          <Row
+            label="Hardware dimming"
+            hint="Dim the real backlight over the HDMI cable. Off falls back to a black overlay."
+          >
+            <select
+              className="settings-select"
+              value={display?.hardwareDim === false ? 'off' : 'on'}
+              onChange={(e) =>
+                updateSettings({
+                  display: { hardwareDim: e.target.value === 'on' },
+                })
+              }
+              data-interactive="true"
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </Row>
           <Row label="Dim from" hint="Screen dims at this time each evening.">
             <TimeOfDay
               hour={display?.dimAt?.hour ?? 21}

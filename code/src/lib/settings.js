@@ -295,16 +295,20 @@ export const DEFAULTS = {
   // Any touch during dim/off wakes; manual wake holds until the next
   // scheduled transition fires.
   //
-  // Brightness values are "fraction of native panel brightness." We have no
-  // hardware backlight control on this HDMI panel, so brightness is
-  // implemented as a CSS overlay (opacity = 1 - brightness). 1.0 means no
-  // overlay; 0.1 means heavy overlay.
+  // Brightness values are "fraction of native panel brightness." These now
+  // drive the REAL backlight over DDC/CI (ddcutil setvcp 10) via the Pi's
+  // /api/display/brightness endpoint. The CSS overlay (opacity = 1 - brightness)
+  // remains as the fallback when DDC is unavailable or hardwareDim is off.
   display: {
     dimAt: { hour: 21, minute: 0 },  // 9:00 PM
     offAt: { hour: 0, minute: 0 },   // midnight
     wakeAt: { hour: 6, minute: 0 },  // 6:00 AM
     wakeBrightness: 0.9,             // 0..1, daytime brightness
     eveningBrightness: 0.4,          // 0..1, brightness during dim window
+    // Drive the panel's real backlight over DDC/CI instead of painting a black
+    // overlay over a full-brightness screen. Off = overlay-only (the old
+    // behavior), which is the escape hatch if the panel ever misbehaves.
+    hardwareDim: true,
   },
   slideshow: {
     intervalMs: 6000,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
+import { KIOSK_TV } from '../lib/kioskMode.js'
 
 // useDisplaySchedule - night-mode state machine for the kiosk.
 //
@@ -15,11 +16,16 @@ import { useSettings } from '../lib/settings.js'
 // This makes "wake until next transition" trivially correct without needing
 // to track a wake timestamp.
 //
-// Both 'dim' and 'off' modes are implemented as CSS overlays (DimOverlay).
-// Real DPMS off via the Pi-side /api/display endpoint was rejected because
-// wlroots disables input events to clients when the output is fully
-// disabled, breaking touch-to-wake. The Pi endpoint still exists for
-// possible future use but is no longer called from here.
+// Dimming drives the panel's REAL backlight over DDC/CI: each mode change
+// POSTs a target to the Pi's /api/display/brightness, which shells out to
+// `ddcutil setvcp 10`. The CSS overlay (DimOverlay) is now the FALLBACK - it
+// re-engages only when DDC reports failure, so we never double-dim - plus the
+// guaranteed-black layer for 'off'.
+//
+// Real DPMS off via /api/display/off is still rejected: wlroots stops
+// delivering input events to clients when the output is fully disabled, which
+// breaks touch-to-wake. `setvcp 10` only lowers the backlight and leaves the
+// output enabled, which is exactly why it is safe here where DPMS was not.
 
 // Convert {hour, minute} -> minutes since midnight.
 function timeToMin(t) {
@@ -51,6 +57,17 @@ function modeAtMinute(now, dim, off, wake) {
   return mode
 }
 
+// Matches DDC_MIN_BRIGHTNESS in pi/kiosk-server.py. Never 0: 'off' is the
+// overlay's job, and a backlight floored at 1 stays recoverable by touch.
+const HW_MIN_BRIGHTNESS = 1
+
+function backlightFor(mode, wakeBrightness, eveningBrightness) {
+  const pct = (f) => Math.max(HW_MIN_BRIGHTNESS, Math.min(100, Math.round(f * 100)))
+  if (mode === 'awake') return pct(wakeBrightness)
+  if (mode === 'dim') return pct(eveningBrightness)
+  return HW_MIN_BRIGHTNESS
+}
+
 export default function useDisplaySchedule() {
   const settings = useSettings()
   const dim = settings.display?.dimAt
@@ -58,6 +75,8 @@ export default function useDisplaySchedule() {
   const wake = settings.display?.wakeAt
   const wakeBrightness = settings.display?.wakeBrightness ?? 0.9
   const eveningBrightness = settings.display?.eveningBrightness ?? 0.4
+  // One-tap escape hatch back to overlay-only if the panel ever misbehaves.
+  const hardwareDimEnabled = settings.display?.hardwareDim !== false
 
   const dimMin = timeToMin(dim)
   const offMin = timeToMin(off)
@@ -128,6 +147,31 @@ export default function useDisplaySchedule() {
     return () => window.removeEventListener('display-sleep-now', onSleepNow)
   }, [])
 
+  // Drive the real backlight on every mode change (and whenever the brightness
+  // settings change). hardwareDim reports whether that actually worked, so the
+  // overlay knows whether it still needs to do the dimming itself.
+  const [hardwareDim, setHardwareDim] = useState(false)
+  useEffect(() => {
+    if (KIOSK_TV || !hardwareDimEnabled) {
+      setHardwareDim(false)
+      return undefined
+    }
+    let cancelled = false
+    const value = backlightFor(actualMode, wakeBrightness, eveningBrightness)
+    // Relative URL: the app bundle is still served by the Pi, so this reaches
+    // the same origin. (Photos moved to FrameServer; the app did not.)
+    fetch('/api/display/brightness', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled) setHardwareDim(!!(j && j.ok)) })
+      .catch(() => { if (!cancelled) setHardwareDim(false) })
+    return () => { cancelled = true }
+  }, [actualMode, wakeBrightness, eveningBrightness, hardwareDimEnabled])
+
   const api = useMemo(() => ({}), [])
 
   return {
@@ -135,6 +179,7 @@ export default function useDisplaySchedule() {
     scheduledMode,
     wakeBrightness,
     eveningBrightness,
+    hardwareDim,
     ...api,
   }
 }

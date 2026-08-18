@@ -359,6 +359,7 @@ function Shell({ initialView }) {
       {!KIOSK_TV && (
         <DimOverlay
           actualMode={display.actualMode}
+          hardwareDim={display.hardwareDim}
           wakeBrightness={display.wakeBrightness}
           eveningBrightness={display.eveningBrightness}
         />

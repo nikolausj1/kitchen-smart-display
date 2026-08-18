@@ -8,6 +8,8 @@
 #   POST /api/display/off  -> shells out to wlr-randr --output <out> --off
 #   POST /api/display/on   -> shells out to wlr-randr --output <out> --on
 #   GET  /api/display/state -> {"on": true|false}
+#   POST /api/display/brightness {"value": 0-100} -> DDC/CI backlight
+#   GET  /api/display/brightness -> {"value": N}
 #
 # The output name is auto-detected from wlr-randr at request time (so the
 # server stays correct even if the cable is plugged into a different HDMI
@@ -265,6 +267,105 @@ def set_display(on):
         return False, str(e)
 
 
+# --- DDC/CI backlight --------------------------------------------------------
+# The panel's REAL backlight, commanded over the HDMI cable with ddcutil - the
+# same control as its physical brightness buttons. Until now "dimming" was a
+# black CSS overlay painted over a panel still running at 100%: it glows in a
+# dark kitchen, blacks read grey, and it draws full power all night.
+#
+# Why this is safe where the wlr-randr DPMS path was not: `setvcp 10` lowers the
+# backlight WITHOUT disabling the output, so wlroots keeps delivering input
+# events to clients and touch-to-wake still works. Disabling the output is what
+# broke it before.
+#
+#   POST /api/display/brightness  {"value": 0-100}
+#   GET  /api/display/brightness  -> {"value": N}
+#
+# Verified on this panel 2026-06-22 and again 2026-08-18: Realtek controller,
+# VCP 2.2, /dev/i2c-13, clean read/write both directions, and the Pi 5 setvcp
+# bug (ddcutil #356) does not affect it. Runs as `pi` - no sudo, no new privs.
+DDC_TIMEOUT = 8          # a flaky I2C bus must never hang the server
+DDC_MIN_BRIGHTNESS = 1   # never drive to 0 over DDC; the overlay guarantees black
+_ddc_bus = None          # cached bus number, re-detected on failure
+
+
+def detect_ddc_bus(force=False):
+    """Return the I2C bus number the panel answers DDC/CI on, or None.
+
+    Never hardcode this. The ddcutil docs say i2c-11, this panel is on i2c-13,
+    and the number can drift across kernel updates - so detect once, cache, and
+    re-detect if a write ever fails.
+    """
+    global _ddc_bus
+    if _ddc_bus is not None and not force:
+        return _ddc_bus
+    try:
+        out = subprocess.run(
+            ['ddcutil', 'detect', '--brief'],
+            capture_output=True, text=True, timeout=20,
+        ).stdout
+    except Exception as e:
+        print(f'ddcutil detect failed: {e}', file=sys.stderr)
+        _ddc_bus = None
+        return None
+    m = re.search(r'/dev/i2c-(\d+)', out)
+    _ddc_bus = int(m.group(1)) if m else None
+    if _ddc_bus is None:
+        print('ddcutil detect: no I2C bus found', file=sys.stderr)
+    return _ddc_bus
+
+
+def get_brightness():
+    """Current backlight 0-100, or None if DDC is unavailable."""
+    bus = detect_ddc_bus()
+    if bus is None:
+        return None
+    try:
+        r = subprocess.run(
+            ['ddcutil', '--bus', str(bus), 'getvcp', '10', '--brief'],
+            capture_output=True, text=True, timeout=DDC_TIMEOUT,
+        )
+        if r.returncode != 0:
+            return None
+        # --brief prints: "VCP 10 C <current> <max>"
+        parts = r.stdout.split()
+        return int(parts[3]) if len(parts) >= 4 else None
+    except Exception:
+        return None
+
+
+def set_brightness(value):
+    """Set the backlight. Returns (ok, info) like set_display.
+
+    Clamped to DDC_MIN_BRIGHTNESS..100 so a bad caller can never black the panel
+    out over DDC alone - "off" is the overlay's job, and it is recoverable by
+    touch. One retry with a forced re-detect covers bus-number drift.
+    """
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return False, 'value must be a number'
+    v = max(DDC_MIN_BRIGHTNESS, min(100, v))
+
+    for attempt in (0, 1):
+        bus = detect_ddc_bus(force=(attempt == 1))
+        if bus is None:
+            continue
+        try:
+            r = subprocess.run(
+                ['ddcutil', '--bus', str(bus), 'setvcp', '10', str(v)],
+                capture_output=True, text=True, timeout=DDC_TIMEOUT,
+            )
+            if r.returncode == 0:
+                return True, v
+            if attempt == 1:
+                return False, (r.stderr or r.stdout).strip()[:200]
+        except Exception as e:
+            if attempt == 1:
+                return False, str(e)
+    return False, 'ddc unavailable'
+
+
 def read_shared_state():
     """Return the persisted shared-state dict, or {} if absent/invalid."""
     try:
@@ -470,6 +571,9 @@ class Handler(SimpleHTTPRequestHandler):
             out = detect_output()
             state = get_display_state(out)
             return self._json(200, {'output': out, 'on': state})
+        if self.path == '/api/display/brightness':
+            v = get_brightness()
+            return self._json(200, {'value': v, 'available': v is not None})
         if self.path == '/api/state' or self.path.startswith('/api/state?'):
             return self._json(200, read_shared_state())
         if self.path == '/api/flags' or self.path.startswith('/api/flags?'):
@@ -508,6 +612,17 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == '/api/display/on':
             ok, info = set_display(True)
             return self._json(200 if ok else 500, {'ok': ok, 'output': info if ok else None, 'error': None if ok else info})
+        if self.path == '/api/display/brightness':
+            try:
+                length = int(self.headers.get('Content-Length') or 0)
+                body = json.loads(self.rfile.read(length) or b'{}')
+            except Exception as e:
+                return self._json(400, {'ok': False, 'error': f'bad body: {e}'})
+            ok, info = set_brightness(body.get('value'))
+            # 200 with ok:false rather than 5xx: the client treats a failure as
+            # "fall back to the CSS overlay", not as an error worth surfacing.
+            return self._json(200, {'ok': ok, 'value': info if ok else None,
+                                    'error': None if ok else info})
         if self.path == '/api/state':
             return self._write_state()
         if self.path == '/api/flags':
