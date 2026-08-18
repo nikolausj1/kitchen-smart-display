@@ -15,11 +15,13 @@ Kitchen Smart Display covers two surfaces for the family: a Raspberry Pi kitchen
 
 ## Stage
 
-Active Development (both the kitchen Pi display and the Apple TV app are live and used daily; new features and fixes still ship regularly, most recently 2026-06-16).
+Active Development (both screens are live and used daily; new features and fixes ship regularly, most recently 2026-08-18). The project grew a third component this week: FrameServer, a hub on the NUC that now serves photos and per-screen settings to every display in the house.
 
 ## Health
 
-🟡 At-risk - both surfaces are live and used daily. **Phases 1, 2, and 3 of the hub migration are complete.** Phase 1 moved the photo server off the kitchen Pi to the NUC (FrameServer); both screens are repointed and verified serving from it, and the Pi's redundant nightly build is disabled with its scripts and unit files preserved as the rollback. Phase 2 moved per-screen settings onto the hub, so the kitchen and the Apple TV now hold genuinely independent config (10 albums vs 3, zero overlap). Phase 3 added the dashboard at `nuc.local:8095/admin`, so every screen is now manageable from a laptop. The kitchen display is no longer a single point of failure for the house. Everything is committed and pushed - `main` and `feature/apple-tv-display` are both level with origin, closing a gap where more than a month of production code existed only on one unbacked machine. Remaining risk is now a single item, unchanged and unrelated: the full-permission `immich-go-import` API key is still active and unrotated, and was pasted into chat a second time during the 2026-08-14 Brooke Borcherding rollout. Windows Update is now governed on the NUC (2026-08-18): quality updates deferred 7 days, feature updates 90, General Availability Channel, and active hours 07:00-01:00 so restarts land overnight rather than in the 07:00-13:00 window that was default. Every verification is now closed. The NUC was rebooted 2026-08-18 08:41 with FrameServer installed: the service returned Automatic/Running, the nightly task came back Ready with lastResult=0, Plex and the *arr stack all recovered, `devices.json` survived intact, and both screens reconnected on their own (kitchen 192.168.7.131, Apple TV 192.168.4.85). The tvOS outbound PATCH is now confirmed too (a Siri Remote photo-duration change reached the hub, 1800s -> 900s, with an album change alongside it), so the device registry is verified in every direction.
+🟡 At-risk, and close to green. The house display system is materially better than it was a week ago: **FrameServer now runs on the NUC** and serves photos plus per-screen settings to both screens, so the kitchen display is no longer a single point of failure for the house. Phases 1-3 of that migration and both phases of hardware backlight dimming all shipped and are **verified on real hardware in every direction** - including a NUC reboot with both screens reconnecting unattended, and a supervised touch test confirming the panel can be powered down over DDC without losing touch-to-wake. Windows Update is now governed (quality +7d, feature +90d, restarts confined to 01:00-07:00). Everything is committed and pushed; `main` is level with origin.
+
+The single remaining risk is unchanged and unrelated to any of it: the full-permission `immich-go-import` API key is still active and unrotated, and was pasted into chat twice. Rotating it would move this to green.
 
 ## Waiting on Me
 
@@ -38,17 +40,18 @@ Active Development (both the kitchen Pi display and the Apple TV app are live an
 
 ## Next Up
 
-1. Build hardware backlight dimming (DDC/CI) for the kitchen Pi screen - TODO, ready to build, feasibility already confirmed on the panel (2026-06-22); replaces the CSS night-mode overlay with a real backlight dim over HDMI.
+1. Rotate the exposed `immich-go-import` API key - the only item left in Biggest Risk, and the oldest thing on the board (~10 min).
 2. Build the Google Calendar/agenda integration for the kitchen Today view, the one real remaining feature gap on that surface.
-3. Clean up housekeeping: rotate the exposed `immich-go-import` API key and push the merged Apple TV branch to origin (GitHub).
+3. Hang the ROADOM 10.1" screen. The hub work makes this cheap now: point a Pi at `http://nuc.local:8095` with `?device=living-room`, and it self-registers with its own albums and settings. Decide what it shows (photos is the baseline; Now Playing is the highest value-per-effort since a 10" touchscreen is a good Sonos remote).
 
 ## Ideas Shelf
 
-- **Kitchen: display art fun facts** (S) - the TV side already shipped rotating fun facts per art piece (2026-06-10); the kitchen just needs a display slot, since the data already rides the manifest's `art.facts`
-- **Playback-reactive backdrop** (S) - the Framed TV music backdrops (Drift/Lava/Marble/Ink) would ease their motion speed with play/pause state; no beat sync needed (Sonos exposes no audio analysis), just a small state-driven tweak
-- **Today "what to wear"** (S) - jacket weight, shorts vs. pants derived from weather thresholds, a small daily delight for the kids
+- **Per-photo display override** (S) - "never crop this one." The infrastructure is all there now: long-press already flags photos, the hub already stores per-device config, and the dashboard already edits it. Precedence would be per-photo+device > per-photo > device default. This is the "Barack Obama portrait shouldn't be cropped on the TV" case.
+- **Kitchen: display art fun facts** (S) - the TV shipped rotating facts 2026-06-10; the kitchen just needs a display slot, since the data already rides the manifest's `art.facts`
+- **Playback-reactive backdrop** (S) - the Framed TV music backdrops (Drift/Lava/Marble/Ink) would ease their motion speed with play/pause state; no beat sync needed, just a state-driven tweak
+- **Today "what to wear"** (S) - jacket weight, shorts vs. pants from weather thresholds, a small daily delight for the kids
+- **Configurable Today panels** (M) - let each screen choose which Today panels it shows, so a living room screen can drop the school timer. The largest remaining piece of the multi-screen vision, and deliberately deferred until a screen actually wants a different composition
 - **Voice assistant visual feedback** (M) - if a voice assistant gets added to Home Assistant, show its feedback (timers, shopping-list additions) on the kitchen display; the long-term goal is retiring the Alexas
-- **Multi-room Sonos** (L) - today the transport/volume target is "Main" only; letting audio (and eventually dimming signals) follow around the house is a bigger but genuinely fun expansion
 
 ## Biggest Risk
 
@@ -90,7 +93,6 @@ None right now, photo-refresh automation shipped 2026-06-09, see Recently Shippe
 
 The app is largely complete: Today, Photos slideshow, Music / Now Playing with the Jukebox station picker, full Settings, Sonos transport, weather, Immich photos, the morning departure timer, and school-schedule awareness are all shipped. Remaining:
 
-- **Hardware backlight dimming (DDC/CI)** (TODO, ready to build) - replace the night-mode CSS black overlay with a real backlight dim over HDMI via `ddcutil` (`setvcp 10`). Feasibility confirmed on the panel 2026-06-22: it answers DDC/CI (Realtek, VCP 2.2, bus `/dev/i2c-13`) and the Pi 5 `setvcp` bug does not affect it. DDC stays primary, the overlay becomes the fallback + guaranteed-black "off" layer, so any failure degrades to today's behavior. Touch-to-wake survives because DDC never disables the output. Full plan + guardrails: `docs/designs/hardware-brightness-ddc.md`. Prereq `ddcutil` already installed on the Pi.
 - Help find the right HDMI cable to make sure the screen works; it has a 90 degree thin-profile connector to the screen; it doesn't affect the image by making it widescreen.
 - **Run "let's triage place corrections"** - to take care of the queue of places that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE, DO NOT MARK COMPLETE.)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g. "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic fallback get the suffix; custom labels are typed by hand.
