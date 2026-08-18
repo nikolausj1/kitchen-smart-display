@@ -86,6 +86,9 @@
   .albums { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .35rem .9rem; }
   .albums label { display: flex; gap: .5rem; align-items: baseline; font-size: .88rem; }
   .albums .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+  .pct { display: flex; align-items: center; gap: .75rem; }
+  .pct input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  .pct-val { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 3.2rem; text-align: right; }
   .toolbar { display: flex; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; align-items: center; }
   .toolbar .note { color: var(--muted); font-size: .82rem; }
   #toast {
@@ -141,6 +144,7 @@
     .row select, .row input[type=number], .row input[type=text], .row input[type=time] {
       width: 100%; min-width: 0; min-height: 44px; font-size: 16px;
     }
+    .pct input[type=range] { min-height: 44px; }
     .row button { min-height: 44px; width: 100%; }
     .albums { grid-template-columns: 1fr; gap: 0; }
     .albums label { padding: .6rem .1rem; border-bottom: 1px solid var(--line); min-height: 44px; align-items: center; }
@@ -269,6 +273,29 @@ function select(options, value, onChange) {
   return el
 }
 
+// Brightness is stored as an arbitrary fraction (the kitchen's Settings uses a
+// 5%-step slider, the TV a 5%-step stepper). A coarse <select> cannot represent
+// e.g. 0.65 - the browser falls back to showing the FIRST option, so the page
+// would claim 10% for a screen actually at 65% and silently overwrite it on
+// touch. A range input represents any value faithfully.
+function percentControl(fraction, onChange, opts = {}) {
+  const wrap = document.createElement('div')
+  wrap.className = 'pct'
+  const el = document.createElement('input')
+  el.type = 'range'
+  el.min = opts.min ?? 10
+  el.max = 100
+  el.step = 5
+  el.value = Math.round(((fraction ?? 0) * 100))
+  const out = document.createElement('span')
+  out.className = 'pct-val'
+  out.textContent = `${el.value}%`
+  el.oninput = () => { out.textContent = `${el.value}%` }
+  el.onchange = () => onChange(Number(el.value) / 100)
+  wrap.append(el, out)
+  return wrap
+}
+
 function numberInput(value, onChange, opts = {}) {
   const el = document.createElement('input')
   el.type = 'number'; el.value = value ?? ''
@@ -370,8 +397,8 @@ function renderDevice(dev) {
       select([[true, 'On'], [false, 'Off']], tv.autoDim,
         (v) => patchDevice(dev.id, { tv: { autoDim: v === 'true' } })))
     row(d, 'Brightness', 'Used only when Auto dim is off',
-      select([[0.2, '20%'], [0.4, '40%'], [0.6, '60%'], [0.8, '80%'], [1.0, '100%']],
-        tv.manualBrightness, (v) => patchDevice(dev.id, { tv: { manualBrightness: Number(v) } })))
+      percentControl(tv.manualBrightness ?? 1.0,
+        (v) => patchDevice(dev.id, { tv: { manualBrightness: v } }), { min: 20 }))
   } else {
     const s = cfg.slideshow || {}
     row(b, 'Photo duration', 'How long each photo stays up',
@@ -393,11 +420,14 @@ function renderDevice(dev) {
     const d = card('Display', 'Panel brightness and the night schedule')
     const disp = cfg.display || {}
     row(d, 'Daytime brightness', '',
-      select([[0.4, '40%'], [0.6, '60%'], [0.8, '80%'], [0.9, '90%'], [1.0, '100%']],
-        disp.wakeBrightness, (v) => patchDevice(dev.id, { display: { wakeBrightness: Number(v) } })))
+      percentControl(disp.wakeBrightness ?? 0.9,
+        (v) => patchDevice(dev.id, { display: { wakeBrightness: v } })))
+    row(d, 'Hardware dimming', 'Dim the real backlight over HDMI (DDC/CI) instead of a black overlay',
+      select([[true, 'On'], [false, 'Off']], disp.hardwareDim !== false,
+        (v) => patchDevice(dev.id, { display: { hardwareDim: v === 'true' } })))
     row(d, 'Evening brightness', 'After the dim time below',
-      select([[0.1, '10%'], [0.2, '20%'], [0.3, '30%'], [0.4, '40%'], [0.6, '60%']],
-        disp.eveningBrightness, (v) => patchDevice(dev.id, { display: { eveningBrightness: Number(v) } })))
+      percentControl(disp.eveningBrightness ?? 0.4,
+        (v) => patchDevice(dev.id, { display: { eveningBrightness: v } })))
     for (const [key, label] of [['dimAt', 'Dim at'], ['offAt', 'Off at'], ['wakeAt', 'Wake at']]) {
       row(d, label, '', timeControl(disp[key], (hm) => patchDevice(dev.id, { display: { [key]: hm } })))
     }
