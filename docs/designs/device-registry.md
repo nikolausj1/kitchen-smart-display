@@ -1,8 +1,8 @@
 ---
 title: "Device Registry - Per-Screen Settings on FrameServer"
 created: 2026-08-17
-modified: 2026-08-17
-version: 1.0
+modified: 2026-08-18
+version: 1.1
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, frameserver, settings, multi-device, kitchen-display, apple-tv]
 ---
@@ -171,8 +171,14 @@ Capabilities negotiation (defer until the e-ink panel needs it), heartbeat /
 online status, and a remote command queue. None are required by anything asked
 for, and each would need an implementation on all three surfaces.
 
-## Not yet exercised
+## Fully verified 2026-08-18
 
-The tvOS **outbound** PATCH is compiled and wired but has not been triggered -
-it needs a settings change made with the Siri Remote. Inbound (hub -> device) is
-verified, as is tvOS self-seeding.
+The last untested path - the tvOS **outbound** PATCH - is confirmed. A photo
+duration changed with the Siri Remote appeared on the hub (1800s -> 900s), and an
+album change rode along with it (3 -> 4). That exercises both halves: the TV-only
+`config.tv.*` group and the shared `config.slideshow.selectedAlbumIds` key, which
+is deliberately the same key the web clients use so the dashboard has one notion
+of "which albums does this screen show".
+
+Every direction is now proven: self-seeding, device -> hub, hub -> device, and
+dashboard -> device.
