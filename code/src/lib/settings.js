@@ -130,10 +130,36 @@ function syncToHub(next) {
   patchTimer = setTimeout(flushPatches, 400)
 }
 
+// One-shot commands from the dashboard (e.g. "turn off screen"). Deliberately
+// NOT part of DEVICE_SCOPE: a command is an action, not a setting, so it must
+// never merge into the settings store or ride back out on the next PATCH.
+//
+// Identified by timestamp rather than cleared after running. Clearing would
+// race with the dashboard writing a new one, and tracking the last-run ts is
+// idempotent for free. The freshness window matters: without it, a page reload
+// would replay whatever command was last written and put the screen to sleep
+// for no reason.
+const COMMAND_MAX_AGE_MS = 2 * 60 * 1000
+let lastCommandTs = 0
+
+function handleHubCommand(cmd) {
+  if (!cmd || typeof cmd !== 'object') return
+  const ts = Number(cmd.ts) || 0
+  if (!ts || ts === lastCommandTs) return
+  if (Date.now() - ts > COMMAND_MAX_AGE_MS) return   // stale; ignore
+  lastCommandTs = ts
+  if (cmd.action === 'sleep') {
+    window.dispatchEvent(new CustomEvent('display-sleep-now'))
+  } else if (cmd.action === 'wake') {
+    window.dispatchEvent(new CustomEvent('display-wake-now'))
+  }
+}
+
 // Apply a hub payload without echoing it straight back as a PATCH - otherwise
 // every poll would rewrite what it just read.
 function applyFromHub(payload) {
   if (!payload) return
+  handleHubCommand(payload.config?.command)
   const patch = {
     ...pick(payload.shared || {}, SHARED_SCOPE),
     ...pick(payload.config || {}, DEVICE_SCOPE),
@@ -175,7 +201,10 @@ async function registerWithHub() {
 
 // Poll so a change made from the dashboard reaches this screen. Skipped right
 // after a local edit, or a poll in flight during a change would revert it.
-const HUB_POLL_MS = 30 * 1000
+// 10s, not 30s. Settings changes could tolerate a slow poll, but a dashboard
+// button that takes half a minute to do anything reads as broken. The payload is
+// a few hundred bytes on a LAN.
+const HUB_POLL_MS = 10 * 1000
 async function pollHub() {
   if (!HUB || typeof fetch === 'undefined') return
   if (Date.now() - lastLocalWriteAt < 5000) return
@@ -309,6 +338,12 @@ export const DEFAULTS = {
     // overlay over a full-brightness screen. Off = overlay-only (the old
     // behavior), which is the escape hatch if the panel ever misbehaves.
     hardwareDim: true,
+    // Power the panel down over DDC/CI (VCP D6) for 'off', instead of only
+    // painting an opaque overlay over a lit screen. Kept SEPARATE from
+    // hardwareDim because the risk profiles differ: a failed dim just looks
+    // wrong, while a panel left in standby is dark until something wakes it.
+    // The server wakes the panel on startup so a reboot always self-heals.
+    hardwarePowerOff: true,
   },
   slideshow: {
     intervalMs: 6000,

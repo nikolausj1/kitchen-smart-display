@@ -10,6 +10,7 @@
 #   GET  /api/display/state -> {"on": true|false}
 #   POST /api/display/brightness {"value": 0-100} -> DDC/CI backlight
 #   GET  /api/display/brightness -> {"value": N}
+#   POST /api/display/power {"on": bool} -> DDC/CI panel standby
 #
 # The output name is auto-detected from wlr-randr at request time (so the
 # server stays correct even if the cable is plugged into a different HDMI
@@ -366,6 +367,64 @@ def set_brightness(value):
     return False, 'ddc unavailable'
 
 
+# --- DDC/CI panel power ------------------------------------------------------
+# VCP D6 puts the PANEL into standby - a real power-down, not a black overlay
+# over a lit screen. Verified on this panel 2026-08-18 with a supervised test:
+# writing 04 darkened it, the USB touch controller stayed enumerated, five
+# touches were still delivered to /dev/input/event5 while dark, and 01 woke it
+# with brightness intact.
+#
+# This is NOT the same as POST /api/display/off above. That one runs
+# `wlr-randr --off`, which disables the Pi's OUTPUT - and wlroots then stops
+# delivering input events to clients, which breaks touch-to-wake. D6 leaves the
+# output enabled and the compositor none the wiser; only the glass goes dark.
+#
+#   POST /api/display/power {"on": true|false}
+#
+# The panel reports back as DPMS Standby (sl=0x02) rather than Off after a 04
+# write - it settles on its nearest supported state. Deeper states (05) are
+# deliberately not used: that is exactly where touch controllers tend to lose
+# power, which would strand the screen.
+DDC_POWER_ON = '01'
+DDC_POWER_OFF = '04'
+
+
+def set_panel_power(on):
+    """Power the panel via DDC/CI. Returns (ok, info)."""
+    for attempt in (0, 1):
+        bus = detect_ddc_bus(force=(attempt == 1))
+        if bus is None:
+            continue
+        try:
+            r = subprocess.run(
+                ['ddcutil', '--bus', str(bus), 'setvcp', 'D6',
+                 DDC_POWER_ON if on else DDC_POWER_OFF],
+                capture_output=True, text=True, timeout=DDC_TIMEOUT,
+            )
+            if r.returncode == 0:
+                return True, ('on' if on else 'off')
+            if attempt == 1:
+                return False, (r.stderr or r.stdout).strip()[:200]
+        except Exception as e:
+            if attempt == 1:
+                return False, str(e)
+    return False, 'ddc unavailable'
+
+
+def wake_panel_on_startup():
+    """Guarantee a lit panel whenever this server starts.
+
+    The one failure mode hardware power-off introduces that dimming never had:
+    if the Pi reboots (or this server is restarted) while the panel is in
+    standby, nothing else would ever send the wake - the browser cannot ask for
+    a screen it does not know is off. Waking unconditionally at startup means
+    the worst case self-heals on restart instead of needing someone to walk over
+    and press the panel's OSD button.
+    """
+    ok, info = set_panel_power(True)
+    print(f'startup panel wake: {"ok" if ok else "FAILED"} ({info})', file=sys.stderr)
+
+
 def read_shared_state():
     """Return the persisted shared-state dict, or {} if absent/invalid."""
     try:
@@ -612,6 +671,15 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path == '/api/display/on':
             ok, info = set_display(True)
             return self._json(200 if ok else 500, {'ok': ok, 'output': info if ok else None, 'error': None if ok else info})
+        if self.path == '/api/display/power':
+            try:
+                length = int(self.headers.get('Content-Length') or 0)
+                body = json.loads(self.rfile.read(length) or b'{}')
+            except Exception as e:
+                return self._json(400, {'ok': False, 'error': f'bad body: {e}'})
+            ok, info = set_panel_power(bool(body.get('on')))
+            return self._json(200, {'ok': ok, 'state': info if ok else None,
+                                    'error': None if ok else info})
         if self.path == '/api/display/brightness':
             try:
                 length = int(self.headers.get('Content-Length') or 0)
@@ -658,6 +726,7 @@ def main():
     print(f'kiosk-server listening on http://{BIND}:{PORT} serving {KIOSK_DIR}')
     out = detect_output()
     print(f'detected display output: {out}')
+    wake_panel_on_startup()
     server.serve_forever()
 
 

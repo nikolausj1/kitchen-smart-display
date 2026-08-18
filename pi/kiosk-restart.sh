@@ -40,8 +40,14 @@ if [ -z "$WAYLAND_SOCK" ]; then
 fi
 echo "starting kiosk-server with WAYLAND_DISPLAY=$WAYLAND_SOCK"
 
+# Append, do not truncate. Killing 8080 and restarting can race with labwc's
+# autostart relaunching the server too; the loser dies with "Address already in
+# use". With `>` the loser's traceback overwrote the winner's startup output,
+# which hid a genuine diagnostic (the DDC panel-wake line) during the 2026-08-18
+# hardware-dimming work. Losing a race is harmless; losing the log is not.
+{ echo; echo "=== kiosk-server start $(date "+%F %T") ==="; } >>/tmp/kiosk-server.log
 setsid env WAYLAND_DISPLAY="$WAYLAND_SOCK" python3 /home/pi/kiosk-server.py \
-  >/tmp/kiosk-server.log 2>&1 </dev/null &
+  >>/tmp/kiosk-server.log 2>&1 </dev/null &
 disown 2>/dev/null || true
 
 # 4. Bounce Chromium. The existing autostart's `while true; do chromium...

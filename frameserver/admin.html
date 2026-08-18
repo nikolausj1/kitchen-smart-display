@@ -318,6 +318,38 @@ function renderDevice(dev) {
   const cfg = dev.config || {}
   const isTV = dev.kind === 'tvos'
 
+  // --- screen power ---
+  // Commands the APP, not the panel. Powering the panel down directly over DDC
+  // would leave the app thinking it is still awake - no overlay, and touch
+  // would not wake it, because the wake path only fires when the app believes
+  // it is off. tvOS has no handler for this, so the card is web-only.
+  if (!isTV) {
+    const p = card('Screen',
+      'Takes effect within about 10 seconds. Touching the screen also wakes it.')
+    const bar = document.createElement('div')
+    bar.className = 'toolbar'
+    for (const [action, label] of [['sleep', 'Turn off screen'], ['wake', 'Wake screen']]) {
+      const b = document.createElement('button')
+      b.className = action === 'sleep' ? 'action' : 'ghost'
+      b.textContent = label
+      b.onclick = async () => {
+        b.disabled = true
+        try {
+          // ts identifies the command; the device tracks the last one it ran and
+          // ignores anything older than two minutes, so a reload cannot replay it.
+          await api(`/api/devices/${encodeURIComponent(dev.id)}/config`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: { action, ts: Date.now() } }),
+          })
+          toast(action === 'sleep' ? 'Turning the screen off…' : 'Waking the screen…')
+        } catch (e) { toast(String(e.message || e)) }
+        b.disabled = false
+      }
+      bar.appendChild(b)
+    }
+    p.appendChild(bar)
+  }
+
   // --- albums ---
   const c = card('Photo albums',
     isTV ? 'What this Apple TV shows. Independent of every other screen.'
@@ -425,6 +457,9 @@ function renderDevice(dev) {
     row(d, 'Hardware dimming', 'Dim the real backlight over HDMI (DDC/CI) instead of a black overlay',
       select([[true, 'On'], [false, 'Off']], disp.hardwareDim !== false,
         (v) => patchDevice(dev.id, { display: { hardwareDim: v === 'true' } })))
+    row(d, 'Power off panel', 'At the off time, standby the panel instead of covering it. Touch still wakes it.',
+      select([[true, 'On'], [false, 'Off']], disp.hardwarePowerOff !== false,
+        (v) => patchDevice(dev.id, { display: { hardwarePowerOff: v === 'true' } })))
     row(d, 'Evening brightness', 'After the dim time below',
       percentControl(disp.eveningBrightness ?? 0.4,
         (v) => patchDevice(dev.id, { display: { eveningBrightness: v } })))

@@ -2,19 +2,19 @@
 title: "Hardware Backlight Dimming via DDC/CI"
 created: 2026-06-22
 modified: 2026-08-18
-version: 2.0
+version: 3.0
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, kitchen-display, raspberry-pi, brightness, ddc, hardware]
 ---
 
 # Hardware Backlight Dimming via DDC/CI
 
-**Status: Phase A shipped 2026-08-18.** The kitchen panel's real backlight now
+**Status: Phases A and B both shipped 2026-08-18.** The kitchen panel's real backlight now
 follows the schedule. Verified end to end: a brightness change made on the hub
 dashboard reached the physical panel in ~25s (dashboard -> hub -> kitchen poll ->
 `/api/display/brightness` -> `ddcutil` -> panel), and a scheduled `awake -> dim`
-transition drove it too. Phase B (true power-off via VCP D6) is designed below
-but deliberately not built - see "Phase B".
+transition drove it too. Phase B (true power-off via VCP D6) shipped the same day after the supervised
+touch test passed - see "Phase B".
 
 How the kitchen display dims its **actual backlight** at night instead of only
 painting a black CSS overlay over a full-brightness panel. The panel's backlight
@@ -169,7 +169,56 @@ same defect (`TVSettings.brightnessChoices` runs in 0.05 steps).
 overlay model - these were opacities - but now that they drive real hardware it
 is probably not what is wanted.
 
-## Phase B: true power-off via VCP D6 (designed, NOT built)
+## Phase B: true power-off via VCP D6 (SHIPPED)
+
+**The supervised test passed on 2026-08-18.** With `D6 04` written, the panel
+went dark, the USB touch controller stayed enumerated, `event5` stayed
+registered, and **five touches were still delivered to /dev/input while the glass
+was dark**. `D6 01` woke it with brightness intact and Chromium untouched.
+
+Why touch survives, and why this is not the DPMS trap: **the Pi never learns the
+panel is off.** D6 darkens the PANEL; the Pi's output stays enabled, so the
+compositor keeps rendering and wlroots keeps delivering input events. The
+existing touch-to-wake path works completely unchanged.
+
+The panel reports `DPMS: Standby (sl=0x02)` after a `04` write - it settles on
+its nearest supported state. `05` ("write only value to turn off display") is
+deliberately unused: deeper states are exactly where touch controllers lose
+power, which would strand the screen.
+
+### The failure mode this introduces, and the guard
+
+Dimming could never strand the screen; power-off can. If the Pi reboots or the
+kiosk server restarts while the panel is in standby, nothing would ever send the
+wake - the browser cannot ask for a screen it does not know is off.
+
+`wake_panel_on_startup()` sends `D6 01` unconditionally when the server starts,
+so the worst case self-heals on restart instead of needing someone to walk over
+and press the panel's OSD button. **Verified**: panel put into standby, server
+restarted, log showed `startup panel wake: ok (on)`, panel came back.
+
+`display.hardwarePowerOff` is a SEPARATE toggle from `hardwareDim`, on purpose:
+the risk profiles differ. A failed dim just looks wrong; a panel left in standby
+is dark until something wakes it.
+
+### Turning the screen off remotely
+
+The dashboard's "Turn off screen" / "Wake screen" buttons command **the app**,
+not the panel. Sending DDC straight at the panel from the dashboard would leave
+the app believing it is still awake - no overlay, and crucially **a touch would
+not wake it**, because the wake path only fires when the app thinks it is off.
+
+The command rides on the device config (`command: {action, ts}`) and is picked
+up by the existing hub poll, which dropped from 30s to 10s so a button press
+does not read as broken. Commands are identified by timestamp and ignored if
+older than two minutes - clearing them would race with the dashboard writing a
+new one, and a stale command would otherwise replay on the next page reload and
+sleep the screen for no reason.
+
+The on-device "Sleep now" button in kitchen Settings already used this path and
+needed no change; it now genuinely powers the panel down.
+
+## Original Phase B design notes (kept for context)
 
 The June design assumed "off" had to stay a black overlay. It does not - this
 panel advertises:

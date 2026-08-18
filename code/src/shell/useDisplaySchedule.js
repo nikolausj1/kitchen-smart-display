@@ -16,6 +16,11 @@ import { KIOSK_TV } from '../lib/kioskMode.js'
 // This makes "wake until next transition" trivially correct without needing
 // to track a wake timestamp.
 //
+// 'off' powers the panel down for real (VCP D6 standby), verified 2026-08-18:
+// touch still reaches /dev/input while the glass is dark, because D6 darkens the
+// PANEL and leaves the Pi's output enabled - so the compositor keeps delivering
+// events and the touch-to-wake path below works unchanged.
+//
 // Dimming drives the panel's REAL backlight over DDC/CI: each mode change
 // POSTs a target to the Pi's /api/display/brightness, which shells out to
 // `ddcutil setvcp 10`. The CSS overlay (DimOverlay) is now the FALLBACK - it
@@ -77,6 +82,7 @@ export default function useDisplaySchedule() {
   const eveningBrightness = settings.display?.eveningBrightness ?? 0.4
   // One-tap escape hatch back to overlay-only if the panel ever misbehaves.
   const hardwareDimEnabled = settings.display?.hardwareDim !== false
+  const hardwarePowerOff = settings.display?.hardwarePowerOff !== false
 
   const dimMin = timeToMin(dim)
   const offMin = timeToMin(off)
@@ -143,8 +149,18 @@ export default function useDisplaySchedule() {
     function onSleepNow() {
       setActualMode('off')
     }
+    // Counterpart for the dashboard's wake button. The on-device path does not
+    // need this - touching the screen already wakes it - but a remote caller
+    // has no finger to offer.
+    function onWakeNow() {
+      setActualMode('awake')
+    }
     window.addEventListener('display-sleep-now', onSleepNow)
-    return () => window.removeEventListener('display-sleep-now', onSleepNow)
+    window.addEventListener('display-wake-now', onWakeNow)
+    return () => {
+      window.removeEventListener('display-sleep-now', onSleepNow)
+      window.removeEventListener('display-wake-now', onWakeNow)
+    }
   }, [])
 
   // Drive the real backlight on every mode change (and whenever the brightness
@@ -158,19 +174,34 @@ export default function useDisplaySchedule() {
     }
     let cancelled = false
     const value = backlightFor(actualMode, wakeBrightness, eveningBrightness)
-    // Relative URL: the app bundle is still served by the Pi, so this reaches
+    const wantOff = actualMode === 'off' && hardwarePowerOff
+
+    // Relative URLs: the app bundle is still served by the Pi, so these reach
     // the same origin. (Photos moved to FrameServer; the app did not.)
-    fetch('/api/display/brightness', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value }),
-      cache: 'no-store',
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (!cancelled) setHardwareDim(!!(j && j.ok)) })
-      .catch(() => { if (!cancelled) setHardwareDim(false) })
+    const post = (path, body) =>
+      fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => !!(j && j.ok))
+        .catch(() => false)
+
+    ;(async () => {
+      // Order matters. Waking first means the brightness write lands on a panel
+      // that can actually show it; a write to a panel in standby is accepted
+      // and invisible. On the way down, set the floor first, then cut power, so
+      // the panel is already dark if the power write fails.
+      if (!wantOff && hardwarePowerOff) await post('/api/display/power', { on: true })
+      const ok = await post('/api/display/brightness', { value })
+      if (wantOff) await post('/api/display/power', { on: false })
+      if (!cancelled) setHardwareDim(ok)
+    })()
+
     return () => { cancelled = true }
-  }, [actualMode, wakeBrightness, eveningBrightness, hardwareDimEnabled])
+  }, [actualMode, wakeBrightness, eveningBrightness, hardwareDimEnabled, hardwarePowerOff])
 
   const api = useMemo(() => ({}), [])
 

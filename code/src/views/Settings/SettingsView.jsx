@@ -802,7 +802,7 @@ export default function SettingsView() {
         {/* --- Display (night mode schedule) --- */}
         <section className="settings-section">
           <h2 className="settings-section__title">Display</h2>
-          <Row label="Sleep now" hint="Turn the screen off right now. Touch the screen to wake.">
+          <Row label="Sleep now" hint="Power the panel down right now. Touch the screen to wake it.">
             <button
               type="button"
               className="settings-reset"
@@ -853,6 +853,24 @@ export default function SettingsView() {
               onChange={(e) =>
                 updateSettings({
                   display: { hardwareDim: e.target.value === 'on' },
+                })
+              }
+              data-interactive="true"
+            >
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </select>
+          </Row>
+          <Row
+            label="Power off panel"
+            hint="At the off time, put the panel in standby instead of covering it. Touch still wakes it."
+          >
+            <select
+              className="settings-select"
+              value={display?.hardwarePowerOff === false ? 'off' : 'on'}
+              onChange={(e) =>
+                updateSettings({
+                  display: { hardwarePowerOff: e.target.value === 'on' },
                 })
               }
               data-interactive="true"
