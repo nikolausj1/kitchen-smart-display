@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-08-17
-version: 2.2
+modified: 2026-08-18
+version: 2.8
 author: Claude Opus 5 (claude-opus-5)
 tags:
 ---

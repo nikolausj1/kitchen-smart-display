@@ -1,8 +1,8 @@
 ---
 title: "Photo-Refresh Automation - FrameServer Build"
 created: 2026-06-09
-modified: 2026-08-16
-version: 2.0
+modified: 2026-08-18
+version: 2.1
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, photos, immich, frameserver, nuc, automation, kitchen-display]
 ---
@@ -225,6 +225,15 @@ What made the cutover cheap:
    **0 API calls**.
 3. **Diff before trusting.** Both manifests compared field-by-field before any
    client was repointed.
+
+Post-migration follow-ups (2026-08-18): the Pi's `photo-refresh.timer` is now
+**disabled** (scripts and unit files left in place as the rollback), `deploy.sh`
+replaced the npm one-liner and targets both hosts, and `flags-apply.mjs` was
+fixed - it printed a hand-off that scp'd `custom-places.json` to the Pi and
+triggered the Pi's build, so with that build disabled a caption correction would
+have been written to a dormant host and silently never reached a screen. It now
+pushes to FrameServer while still resolving flags on the Pi, which keeps the flag
+queue.
 
 Rollback, valid while the Pi's build stays installed: re-enable
 `photo-refresh.timer` on the Pi, set `PHOTOS.baseUrl` back to `''` in
