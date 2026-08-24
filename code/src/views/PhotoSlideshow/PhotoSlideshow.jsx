@@ -410,12 +410,25 @@ export default function PhotoSlideshow() {
 
   // Auto-advance every intervalMs (when > 0). The auto:true flag lets the
   // pause-after-back logic suppress the next few ticks.
+  //
+  // `advance` is read through a ref rather than named as a dependency: it is
+  // rebuilt whenever the photo list changes identity, and restarting the
+  // timer on every rebuild means a long interval never gets to elapse. That
+  // is exactly what the 10s settings poll used to do to a 5-minute slideshow.
+  // Only a genuine change of interval, or photos appearing/disappearing,
+  // should reset the clock.
+  const advanceRef = useRef(advance)
   useEffect(() => {
-    if (!photos || photos.length === 0) return
+    advanceRef.current = advance
+  }, [advance])
+
+  const hasPhotos = !!photos && photos.length > 0
+  useEffect(() => {
+    if (!hasPhotos) return
     if (intervalMs <= 0) return
-    const id = setInterval(() => advance({ auto: true }), intervalMs)
+    const id = setInterval(() => advanceRef.current({ auto: true }), intervalMs)
     return () => clearInterval(id)
-  }, [photos, advance, intervalMs])
+  }, [hasPhotos, intervalMs])
 
   // Listen for swipe gestures (emitted by the document-level handler in
   // DebugLog.jsx). Left = next, right = previous.

@@ -165,7 +165,15 @@ function applyFromHub(payload) {
     ...pick(payload.config || {}, DEVICE_SCOPE),
   }
   if (!Object.keys(patch).length) return
-  currentValue = deepMerge(currentValue, patch)
+  const next = deepMerge(currentValue, patch)
+  // Almost every poll returns exactly what we already hold. Publishing it
+  // anyway still hands every consumer brand-new object and array identities
+  // six times a minute, and anything keyed on those identities restarts.
+  // That silently broke the slideshow: its advance timer was torn down and
+  // rebuilt on each poll, so any photo duration longer than HUB_POLL_MS
+  // could never elapse and the photo never changed.
+  if (deepEqual(next, currentValue)) return
+  currentValue = next
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(currentValue))
   } catch { /* storage disabled */ }
@@ -367,6 +375,29 @@ export const DEFAULTS = {
     // don't fit, fall back to Fit with blur backdrop.
     smartFaces: true,
   },
+}
+
+// Structural equality for settings blobs (plain objects, arrays, primitives).
+// Lets an unchanged hub poll be dropped instead of republished - see
+// applyFromHub.
+function deepEqual(a, b) {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  if (typeof a !== 'object' || typeof b !== 'object') return false
+  const aArr = Array.isArray(a)
+  if (aArr !== Array.isArray(b)) return false
+  if (aArr) {
+    if (a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], b[i])) return false
+    return true
+  }
+  const aKeys = Object.keys(a)
+  if (aKeys.length !== Object.keys(b).length) return false
+  for (const k of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false
+    if (!deepEqual(a[k], b[k])) return false
+  }
+  return true
 }
 
 // --- Deep merge that respects nested objects but replaces arrays wholesale.
