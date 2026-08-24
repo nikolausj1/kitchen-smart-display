@@ -38,15 +38,15 @@ function writeCache(slots) {
 function wmoToIcon(code) {
   if (code === 0 || code === 1) return 'clear'
   if (code === 2) return 'partly-cloudy'
-  if (code === 3) return 'mostly-cloudy'
+  if (code === 3) return 'overcast'
   if (code === 45 || code === 48) return 'fog'
   if (code === 51) return 'light-drizzle'
   if (code === 53 || code === 55) return 'drizzle'
   if ([56, 57, 66, 67].includes(code)) return 'freezing-rain'
   if ([61, 63, 80, 81].includes(code)) return 'rain'
   if ([65, 82].includes(code)) return 'heavy-rain'
-  if ([71, 77].includes(code)) return 'snow'
-  if ([73, 75, 85, 86].includes(code)) return 'heavy-snow'
+  if ([71, 73, 77, 85].includes(code)) return 'snow'
+  if ([75, 86].includes(code)) return 'heavy-snow'
   if ([95, 96, 99].includes(code)) return 'thunderstorm'
   return 'overcast'
 }
