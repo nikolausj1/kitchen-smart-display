@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-08-18
-version: 2.8
+modified: 2026-08-24
+version: 3.3
 author: Claude Opus 5 (claude-opus-5)
 tags:
 ---
@@ -15,11 +15,13 @@ Kitchen Smart Display covers two surfaces for the family: a Raspberry Pi kitchen
 
 ## Stage
 
-Active Development (both screens are live and used daily; new features and fixes ship regularly, most recently 2026-08-18). The project grew a third component this week: FrameServer, a hub on the NUC that now serves photos and per-screen settings to every display in the house.
+Active Development (both screens are live and used daily; new features and fixes ship regularly, most recently 2026-08-24). The project grew a third component this week: FrameServer, a hub on the NUC that now serves photos and per-screen settings to every display in the house.
 
 ## Health
 
-🟡 At-risk, and close to green. The house display system is materially better than it was a week ago: **FrameServer now runs on the NUC** and serves photos plus per-screen settings to both screens, so the kitchen display is no longer a single point of failure for the house. Phases 1-3 of that migration and both phases of hardware backlight dimming all shipped and are **verified on real hardware in every direction** - including a NUC reboot with both screens reconnecting unattended, and a supervised touch test confirming the panel can be powered down over DDC without losing touch-to-wake. Windows Update is now governed (quality +7d, feature +90d, restarts confined to 01:00-07:00). Everything is committed and pushed; `main` is level with origin.
+🟡 At-risk, and close to green. The house display system is materially better than it was a week ago: **FrameServer now runs on the NUC** and serves photos plus per-screen settings to both screens, so the kitchen display is no longer a single point of failure for the house. Phases 1-3 of that migration and both phases of hardware backlight dimming all shipped and are **verified on real hardware in every direction** - including a NUC reboot with both screens reconnecting unattended, and a supervised touch test confirming the panel can be powered down over DDC without losing touch-to-wake. Windows Update is now governed (quality +7d, feature +90d, restarts confined to 01:00-07:00).
+
+One regression from that migration surfaced and was fixed on 2026-08-24: the kitchen slideshow had stopped advancing entirely. The 10s hub settings poll republished an unchanged payload every tick, whose fresh `selectedAlbumIds` array identity tore down the slideshow's advance timer before a 5-minute photo duration could elapse. Fixed on both sides (no-op polls are now dropped; the timer no longer keys on callback identity), verified in the running app, and deployed to the Pi. Worth noting as a pattern: a poll that republishes identical data is not free on the consumer side.
 
 The single remaining risk is unchanged and unrelated to any of it: the full-permission `immich-go-import` API key is still active and unrotated, and was pasted into chat twice. Rotating it would move this to green.
 
@@ -27,10 +29,11 @@ The single remaining risk is unchanged and unrelated to any of it: the full-perm
 
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
-- [ ] **Triage the 28-file uncommitted snapshot into real commits** (~30 min)
-      - unblocks: deleting `wip/uncommitted-snapshot-2026-08-12`, which is a single undifferentiated backup commit and must not be merged. 19 modified files plus 9 untracked, never reviewed or grouped. (added via Oracle at Justin's direction, 2026-08-12)
-- [ ] **Find the right HDMI cable for the kitchen screen** - needs a 90 degree thin-profile connector, and must not affect the image by making it widescreen (~15-30 min)
-      - unblocks: finishing the physical hookup so hardware backlight dimming (DDC/CI) can be verified end to end
+- [ ] **Review and merge `triage/2026-08-24`, then delete the wip snapshot branch** (~15 min)
+      - The uncommitted tree was triaged into 10 reviewed commits on 2026-08-24, and the tvOS target builds clean from it. Two half-landed features surfaced and were repaired in the process: the Framed music backdrops had settings and hub sync on `main` but no renderer, and `build-photo-manifest.mjs` imported a `downloadOriginal` that was never committed, which is a link-time failure that made the photo build unloadable from a fresh checkout.
+      - unblocks: deleting `wip/uncommitted-snapshot-2026-08-12`. Verified to hold zero unique content: its delta is 51 files, of which 6 were superseded by later `main` commits, 42 are byte-identical on disk, and 3 evolved forward. Never merge it; it predates FrameServer.
+- [ ] **Test-fit and verify the frame HDMI cable** - Option B ordered 2026-08-18, arriving 2026-08-20 (Twozoh 1 ft micro-to-HDMI braided + AreMe 90 degree mini-to-HDMI adapter, up/down bend). Run the acceptance checklist in `docs/designs/frame-cabling-hdmi.md`, with the frame assembled rather than on the bench (~30 min)
+      - unblocks: closing up the wooden frame. Pass/fail is a 256-byte EDID, native 1080p60 preferred and current, and `ddcutil detect` succeeding. DDC rides pins 15/16, so a cable that shows a picture but drops I2C would silently break hardware dim and power-off.
 - [ ] **Run "let's triage place corrections"** for the 9 pending photo-caption flags on the Pi (~15-20 min)
       - unblocks: clearing the caption-correction queue (7 have no GPS and need it added in Immich, 2 were skipped: Bridgehaven and a 2nd Cave Creek)
 - [ ] **Decide the Apple TV app's display name** - brainstorm is done, nothing chosen yet; currently placeholder "Kitchen Display" (~5 min)
@@ -93,7 +96,7 @@ None right now, photo-refresh automation shipped 2026-06-09, see Recently Shippe
 
 The app is largely complete: Today, Photos slideshow, Music / Now Playing with the Jukebox station picker, full Settings, Sonos transport, weather, Immich photos, the morning departure timer, and school-schedule awareness are all shipped. Remaining:
 
-- Help find the right HDMI cable to make sure the screen works; it has a 90 degree thin-profile connector to the screen; it doesn't affect the image by making it widescreen.
+- **Frame cabling / HDMI connector** (DECISION) - micro HDMI Type D at the Pi to mini HDMI Type C at the panel, needing a right-angle low-profile plug at the panel end. The earlier "widescreen" failures were EDID reads failing on pins 15/16, which also carry DDC/CI, so a marginal cable would silently break hardware dim and power-off. Current link measured healthy on 2026-08-18 (256-byte EDID, native 1080p60 preferred and current, `ddcutil` answering). Options, part numbers, mode lock, and verification checklist: `docs/designs/frame-cabling-hdmi.md`. Open: bend direction at each end.
 - **Run "let's triage place corrections"** - to take care of the queue of places that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE, DO NOT MARK COMPLETE.)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g. "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic fallback get the suffix; custom labels are typed by hand.
 - **Google Calendar / agenda** (TODO) - the one real feature gap. Direct OAuth via a `useCalendarEvents` hook, agenda on the Today view.
@@ -206,7 +209,9 @@ Newest first.
 
 ## Lessons
 
-- **Windows active hours protect the wrong window by default (2026-08-18).** "Active hours" is when Windows will NOT auto-restart; the unprotected remainder is when it will. A machine found at 13:00-07:00 active had its restart window at **07:00-13:00** - school mornings and midday - which is the worst slot for anything a household depends on. Windows 11 caps active hours at 18 hours, so you cannot protect the whole day; you are choosing which 6 hours are sacrificial, and it should be overnight. Check the actual values rather than assuming the default is sane.
+- **A poll that republishes identical data is not free (2026-08-24).** A 10s settings poll deep-merged its response every tick whether or not anything had changed, handing every consumer fresh object and array identities six times a minute. Anything keyed on those identities restarts - here a `setInterval` rebuilt on each poll, so a 5-minute photo duration could never elapse and the kitchen slideshow froze on one image. The bug is invisible until someone picks an interval longer than the poll period. Two habits fall out: compare before publishing in any polling store, and never let a timer's lifetime depend on a callback identity that churns.
+
+- **Windows active hours protect the wrong window by default (2026-08-18).** "Active hours" is when Windows will NOT auto-restart; the unprotected remainder is when it will. A machine found at 13:00-07:00 active had its restart window at **07:00-13:00** - school mornings and midday - which is the worst slot for anything a household depends on. Windows 11 caps active hours at 18 hours, so you cannot protect the whole day; you are choosing which 6 hours are sacrificial, and it should be overnight. Check the actual values rather than assuming the default is sane. (promoted to Build Guide v9.4, 2026-08-18)
 
 - **Windows reserves service names you would plausibly pick (2026-08-16).** `nssm install FrameServer` failed with "The specified service already exists" - `FrameServer` is the built-in **Windows Camera Frame Server**. Worse, the follow-up `nssm start FrameServer` started *Microsoft's* service. Check `Get-Service -Name <name>` before naming anything, and qualify app service names (`SmartDisplayFrameServer`) while keeping the bare product name for the display name and install directory. (promoted to Build Guide v9.3, 2026-08-16)
 - **UNC paths do not authenticate from a non-interactive Windows session (2026-08-16).** Mapped drives like `Z:` are per-logon, which is well known - but even the raw UNC `\\HOST\Share` failed over SSH while working fine in the interactive desktop session. Anything running as a service needs machine-scope stored credentials (`cmdkey`), or the design should avoid the share entirely. Test from the *actual* non-interactive context before depending on it. (promoted to Build Guide v9.3, 2026-08-16)

@@ -1,8 +1,8 @@
 ---
 title: "Smart Displays - Kitchen Display Project"
 created: 2026-03-01
-modified: 2026-06-09
-version: 17.1
+modified: 2026-06-16
+version: 17.2
 author: Claude Opus 4.7 (claude-opus-4-7)
 tags:
 ---
@@ -286,6 +286,7 @@ https://www.thedigitalpictureframe.com/build-3-by-2-aspect-ratio-digital-picture
   5. New photos added to a curated album appear automatically on the display via periodic polling.
 - Authentication: a long-lived Immich API key generated in the Immich UI and stored in the kiosk app's local config. No OAuth, no refresh tokens, no Google Cloud project.
 - Multi-frame strategy: future additional photo frames (other rooms) point at the same Immich server, optionally at different albums (e.g. kitchen = "Family + Kids," bedroom = "Travel").
+- Curated art collection: a separate Immich EXTERNAL library ("Art (NAS)") indexes the NAS folder `/volume1/Media/Art` in place (one copy, read-only), organized into four movement-based "Art - ..." albums. This runs alongside the managed `immich-go` family-photo library and feeds the art slideshow without affecting the family-photo flow. See `docs/designs/art-collection-lifecycle.md` for the full lifecycle.
 
 **Why not Google Photos APIs (decision context, 2026-05-21):**
 - The original plan was the Google Photos Ambient API in OAuth Testing mode. Confirmed via Google's published docs and an independent second-opinion review that this path is not viable for a personal home project:
