@@ -8,12 +8,14 @@ import SwiftUI
 // paper in lamplight instead of a cold lit screen.
 //
 // Modes (TVSettings):
-//   autoDim ON  - brightness follows a sunset-anchored curve:
-//                   day .................. 1.0
-//                   sunset -> +45 min .... ramp to evening (0.7)
-//                   22:30 -> +15 min ..... ramp to night (0.45)
-//                   night ................ 0.45 until sunrise
-//                   sunrise -> +30 min ... ramp back to 1.0
+//   autoDim ON  - brightness follows a sunset-anchored curve (an ambient
+//                 display never needs full panel brightness - ceiling tuned
+//                 by Justin 2026-06-12):
+//                   day .................. 0.60
+//                   sunset -> +45 min .... ramp to evening (0.40)
+//                   22:30 -> +15 min ..... ramp to night (0.20)
+//                   night ................ 0.20 until sunrise
+//                   sunrise -> +30 min ... ramp back to 0.60
 //                 Sunrise/sunset come from Open-Meteo (free, keyless), fetched
 //                 twice a day with a fixed 06:30/20:30 fallback, so seasons
 //                 are handled without a config in either mode.
@@ -34,8 +36,9 @@ final class DimModel: ObservableObject {
     private var lastFetch: Date?
 
     // Curve constants (code-tuned; promote to Settings if they prove wrong).
-    static let eveningBrightness = 0.7
-    static let nightBrightness = 0.45
+    static let dayBrightness = 0.40
+    static let eveningBrightness = 0.20
+    static let nightBrightness = 0.10
     static let sunsetRampMinutes = 45.0
     static let nightStartHour = 22
     static let nightStartMinute = 30
@@ -83,14 +86,14 @@ final class DimModel: ObservableObject {
             return Self.nightBrightness
         }
         if date < sunrise.addingTimeInterval(Self.sunriseRampMinutes * 60) {
-            return ramp(from: Self.nightBrightness, to: 1.0,
+            return ramp(from: Self.nightBrightness, to: Self.dayBrightness,
                         start: sunrise, minutes: Self.sunriseRampMinutes)
         }
         if date < sunset {
-            return 1.0
+            return Self.dayBrightness
         }
         if date < nightStart {
-            return ramp(from: 1.0, to: Self.eveningBrightness,
+            return ramp(from: Self.dayBrightness, to: Self.eveningBrightness,
                         start: sunset, minutes: Self.sunsetRampMinutes)
         }
         return ramp(from: Self.eveningBrightness, to: Self.nightBrightness,
