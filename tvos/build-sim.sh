@@ -13,7 +13,10 @@ echo "==> Generating Xcode project"
 xcodegen generate
 
 echo "==> Building for the tvOS simulator"
-DERIVED="$(pwd)/.build-sim"
+# Derived data MUST live outside Dropbox - building into the repo puts
+# gigabytes inside the synced tree and stalls the file provider portfolio-wide.
+# See the Dropbox rule in _Templates/Project Build Guide.md. (Fixed 2026-08-04.)
+DERIVED="/tmp/smartdisplay-tvos-build"
 xcodebuild -project KitchenDisplayTV.xcodeproj -scheme "$SCHEME" \
   -sdk appletvsimulator -configuration Debug \
   -destination "platform=tvOS Simulator,name=$SIM_NAME" \
