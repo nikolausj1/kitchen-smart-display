@@ -1,0 +1,315 @@
+/* AmbientLayout - a photo frame with a quiet heads-up display.
+ *
+ * Three stacked layers, bottom to top: the full-bleed PhotoPanel, one gradient
+ * scrim across the lower third, and the HUD. Nothing here draws a box except
+ * the Now Playing chip, and nothing is allowed to out-shout the picture.
+ *
+ * Two shared measurements do most of the work:
+ *   --tl-hud-x / --tl-hud-y  the safe margin every corner keeps, including the
+ *                            photo's own caption and counter, so the four
+ *                            corners of the screen line up as one composition.
+ *   --tl-hud-shadow          the soft shadow every glyph carries. It is what
+ *                            keeps white text legible when the next photo
+ *                            turns out to be a snowfield.
+ */
+
+.tl-ambient {
+  --tl-hud-x: 3vw;
+  --tl-hud-y: 3vh;
+  --tl-hud-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* --- Photo layer ---------------------------------------------------------- */
+
+.tl-ambient__photo {
+  position: absolute;
+  inset: 0;
+}
+
+/* The photo IS the background here, so the panel gives up its card: no
+ * surface, no radius, no padding. */
+.tl-ambient .tl-panel.tl-photo {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* The clock owns the bottom-left, so the photo caption moves to the top-left
+ * and its scrim flips with it. The 26% right padding keeps the caption text
+ * clear of PhotoPanel's counter pill at the top-right at either 16:9 or 16:10;
+ * the gradient itself still spans the full width so the band reads as one
+ * piece rather than a floating box. */
+.tl-ambient .tl-photo__caption {
+  top: 0;
+  bottom: auto;
+  padding: var(--tl-hud-y) 26% 4vh var(--tl-hud-x);
+  background: linear-gradient(to bottom, var(--tl-scrim), transparent);
+  text-shadow: var(--tl-hud-shadow);
+}
+
+/* Sized well under the clock: the caption names the photo, it does not compete
+ * with the time. PhotoPanel's own sizes are tuned for a Board tile and land at
+ * their maximum when the stage is the whole screen. */
+.tl-ambient .tl-photo__caption-line {
+  font-size: clamp(15px, 1.55vw, 32px);
+}
+
+.tl-ambient .tl-photo__caption-sub {
+  font-size: clamp(12px, 1.15vw, 24px);
+}
+
+.tl-ambient .tl-photo__caption-fact {
+  font-size: clamp(11px, 1vw, 20px);
+}
+
+.tl-ambient .tl-photo__counter {
+  top: var(--tl-hud-y);
+  right: var(--tl-hud-x);
+  font-size: clamp(11px, 1vw, 20px);
+}
+
+/* --- Scrim ---------------------------------------------------------------- */
+
+.tl-ambient__scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 35%;
+  background: linear-gradient(to top, var(--tl-scrim), transparent);
+  pointer-events: none;
+}
+
+/* --- HUD ------------------------------------------------------------------ */
+
+/* Left and right blocks are the only things in flow, so the chip appearing or
+ * leaving can never move them. Read-only: pointer-events off means a tap falls
+ * through to the photo, which the shell reads as "open the menu". */
+.tl-ambient__hud {
+  position: absolute;
+  left: var(--tl-hud-x);
+  right: var(--tl-hud-x);
+  bottom: var(--tl-hud-y);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2vw;
+  color: var(--tl-fg);
+  text-shadow: var(--tl-hud-shadow);
+  pointer-events: none;
+}
+
+/* --- Bottom left: time, date, greeting ------------------------------------ */
+
+.tl-ambient__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.tl-ambient__time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.16em;
+  font-family: var(--tl-font-display);
+  /* At this size weight is volume, so the numerals stay light - the same 300
+   * the existing slideshow clock uses. */
+  font-weight: 300;
+  font-size: clamp(54px, 11vh, 136px);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.tl-ambient__ampm {
+  font-size: 0.2em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--tl-fg-2);
+}
+
+.tl-ambient__date {
+  margin-top: 0.9vh;
+  font-size: clamp(14px, 1.5vw, 30px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.tl-ambient__greeting {
+  margin-top: 0.7vh;
+  font-size: clamp(11px, 0.95vw, 19px);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+}
+
+/* --- Bottom right: weather, then the next thing --------------------------- */
+
+.tl-ambient__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 0.9vh;
+  min-width: 0;
+}
+
+.tl-ambient__wx {
+  display: flex;
+  align-items: center;
+  gap: 0.6vw;
+  min-width: 0;
+}
+
+.tl-ambient__wx-icon {
+  flex: 0 0 auto;
+  display: block;
+  width: clamp(28px, 5.4vh, 68px);
+  height: clamp(28px, 5.4vh, 68px);
+}
+
+/* The icon art is flat colour with no scrim of its own, so it carries the
+ * HUD's shadow as a drop-shadow instead. */
+.tl-ambient__wx-icon .weather-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 10px rgba(0, 0, 0, 0.45));
+}
+
+.tl-ambient__wx-temp {
+  font-family: var(--tl-font-display);
+  font-weight: 300;
+  font-size: clamp(24px, 4.6vh, 58px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.tl-ambient__wx-word {
+  font-size: clamp(13px, 1.35vw, 26px);
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-ambient__next {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  max-width: 44vw;
+  font-size: clamp(13px, 2vh, 28px);
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.tl-ambient__sep,
+.tl-ambient__trail {
+  color: var(--tl-fg-2);
+}
+
+/* Band dot: the same green/yellow/orange/red as the Framed timer, so urgency
+ * reads identically on every screen in the house. */
+.tl-ambient__dot {
+  flex: 0 0 auto;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: var(--tl-fg-3);
+}
+
+.tl-ambient__next--green .tl-ambient__dot {
+  background: var(--tl-band-green);
+}
+
+.tl-ambient__next--yellow .tl-ambient__dot {
+  background: var(--tl-band-yellow);
+}
+
+.tl-ambient__next--orange .tl-ambient__dot {
+  background: var(--tl-band-orange);
+}
+
+.tl-ambient__next--red .tl-ambient__dot {
+  background: var(--tl-band-red);
+}
+
+/* --- Bottom centre: the Now Playing chip ---------------------------------- */
+
+/* Absolutely positioned inside the HUD, so it is out of flow and the clock and
+ * the weather never move when the music starts. The box keeps its size at all
+ * times; only opacity changes.
+ *
+ * The transition is asymmetric on purpose. It arrives slowly enough to notice
+ * (620ms, after a beat) and leaves fast (220ms), because the instant the Sonos
+ * stops the panel underneath drops to its idle state - which this layout hides
+ * - and a slow exit would leave an empty plate hanging on the photo. */
+.tl-ambient__chip {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: clamp(240px, 30vw, 520px);
+  height: clamp(78px, 11.4vh, 140px);
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+.tl-ambient__chip--on {
+  opacity: 1;
+  transition: opacity 620ms ease 160ms;
+}
+
+.tl-ambient .tl-panel.tl-np {
+  height: 100%;
+  padding: 1.2vh 1.6vw;
+  border-radius: var(--tl-radius);
+  background: rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* A chip, not a panel: album art, title, artist, and the hairline of progress.
+ * The header, the album line, the source and the elapsed/duration readout are
+ * all detail this screen does not owe anyone. */
+.tl-ambient .tl-np .tl-panel__head,
+.tl-ambient .tl-np__album,
+.tl-ambient .tl-np__source,
+.tl-ambient .tl-np__times {
+  display: none;
+}
+
+/* "Nothing playing" is a fine empty state in a Board tile. Over a photograph
+ * the honest empty state is no chip at all, so the idle block is hidden and
+ * the plate simply is not there. */
+.tl-ambient .tl-np__idle {
+  display: none;
+}
+
+.tl-ambient .tl-np__body {
+  gap: 1vh;
+}
+
+.tl-ambient .tl-np__art {
+  width: clamp(40px, 7vh, 86px);
+}
+
+.tl-ambient .tl-np__title {
+  font-size: clamp(14px, 2vh, 26px);
+}
+
+.tl-ambient .tl-np__artist {
+  font-size: clamp(12px, 1.65vh, 22px);
+}
+
+.tl-ambient .tl-np__meta {
+  margin-top: 0;
+  font-size: clamp(10px, 1.3vh, 17px);
+}

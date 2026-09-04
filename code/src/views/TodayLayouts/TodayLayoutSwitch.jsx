@@ -1,5 +1,6 @@
 import TodayView from '../TodayView/TodayView.jsx'
 import PlaceholderLayout from './PlaceholderLayout.jsx'
+import AmbientLayout from './Ambient/AmbientLayout.jsx'
 import { useSettings } from '../../lib/settings.js'
 import { REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import { normalizeLayoutId, LAYOUT_LABELS } from './registry.js'
@@ -12,7 +13,7 @@ import { normalizeLayoutId, LAYOUT_LABELS } from './registry.js'
 const LAYOUTS = {
   board: () => <PlaceholderLayout name={LAYOUT_LABELS.board} />,
   briefing: () => <PlaceholderLayout name={LAYOUT_LABELS.briefing} />,
-  ambient: () => <PlaceholderLayout name={LAYOUT_LABELS.ambient} />,
+  ambient: AmbientLayout,
 }
 
 export default function TodayLayoutSwitch() {
