@@ -449,8 +449,21 @@ function renderDevice(dev) {
       select([[true, 'On'], [false, 'Off']], s.autoDismissExif,
         (v) => patchDevice(dev.id, { slideshow: { autoDismissExif: v === 'true' } })))
 
-    const d = card('Display', 'Panel brightness and the night schedule')
+    // --- Today screen (web screens only; the tvOS app has its own Today) ---
+    // 'framed' is the original Today view. The others live in
+    // code/src/views/TodayLayouts/. Per screen, so the kitchen and a living
+    // room screen can differ. Pixel shift is burn-in care for the static Board.
     const disp = cfg.display || {}
+    const t = card('Today screen', 'Which Today layout this screen shows. Takes effect within about 10 seconds.')
+    row(t, 'Layout', 'Framed is the original. Board, Briefing and Ambient are the 2026-09 layouts.',
+      select([['framed', 'Framed (original)'], ['board', 'Board'], ['briefing', 'Briefing'], ['ambient', 'Ambient']],
+        disp.todayLayout || 'framed',
+        (v) => patchDevice(dev.id, { display: { todayLayout: v } })))
+    row(t, 'Pixel shift', 'Nudge the whole picture a pixel or two every few minutes. Recommended with Board.',
+      select([[true, 'On'], [false, 'Off']], disp.pixelShift === true,
+        (v) => patchDevice(dev.id, { display: { pixelShift: v === 'true' } })))
+
+    const d = card('Display', 'Panel brightness and the night schedule')
     row(d, 'Daytime brightness', '',
       percentControl(disp.wakeBrightness ?? 0.9,
         (v) => patchDevice(dev.id, { display: { wakeBrightness: v } })))
