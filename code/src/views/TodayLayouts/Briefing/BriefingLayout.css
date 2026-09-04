@@ -1,0 +1,411 @@
+/* BriefingLayout - cream paper, warm ink, hairline rules, no panel surfaces.
+ *
+ * Everything a panel needs is restyled from here, scoped under .tl-briefing;
+ * nothing in panels/ is edited, so the same components still render on the dark
+ * Board. Where a panel rule uses two classes (.tl-np--compact .tl-np__title)
+ * the override below uses three, so specificity decides and stylesheet order
+ * never has to.
+ *
+ * THE VERTICAL BUDGET. Panel bodies are size containers with no intrinsic
+ * height, so every region gets a definite track; `auto` anywhere here would
+ * collapse the type. Page padding is 3.5vh top and 8vh bottom (the air the
+ * design asks for at the foot), leaving 88.5vh of content:
+ *
+ *   left   7 (masthead) + 32 (clock) + 1fr (23.5, air) + 26 (music) = 88.5vh
+ *   right  7 (offset)   + 22 (weather) + 20 (forecast) + 22 (school
+ *                        or departure) + 1fr (17.5, sun & moon)     = 88.5vh
+ *
+ * The last track in each column is the flexible one, so sub-pixel rounding is
+ * absorbed there instead of pushing the column off the page.
+ *
+ * Horizontally: 4vw + 51.04 + 4vw gap + 36.96 + 4vw = 100vw. The 92vw between
+ * the margins is split 58/42 after the gap comes out of it.
+ *
+ * Both sums are viewport relative, so they hold at 1920x1080 (1vh = 10.8px,
+ * 1vw = 19.2px) and at 1280x800 (1vh = 8px, 1vw = 12.8px) alike. Type in the
+ * right-hand column is sized in vw wherever the panel's own container-relative
+ * value would drop under ~1.1vw, which is the couch-readable floor.
+ */
+
+.tl-briefing {
+  /* The Framed timer's bands are tuned for a black panel; on paper the yellow
+   * vanishes and the green shouts. Deeper inks of the same hues, this page only. */
+  --tl-band-green: #1f7a3f;
+  --tl-band-yellow: #a8790b;
+  --tl-band-orange: #b5501a;
+  --tl-band-red: #a8281f;
+
+  /* Palette. The tokens are the panels' only route to a colour, so flipping
+   * them here is what turns the dark board into a printed page. */
+  --tl-bg: #efe9df;
+  --tl-surface: transparent;
+  --tl-surface-2: rgba(42, 38, 34, 0.05);
+  --tl-fg: #2a2622;
+  --tl-fg-2: rgba(42, 38, 34, 0.68);
+  --tl-fg-3: rgba(42, 38, 34, 0.46);
+  --tl-accent: #8a5a2b;
+  --tl-rule: rgba(42, 38, 34, 0.16);
+  --tl-radius: 0;
+  --tl-radius-sm: 0.4vw;
+  --tl-scrim: rgba(40, 34, 28, 0.55);
+  --tl-font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+
+  display: grid;
+  grid-template-columns: 58fr 42fr;
+  column-gap: 4vw;
+  align-items: stretch;
+  padding: 3.5vh 4vw 8vh;
+  /* Dark type on a light ground wants the normal render, not the thinned one
+   * index.css asks for on the black kiosk background. */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
+.tl-briefing,
+.tl-briefing__col,
+.tl-briefing__block,
+.tl-briefing__masthead {
+  box-sizing: border-box;
+}
+
+/* --- The two columns ----------------------------------------------------- */
+
+.tl-briefing__col {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tl-briefing__col--left {
+  grid-template-rows: 7vh 32vh minmax(0, 1fr) 26vh;
+}
+
+.tl-briefing__col--right {
+  grid-template-rows: 7vh 22vh 20vh 22vh minmax(0, 1fr);
+}
+
+.tl-briefing__air,
+.tl-briefing__col-top {
+  min-height: 0;
+}
+
+/* One hairline above each region is the whole chrome of this page. */
+.tl-briefing__block {
+  min-width: 0;
+  min-height: 0;
+  border-top: 1px solid var(--tl-rule);
+  padding-top: 1.6vh;
+}
+
+/* --- Masthead ------------------------------------------------------------ */
+
+/* Sits on the bottom of its 7vh track so the name rests on the first rule. */
+.tl-briefing__masthead {
+  align-self: end;
+  display: flex;
+  align-items: baseline;
+  gap: 1.4vw;
+  min-width: 0;
+  padding-bottom: 1.4vh;
+}
+
+.tl-briefing__house,
+.tl-briefing__greeting {
+  font-family: var(--tl-font-display);
+  font-variation-settings: 'opsz' 24, 'SOFT' 30;
+  font-feature-settings: normal;
+  font-size: clamp(14px, 1.35vw, 28px);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-briefing__house {
+  flex: 0 0 auto;
+  color: var(--tl-fg);
+}
+
+.tl-briefing__greeting {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--tl-accent);
+}
+
+/* --- Panel chrome: take the boxes away ----------------------------------- */
+
+.tl-briefing .tl-panel {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.tl-briefing .tl-panel__head {
+  margin-bottom: 1.1vh;
+}
+
+.tl-briefing .tl-label {
+  font-size: clamp(12px, 1.15vw, 24px);
+  letter-spacing: 0.14em;
+}
+
+.tl-briefing .tl-panel__aside,
+.tl-briefing .tl-fresh {
+  font-size: clamp(11px, 1.1vw, 22px);
+  font-variant-numeric: oldstyle-nums tabular-nums;
+}
+
+/* --- Clock: the one piece of true display type --------------------------- */
+
+/* 23vh is the design size; 29cqw is the guard. The clock's widest string
+ * ("12:34" plus the meridiem) runs about 3.2em, so 29cqw can never reach the
+ * edge of a 51vw column. The block is 1.27x the numeral size once the date and
+ * its margin are counted: 29.2vh inside a 32vh region less 1.6vh of padding. */
+.tl-briefing .tl-clock__body {
+  --tl-clock-size: min(23vh, 29cqw);
+  justify-content: flex-start;
+}
+
+.tl-briefing .tl-clock__time {
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  font-variation-settings: 'opsz' 144, 'SOFT' 50;
+  font-feature-settings: normal;
+}
+
+/* Lining and tabular on the clock: the minutes must not shuffle sideways. */
+.tl-briefing .tl-clock__hm {
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tl-briefing .tl-clock__ampm {
+  font-size: 0.2em;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--tl-fg-3);
+  font-variation-settings: 'opsz' 24, 'SOFT' 50;
+  font-feature-settings: normal;
+}
+
+/* The dateline: the page's only italic, and the one place WONK is allowed to
+ * bring out Fraunces' quirky alternates. Old-style figures on the day number
+ * where the face has them; a face without `onum` just keeps lining figures. */
+.tl-briefing .tl-clock__date {
+  margin-top: calc(var(--tl-clock-size) * 0.14);
+  font-family: var(--tl-font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: calc(var(--tl-clock-size) * 0.2);
+  letter-spacing: 0.005em;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40, 'WONK' 1;
+  font-feature-settings: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  color: var(--tl-fg-2);
+}
+
+/* --- Weather now --------------------------------------------------------- */
+
+/* 52cqh is what binds here (the region is short and wide), giving roughly a
+ * 9.5vh temperature at both screen sizes. */
+.tl-briefing .tl-wnow__body {
+  --tl-wnow-big: min(11vh, 26cqw, 52cqh);
+  gap: 0.9vh;
+}
+
+.tl-briefing .tl-wnow__temp {
+  font-weight: 450;
+  letter-spacing: -0.01em;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tl-briefing .tl-wnow__desc {
+  font-weight: 400;
+  color: var(--tl-fg-2);
+}
+
+.tl-briefing .tl-wnow__meta {
+  font-size: clamp(14px, 1.25vw, 26px);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+/* --- Forecast ------------------------------------------------------------ */
+
+.tl-briefing .tl-fc__grid {
+  --tl-fc-temp: clamp(16px, 1.5vw, 32px);
+}
+
+.tl-briefing .tl-fc__day {
+  color: var(--tl-fg-2);
+}
+
+.tl-briefing .tl-fc__temps {
+  font-family: var(--tl-font-display);
+  font-variation-settings: 'opsz' 24, 'SOFT' 40;
+  font-feature-settings: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tl-briefing .tl-fc__hi {
+  font-weight: 550;
+}
+
+.tl-briefing .tl-fc__lo {
+  font-weight: 400;
+}
+
+.tl-briefing .tl-fc__pop {
+  font-size: clamp(13px, 1.15vw, 24px);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+/* --- Sun & moon ---------------------------------------------------------- */
+
+/* The moon reads as a caption beside the arc rather than a stacked column:
+ * "Waxing crescent" needs a line of its own width, and the region is only
+ * 17.5vh tall, which is not enough for a wrapped label under a glyph. */
+.tl-briefing .tl-sun__moon {
+  width: auto;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.7vw;
+  text-align: left;
+}
+
+.tl-briefing .tl-sun__moon-svg {
+  flex: 0 0 auto;
+  width: min(3.6vh, 9cqw);
+}
+
+.tl-briefing .tl-sun__moon-label {
+  font-size: clamp(12px, 1.15vw, 24px);
+  white-space: nowrap;
+  overflow-wrap: normal;
+  color: var(--tl-fg-2);
+}
+
+.tl-briefing .tl-sun__moon-lit-pct {
+  font-size: clamp(11px, 1.1vw, 22px);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  white-space: nowrap;
+}
+
+.tl-briefing .tl-sun__clock {
+  font-family: var(--tl-font-display);
+  font-size: clamp(14px, 1.3vw, 28px);
+  font-weight: 500;
+  font-variation-settings: 'opsz' 24, 'SOFT' 40;
+  font-feature-settings: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+/* --- Now playing (compact, foot of the left column) ---------------------- */
+
+/* Three classes so these beat the panel's own .tl-np--compact rules. */
+.tl-briefing .tl-np .tl-np__art {
+  width: min(12vh, 30cqw);
+}
+
+.tl-briefing .tl-np .tl-np__title {
+  font-size: clamp(16px, min(3vh, 5.2cqw), 44px);
+  font-weight: 500;
+  letter-spacing: 0;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+}
+
+/* The panel's compact artist size is cqh driven and would out-grow the title
+ * in a region this tall, so it is pinned to the page instead. */
+.tl-briefing .tl-np .tl-np__artist {
+  font-size: clamp(13px, 2.2vh, 30px);
+}
+
+.tl-briefing .tl-np .tl-np__idle-line {
+  font-weight: 400;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+}
+
+.tl-briefing .tl-np__body {
+  justify-content: flex-start;
+}
+
+.tl-briefing .tl-np__row {
+  gap: 1.2vw;
+}
+
+/* --- Departure (school mornings, countdown running) ---------------------- */
+
+/* The panel has no padding on this page, so the band stripe would sit outside
+ * the frame and be clipped. It moves to the region's own left edge instead and
+ * the countdown indents past it, which reads as a margin mark on a page. */
+.tl-briefing .tl-depart__body {
+  padding-left: 1.1vw;
+}
+
+.tl-briefing .tl-depart__edge {
+  left: 0;
+  width: clamp(3px, 0.22vw, 6px);
+  border-radius: 0;
+}
+
+.tl-briefing .tl-depart__minutes {
+  font-size: min(9vh, 44cqh, 34cqw);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.tl-briefing .tl-depart__unit {
+  font-weight: 500;
+}
+
+.tl-briefing .tl-depart__now,
+.tl-briefing .tl-depart__headline {
+  font-weight: 500;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+}
+
+.tl-briefing .tl-depart__meta {
+  font-size: clamp(14px, 1.25vw, 26px);
+}
+
+.tl-briefing .tl-depart__option-label {
+  font-size: clamp(12px, 1.15vw, 24px);
+}
+
+.tl-briefing .tl-depart__option-time {
+  font-weight: 500;
+  font-variation-settings: 'opsz' 48, 'SOFT' 40;
+  font-feature-settings: normal;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+
+/* The only control on the page, so it is a ruled word rather than a pill. */
+.tl-briefing .tl-depart__toggle {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--tl-rule);
+  font-size: clamp(12px, 1.1vw, 22px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+}
+
+/* --- Empty states -------------------------------------------------------- */
+
+/* The first paint, before any fetch lands, is the page with its rules and
+ * labels and these lines in place. Nothing spins, nothing says "loading". */
+.tl-briefing .tl-wnow__empty,
+.tl-briefing .tl-fc__empty,
+.tl-briefing .tl-sun__empty {
+  font-size: clamp(14px, 1.2vw, 26px);
+}
