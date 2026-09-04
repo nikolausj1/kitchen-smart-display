@@ -91,61 +91,20 @@ Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
 
-### Today, second layout: the panel board (DESIGN)
+### Today, second layout (BUILT 2026-09-04, in review)
 
-Sourced 2026-08-31 from a read of Theatrium (theatrium.info), a commercial tvOS
-home-dashboard app. The idea: leave Framed Today exactly as it is and add a
-**second selectable Today layout** - a calm board of six to eight panels -
-rather than retrofitting card ideas into the mat. Chosen per screen, which also
-makes this the answer to the deferred **Configurable Today panels** idea on the
-STATUS Ideas Shelf: that item was waiting on a screen that wanted a different
-composition, and the ROADOM living-room screen is that screen.
+Built overnight as THREE selectable layouts, not one: **Board** (dark bento
+grid), **Briefing** (cream paper, serif) and **Ambient** (photo-forward with a
+quiet HUD), on the kitchen React app, chosen per screen with
+`display.todayLayout` (default `framed`, the untouched original). Design and
+architecture: `docs/designs/today-layouts.md`. Review shots and the morning
+checklist: `_review/today-layouts/README.md`. On branch `feature/today-layouts`,
+not deployed, not merged.
 
-**Thesis, so it is not just a reskin.** Framed Today is a 6-8am *departure
-instrument*. The panel board is the *rest of the day* - an ambient status
-screen for 3pm, when nobody is leaving for school. Both have a job and neither
-replaces the other.
-
-**Candidate panels, all fillable from data we already hold:** clock plus a
-time-of-day greeting, current weather, four-day forecast, a sun and moon arc
-(sunrise/sunset are already fetched for the dim curve), the school timer or a
-morning timeline with a now-marker, Sonos now playing, and a photo/art tile
-with a rotation counter. That is seven. Google Calendar (named-person rows, eg
-"Piano lesson - Sofia") and live drive time to school would take it to nine.
-Design for seven good panels, not twelve thin ones: Theatrium's density comes
-mostly from Home Assistant entities plus market and news filler we do not want.
-
-**Conventions worth borrowing** (all observed in their screenshots, none of it
-in their marketing copy): every value carries its age ("as of 12:36 pm", "10
-mins ago"); rotating panels show position ("2/12"); sparklines live inside the
-value panel instead of taking one of their own; bounded values get a scale bar
-with a position marker; a bar with a now-marker reads better than a bare
-countdown.
-
-**Open decisions:**
-- *Which surfaces.* TV first is the recommendation - the reference is tvOS and a
-  panel grid suits ten feet. The kitchen at two feet already has a working
-  Today, and building it in React as well doubles the work.
-- *Auto-select or manual.* Proposal: reuse the school-morning latch already in
-  `tvos/Sources/RootView.swift` - Framed Today inside the school window, panel
-  board after it, with a manual choice still winning for the day.
-- *Focus model.* The panels are read-only. Recommendation: non-focusable, no
-  focus rings, left/right keeps cycling views. Otherwise we inherit tvOS grid
-  focus behaviour we do not want.
-- *Name.* Not "Theatrium" (a registered trademark). Panels / Board / Briefing /
-  Bento.
-
-**Guardrails.** Photos and Music keep the Framed treatment regardless of this
-setting: the mat, placard and handwritten facts are the differentiator, and this
-is a mode on Today only, not a migration. **Pixel shift is a prerequisite** (see
-Shared / infrastructure) - every view we ship today drifts, and a static panel
-grid would be the first thing to sit still on screen for hours. The auto-dim
-curve was also tuned against mats and art; a dark grid at 45% may not be
-readable, so a per-layout dim floor may be needed.
-
-**Next step:** prototype in `_review/mockups/` at 1920x1080 (the established
-pattern, as with `today-school-data-mockup.html`) before writing any SwiftUI,
-then spin the settled design out to `docs/designs/today-panel-board.md`.
+Still open from the original topic: which layout (if any) gets the Apple TV
+port; auto-select by time of day (Framed inside the school window, a layout
+after); the house name on Briefing as a setting. The focus-model question is
+moot on the kitchen (touch) and waits for the TV port.
 
 Reminder that outlives the old topic here: **if a second photo frame comes up,
 move the photo build to the NAS** - Decisions Log 2026-06-09.
@@ -213,6 +172,17 @@ Remaining:
 - **Smart-crop (face) feedback loop** (TODO) - like the geolocation
   corrections: when the face-aware crop gets it wrong, mark the photo on the
   display so it queues for fixing later (and so we learn why it was wrong).
+- **Today layouts, review nits** (POLISH, from the 2026-09-04 build) - Board's
+  Forecast tile has dead vertical space in its 3-row cell; the weather SVGs
+  were drawn for a dark panel so the sun disc reads as a black dot on
+  Briefing's cream (needs a light-safe icon set or a filter); Board has no
+  lunch / activities tile (seven panels is what a 12x6 grid fits at 1280x800);
+  Briefing's `HOUSE_NAME` is a constant that wants a setting; check whether
+  this Fraunces cut honours `oldstyle-nums`. Full list in
+  `_review/today-layouts/README.md`.
+- **Today layout auto-select by time** (DECISION) - Framed inside the school
+  window, the chosen layout the rest of the day, using the existing schedule
+  watchers in `AppShell.jsx`. Or leave it manual per screen.
 - **Kitchen: display art fun facts** (TODO) - the TV side shipped 2026-06-10
   (rotating fact bottom-center on the mat, "Art Facts" toggle); the facts
   already ride the manifest's `art.facts`, so the kitchen needs only a
@@ -223,6 +193,10 @@ Remaining:
 Phase 1 shipped (per-view mats, Framed Now Playing, Today mat, linear nav, smooth
 progress bar). Remaining:
 
+- **Port a Today layout to tvOS** (TODO, after Justin picks one) - React
+  first was the plan; port the winner, not all three. `tvos/Sources/TodayView.swift`
+  is the current Framed Today; the panel/composition split in
+  `docs/designs/today-layouts.md` is the shape to mirror.
 - **"Display server unreachable" indicator** (TODO) - the TV swallows all
   manifest/photo fetch errors silently (`fetchJSON` in `AppModel.swift` returns
   nil on any failure), so a down/offline Pi looks identical to "no albums":
@@ -298,7 +272,8 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
-- **Data freshness stamps** (TODO) - never render a value without its age.
+- **Data freshness stamps** (SHIPPED 2026-09-04 on the kitchen, TV still TODO) -
+  never render a value without its age.
   Theatrium stamps every panel ("as of 12:36 pm" on markets, "just now" on
   traffic, "10 mins ago" on the webcam, relative ages on notifications), which
   makes stale and unreachable visible instead of silent. This is the general
@@ -306,13 +281,15 @@ progress bar). Remaining:
   identical to "no albums". Needs a `fetchedAt` on every service response, then
   a shared way to render it. Data-layer work, so it improves the views we ship
   today rather than only the panel board.
-- **Pixel shift** (TODO) - nudge the whole rendered view a pixel or two on an
+- **Pixel shift** (SHIPPED 2026-09-04 on the kitchen, default off; TV TODO) -
+  nudge the whole rendered view a pixel or two on an
   irregular timer so no element sits on the same pixels for hours. Roughly
   fifteen lines on each surface. Currently we have no burn-in mitigation of any
   kind; it matters little while every view drifts, and becomes a **prerequisite**
   the moment the static panel board ships (see Active design topics). Irregular
   timing is the point - a fixed interval settles into its own pattern.
-- **Build stamp in Settings** (TODO) - a small version plus build-time line in a
+- **Build stamp in Settings** (SHIPPED 2026-09-04 on the kitchen; TV TODO) - a
+  small version plus build-time line in a
   corner of Settings on each surface (Theatrium shows `v1.6(172) - Aug 10
   08:06`). With a Pi, a TV, a hub and a third screen coming, "which build is
   this screen running" should be answerable from the couch instead of over SSH.
@@ -356,6 +333,26 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-04 - Three Today layouts built as a per-screen setting, Framed
+  untouched.** Board, Briefing and Ambient shipped to `feature/today-layouts`
+  behind `display.todayLayout` (default `framed`). Architecture: pure
+  presentational panels themed by CSS variables, one data hook, layouts as
+  compositions (`docs/designs/today-layouts.md`). Lead decisions during the
+  build: the Board's bottom-right tile is the live countdown while a timer runs
+  and Now Playing otherwise (music is one of the display's three jobs; the
+  Board is the rest-of-the-day view, Framed is the morning instrument); the
+  Briefing re-inks the timer band colours for paper; `useTodayData` never calls
+  `postTimerState`, so Framed stays the TV's timer authority. React first, TV
+  port after a winner is chosen.
+- **2026-09-04 - FrameServer CORS blocked every settings write from a browser
+  screen.** The preflight listed `GET, POST, OPTIONS`; the screens PATCH. The
+  settings store is optimistic and silent, so every write from the kitchen
+  panel since the 2026-08-17 migration was dropped and reverted by the next
+  10s poll (the tvOS app is unaffected, no CORS in URLSession). Found because
+  dev-device writes kept reverting; confirmed with a curl preflight and the
+  Pi's plain `chromium --kiosk` flags. Fixed on both sides so deploy order does
+  not matter: the hub lists PATCH, the client sends POST (which the hub already
+  treated as PATCH and the old preflight allowed). Lesson recorded in STATUS.
 - **2026-08-31 - Sourced ideas from Theatrium; the layout ones land as a second
   Today layout, not a rewrite.** Reviewed Theatrium (theatrium.info), a
   commercial tvOS home-dashboard app, including a screenshot audit of its four
@@ -490,6 +487,19 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-04 - Three selectable Today layouts (kitchen).** Board, Briefing,
+  Ambient in `code/src/views/TodayLayouts/`, chosen per screen via
+  `display.todayLayout` or previewed with `?layout=<id>`. Verified in headless
+  Chrome at 1920x1080 and 1280x800 against live hub photos and weather. Not
+  deployed; review from `_review/today-layouts/`. Branch `feature/today-layouts`.
+- **2026-09-04 - Kitchen plumbing for the layouts, all default-off or additive:**
+  pixel shift (`display.pixelShift`), build stamp in the Settings footer,
+  `fetchedAt` on the weather / Sonos / photo hooks, a second Open-Meteo call for
+  daily + current + sunrise/sunset, moon phase, a what-to-wear rule, `?demo=1`
+  fixtures, `@fontsource-variable/fraunces`.
+- **2026-09-04 - Fix: hub CORS dropped browser settings writes** (see Decisions
+  Log). `frameserver/server.mjs` lists PATCH; `lib/settings.js` sends POST.
+  Lands with `npm run deploy:pi` (client) and `deploy:hub` (server).
 - **2026-08-24 - Fix: the kitchen slideshow stopped advancing.** The hub settings
   poll (every 10s since the hub became the source of truth in `31b4535`)
   re-merged an unchanged payload on every tick, handing every consumer a fresh
