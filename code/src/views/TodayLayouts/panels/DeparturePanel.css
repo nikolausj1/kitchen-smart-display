@@ -1,0 +1,198 @@
+/* DeparturePanel - "leave by" countdown.
+ *
+ * The big number is sized off the panel's own box (container query units) not
+ * the viewport, because the same component sits in a 3-column Board tile and in
+ * a half-page Briefing block. Each size is clamped so a cell with an indefinite
+ * height (where cqh collapses to 0) still renders readable type.
+ */
+
+.tl-depart__body {
+  position: relative;
+  container-type: size;
+  container-name: depart;
+  justify-content: center;
+  gap: calc(var(--tl-gap) * 0.6);
+}
+
+/* Band colour, resolved once here so every child can read one variable. */
+.tl-depart {
+  --tl-depart-band: var(--tl-fg-3);
+}
+.tl-depart--band-green {
+  --tl-depart-band: var(--tl-band-green);
+}
+.tl-depart--band-yellow {
+  --tl-depart-band: var(--tl-band-yellow);
+}
+.tl-depart--band-orange {
+  --tl-depart-band: var(--tl-band-orange);
+}
+.tl-depart--band-red {
+  --tl-depart-band: var(--tl-band-red);
+}
+
+/* A stripe down the leading edge of the body rather than a flood fill: at
+ * kitchen distance the colour still lands, but the panel keeps its surface. */
+.tl-depart__edge {
+  position: absolute;
+  left: calc(var(--tl-pad) * -0.5);
+  top: 0;
+  bottom: 0;
+  width: clamp(3px, 0.35cqw, 8px);
+  border-radius: 100px;
+  background: var(--tl-depart-band);
+}
+
+/* --- Active countdown ---------------------------------------------------- */
+
+.tl-depart__count-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+
+.tl-depart__count {
+  display: flex;
+  align-items: baseline;
+  gap: 0.18em;
+  line-height: 0.86;
+  min-width: 0;
+}
+
+.tl-depart__minutes {
+  font-family: var(--tl-font-display);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  font-size: clamp(44px, min(52cqh, 38cqw), 190px);
+  color: var(--tl-fg);
+}
+
+.tl-depart__unit {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-size: clamp(15px, min(15cqh, 11cqw), 46px);
+  color: var(--tl-fg-2);
+}
+
+/* Expired: the word replaces the number at a size that still fills the cell. */
+.tl-depart__now {
+  font-family: var(--tl-font-display);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  font-size: clamp(36px, min(40cqh, 26cqw), 140px);
+  color: var(--tl-fg);
+}
+
+.tl-depart__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-top: 0.5em;
+  font-size: clamp(13px, min(11cqh, 7cqw), 28px);
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-depart__dot {
+  flex: 0 0 auto;
+  width: 0.62em;
+  height: 0.62em;
+  border-radius: 50%;
+  background: var(--tl-depart-band);
+}
+
+.tl-depart__sep {
+  color: var(--tl-fg-3);
+}
+
+/* --- No-timer: the two depart times -------------------------------------- */
+
+.tl-depart__options {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--tl-gap);
+  min-width: 0;
+}
+
+.tl-depart__option {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  color: var(--tl-fg-3);
+}
+
+/* The weather-picked default is the one the timer will arm with, so it is the
+ * only one at full strength. */
+.tl-depart__option--chosen {
+  color: var(--tl-fg);
+}
+
+.tl-depart__option--past {
+  opacity: 0.45;
+}
+
+.tl-depart__option-label {
+  font-size: clamp(11px, min(10cqh, 6cqw), 20px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-depart__option-time {
+  font-family: var(--tl-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-size: clamp(20px, min(26cqh, 17cqw), 62px);
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Flat states (no school, setting timer) ------------------------------ */
+
+.tl-depart__headline {
+  font-family: var(--tl-font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-size: clamp(18px, min(22cqh, 13cqw), 54px);
+  color: var(--tl-fg-2);
+}
+
+.tl-depart__headline--quiet {
+  color: var(--tl-fg-3);
+}
+
+/* --- Travel toggle ------------------------------------------------------- */
+
+.tl-depart__toggle {
+  align-self: flex-start;
+  margin-top: auto;
+  flex: 0 0 auto;
+  background: var(--tl-surface-2);
+  color: var(--tl-fg-2);
+  border: 0;
+  border-radius: 100px;
+  padding: 0.5em 1.1em;
+  font-family: inherit;
+  font-size: clamp(11px, min(10cqh, 6cqw), 22px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

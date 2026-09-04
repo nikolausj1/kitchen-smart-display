@@ -1,0 +1,90 @@
+/* WeatherNowPanel - the temperature drives every other size in the panel, so
+ * the whole block stays in proportion at any cell size. The cq caps keep it
+ * inside the cell; the vh guardrails keep it in the same visual family as the
+ * neighbouring panels when a cell is unusually large or small. */
+
+.tl-wnow__body {
+  container-type: size;
+  justify-content: center;
+  gap: 0.7vh;
+  min-height: 6vh;
+  --tl-wnow-big: clamp(3vh, min(24cqw, 44cqh), 11vh);
+}
+
+/* Temperature left, icon anchored right under the freshness stamp, so a wide
+ * cell reads as a deliberate pair instead of a left-packed clump. */
+.tl-wnow__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tl-gap);
+  min-width: 0;
+}
+
+.tl-wnow__temp {
+  font-family: var(--tl-font-display);
+  font-size: var(--tl-wnow-big);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+/* The degree sign rides high and light so the number keeps the weight. */
+.tl-wnow__deg {
+  font-size: 0.5em;
+  font-weight: 500;
+  color: var(--tl-fg-2);
+  vertical-align: 0.55em;
+  margin-left: 0.02em;
+}
+
+.tl-wnow__icon {
+  flex: 0 0 auto;
+  width: calc(var(--tl-wnow-big) * 1.02);
+  height: calc(var(--tl-wnow-big) * 1.02);
+}
+
+/* Scoped copy of the sizing WeatherPanel gives the shared icon, so this panel
+ * does not depend on another view's stylesheet being in the bundle. */
+.tl-wnow__icon .weather-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.tl-wnow__desc {
+  font-size: calc(var(--tl-wnow-big) * 0.27);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--tl-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* One line, sized off the panel width rather than the temperature: it is the
+ * longest string in the panel and must never push past the cell. */
+.tl-wnow__meta {
+  font-size: clamp(1.2vh, min(4.2cqw, 9cqh), 2.4vh);
+  font-weight: 500;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-wnow__sep {
+  color: var(--tl-fg-3);
+  margin: 0 0.5em;
+}
+
+.tl-wnow__empty {
+  margin: auto 0;
+  font-size: clamp(1.4vh, min(6cqw, 12cqh), 2.8vh);
+  color: var(--tl-fg-3);
+}

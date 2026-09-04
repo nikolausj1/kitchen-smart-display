@@ -1,0 +1,337 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSettings } from '../../../lib/settings.js'
+import useWeather from '../../../hooks/useWeather.js'
+import useTimer from '../../../hooks/useTimer.js'
+import useSonosState from '../../../hooks/useSonosState.js'
+import useImmichPhotos from '../../../hooks/useImmichPhotos.js'
+import useLunch from '../../../hooks/useLunch.js'
+import useSchoolCalendar from '../../../hooks/useSchoolCalendar.js'
+import { decideTravelMode } from '../../../lib/travelDefault.js'
+import {
+  dateKey,
+  isNoSchoolToday,
+  lunchEntreeForToday,
+  grabForToday,
+  activitiesForToday,
+} from '../../../lib/schoolDay.js'
+import { fmtDayShort, greetingFor } from '../lib/format.js'
+import { moonPhase } from '../lib/sun.js'
+import { decideWear } from '../lib/wear.js'
+import useDailyForecast from './useDailyForecast.js'
+import { wmoToIcon, wmoDescription } from './wmo.js'
+import { DEMO_MUSIC, DEMO_SCHOOL, DEMO_TIMER, DEMO_TIMER_MINUTES, demoWeather } from './demo.js'
+
+// useTodayData - the single data hook every new Today layout calls. Layouts
+// call it once and hand slices to purely presentational panels, which is what
+// lets the same panel render on the dark Board and the light Briefing page.
+//
+// Deliberately NOT here: postTimerState(). The Framed Today view stays the one
+// authority that mirrors the timer to the Apple TV, so a second layout mounting
+// cannot start fighting it over what the TV shows.
+
+// URL params, parsed ONCE at module load the way lib/kioskMode.js does.
+// Reading window.location in a render body trips the React Compiler purity
+// rule, and these flags never change for the life of the page anyway.
+function readFlags() {
+  if (typeof window === 'undefined') return { demo: false, forceNoSchool: false }
+  const p = new URLSearchParams(window.location.search)
+  return {
+    demo: p.get('demo') === '1',
+    forceNoSchool: p.get('noschool') === '1',
+  }
+}
+const FLAGS = readFlags()
+
+function startOfDay(d) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+function isSameDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+export default function useTodayData() {
+  // Three clocks, one interval. `now` ticks every second for the display;
+  // `hourNow` and `today` change only when they really do, so everything
+  // memoised against them keeps its object identity between ticks.
+  const [now, setNow] = useState(() => new Date())
+  const [hourNow, setHourNow] = useState(() => new Date().getHours())
+  const [today, setToday] = useState(() => startOfDay(new Date()))
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const d = new Date()
+      setNow(d)
+      setHourNow(d.getHours())
+      setToday((prev) => (isSameDay(prev, d) ? prev : startOfDay(d)))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Demo values that depend on when the page was opened are frozen once, in a
+  // state initialiser, so the fixture does not slide forward every second.
+  const [demoTarget] = useState(() =>
+    FLAGS.demo ? new Date(Date.now() + DEMO_TIMER_MINUTES * 60_000) : null
+  )
+  const [demoFetchedAt] = useState(() => (FLAGS.demo ? Date.now() : null))
+
+  const settings = useSettings()
+  const schoolSettings = settings.school
+
+  const weather = useWeather()          // hourly block: forecastForHour + fallback
+  const daily = useDailyForecast()      // daily + current block
+
+  // Weather-based default travel mode, exactly as views/TodayView does it: read
+  // the forecast at the walking departure hour and decide drive vs walk. The
+  // timer uses it when it auto-arms; a manual toggle wins for the rest of the day.
+  const depHour = schoolSettings?.walkingDepart?.hour ?? 7
+  const weatherDefaultMode = decideTravelMode(weather.forecastForHour?.(depHour))
+  const timerState = useTimer({ weatherDefaultMode })
+
+  const sonos = useSonosState()
+  const photoData = useImmichPhotos()
+  const lunch = useLunch()
+  const calendar = useSchoolCalendar()
+
+  const todayKey = useMemo(() => dateKey(today), [today])
+
+  // useWeather rebuilds forecastForHour on every render, which would churn the
+  // weather object identity once a second. Hand consumers a stable wrapper over
+  // the latest one instead (ref updated in an effect, read only when called).
+  const forecastForHourRef = useRef(weather.forecastForHour)
+  useEffect(() => {
+    forecastForHourRef.current = weather.forecastForHour
+  })
+  const forecastForHour = useCallback((hour) => {
+    const fn = forecastForHourRef.current
+    return fn ? fn(hour) : null
+  }, [])
+
+  // This hour's reading from the hourly block, kept as scalars so it can be a
+  // memo dependency. Used only when the daily+current call has nothing.
+  const hourlyNow = weather.forecastForHour?.(hourNow) || null
+  const hourlyNowTempF = hourlyNow?.tempF ?? null
+  const hourlyNowCode = hourlyNow?.code ?? null
+
+  const demoWeatherView = useMemo(() => (FLAGS.demo ? demoWeather(today) : null), [today])
+
+  // The demo weather fixture is a last resort: real data always wins, so a demo
+  // screenshot taken on the wall shows the real sky outside the window.
+  const haveLiveForecast = !!(daily.current || daily.days.length)
+  const usingDemoWeather = FLAGS.demo && !haveLiveForecast
+  const source = usingDemoWeather ? demoWeatherView : daily
+
+  const liveFetchedAt = daily.fetchedAt ?? weather.fetchedAt ?? null
+
+  // Past days are dropped so days[0] really is today, which is what the panels
+  // are told to assume. A cache written yesterday evening is still inside its
+  // 12h window after midnight and would otherwise lead with a day that is over.
+  const days = useMemo(
+    () =>
+      (source?.days || [])
+        .filter((d) => d.dateKey >= todayKey)
+        .map((d) => ({
+          ...d,
+          label: d.dateKey === todayKey ? 'Today' : fmtDayShort(d.date),
+        })),
+    [source, todayKey]
+  )
+
+  // Today's row from the daily block. Pulled out here rather than read back off
+  // the weather object below, because the compiler's ref rule treats any object
+  // carrying a `current` key as a ref and refuses property reads on it.
+  const todayDay = useMemo(
+    () => days.find((d) => d.dateKey === todayKey) || days[0] || null,
+    [days, todayKey]
+  )
+
+  const currentOut = useMemo(() => {
+    const live = source?.current || null
+    if (live) return live
+    // Fallback: same API, same location, just the other block. An hourly
+    // forecast for the current hour is an honest stand-in for "now"; inventing
+    // a number would not be.
+    if (hourlyNowTempF == null && hourlyNowCode == null) return null
+    return {
+      tempF: hourlyNowTempF,
+      feelsLikeF: null,
+      code: hourlyNowCode,
+      iconName: wmoToIcon(hourlyNowCode),
+      description: wmoDescription(hourlyNowCode),
+      windMph: null,
+      isDay: null,
+    }
+  }, [source, hourlyNowTempF, hourlyNowCode])
+
+  const weatherOut = useMemo(
+    () => ({
+      current: currentOut,
+      today: todayDay
+        ? {
+            highF: todayDay.highF,
+            lowF: todayDay.lowF,
+            precipPct: todayDay.precipPct,
+            code: todayDay.code,
+            iconName: todayDay.iconName,
+          }
+        : null,
+      days,
+      sunrise: todayDay?.sunrise || source?.sunrise || null,
+      sunset: todayDay?.sunset || source?.sunset || null,
+      forecastForHour,
+      fetchedAt: usingDemoWeather ? demoFetchedAt : liveFetchedAt,
+      // The demo fixture is not stale and did not fail; a live error belongs to
+      // data we are not showing right now.
+      stale: usingDemoWeather ? false : !!daily.stale,
+      error: usingDemoWeather ? null : daily.error ?? null,
+    }),
+    [
+      currentOut,
+      todayDay,
+      days,
+      source,
+      forecastForHour,
+      usingDemoWeather,
+      demoFetchedAt,
+      liveFetchedAt,
+      daily.stale,
+      daily.error,
+    ]
+  )
+
+  // Taken at local midday so the label does not lead or lag by half a day at a
+  // phase boundary. Only changes when the date does.
+  const moon = useMemo(() => moonPhase(today.getTime() + 12 * 60 * 60 * 1000), [today])
+
+  const schoolOut = useMemo(() => {
+    // ?noschool=1 is an explicit request, so it wins even over the demo fixture.
+    const noSchool = FLAGS.forceNoSchool
+      ? true
+      : FLAGS.demo
+        ? DEMO_SCHOOL.noSchool
+        : isNoSchoolToday(schoolSettings, calendar, today)
+
+    return {
+      noSchool,
+      entree: FLAGS.demo ? DEMO_SCHOOL.entree : lunchEntreeForToday(lunch, today),
+      grab: FLAGS.demo ? DEMO_SCHOOL.grab : grabForToday(lunch, today),
+      activities: FLAGS.demo
+        ? DEMO_SCHOOL.activities
+        : activitiesForToday(schoolSettings, today),
+      departTimes: {
+        driving: schoolSettings?.drivingDepart ?? null,
+        walking: schoolSettings?.walkingDepart ?? null,
+      },
+      morningEndsAt: schoolSettings?.morningEndsAt ?? null,
+    }
+  }, [schoolSettings, calendar, lunch, today])
+
+  const wear = useMemo(
+    () =>
+      decideWear({
+        highF: todayDay?.highF,
+        lowF: todayDay?.lowF,
+        precipPct: todayDay?.precipPct,
+        code: todayDay?.code,
+        hourNow,
+      }),
+    [todayDay, hourNow]
+  )
+
+  // actions is passed through untouched: the same five callbacks useTimer
+  // handed us, so a panel button drives the real state machine.
+  const timer = useMemo(
+    () =>
+      FLAGS.demo
+        ? { ...DEMO_TIMER, target: demoTarget, actions: timerState.actions }
+        : {
+            mode: timerState.mode,
+            kind: timerState.kind,
+            travelMode: timerState.travelMode,
+            minutesLeft: timerState.minutesLeft,
+            band: timerState.band,
+            target: timerState.target,
+            actions: timerState.actions,
+          },
+    [
+      timerState.mode,
+      timerState.kind,
+      timerState.travelMode,
+      timerState.minutesLeft,
+      timerState.band,
+      timerState.target,
+      timerState.actions,
+      demoTarget,
+    ]
+  )
+
+  const musicRoom = settings.sonos?.room || 'Main'
+  const music = useMemo(() => {
+    if (FLAGS.demo) {
+      return { ...DEMO_MUSIC, room: musicRoom, fetchedAt: demoFetchedAt }
+    }
+    return {
+      playing: !!sonos.playing,
+      paused: !!sonos.paused,
+      track: sonos.track || null,
+      stationName: sonos.stationName || '',
+      sourceLabel: sonos.sourceLabel || '',
+      sourceKind: sonos.sourceKind || '',
+      volume: sonos.volume ?? 0,
+      room: musicRoom,
+      fetchedAt: sonos.fetchedAt ?? null,
+      error: sonos.error ?? null,
+    }
+  }, [
+    sonos.playing,
+    sonos.paused,
+    sonos.track,
+    sonos.stationName,
+    sonos.sourceLabel,
+    sonos.sourceKind,
+    sonos.volume,
+    sonos.fetchedAt,
+    sonos.error,
+    musicRoom,
+    demoFetchedAt,
+  ])
+
+  // Photos are always live - the slideshow is the one source that never needs
+  // a fixture, and a demo screenshot should show the family's real pictures.
+  const photos = useMemo(
+    () => ({
+      photos: photoData.photos || [],
+      albums: photoData.albums || [],
+      loading: !!photoData.loading,
+      error: photoData.error ?? null,
+      fetchedAt: photoData.fetchedAt ?? null,
+    }),
+    [
+      photoData.photos,
+      photoData.albums,
+      photoData.loading,
+      photoData.error,
+      photoData.fetchedAt,
+    ]
+  )
+
+  return {
+    now,
+    demo: FLAGS.demo,
+    greeting: greetingFor(now),
+    settings,
+    weather: weatherOut,
+    moon,
+    school: schoolOut,
+    timer,
+    wear,
+    music,
+    photos,
+  }
+}

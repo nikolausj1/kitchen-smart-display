@@ -1,0 +1,151 @@
+/* SunMoonPanel - a dashed daylight arc with the sun on it, the two horizon
+ * times underneath, and the moon standing quietly to the right. */
+
+.tl-sun__body {
+  container-type: size;
+  min-height: 6vh;
+}
+
+.tl-sun__row {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: var(--tl-gap);
+}
+
+.tl-sun__arc {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tl-sun__sky {
+  container-type: size;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 4vh;
+  min-width: 0;
+}
+
+.tl-sun__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tl-sun__horizon {
+  stroke: var(--tl-rule);
+  stroke-width: max(1px, 0.12vh);
+  fill: none;
+}
+
+/* Hairline and dashed: the path of the day, not a data series. */
+.tl-sun__track {
+  stroke: var(--tl-fg-3);
+  stroke-width: max(1px, 0.16vh);
+  stroke-dasharray: 5 7;
+  stroke-linecap: round;
+}
+
+.tl-sun__dot {
+  position: absolute;
+  width: clamp(7px, min(5cqw, 11cqh), 26px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: var(--tl-accent);
+  transform: translate(-50%, -50%);
+}
+
+/* Sun is down: it stays on the side of the horizon it is actually on, dimmed
+ * to say so rather than vanishing. */
+.tl-sun__dot--down {
+  background: var(--tl-fg-3);
+  width: clamp(5px, min(3.4cqw, 7.5cqh), 18px);
+}
+
+.tl-sun__times {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--tl-gap);
+  margin-top: 0.8vh;
+  min-width: 0;
+}
+
+.tl-sun__time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.tl-sun__time--end {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.tl-sun__clock {
+  font-size: clamp(1.3vh, min(5cqw, 11cqh), 2.7vh);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-sun__moon {
+  flex: 0 0 auto;
+  width: min(27cqw, 62cqh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6vh;
+  min-width: 0;
+  text-align: center;
+}
+
+.tl-sun__moon-svg {
+  width: min(17cqw, 30cqh);
+  aspect-ratio: 1 / 1;
+  display: block;
+}
+
+.tl-sun__moon-disc {
+  fill: var(--tl-surface-2);
+  stroke: var(--tl-fg-3);
+  stroke-width: 0.8;
+}
+
+/* The filled part is the lit part, which reads the same way on the dark board
+ * and on the light briefing page. */
+.tl-sun__moon-lit {
+  fill: var(--tl-fg-2);
+  stroke: none;
+}
+
+.tl-sun__moon-label {
+  font-size: clamp(1.1vh, min(5.6cqw, 9cqh), 2.1vh);
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--tl-fg);
+  overflow-wrap: anywhere;
+}
+
+.tl-sun__moon-lit-pct {
+  font-size: clamp(1vh, min(4.6cqw, 7.5cqh), 1.8vh);
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+}
+
+.tl-sun__empty {
+  margin: auto 0;
+  font-size: clamp(1.4vh, min(6cqw, 12cqh), 2.8vh);
+  color: var(--tl-fg-3);
+}

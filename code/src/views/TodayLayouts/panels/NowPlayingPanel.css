@@ -1,0 +1,190 @@
+/* NowPlayingPanel - album art, track, and a hairline of progress.
+ *
+ * Sizes come off the panel box (container query units) so the same component
+ * works as a wide Board tile and as a narrow Ambient chip. Each size is clamped
+ * so a cell with an indefinite height (where cqh collapses to 0) still renders
+ * readable type.
+ */
+
+.tl-np__body {
+  container-type: size;
+  container-name: np;
+  gap: calc(var(--tl-gap) * 0.7);
+  justify-content: center;
+}
+
+.tl-np__row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--tl-gap) * 0.8);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* --- Album art ----------------------------------------------------------- */
+
+/* Sized from the smaller of the panel's two dimensions so it stays square in
+ * any cell shape instead of stretching when the tile gets tall and thin. */
+.tl-np__art {
+  flex: 0 0 auto;
+  width: clamp(44px, min(34cqw, 60cqh), 240px);
+  aspect-ratio: 1 / 1;
+  border-radius: var(--tl-radius-sm);
+  overflow: hidden;
+  background: var(--tl-surface-2);
+}
+
+.tl-np__art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tl-np__art-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22%;
+  box-sizing: border-box;
+  color: var(--tl-fg-3);
+}
+
+/* --- Track text ---------------------------------------------------------- */
+
+.tl-np__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16em;
+}
+
+.tl-np__title,
+.tl-np__artist,
+.tl-np__album,
+.tl-np__source {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-np__title {
+  font-family: var(--tl-font-display);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  font-size: clamp(16px, min(17cqh, 6.4cqw), 40px);
+  color: var(--tl-fg);
+}
+
+.tl-np__artist {
+  font-size: clamp(13px, min(13cqh, 4.8cqw), 30px);
+  color: var(--tl-fg-2);
+}
+
+.tl-np__album {
+  font-size: clamp(12px, min(11cqh, 4.1cqw), 25px);
+  color: var(--tl-fg-3);
+}
+
+.tl-np__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+  margin-top: 0.2em;
+  font-size: clamp(11px, min(10cqh, 3.7cqw), 22px);
+  color: var(--tl-fg-3);
+}
+
+.tl-np__pill {
+  flex: 0 0 auto;
+  background: var(--tl-surface-2);
+  color: var(--tl-fg-2);
+  border-radius: 100px;
+  padding: 0.22em 0.7em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* --- Progress ------------------------------------------------------------ */
+
+.tl-np__progress {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  min-width: 0;
+}
+
+/* A hairline, not a bar: it is a glance at how far in we are, not a control. */
+.tl-np__track {
+  height: clamp(2px, 0.25vh, 4px);
+  border-radius: 100px;
+  background: var(--tl-rule);
+  overflow: hidden;
+}
+
+.tl-np__fill {
+  height: 100%;
+  background: var(--tl-fg-2);
+  border-radius: 100px;
+  /* The elapsed value steps once a second; ease the width so it glides. */
+  transition: width 900ms linear;
+}
+
+.tl-np__times {
+  display: flex;
+  justify-content: space-between;
+  font-size: clamp(11px, min(9cqh, 3.4cqw), 20px);
+  color: var(--tl-fg-3);
+}
+
+/* --- Idle ---------------------------------------------------------------- */
+
+.tl-np__idle {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25em;
+  min-width: 0;
+}
+
+.tl-np__idle-line {
+  font-family: var(--tl-font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-size: clamp(15px, min(16cqh, 6cqw), 38px);
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-np__idle-room {
+  font-size: clamp(11px, min(10cqh, 4cqw), 22px);
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Compact (Ambient chip): art + one line of text ---------------------- */
+
+.tl-np--compact .tl-np__title {
+  font-size: clamp(14px, min(24cqh, 6cqw), 32px);
+}
+
+.tl-np--compact .tl-np__artist {
+  font-size: clamp(12px, min(18cqh, 4.6cqw), 26px);
+}
+
+.tl-np--compact .tl-np__art {
+  width: clamp(40px, min(30cqw, 78cqh), 170px);
+}

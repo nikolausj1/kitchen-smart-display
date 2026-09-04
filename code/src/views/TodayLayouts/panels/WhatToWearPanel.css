@@ -1,0 +1,64 @@
+/* WhatToWearPanel - glyph left, advice right. Both are sized against the panel
+ * body so the pair keeps its proportions in a tall cell or a wide one. */
+
+.tl-wear__body {
+  container-type: size;
+  justify-content: center;
+  min-height: 6vh;
+}
+
+.tl-wear__row {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-gap);
+  min-width: 0;
+}
+
+.tl-wear__glyph {
+  flex: 0 0 auto;
+  width: min(26cqw, 58cqh);
+  height: min(26cqw, 58cqh);
+  color: var(--tl-fg);
+}
+
+.tl-wear__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tl-wear__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tl-wear__headline {
+  font-family: var(--tl-font-display);
+  font-size: clamp(1.7vh, min(8.4cqw, 22cqh), 4.4vh);
+  font-weight: 600;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  color: var(--tl-fg);
+  text-wrap: balance;
+  overflow: hidden;
+}
+
+/* The detail is a sentence, so it wraps - but never past three lines, which is
+ * the point where it stops being glanceable from across the kitchen. */
+.tl-wear__detail {
+  margin-top: 0.55em;
+  font-size: clamp(1.2vh, min(5cqw, 13cqh), 2.5vh);
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--tl-fg-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tl-wear__empty {
+  margin: auto 0;
+  font-size: clamp(1.4vh, min(6cqw, 12cqh), 2.8vh);
+  color: var(--tl-fg-3);
+}

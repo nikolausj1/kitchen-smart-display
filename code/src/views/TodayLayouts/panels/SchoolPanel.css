@@ -1,0 +1,61 @@
+/* SchoolPanel - one "name . value" row per thing happening at school today. */
+
+.tl-school__body {
+  container-type: size;
+  container-name: school;
+  justify-content: flex-start;
+}
+
+.tl-school__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.42em;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.tl-school__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.42em;
+  min-width: 0;
+  line-height: 1.2;
+  font-size: clamp(14px, min(15cqh, 5.2cqw), 32px);
+}
+
+/* Left term stays full strength, the value sits back one step: the pair reads
+ * as a label and its answer rather than as two competing lines. */
+.tl-school__name {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-school__sep {
+  flex: 0 0 auto;
+  color: var(--tl-fg-3);
+}
+
+.tl-school__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-school__empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: clamp(14px, min(16cqh, 5.4cqw), 34px);
+  color: var(--tl-fg-3);
+}

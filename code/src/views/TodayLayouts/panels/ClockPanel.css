@@ -1,0 +1,67 @@
+/* ClockPanel - the type scales off the panel body, not the viewport, so the
+ * clock fills whatever cell a layout hands it.
+ *
+ * --tl-clock-size is declared on the container but only ever *used* by its
+ * children, which is what makes the cq units resolve against the body (an
+ * element never queries itself).
+ *
+ * The width factor is the widest string the clock can show: "12:34" plus the
+ * meridiem is about 3.2em of the numeral size, so 31cqw never overflows. The
+ * height factor covers the numeral line (0.9), the gap, and the date line.
+ */
+
+.tl-clock__body {
+  container-type: size;
+  justify-content: center;
+  align-items: flex-start;
+  /* Insurance: a size container contributes no intrinsic height, so if a
+   * layout ever drops the clock into an auto-height row the cq units would
+   * resolve against zero. This keeps it legible instead of invisible. */
+  min-height: 8vh;
+  --tl-clock-size: min(31cqw, 74cqh);
+}
+
+/* Seconds add two digits and a colon, so the same block needs a smaller
+ * numeral to stay inside the cell. */
+.tl-clock__body--seconds {
+  --tl-clock-size: min(21cqw, 74cqh);
+}
+
+.tl-clock__time {
+  display: flex;
+  align-items: baseline;
+  gap: 0.14em;
+  min-width: 0;
+  font-family: var(--tl-font-display);
+  font-size: var(--tl-clock-size);
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-clock__hm {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small and sitting on the numeral baseline, never a second big number. */
+.tl-clock__ampm {
+  font-size: 0.22em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--tl-fg-2);
+}
+
+.tl-clock__date {
+  margin-top: calc(var(--tl-clock-size) * 0.1);
+  max-width: 100%;
+  font-size: calc(var(--tl-clock-size) * 0.2);
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  line-height: 1.15;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

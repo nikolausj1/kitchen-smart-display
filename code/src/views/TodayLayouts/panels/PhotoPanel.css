@@ -1,0 +1,133 @@
+/* PhotoPanel - the photo fills the whole cell, so the panel drops the chrome
+ * padding entirely. The double class beats .tl-panel's own padding whatever
+ * order the stylesheets land in. */
+
+.tl-panel.tl-photo {
+  padding: 0;
+}
+
+.tl-photo__body {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The stage is the measured box (ResizeObserver) and the query container for
+ * the overlays, so a caption in a small Board tile is small and the same
+ * caption full-bleed in Ambient is large. */
+.tl-photo__stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  container-name: photo;
+}
+
+/* --- Crossfade ----------------------------------------------------------- */
+
+.tl-photo__layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  /* 1.2s, matching FADE_MS in PhotoPanel.jsx. */
+  transition: opacity 1200ms ease-in-out;
+}
+
+.tl-photo__layer--active {
+  opacity: 1;
+}
+
+.tl-photo__layer img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tl-photo--cover .tl-photo__layer img {
+  object-fit: cover;
+  object-position: 50% 50%;
+}
+
+.tl-photo--contain .tl-photo__layer img {
+  object-fit: contain;
+}
+
+/* --- Counter pill -------------------------------------------------------- */
+
+.tl-photo__counter {
+  position: absolute;
+  top: calc(var(--tl-pad) * 0.7);
+  right: calc(var(--tl-pad) * 0.7);
+  padding: 0.28em 0.7em;
+  border-radius: 100px;
+  background: var(--tl-scrim);
+  color: var(--tl-fg);
+  font-size: clamp(10px, min(5cqh, 3cqw), 22px);
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* --- Caption ------------------------------------------------------------- */
+
+/* Full-width scrim, text hard left: the gradient is what keeps a caption
+ * legible over a bright sky without putting a box on the photo. */
+.tl-photo__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: calc(var(--tl-pad) * 1.6) var(--tl-pad) calc(var(--tl-pad) * 0.85);
+  background: linear-gradient(to top, var(--tl-scrim), transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 0.12em;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.tl-photo__caption-line,
+.tl-photo__caption-sub,
+.tl-photo__caption-fact {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-photo__caption-line {
+  font-family: var(--tl-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  font-size: clamp(13px, min(8cqh, 4.4cqw), 44px);
+  color: var(--tl-fg);
+}
+
+.tl-photo__caption-sub {
+  font-size: clamp(11px, min(6cqh, 3.4cqw), 32px);
+  color: var(--tl-fg-2);
+}
+
+/* Only shown on a tall cell (see TALL_CELL_VH), where there is room for a
+ * third line without crowding the picture. */
+.tl-photo__caption-fact {
+  margin-top: 0.25em;
+  font-size: clamp(10px, min(4.6cqh, 2.7cqw), 26px);
+  color: var(--tl-fg-2);
+  opacity: 0.8;
+}
+
+/* --- Empty --------------------------------------------------------------- */
+
+.tl-photo__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tl-fg-3);
+  font-size: clamp(13px, min(9cqh, 5cqw), 34px);
+}
