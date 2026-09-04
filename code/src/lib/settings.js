@@ -98,10 +98,15 @@ let patchTimer = null
 let queuedDevice = {}
 let queuedShared = {}
 
+// POST, not PATCH, on purpose: the hub treats the two identically on these
+// routes, but its CORS preflight only allowed GET/POST until 2026-09-04, so a
+// browser-originated PATCH was dropped silently and reverted by the next poll.
+// POST works against both the old and the fixed hub, so a screen keeps saving
+// settings whichever half is deployed first.
 function hubPatch(path, body) {
   if (!HUB || typeof fetch === 'undefined') return
   fetch(`${HUB}${path}`, {
-    method: 'PATCH',
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     cache: 'no-store',

@@ -215,7 +215,10 @@ function registerDevice({ id, name, kind, config, shared }) {
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  // PATCH is what the screens send for settings writes (settings.js hubPatch);
+  // without it here the browser's preflight fails and every write from a
+  // screen is dropped silently, reverted by the next poll. Found 2026-09-04.
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
