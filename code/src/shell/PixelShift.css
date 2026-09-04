@@ -1,0 +1,11 @@
+/* The shifted wrapper becomes the containing block for every position:fixed
+ * view inside it (a transform does that), so the views still fill it edge to
+ * edge; the at-most-2px sliver it exposes at one edge is black, under the
+ * bezel. MenuPill and DimOverlay stay outside the wrapper on purpose. */
+.pixel-shift {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  transition: transform 1.6s ease-in-out;
+  will-change: transform;
+}

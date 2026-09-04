@@ -101,6 +101,9 @@ export default function useWeather() {
       // lookups (e.g. the departure-time forecast that drives the travel
       // default). Null until a live fetch succeeds (not cached).
       hourly: null,
+      // ms epoch of the fetch behind the current slots (cache or live), so a
+      // view can show the data's age instead of silently showing stale slots.
+      fetchedAt: cached?.fetchedAt || null,
     }
   })
 
@@ -130,6 +133,7 @@ export default function useWeather() {
           error: null,
           stale: false,
           hourly: payload?.hourly || null,
+          fetchedAt: Date.now(),
         })
         schedule(REFRESH_MS)
       } catch (err) {
@@ -141,6 +145,7 @@ export default function useWeather() {
           error: err.message || 'fetch failed',
           stale: !!prev.slots,
           hourly: prev.hourly,
+          fetchedAt: prev.fetchedAt,
         }))
         schedule(ERROR_RETRY_MS)
       }

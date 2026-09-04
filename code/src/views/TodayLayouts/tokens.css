@@ -1,0 +1,55 @@
+/* Today Layouts - theme tokens and base classes.
+ *
+ * Every panel in panels/ reads ONLY these variables, so one panel renders on
+ * the dark Board and the light Briefing page without knowing which. A layout
+ * sets its palette by overriding the variables on its own root element; the
+ * values here are the dark defaults.
+ *
+ * Band colours mirror the existing Framed Today timer
+ * (views/TodayView/TimerPanel.css) so "green means go" reads the same in both.
+ */
+
+.tl-root {
+  --tl-bg: #0b0d0f;
+  --tl-surface: #16191c;
+  --tl-surface-2: #1e2226;
+  --tl-fg: #f2f2f0;
+  --tl-fg-2: rgba(242, 242, 240, 0.68);
+  --tl-fg-3: rgba(242, 242, 240, 0.42);
+  --tl-accent: #d9a066;
+  --tl-rule: rgba(255, 255, 255, 0.08);
+  --tl-radius: 1.4vw;
+  --tl-radius-sm: 0.6vw;
+  --tl-font-display: 'Inter', -apple-system, system-ui, sans-serif;
+  --tl-font-body: 'Inter', -apple-system, system-ui, sans-serif;
+  --tl-font-mono: ui-monospace, Menlo, Consolas, monospace;
+  --tl-pad: clamp(12px, 1.6vw, 34px);
+  --tl-gap: clamp(10px, 1.2vw, 26px);
+  --tl-band-green: #2de368;
+  --tl-band-yellow: #fffb00;
+  --tl-band-orange: #ffa100;
+  --tl-band-red: #ea0303;
+  --tl-scrim: rgba(0, 0, 0, 0.55);
+
+  position: fixed;
+  inset: 0;
+  background: var(--tl-bg);
+  color: var(--tl-fg);
+  font-family: var(--tl-font-body);
+  font-feature-settings: 'cv11', 'ss01';
+  overflow: hidden;
+}
+
+/* Small-caps tracking used for every panel label, so the labels agree across
+ * panels built by different hands. */
+.tl-label {
+  font-size: clamp(11px, 0.95vw, 20px);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+}
+
+.tl-num {
+  font-variant-numeric: tabular-nums;
+}

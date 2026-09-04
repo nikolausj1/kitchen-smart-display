@@ -63,6 +63,7 @@ export default function useImmichPhotos() {
     albums: [],
     loading: true,
     error: null,
+    fetchedAt: null, // ms epoch of the last successful manifest fetch
   })
 
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function useImmichPhotos() {
           albums: payload.albums || [],
           loading: false,
           error: null,
+          fetchedAt: Date.now(),
         })
       } catch (err) {
         if (cancelled) return
@@ -87,6 +89,7 @@ export default function useImmichPhotos() {
           albums: [],
           loading: false,
           error: err.message || 'fetch failed',
+          fetchedAt: null,
         })
       }
     }
@@ -109,5 +112,6 @@ export default function useImmichPhotos() {
     albums: raw.albums,
     loading: raw.loading,
     error: raw.error,
+    fetchedAt: raw.fetchedAt,
   }
 }

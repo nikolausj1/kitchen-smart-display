@@ -3,6 +3,7 @@ import { useSettings, updateSettings, resetSettings } from '../../lib/settings.j
 import { useView } from '../../shell/ViewContext.jsx'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
 import { PHOTOS } from '../../config.js'
+import { LAYOUT_IDS, LAYOUT_LABELS, normalizeLayoutId } from '../TodayLayouts/registry.js'
 import './SettingsView.css'
 
 // If the Settings screen sees no user activity for this long, auto-bounce
@@ -480,6 +481,29 @@ export default function SettingsView() {
 
         {/* --- School / morning timer --- */}
         <section className="settings-section">
+          <h2 className="settings-section__title">Today screen</h2>
+          <Row
+            label="Layout"
+            hint="Framed is the original Today screen. Board, Briefing and Ambient are the new layouts. Each screen keeps its own choice."
+          >
+            <select
+              className="settings-select"
+              value={normalizeLayoutId(display?.todayLayout)}
+              onChange={(e) =>
+                updateSettings({ display: { todayLayout: normalizeLayoutId(e.target.value) } })
+              }
+              data-interactive="true"
+            >
+              {LAYOUT_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {LAYOUT_LABELS[id]}
+                </option>
+              ))}
+            </select>
+          </Row>
+        </section>
+
+        <section className="settings-section">
           <h2 className="settings-section__title">School &amp; morning timer</h2>
           <Row label="Driving depart" hint="Time to leave when driving.">
             <TimeOfDay
@@ -879,6 +903,15 @@ export default function SettingsView() {
               <option value="off">Off</option>
             </select>
           </Row>
+          <Row
+            label="Pixel shift"
+            hint="Nudge the whole picture a pixel or two every few minutes so nothing burns in. Recommended with the Board layout."
+          >
+            <OnOffSelect
+              on={display?.pixelShift === true}
+              onChange={(on) => updateSettings({ display: { pixelShift: on } })}
+            />
+          </Row>
           <Row label="Dim from" hint="Screen dims at this time each evening.">
             <TimeOfDay
               hour={display?.dimAt?.hour ?? 21}
@@ -942,6 +975,7 @@ export default function SettingsView() {
 
         <div className="settings__footer">
           Tap a dead area to open the menu and navigate away.
+          <div className="settings__build">Build {__BUILD_STAMP__}</div>
         </div>
       </div>
     </div>

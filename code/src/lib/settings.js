@@ -352,6 +352,14 @@ export const DEFAULTS = {
     // wrong, while a panel left in standby is dark until something wakes it.
     // The server wakes the panel on startup so a reboot always self-heals.
     hardwarePowerOff: true,
+    // Which Today layout this screen shows. 'framed' is the original Today
+    // view; the others live in views/TodayLayouts/ and are chosen per screen
+    // (DEVICE scope). Preview any of them with ?layout=<id> without saving.
+    todayLayout: 'framed',
+    // Burn-in care: nudge the whole view a pixel or two on an irregular timer.
+    // Off by default. The Framed views drift on their own; a static panel grid
+    // does not, so the Board layout wants this on.
+    pixelShift: false,
   },
   slideshow: {
     intervalMs: 6000,

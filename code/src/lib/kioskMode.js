@@ -14,17 +14,22 @@
 import { updateSettings } from './settings.js'
 
 const VALID_VIEWS = ['today', 'photos', 'music', 'settings']
+// Mirrors views/TodayLayouts/registry.js (not imported: keep this module
+// dependency-free so it can run before the tree mounts).
+const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient']
 
 function parseParams() {
   if (typeof window === 'undefined') {
-    return { rawView: null, view: null, kioskTv: false }
+    return { rawView: null, view: null, kioskTv: false, layout: null }
   }
   const p = new URLSearchParams(window.location.search)
   const rawView = p.get('view')
+  const rawLayout = p.get('layout')
   return {
     rawView,
     view: VALID_VIEWS.includes(rawView) ? rawView : null,
     kioskTv: p.get('kiosk') === 'tv',
+    layout: VALID_LAYOUTS.includes(rawLayout) ? rawLayout : null,
   }
 }
 
@@ -36,6 +41,10 @@ export const REQUESTED_VIEW = parsed.view
 export const AUTO_MODE = parsed.rawView === 'auto' || parsed.rawView == null
 // True when running as the Apple TV surface.
 export const KIOSK_TV = parsed.kioskTv
+// A Today layout requested for this page load only (?layout=board). Wins over
+// the saved display.todayLayout setting without changing it, so a laptop can
+// preview a layout while the kitchen keeps its own.
+export const REQUESTED_LAYOUT = parsed.layout
 
 // --- Side effects, applied once at import. ESM runs after DOM parse, so
 // document.body is normally present; guard anyway for safety. -----------------

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import TodayView from '../views/TodayView/TodayView.jsx'
+import TodayLayoutSwitch from '../views/TodayLayouts/TodayLayoutSwitch.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
 import NowPlaying from '../views/NowPlaying/NowPlaying.jsx'
 import SettingsView from '../views/Settings/SettingsView.jsx'
@@ -7,9 +7,10 @@ import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
 import { DebugHud, logEvent } from './DebugLog.jsx'
-import { getSettings, postSchoolDayState } from '../lib/settings.js'
+import { getSettings, postSchoolDayState, useSettings } from '../lib/settings.js'
 import useDisplaySchedule from './useDisplaySchedule.js'
 import DimOverlay from './DimOverlay.jsx'
+import PixelShift from './PixelShift.jsx'
 import useSharedState from '../hooks/useSharedState.js'
 import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
 import { isNoSchoolToday } from '../lib/schoolDay.js'
@@ -110,7 +111,7 @@ function CurrentView() {
   const { view } = useView()
   switch (view) {
     case 'today':
-      return <TodayView />
+      return <TodayLayoutSwitch />
     case 'photos':
       return <PhotoSlideshow />
     case 'music':
@@ -118,7 +119,7 @@ function CurrentView() {
     case 'settings':
       return <SettingsView />
     default:
-      return <TodayView />
+      return <TodayLayoutSwitch />
   }
 }
 
@@ -126,6 +127,9 @@ function Shell({ initialView }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { view, setView } = useView()
   const display = useDisplaySchedule()
+  // Only the pixel-shift flag is read here; the schedule state above owns the
+  // rest of the display behaviour.
+  const pixelShift = useSettings().display?.pixelShift === true
 
   // Keep the TV's synced settings fresh from the Pi (no-op on the kitchen).
   useSharedState()
@@ -354,7 +358,9 @@ function Shell({ initialView }) {
 
   return (
     <div className="app-shell" onClick={onShellClick}>
-      <CurrentView />
+      <PixelShift enabled={pixelShift}>
+        <CurrentView />
+      </PixelShift>
       <MenuPill open={menuOpen} onClose={closeMenu} />
       {!KIOSK_TV && (
         <DimOverlay

@@ -111,6 +111,9 @@ export default function useSonosState() {
     volume: 0,
     loading: true,
     error: null,
+    // ms epoch of the last successful poll; lets a view advance the elapsed
+    // time locally between polls and show the data's age.
+    fetchedAt: null,
   })
 
   useEffect(() => {
@@ -157,6 +160,7 @@ export default function useSonosState() {
           avTransportUriMetadata,
           loading: false,
           error: null,
+          fetchedAt: Date.now(),
         }))
       } catch (err) {
         if (cancelled) return
