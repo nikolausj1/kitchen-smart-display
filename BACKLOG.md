@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-02
-version: 5.2
+version: 5.3
 author: Claude Opus 5 (claude-opus-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -497,6 +497,10 @@ Newest first.
   `fetchedAt` on the weather / Sonos / photo hooks, a second Open-Meteo call for
   daily + current + sunrise/sunset, moon phase, a what-to-wear rule, `?demo=1`
   fixtures, `@fontsource-variable/fraunces`.
+- **2026-09-04 - FrameServer admin: Today screen card.** Layout (Framed /
+  Board / Briefing / Ambient) and Pixel shift per web screen, in
+  `frameserver/admin.html`; verified against the live hub through a local
+  proxy before deploy. Lands with `npm run deploy:hub`.
 - **2026-09-04 - Fix: hub CORS dropped browser settings writes** (see Decisions
   Log). `frameserver/server.mjs` lists PATCH; `lib/settings.js` sends POST.
   Lands with `npm run deploy:pi` (client) and `deploy:hub` (server).
