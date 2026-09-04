@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-08-24
-version: 5.0
+modified: 2026-09-02
+version: 5.2
 author: Claude Opus 5 (claude-opus-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -91,9 +91,64 @@ Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
 
-(none right now - photo-refresh automation shipped 2026-06-09, see Recently
-Shipped. Reminder that outlives it: **if a second photo frame comes up, move
-the photo build to the NAS** - Decisions Log 2026-06-09.)
+### Today, second layout: the panel board (DESIGN)
+
+Sourced 2026-08-31 from a read of Theatrium (theatrium.info), a commercial tvOS
+home-dashboard app. The idea: leave Framed Today exactly as it is and add a
+**second selectable Today layout** - a calm board of six to eight panels -
+rather than retrofitting card ideas into the mat. Chosen per screen, which also
+makes this the answer to the deferred **Configurable Today panels** idea on the
+STATUS Ideas Shelf: that item was waiting on a screen that wanted a different
+composition, and the ROADOM living-room screen is that screen.
+
+**Thesis, so it is not just a reskin.** Framed Today is a 6-8am *departure
+instrument*. The panel board is the *rest of the day* - an ambient status
+screen for 3pm, when nobody is leaving for school. Both have a job and neither
+replaces the other.
+
+**Candidate panels, all fillable from data we already hold:** clock plus a
+time-of-day greeting, current weather, four-day forecast, a sun and moon arc
+(sunrise/sunset are already fetched for the dim curve), the school timer or a
+morning timeline with a now-marker, Sonos now playing, and a photo/art tile
+with a rotation counter. That is seven. Google Calendar (named-person rows, eg
+"Piano lesson - Sofia") and live drive time to school would take it to nine.
+Design for seven good panels, not twelve thin ones: Theatrium's density comes
+mostly from Home Assistant entities plus market and news filler we do not want.
+
+**Conventions worth borrowing** (all observed in their screenshots, none of it
+in their marketing copy): every value carries its age ("as of 12:36 pm", "10
+mins ago"); rotating panels show position ("2/12"); sparklines live inside the
+value panel instead of taking one of their own; bounded values get a scale bar
+with a position marker; a bar with a now-marker reads better than a bare
+countdown.
+
+**Open decisions:**
+- *Which surfaces.* TV first is the recommendation - the reference is tvOS and a
+  panel grid suits ten feet. The kitchen at two feet already has a working
+  Today, and building it in React as well doubles the work.
+- *Auto-select or manual.* Proposal: reuse the school-morning latch already in
+  `tvos/Sources/RootView.swift` - Framed Today inside the school window, panel
+  board after it, with a manual choice still winning for the day.
+- *Focus model.* The panels are read-only. Recommendation: non-focusable, no
+  focus rings, left/right keeps cycling views. Otherwise we inherit tvOS grid
+  focus behaviour we do not want.
+- *Name.* Not "Theatrium" (a registered trademark). Panels / Board / Briefing /
+  Bento.
+
+**Guardrails.** Photos and Music keep the Framed treatment regardless of this
+setting: the mat, placard and handwritten facts are the differentiator, and this
+is a mode on Today only, not a migration. **Pixel shift is a prerequisite** (see
+Shared / infrastructure) - every view we ship today drifts, and a static panel
+grid would be the first thing to sit still on screen for hours. The auto-dim
+curve was also tuned against mats and art; a dark grid at 45% may not be
+readable, so a per-layout dim floor may be needed.
+
+**Next step:** prototype in `_review/mockups/` at 1920x1080 (the established
+pattern, as with `today-school-data-mockup.html`) before writing any SwiftUI,
+then spin the settled design out to `docs/designs/today-panel-board.md`.
+
+Reminder that outlives the old topic here: **if a second photo frame comes up,
+move the photo build to the NAS** - Decisions Log 2026-06-09.
 
 ---
 
@@ -115,10 +170,16 @@ Remaining:
   because DDC never disables the output. Full plan + guardrails:
   `docs/designs/hardware-brightness-ddc.md`. Prereq `ddcutil` already installed on
   the Pi.
-- **Frame cabling / HDMI connector** (IN FLIGHT - Option B ordered 2026-08-18, arriving 2026-08-20) - the
-  Pi 5 is micro HDMI Type D and the EVICIV panel is mini HDMI Type C, a pairing
-  no stock right-angle cable covers, which is why the DIY ribbon parts were in
-  play. The earlier "widescreen" failures were EDID reads dying on pins 15/16,
+- **Frame cabling / HDMI connector** (DIRECTION CHANGED 2026-09-02: thin ribbon
+  preferred for both the kitchen and the coming front door frame, since rigid
+  right-angle adapters add bulk in one direction or another. Option B arrived
+  but was never test-fitted and is now the fallback) - the
+  Pi 5 is micro HDMI Type D and the EVICIV panel is mini HDMI Type C. No round
+  right-angle cable covers that pairing, but the FPV drone market sells it as a
+  5 cm+ FPC ribbon with molded 90 degree heads (Option A2 in the doc). Next:
+  order the shortest ribbons in both bends plus the straight reference cable,
+  bench-test on the kitchen Pi against the checklist, and plan the Pi position
+  in each frame so a 5 to 10 cm ribbon reaches. The earlier "widescreen" failures were EDID reads dying on pins 15/16,
   not a picture problem: a bad read makes the Pi fall back to a generic mode
   that the panel then stretches. Same two pins carry DDC/CI, so a marginal
   cable would silently break hardware dim and power-off. Current link measured
@@ -169,7 +230,8 @@ progress bar). Remaining:
   hint why (diagnosed live 2026-08-12, Pi off the network). Add a small hint in
   Settings (e.g. "Display server unreachable" on the Photo albums row, or a
   status row showing last successful manifest fetch) so the next occurrence is
-  diagnosable from the couch.
+  diagnosable from the couch. See **Data freshness stamps** under Shared /
+  infrastructure - the general form of this fix.
 - **Cold-threshold (35F) Settings row** (TODO) - currently hard-coded; expose as a
   TV-local setting.
 - **App name + Brand Assets** (IN PROGRESS) - the **app icon is done**
@@ -211,6 +273,24 @@ progress bar). Remaining:
   Lava / Marble / Ink) flow at full energy while music plays and settle to
   near-still when paused. No beat sync (Sonos exposes no audio analysis) -
   just ease a speed multiplier on the play/pause state the app already polls.
+- **Tempo-locked backdrops via a BPM lookup** (DECISION) - upgrade the item
+  above from play/pause to real tempo. Theatrium drives its scenes from track
+  BPM without listening to the room either (it says so explicitly: no
+  microphone); it looks the tempo up from artist plus title, credited to
+  GetSongBPM. We already poll artist and title from node-sonos-http-api, so the
+  eight Metal backdrops could lock their speed to actual BPM - which is also the
+  only thing that would make `bars` honest, since its own code comment in
+  `TVSettings.swift` calls it noise-driven. Open before committing: GetSongBPM's
+  free tier requires a visible attribution backlink, coverage on obscure tracks
+  is patchy, and it needs a per-track cache plus a clean fallback to the current
+  fixed speed on a miss.
+- **True-black screensaver step** (TODO) - a third rung below the existing
+  auto-dim curve: after N hours, true black with a drifting clock, rather than a
+  dimmed picture. Theatrium's measured numbers make the case - on a 65" OLED
+  their dashboard draws 65W, the *dimmed* dashboard 60W, and the screensaver
+  58W, against a ~58W floor for the panel electronics with no picture. Dimming a
+  lit screen saves almost nothing; going black is the whole win. The Frame TV is
+  QLED so the burn-in half matters less, but the power half still holds.
 - **Live school-morning verification** (VERIFY) - weather-aware walk/drive default
   + timer mirroring are unit-tested but not confirmed on a real morning.
 - **Polish** (POLISH) - tune Framed handwritten metadata size/placement on the real
@@ -218,6 +298,32 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
+- **Data freshness stamps** (TODO) - never render a value without its age.
+  Theatrium stamps every panel ("as of 12:36 pm" on markets, "just now" on
+  traffic, "10 mins ago" on the webcam, relative ages on notifications), which
+  makes stale and unreachable visible instead of silent. This is the general
+  form of the TV's "Display server unreachable" bug, where a down Pi looks
+  identical to "no albums". Needs a `fetchedAt` on every service response, then
+  a shared way to render it. Data-layer work, so it improves the views we ship
+  today rather than only the panel board.
+- **Pixel shift** (TODO) - nudge the whole rendered view a pixel or two on an
+  irregular timer so no element sits on the same pixels for hours. Roughly
+  fifteen lines on each surface. Currently we have no burn-in mitigation of any
+  kind; it matters little while every view drifts, and becomes a **prerequisite**
+  the moment the static panel board ships (see Active design topics). Irregular
+  timing is the point - a fixed interval settles into its own pattern.
+- **Build stamp in Settings** (TODO) - a small version plus build-time line in a
+  corner of Settings on each surface (Theatrium shows `v1.6(172) - Aug 10
+  08:06`). With a Pi, a TV, a hub and a third screen coming, "which build is
+  this screen running" should be answerable from the couch instead of over SSH.
+- **Live drive time to school** (TODO) - the morning timer uses fixed
+  `drivingDepart` / `walkingDepart` thresholds, so it is wrong on exactly the
+  mornings that matter. Theatrium's Traffic and Commute panels draw the route on
+  an Apple Maps tile with a traffic-coloured polyline and a "23 min to school"
+  readout, and are built on Apple Maps specifically so there is no account and
+  no API key - which is the interesting part for us. On tvOS that is MapKit
+  directly; the kitchen would need a different source. Data work, so the
+  existing timer benefits immediately, ahead of any panel board.
 - **Lunch + per-kid activities on the Apple TV** (TODO) - kitchen-only today.
 - **No-school date *ranges* in the manual override UI** (TODO) - single dates ship
   today (covers snow days).
@@ -236,6 +342,11 @@ progress bar). Remaining:
 - **Home Assistant** - auto-launch, doorbell camera, presence dimming all depend on
   it.
 - **Auto-show Now Playing** - one rule set should govern kitchen and TV.
+- **Today layouts** - Framed vs the panel board, chosen per screen through the
+  hub's existing per-device settings. Subsumes the deferred "Configurable Today
+  panels" idea.
+- **Data freshness** - one `fetchedAt` convention and one way to render it,
+  across every service on both surfaces.
 
 ---
 
@@ -244,6 +355,33 @@ progress bar). Remaining:
 Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
+
+- **2026-08-31 - Sourced ideas from Theatrium; the layout ones land as a second
+  Today layout, not a rewrite.** Reviewed Theatrium (theatrium.info), a
+  commercial tvOS home-dashboard app, including a screenshot audit of its four
+  themes, its Settings, and its alert cards. Decision: its panel-dashboard ideas
+  go into a **second selectable Today layout** (see Active design topics), while
+  Framed Today, Photos and Music keep the mat/placard treatment unchanged. The
+  ideas were split by weight rather than adopted as a set: layout ideas to the
+  new topic; **freshness stamps, pixel shift, build stamp and live drive time**
+  to Shared / infrastructure, because they are data-layer or app-shell work that
+  improves the views we already ship; **BPM-locked backdrops** and the
+  true-black screensaver to the Apple TV list. Explicitly **rejected**, so this
+  is not re-litigated: light sync (needs HA plus Hue, and it is a party feature,
+  not a family-display one), the retro visualiser objects (a spinning iPod and a
+  mirrorball fight the framed-art aesthetic), stocks / crypto / news panels
+  (noise in a kitchen), per-theme panel arrangements, iCloud sync and Family
+  Sharing, and a companion app (the kitchen touchscreen already is the
+  companion, and TV-settings-live-at-the-kitchen is a deliberate PRD non-goal).
+  Two things they do that we should copy verbatim if Home Assistant ever lands:
+  alerts are a **pop-up over the current view plus a notification history**,
+  never a forced view switch, and any HA automation whose notification ID starts
+  with a fixed prefix pops up on the TV, so there is **no per-alert config in the
+  app at all**. Worth noting for morale: several things we already ship
+  (time-curve auto-dim, ambient warming through the day, generative backdrops
+  keyed to album art, art-as-frame with captions off) they arrived at
+  independently, and their Estate theme is a light paper-toned serif board,
+  which is evidence that a light Today mat would read fine across a room.
 
 - **2026-06-16 - Art albums settled on the MOVEMENT-based "4B" scheme.** The four
   albums are by art movement, not subject theme: `Art - Impressionism &

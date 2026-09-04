@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-08-24
-version: 3.3
+modified: 2026-08-31
+version: 3.5
 author: Claude Opus 5 (claude-opus-5)
 tags:
 ---
@@ -29,7 +29,7 @@ The single remaining risk is unchanged and unrelated to any of it: the full-perm
 
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
-- [ ] **Review and merge `triage/2026-08-24`, then delete the wip snapshot branch** (~15 min)
+- [ ] **HANDED TO THIS PROJECT'S AGENT 2026-08-28, no longer waiting on Justin. Review and merge `triage/2026-08-24`, then delete the wip snapshot branch** (~15 min). Justin, 2026-08-28: "I'm not sure what this is and happy to have the field agent take care of it." Next session: do the review and the merge on your own judgment, delete `wip/uncommitted-snapshot-2026-08-12`, and say what you merged in `## Health`. Come back to him only if the review turns up something that changes behaviour he would notice on a screen. (updated via Oracle at Justin's direction, 2026-08-28)
       - The uncommitted tree was triaged into 10 reviewed commits on 2026-08-24, and the tvOS target builds clean from it. Two half-landed features surfaced and were repaired in the process: the Framed music backdrops had settings and hub sync on `main` but no renderer, and `build-photo-manifest.mjs` imported a `downloadOriginal` that was never committed, which is a link-time failure that made the photo build unloadable from a fresh checkout.
       - unblocks: deleting `wip/uncommitted-snapshot-2026-08-12`. Verified to hold zero unique content: its delta is 51 files, of which 6 were superseded by later `main` commits, 42 are byte-identical on disk, and 3 evolved forward. Never merge it; it predates FrameServer.
 - [ ] **Test-fit and verify the frame HDMI cable** - Option B ordered 2026-08-18, arriving 2026-08-20 (Twozoh 1 ft micro-to-HDMI braided + AreMe 90 degree mini-to-HDMI adapter, up/down bend). Run the acceptance checklist in `docs/designs/frame-cabling-hdmi.md`, with the frame assembled rather than on the bench (~30 min)
@@ -51,9 +51,9 @@ The single remaining risk is unchanged and unrelated to any of it: the full-perm
 
 - **Per-photo display override** (S) - "never crop this one." The infrastructure is all there now: long-press already flags photos, the hub already stores per-device config, and the dashboard already edits it. Precedence would be per-photo+device > per-photo > device default. This is the "Barack Obama portrait shouldn't be cropped on the TV" case.
 - **Kitchen: display art fun facts** (S) - the TV shipped rotating facts 2026-06-10; the kitchen just needs a display slot, since the data already rides the manifest's `art.facts`
-- **Playback-reactive backdrop** (S) - the Framed TV music backdrops (Drift/Lava/Marble/Ink) would ease their motion speed with play/pause state; no beat sync needed, just a state-driven tweak
+- **Playback-reactive backdrop** (S, with an M upgrade behind it) - the Framed TV music backdrops would ease their motion speed with play/pause state; no beat sync needed, just a state-driven tweak. The upgrade found 2026-08-31: Theatrium locks its scenes to real tempo without listening to the room, by looking BPM up from artist plus title. We already poll both from Sonos, so the eight backdrops could run at true tempo, and `bars` would stop being noise-driven
 - **Today "what to wear"** (S) - jacket weight, shorts vs. pants from weather thresholds, a small daily delight for the kids
-- **Configurable Today panels** (M) - let each screen choose which Today panels it shows, so a living room screen can drop the school timer. The largest remaining piece of the multi-screen vision, and deliberately deferred until a screen actually wants a different composition
+- **Today panel board** (M) - a second selectable Today layout, a calm board of six to eight panels, chosen per screen. Absorbs the old "Configurable Today panels" idea, which was deliberately deferred until a screen wanted a different composition: the ROADOM living-room screen is that screen, so the trigger has arrived. Seven panels are fillable from data we already hold. See Active design topics
 - **Voice assistant visual feedback** (M) - if a voice assistant gets added to Home Assistant, show its feedback (timers, shopping-list additions) on the kitchen display; the long-term goal is retiring the Alexas
 
 ## Biggest Risk
@@ -88,7 +88,9 @@ Wrong captions get long-press-flagged on the kitchen display and queue up on the
 
 Topics we are actively talking through. Each gets its detail captured per-topic (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary + decision live here once settled.
 
-None right now, photo-refresh automation shipped 2026-06-09, see Recently Shipped. Reminder that outlives it: if a second photo frame comes up, move the photo build to the NAS (Decisions Log 2026-06-09).
+**Today, second layout: the panel board** (opened 2026-08-31). Sourced from a review of Theatrium, a commercial tvOS home-dashboard app. Leave Framed Today as it is and add a second selectable Today layout, a calm board of six to eight panels, chosen per screen through the hub's existing per-device settings. Framed Today stays the 6-8am departure instrument; the board is the rest of the day. This is also what unblocks the long-deferred "Configurable Today panels" idea, since the ROADOM living-room screen is finally a screen that wants a different composition. Open: which surfaces get it, auto-select vs manual, whether panels are focusable, and a name. Pixel shift is a prerequisite, since a static grid would be the first thing on our screens that does not drift. Full detail and the borrowed conventions are in BACKLOG. Next step is an HTML mockup in `_review/mockups/` before any SwiftUI.
+
+Reminder that outlives the old topic: if a second photo frame comes up, move the photo build to the NAS (Decisions Log 2026-06-09).
 
 ## Backlog
 
@@ -209,7 +211,7 @@ Newest first.
 
 ## Lessons
 
-- **A poll that republishes identical data is not free (2026-08-24).** A 10s settings poll deep-merged its response every tick whether or not anything had changed, handing every consumer fresh object and array identities six times a minute. Anything keyed on those identities restarts - here a `setInterval` rebuilt on each poll, so a 5-minute photo duration could never elapse and the kitchen slideshow froze on one image. The bug is invisible until someone picks an interval longer than the poll period. Two habits fall out: compare before publishing in any polling store, and never let a timer's lifetime depend on a callback identity that churns.
+- **A poll that republishes identical data is not free (2026-08-24).** A 10s settings poll deep-merged its response every tick whether or not anything had changed, handing every consumer fresh object and array identities six times a minute. Anything keyed on those identities restarts - here a `setInterval` rebuilt on each poll, so a 5-minute photo duration could never elapse and the kitchen slideshow froze on one image. The bug is invisible until someone picks an interval longer than the poll period. Two habits fall out: compare before publishing in any polling store, and never let a timer's lifetime depend on a callback identity that churns. (promoted to Build Guide v10.0, 2026-08-27)
 
 - **Windows active hours protect the wrong window by default (2026-08-18).** "Active hours" is when Windows will NOT auto-restart; the unprotected remainder is when it will. A machine found at 13:00-07:00 active had its restart window at **07:00-13:00** - school mornings and midday - which is the worst slot for anything a household depends on. Windows 11 caps active hours at 18 hours, so you cannot protect the whole day; you are choosing which 6 hours are sacrificial, and it should be overnight. Check the actual values rather than assuming the default is sane. (promoted to Build Guide v9.4, 2026-08-18)
 
