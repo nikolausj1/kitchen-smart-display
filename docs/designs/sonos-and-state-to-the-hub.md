@@ -2,7 +2,7 @@
 title: "Sonos and /api/state to the Hub"
 created: 2026-09-22
 modified: 2026-09-22
-version: 1.0
+version: 1.1
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, frameserver, sonos, apple-tv, hub, migration, single-point-of-failure]
 ---
@@ -122,6 +122,14 @@ Room device.
   hiding a write that never took effect.
 - `lib/kioskMode.js` rewrites `sonos.apiBase` for the `?kiosk=tv` web surface.
   Dead for the native TV app; update or delete it in the same pass.
+- **Fold in the layout coupling while these call sites are open.**
+  `postTimerState` is called only from `views/TodayView/TodayView.jsx`, the
+  Framed layout. The three 2026-09 layouts run through `useTodayData`, which
+  deliberately does not call it, so selecting Board, Briefing or Ambient on the
+  kitchen silently kills the TV's countdown with exactly the symptom this
+  migration is meant to prevent. Move the call up into `shell/AppShell.jsx`,
+  which already hosts `postSchoolDayState` for the same reason, so it runs
+  regardless of layout.
 
 ### D. Decommission on the Pi
 
@@ -167,20 +175,26 @@ it a glance:
 | D, decommission | 30 minutes |
 | E, visibility | 2 to 3 hours |
 
-## Open decision
+## Decided 2026-09-22: the kitchen uses the NUC's Sonos API too
 
-**Does the kitchen use the NUC's Sonos API, or keep its own `localhost:5005`?**
+One Sonos service in the house, not two. The kitchen repoints from
+`http://localhost:5005` to `http://nuc.local:8095/api/sonos` along with the TV,
+and the Pi's `node-sonos-http-api` service is disabled in package D.
 
-Keeping localhost means the kitchen still plays music when the NUC is down, and
-the 1.5 second poll never leaves the box. Moving it means one Sonos service in
-the house instead of two to install, patch and keep in sync.
+Rationale: the kitchen already depends on the NUC for photos, so a NUC outage
+already degrades it; "NUC = applications, NAS = data" is the house rule and a
+Sonos HTTP API is plainly an application; and two services would mean two
+installs to patch and two different answers when Sonos misbehaves.
 
-Recommendation: **move it.** The kitchen already depends on the NUC for photos,
-so a NUC outage already degrades it; and the house architecture principle is
-already "NUC = applications, NAS = data", which a Sonos HTTP API plainly falls
-under. Two services would also mean two different answers when Sonos
-misbehaves. The fallback is a one-line settings change back to localhost, so
-this is cheap to reverse if it proves wrong.
+**What this costs, stated plainly.** Today a NUC outage leaves the kitchen
+without photos but still playing music. After this it loses both, and the
+kitchen's 1.5 second poll goes over the network instead of staying on the box.
+That is a deliberate trade of blast radius for one source of truth.
+
+**Two things that make it safe to take:** nssm restarts a crashed service
+automatically, which loopback-on-the-Pi never gave us; and the fallback is a
+one-line settings change back to `localhost:5005` while the Pi's service is
+still installed, which is why package D waits a week.
 
 ## Rollback
 

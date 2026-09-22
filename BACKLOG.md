@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-22
-version: 5.5
+version: 5.6
 author: Claude Opus 5 (claude-opus-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -107,9 +107,11 @@ from the tvOS app. Gate everything on the NUC's zone list matching the Pi's,
 because SSDP multicast discovery on Windows is the one part that can fail for
 environmental reasons.
 
-Open decision: does the kitchen also use the NUC's Sonos API, or keep its own
-`localhost:5005`? Recommendation is to move it (one service in the house; the
-kitchen already depends on the NUC for photos), with a one-line fallback.
+**Decided 2026-09-22: the kitchen moves to the NUC's Sonos API too.** One
+service in the house, not two. Accepted cost: a NUC outage will take the
+kitchen's music as well as its photos. Fallback is a one-line settings change
+back to `localhost:5005`, which is why the Pi's service stays installed for a
+week.
 
 Known trap for the rollout: the hub already stores
 `sonos.apiBase: "http://localhost:5005"` for the kitchen, and a stored value
@@ -328,7 +330,12 @@ progress bar). Remaining:
   the profile that hangs a screen unattended and reads as a software fault. The
   likely cause of the 2026-09-22 outage. Fix: the official Raspberry Pi 27W
   USB-C PD supply into a real AC socket. Nothing is wrong with the SD card (no
-  I/O errors, no ext4 journal replay) or the Pi itself.
+  I/O errors, no ext4 journal replay) or the Pi itself. **Check the total budget
+  on that outlet:** per the front door entry below, the EVICIV panel is also
+  powered from an outlet USB port, and a dual-USB outlet typically shares one
+  2.4A budget across both ports. A Pi 5 alone wants more than the whole outlet
+  can give, so the panel should keep the USB port and the Pi should get its own
+  27W charger, not the other way round.
 - **No logs survived the outage** (TODO) - `journalctl --list-boots` shows only
   the current boot and `last -x reboot` is empty, so the moment of the crash is
   unrecoverable. `/var/log/journal` exists but is empty, meaning journald is
@@ -398,6 +405,24 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-22 - The kitchen Pi was never powered adequately, and it took the
+  Apple TV's music and countdown down with it.** The Pi 5 runs from a wall-outlet
+  USB-A port: no USB-C PD negotiation and roughly 12W against the 27W a Pi 5
+  wants. Measured `throttled=0x50000` with four undervoltage events in the first
+  50 seconds of boot. Diagnosed only after a /22 sweep, because the Apple TV
+  swallows a dead server silently and kept showing photos and weather the whole
+  time. Two structural lessons folded into the backlog: the hub should hold a
+  `lastSeenAt` heartbeat (it is always on, so it is the natural watcher), and
+  journald on the Pi is running volatile so no logs survived the crash.
+- **2026-09-22 - Sonos and /api/state finish the move to the hub, kitchen
+  included.** The August migration moved photos but not these two, leaving the
+  Pi a single point of failure for the TV. Decided: `node-sonos-http-api` runs
+  on the NUC under nssm, FrameServer proxies it, `/api/state` moves with a
+  byte-identical shape, `AppConfig.piBase` is deleted, and **the kitchen
+  repoints to the NUC as well** rather than keeping a second local service.
+  Everything gates on the NUC's zone list matching the Pi's, since SSDP
+  multicast on Windows is the one part that can fail environmentally. Scope:
+  `docs/designs/sonos-and-state-to-the-hub.md`.
 - **2026-09-04 - Three Today layouts built as a per-screen setting, Framed
   untouched.** Board, Briefing and Ambient shipped to `feature/today-layouts`
   behind `display.todayLayout` (default `framed`). Architecture: pure
