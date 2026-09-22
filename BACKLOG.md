@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-02
-version: 5.3
+modified: 2026-09-22
+version: 5.5
 author: Claude Opus 5 (claude-opus-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -91,6 +91,36 @@ Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
 
+### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
+
+Finish the FrameServer migration. Photos moved to the NUC in August; **Sonos and
+`/api/state` did not**, so the kitchen Pi is still a single point of failure for
+the Apple TV. Proven live on 2026-09-22: with the Pi down the TV kept photos and
+weather but silently lost music and the morning countdown, and finding out why
+took a /22 port sweep. Full scope, risks, ordering and effort:
+`docs/designs/sonos-and-state-to-the-hub.md`.
+
+Shape: run `node-sonos-http-api` on the NUC under nssm (Node 24 and nssm are
+already there), proxy it from FrameServer at `/api/sonos/*`, move `/api/state`
+to the hub with a byte-identical response shape, then delete `AppConfig.piBase`
+from the tvOS app. Gate everything on the NUC's zone list matching the Pi's,
+because SSDP multicast discovery on Windows is the one part that can fail for
+environmental reasons.
+
+Open decision: does the kitchen also use the NUC's Sonos API, or keep its own
+`localhost:5005`? Recommendation is to move it (one service in the house; the
+kitchen already depends on the NUC for photos), with a one-line fallback.
+
+Known trap for the rollout: the hub already stores
+`sonos.apiBase: "http://localhost:5005"` for the kitchen, and a stored value
+beats a new default, so changing the default alone will silently do nothing.
+Same class of failure as the 2026-09-04 CORS bug.
+
+Second-order find while scoping: shared settings also ride `/api/state`, so a
+cold TV launch with the Pi down falls back to the built-in `SchoolSettings`
+defaults (7:42 / 7:32) while the hub holds the real values (7:38 / 7:28). A
+restarted TV would show a countdown four minutes late, silently.
+
 ### Today, second layout (BUILT 2026-09-04, in review)
 
 Built overnight as THREE selectable layouts, not one: **Board** (dark bento
@@ -129,24 +159,40 @@ Remaining:
   because DDC never disables the output. Full plan + guardrails:
   `docs/designs/hardware-brightness-ddc.md`. Prereq `ddcutil` already installed on
   the Pi.
-- **Frame cabling / HDMI connector** (DIRECTION CHANGED 2026-09-02: thin ribbon
-  preferred for both the kitchen and the coming front door frame, since rigid
-  right-angle adapters add bulk in one direction or another. Option B arrived
-  but was never test-fitted and is now the fallback) - the
-  Pi 5 is micro HDMI Type D and the EVICIV panel is mini HDMI Type C. No round
-  right-angle cable covers that pairing, but the FPV drone market sells it as a
-  5 cm+ FPC ribbon with molded 90 degree heads (Option A2 in the doc). Next:
-  order the shortest ribbons in both bends plus the straight reference cable,
-  bench-test on the kitchen Pi against the checklist, and plan the Pi position
-  in each frame so a 5 to 10 cm ribbon reaches. The earlier "widescreen" failures were EDID reads dying on pins 15/16,
-  not a picture problem: a bad read makes the Pi fall back to a generic mode
-  that the panel then stretches. Same two pins carry DDC/CI, so a marginal
-  cable would silently break hardware dim and power-off. Current link measured
-  healthy (256-byte EDID, native 1080p60 preferred+current, `ddcutil` answering
-  on `/dev/i2c-13`) - that is the baseline to beat. Options, part numbers,
-  the `video=HDMI-A-1:1920x1080@60D` mode lock, and a pass/fail verification
-  checklist: `docs/designs/frame-cabling-hdmi.md`. Open: which bend direction
-  each end needs, which depends on how the Pi mounts in the frame.
+- **Frame cabling / HDMI connector** (RESOLVED 2026-09-10) - the FPV FPC ribbon
+  won. `B01M8HDX8Z` mini HDMI 90 degree up head at the panel plus `B0GZHT6LML`
+  bare 20-pin 0.5 mm ribbon at 10 cm, micro head at the Pi. Confirmed working on
+  the kitchen frame. Short ribbon was the deciding variable. Rigid right-angle
+  adapters (Option B) failed on geometry twice and are closed. Reference build
+  for every frame in the house: `docs/designs/frame-cabling-hdmi.md` v2.0.
+- **Front door frame build** (TODO, parts ordered 2026-09-10) - third screen,
+  same EVICIV B0CYLTZSWD panel as the kitchen. **Ordered:** `B0CYLTZSWD` panel,
+  `B0DFMNHL62` Vemico Pi 5 8GB kit, `B01787RBUO` JSER micro-to-mini FPC kit (both
+  heads, down bend), `B0C36MCW9N` CY micro head 90 degree up, `B0GZHSJBGB` ribbon
+  (length unconfirmed, adjacent ASIN to the 10 cm `B0GZHT6LML` used on the
+  kitchen). Panel power comes from the outlet USB port, same as the kitchen, so no
+  charger was bought.
+  **Still missing, in priority order:**
+  1. **microSD card.** `B0DFMNHL62` is board plus active cooler plus 27W PSU only,
+     no card, no case, no reader. Hard blocker: the Pi cannot boot. High-endurance
+     recommended (`B09W9XYQCQ`), and a USB card reader too if the Mac has no slot.
+  2. **Mini HDMI head in the UP bend.** The kitchen works on mini-up
+     (`B01M8HDX8Z`). `B01787RBUO` ships both heads in the DOWN bend only, so if the
+     front door panel mounts like the kitchen there is no correct panel-end head in
+     this order. Micro is covered in both bends.
+  3. **Right-angle USB cables** for touch and panel power. The panel ships straight
+     cables which work electrically but are now the thickest parts in the frame and
+     set minimum depth.
+  Confirm the `B0GZHSJBGB` ribbon length on the order: anything 20 cm or over
+  should be swapped for 5 to 10 cm, since length was the deciding variable.
+  Orientation still undecided. The ribbon does not care, but the React app assumes
+  1920x1080 landscape throughout: the slideshow portrait-pairing logic, the Today
+  layouts and the mat are all laid out to landscape coordinates, so a portrait
+  front door screen is a real front-end project, not a config flag. Rotation itself
+  is `wlr-randr --transform 90` plus checking touch rotates with the output.
+  Software otherwise near free: point the kiosk at the hub with `?device=front-door`
+  and it self-seeds. One code prerequisite: `deploy.sh` hardcodes
+  `PI_HOST=pi@smartdisplay.local` and needs a second target.
 - **Run "let's triage place corrections"** - to take care of the queue of places that I have marked on the kitchen display that need geo data updated. After running triage, save file, and move it to "inbox" to be processed. (KEEP THIS HERE.. DO NOT MARK COMPLETE)
 - **Custom-label city/state suffix** (DECISION) - extend the away-from-home
   "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
@@ -271,6 +317,25 @@ progress bar). Remaining:
   screen; gradient-fill alternative to the blurred Framed background.
 
 ### Shared / infrastructure
+
+- **Kitchen Pi is underpowered** (TODO, do this first) - the Pi 5 runs off a
+  USB-A port built into a wall outlet. USB-A cannot negotiate USB-C PD and tops
+  out near 5V/2.4A (12W); a Pi 5 wants 5V/5A (27W). Measured 2026-09-22, seven
+  minutes after a reset: `throttled=0x50000` (bit 16 undervoltage has occurred,
+  bit 18 throttling has occurred) with four `Undervoltage detected!` kernel
+  events in the first 50 seconds of boot, all during inrush. `EXT5V_V` reads
+  5.03V once idle, so the supply is marginal rather than dead, which is exactly
+  the profile that hangs a screen unattended and reads as a software fault. The
+  likely cause of the 2026-09-22 outage. Fix: the official Raspberry Pi 27W
+  USB-C PD supply into a real AC socket. Nothing is wrong with the SD card (no
+  I/O errors, no ext4 journal replay) or the Pi itself.
+- **No logs survived the outage** (TODO) - `journalctl --list-boots` shows only
+  the current boot and `last -x reboot` is empty, so the moment of the crash is
+  unrecoverable. `/var/log/journal` exists but is empty, meaning journald is
+  running volatile regardless; check `Storage=` in
+  `/etc/systemd/journald.conf` and restart journald so the next incident leaves
+  evidence. Pairs with the heartbeat and throttle-readout ideas in
+  `docs/designs/sonos-and-state-to-the-hub.md` section E.
 
 - **Data freshness stamps** (SHIPPED 2026-09-04 on the kitchen, TV still TODO) -
   never render a value without its age.

@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-09-04
-version: 3.6
+modified: 2026-09-22
+version: 3.7
 author: Claude Opus 5 (claude-opus-5)
 tags:
 ---
@@ -31,6 +31,13 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 - [ ] **Review the three Today layouts and deploy the kitchen bundle** - open `_review/today-layouts/README.md`, look at the shots, try them on your Mac (`cd code && npm run dev`, then `http://localhost:5173/?device=dev-mac&layout=board&demo=1`), then `cd code && npm run deploy:pi` outside the school-morning window (~20 min)
       - unblocks: choosing a layout on the kitchen panel (Settings > Today screen), and it carries the fix for kitchen settings not persisting. `npm run deploy:hub` afterwards lands the server half of that fix (optional; the client half suffices).
+- [ ] **Replace the kitchen Pi's power supply** - it is running off a USB-A port
+      built into a wall outlet (~12W, no USB-C PD negotiation); a Pi 5 needs the
+      official 27W USB-C PD supply. Measured 2026-09-22: `throttled=0x50000` and
+      four undervoltage events in the first 50 seconds of every boot (~10 min)
+      - unblocks: the kitchen display staying up unattended. This is the likely
+        cause of the 2026-09-22 outage, which also took music and the morning
+        countdown off the Apple TV until the Pi was reset.
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
 - [ ] **HANDED TO THIS PROJECT'S AGENT 2026-08-28, no longer waiting on Justin. Review and merge `triage/2026-08-24`, then delete the wip snapshot branch** (~15 min). Justin, 2026-08-28: "I'm not sure what this is and happy to have the field agent take care of it." Next session: do the review and the merge on your own judgment, delete `wip/uncommitted-snapshot-2026-08-12`, and say what you merged in `## Health`. Come back to him only if the review turns up something that changes behaviour he would notice on a screen. (updated via Oracle at Justin's direction, 2026-08-28)
