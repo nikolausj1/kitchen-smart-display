@@ -1,20 +1,31 @@
 ---
 title: "Frame Cabling: Picking the HDMI Connector for the Kitchen Panel"
 created: 2026-08-18
-modified: 2026-08-19
-version: 1.2
+modified: 2026-09-10
+version: 2.0
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, kitchen-display, hardware, hdmi, frame, raspberry-pi, ddc]
 ---
 
 # Frame Cabling: Picking the HDMI Connector for the Kitchen Panel
 
-**Status: Option B ordered 2026-08-18, arriving 2026-08-20.** Twozoh 4K Micro HDMI
-to HDMI 1 ft braided cable, plus the AreMe 8K 90 degree Mini HDMI to HDMI adapter
-2 pack in the **up and down** bend. Up/down is the correct orientation for a side
-edge port in a shallow frame: it turns the cable to run along the panel edge
-rather than forward into the mat or backward into depth we do not have. Not yet
-fitted or verified, see the checklist at the end.
+**Status (2026-09-10): SOLVED. Option A2, the FPV FPC ribbon, works on the
+kitchen frame.** Winning combination, confirmed working by Justin:
+`B01M8HDX8Z` (Chenyang mini HDMI plug head, 90 degree up, panel end) plus
+`B0GZHT6LML` (bare 20-pin 0.5 mm FPC ribbon, 10 cm), with a micro HDMI plug
+head at the Pi end. The short ribbon was the deciding variable, exactly as
+predicted. Options B and C are closed and need not be revisited. This is now
+the reference build for every frame in the house, including the front door.
+
+Orientation note: the ribbon is rotation-agnostic. It lies flat in the plane of
+the panel back whichever way the panel is mounted, so a portrait frame changes
+only where the cable exits, not which parts to buy. This is a property the rigid
+adapters never had.
+
+History, kept because the reasoning still explains the failure modes: rigid
+right-angle adapters were tried first and failed on geometry twice. Option B
+(up/down bend) pushed the cable toward the wall; the left/right bend was
+never fitted. The bend-axis trap is documented under "Bend direction" below.
 
 How to get video from the Pi into the EVICIV panel with a connector low enough to
 disappear inside a wooden frame, without breaking the resolution, the aspect
@@ -35,10 +46,12 @@ Pulled from the PRD's locked hardware decisions and confirmed live on the Pi
 
 So the cable you are shopping for is **micro HDMI Type D male at the Pi end, mini
 HDMI Type C male at the panel end.** Straight micro-to-mini cables do exist in
-short lengths (see the shopping list below), but **no right-angle version of
-that pairing is sold by anyone.** Every stock right-angle HDMI cable or adapter
-is mini-to-standard or micro-to-standard. That is the gap, and it is why the
-build has to be either two pieces or the DIY ribbon parts.
+short lengths (see the shopping list below). No right-angle version of that
+pairing exists as a **round** cable, and every stock right-angle adapter is
+mini-to-standard or micro-to-standard. It does exist as an **FPC ribbon** from
+the FPV drone and gimbal market (Option A2 below), with molded 90 degree heads
+in both bend directions at each end. So the choice is really ribbon versus a
+two-piece adapter build.
 
 Touch is a separate path and is already working: the panel's controller shows up
 as a `SiS HID Touch Controller` on USB bus 003, so one USB-C on the panel is
@@ -155,7 +168,65 @@ reaches, 10 cm if at all possible.** This is almost certainly the family that
 gave you the aspect ratio problems, and length is the variable most likely to
 have caused it.
 
-### Option B: right-angle mini adapter plus a thin micro-to-standard cable (recommended)
+### Option A2: FPV micro-to-mini FPC ribbon with molded 90 degree heads (CHOSEN, works)
+
+The drone and gimbal market sells the exact pairing this build needs as a flat
+cable: **micro HDMI male to mini HDMI male on a 20-pin, 0.5 mm pitch FPC**, with
+molded right-angle heads. Chenyang and Xiwai sell it under the CYFPV name and
+many clones exist. Plug codes: **D1/D2** are the micro end, up versus down bend;
+**C1/C2** are the mini end, up versus down; D3/C3 are straight. Lengths start at
+5 cm. The molded heads are much lower profile than the Adafruit PCB plugs and
+lie in the plane of the panel back, which is what makes the ribbon the only
+shape that stays flat at both ends. Chenyang also sells the parts modularly:
+bare 20-pin ribbon plus separate FPC-latched plug heads, the same idea as
+Adafruit's system.
+
+Electrically it is the same class as Option A: an unshielded flex with all 19
+conductors plus one ground. DDC and hot plug are wired. Whether pins 15 and 16
+stay clean comes down to length and routing, and 1080p60 is a low-rate HDMI 1.4
+signal, which is what these are rated for. Rules for giving it the best chance:
+
+1. **Shortest that reaches: 5 or 10 cm.** Never 20 cm or more. Length is the
+   variable that most likely broke the earlier Adafruit runs.
+2. **Design the Pi position around the ribbon.** Mount the Pi so its micro HDMI
+   edge sits a couple of centimetres from the panel's mini HDMI port. On the front
+   door build the Pi position is a free choice, so plan it in.
+3. Route the ribbon flat, away from the USB-C power and touch cables, taped to
+   the panel back for strain relief, no sharp folds.
+4. Judge it only by the verification checklist below: 256-byte EDID, native
+   1080p60 current, `ddcutil detect` succeeding, then a full day with the evening
+   dim and overnight power-off. Add the `cmdline.txt` mode lock only after it
+   passes.
+
+If a short ribbon fails DDC, Option B is the fallback and the ribbon question is
+closed for good. Test on the kitchen Pi on the bench first: both frames share
+the panel, so one answer covers both.
+
+Listings verified in stock on Amazon.com on 2026-09-02 (prices that day). All are
+the same CYFPV family, sold as a 20-pin 0.5 mm ribbon plus plug heads that latch
+onto it, so the 20 cm ribbon that ships with the cable can be swapped for a
+shorter bare ribbon from the same family. Micro versus mini is mislabelled
+constantly in this category, so read each listing twice:
+
+| Part | Price | Link |
+| --- | --- | --- |
+| JSER micro HDMI male to mini HDMI male FPC cable, both ends 90 degree down, 20 cm, ships as heads plus ribbon | $9.99 | https://www.amazon.com/dp/B01787RBUO |
+| Bare 20-pin 0.5 mm FPC ribbon, 10 cm, to replace the 20 cm one | $5.99 | https://www.amazon.com/dp/B0GZHT6LML |
+| Chenyang mini HDMI plug head, 90 degree up (alternate bend for the panel end) | $5.99 | https://www.amazon.com/dp/B01M8HDX8Z |
+| CY micro HDMI plug head, 90 degree up (alternate bend for the Pi end) | $5.99 | https://www.amazon.com/dp/B0C36MCW9N |
+| ZeniKon straight micro-to-mini, 1 ft, braided (Option C reference cable) | $11.99 | https://www.amazon.com/dp/B0DP6WTVN5 |
+
+Confirmed dead on 2026-09-02: the Permanent-brand B07253CZ9H micro-to-mini
+ribbon, which was the first listing found.
+
+Buy both bend orientations at both ends in the shortest length, plus the straight
+ZeniKon reference cable from Option C, in one order.
+
+The same vendors sell FPC USB-C flat cables. The panel's USB-C power and touch
+plugs are what set the frame's minimum depth, so if those turn out to be the
+obstacle, the same treatment is available.
+
+### Option B: right-angle mini adapter plus a thin micro-to-standard cable (fallback)
 
 Buy a low-profile **mini HDMI male to standard HDMI female right-angle adapter**
 in aluminium, then run a thin, properly shielded **micro HDMI to standard HDMI**
@@ -204,7 +275,7 @@ both orientations, buy that rather than guessing.
 One micro plug plus one mini plug plus one ribbon makes a cable. Buying both bends
 at both ends is about $26 and removes a second order from the critical path.
 
-### Option B: right-angle mini adapter at the panel plus a micro-to-standard cable (recommended)
+### Option B: right-angle mini adapter at the panel plus a micro-to-standard cable (fallback)
 
 Panel end, pick by which way the cable must exit:
 
@@ -239,9 +310,9 @@ you instantly whether the fault is the cable or something else.
 
 ### Not available
 
-A right-angle micro-to-mini cable. It does not exist as a stock part from any
-vendor checked. If a listing appears to offer one, read carefully, since micro and
-mini get confused constantly in these listings.
+A right-angle micro-to-mini **round** cable. As a flat FPC ribbon it does exist,
+see Option A2. Read any listing carefully, since micro and mini get confused
+constantly in these listings.
 
 ## Belt and braces: lock the mode on the Pi
 
