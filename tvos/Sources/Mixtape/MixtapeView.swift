@@ -126,7 +126,7 @@ private struct MixtapeAnimatedLayer: View {
             }
 
             if let imgs = model.deckImages, showDoor {
-                doorLayers(imgs, open: door)
+                doorLayers(imgs, open: door, tapeIn: tape != nil && model.current != nil)
             }
 
             if let imgs = model.deckImages {
@@ -154,12 +154,32 @@ private struct MixtapeAnimatedLayer: View {
     // The door is hinged at the bottom and falls toward the camera. Glass and
     // frame tilt together around the manifest's hinge line; the perspective
     // widens the top edge as it comes forward (the keystone that makes it read
-    // as a tilt, not a slide). The glass keeps its own tint throughout.
+    // as a tilt, not a slide).
+    //
+    // Smoke: every tape.png already carries the door's smoke (the tapes were
+    // photographed behind it), so over a seated tape with the door shut the
+    // glass must not darken again. Closed, the glass is drawn with a screen
+    // blend: its black smoke drops out and only the bright reflections add.
+    // As the door starts to tip, the full (normal) glass fades in over the
+    // first quarter of the swing, so a tilting door still reads as smoked.
     @ViewBuilder
-    private func doorLayers(_ imgs: MixtapeDeckImages, open: Double) -> some View {
+    private func doorLayers(_ imgs: MixtapeDeckImages, open: Double, tapeIn: Bool) -> some View {
         let fr = F.frameRect
+        let u = min(1, open / 0.25)
+        // No tape behind it: the glass keeps its full smoke all the way shut,
+        // matching the smoke baked into the empty-well plate it hands over to.
+        let smoke = tapeIn ? u * u * (3 - 2 * u) : 1
+        if let g = imgs.glass, smoke < 0.999 {
+            // Flat (closed) glass, reflections only. Kept outside the rotated
+            // group so the screen blend composites against the tape itself.
+            Image(uiImage: g).resizable()
+                .frame(width: fr.width, height: fr.height)
+                .blendMode(.screen)
+                .opacity(1 - smoke)
+                .position(x: fr.midX, y: fr.midY)
+        }
         ZStack {
-            if let g = imgs.glass { Image(uiImage: g).resizable() }
+            if let g = imgs.glass, smoke > 0.001 { Image(uiImage: g).resizable().opacity(smoke) }
             if let fImg = imgs.frame { Image(uiImage: fImg).resizable() }
         }
         .frame(width: fr.width, height: fr.height)
@@ -297,23 +317,30 @@ private struct TapeGroup: View {
             Image(uiImage: images.sprite).resizable()
                 .frame(width: sr.width, height: sr.height)
 
-            // Tape packs, seen through the window only.
-            if let pack = images.pack {
+            // Tape packs, seen through the window only. tape.png is opaque with
+            // the photo's own packs baked into the window, so the window is
+            // first blacked out (a near-black cavity, so the baked packs never
+            // show through mismatched), then both live packs go on top. The
+            // clip is the window's stadium (the manifest windowRect with fully
+            // rounded ends): its corners are label paper on every measured tape.
+            if let w = tape.windowRect {
+                let wr = CGRect(x: lx(w.x), y: ly(w.y), width: w.w * F.W, height: w.h * F.H)
                 ZStack(alignment: .topLeading) {
-                    packDisc(pack, r: radii.rs, angle: angleL)
-                        .position(x: lx(tape.hubL.x), y: ly(tape.hubL.y))
-                    packDisc(pack, r: radii.rt, angle: angleR)
-                        .position(x: lx(tape.hubR.x), y: ly(tape.hubR.y))
+                    Color(white: 0.025).opacity(0.9)
+                        .frame(width: wr.width, height: wr.height)
+                        .offset(x: wr.minX, y: wr.minY)
+                    if let pack = images.pack {
+                        packDisc(pack, r: radii.rs, angle: angleL)
+                            .position(x: lx(tape.hubL.x), y: ly(tape.hubL.y))
+                        packDisc(pack, r: radii.rt, angle: angleR)
+                            .position(x: lx(tape.hubR.x), y: ly(tape.hubR.y))
+                    }
                 }
                 .frame(width: sr.width, height: sr.height, alignment: .topLeading)
                 .mask(alignment: .topLeading) {
-                    if let w = tape.windowRect {
-                        Capsule()
-                            .frame(width: w.w * F.W, height: w.h * F.H)
-                            .offset(x: lx(w.x), y: ly(w.y))
-                    } else {
-                        Rectangle()
-                    }
+                    Capsule()
+                        .frame(width: wr.width, height: wr.height)
+                        .offset(x: wr.minX, y: wr.minY)
                 }
             }
 
@@ -338,13 +365,28 @@ private struct TapeGroup: View {
 
     // The pack texture keeps its scale (sized to the full pack) and is revealed
     // by a disc of the current radius, so the spiral does not stretch as the
-    // pack grows.
+    // pack grows. The generated texture is very dark, so the disc is lifted a
+    // touch and its outer wraps catch a warm sheen and a thin bright edge:
+    // that edge is what reads, from the couch, as the pack growing.
     private func packDisc(_ img: UIImage, r: Double, angle: Double) -> some View {
         let full = 2 * tape.packMaxRadius * F.W
-        return Image(uiImage: img).resizable()
-            .frame(width: full, height: full)
-            .rotationEffect(.degrees(angle))
-            .mask(Circle().frame(width: 2 * r * F.W, height: 2 * r * F.W))
+        let d = 2 * r * F.W
+        let warm = Color(red: 0.62, green: 0.44, blue: 0.27)
+        return ZStack {
+            Image(uiImage: img).resizable()
+                .frame(width: full, height: full)
+                .rotationEffect(.degrees(angle))
+                .brightness(0.05)
+                .mask(Circle().frame(width: d, height: d))
+            Circle()
+                .fill(RadialGradient(colors: [.clear, warm.opacity(0.10), warm.opacity(0.26)],
+                                     center: .center, startRadius: d * 0.22, endRadius: d / 2))
+                .frame(width: d, height: d)
+            Circle()
+                .strokeBorder(warm.opacity(0.55), lineWidth: max(1, F.px(3)))
+                .frame(width: d, height: d)
+        }
+        .frame(width: full, height: full)
     }
 }
 
@@ -443,24 +485,51 @@ private struct MixtapeLabel: View, Equatable {
             .offset(x: lx(line.x), y: ly(line.baselineY))
     }
 
+    // Pre-printed field names (printed label styles): a small-caps sans in a
+    // printed ink grey, sitting on the value's baseline at the manifest's
+    // captionX. The value starts at line.x, so each caption must end a small
+    // gap short of it. All captions share ONE size, as a printed form would:
+    // nominal from the smallest line's x-height, shrunk just enough that the
+    // widest caption (e.g. STATION on a radio tape) still fits its room.
+    private static let captionKern = 0.10
+
+    private func captionLabel(_ line: MixtapeTextLine) -> String {
+        switch line.field {
+        case "artist": return "ARTIST"
+        case "album": return load.isRadio ? "STATION" : "ALBUM"
+        default: return "SONG"
+        }
+    }
+
+    private func captionWidth(_ label: String, size: CGFloat) -> CGFloat {
+        let f = UIFont.systemFont(ofSize: size, weight: .medium)
+        return (label as NSString).size(withAttributes: [.font: f, .kern: size * Self.captionKern]).width
+    }
+
+    private var captionSize: CGFloat {
+        let xh = tape.textLines.map(\.xHeight).min() ?? 0.01
+        let nominal = xh * H * 0.95 / 0.70          // cap height about 0.95 x-height
+        var size = nominal
+        for line in tape.textLines {
+            let room = (line.x - (line.captionX ?? line.x)) * W - 0.004 * W
+            guard room > 0 else { continue }
+            let w = captionWidth(captionLabel(line), size: nominal)
+            size = min(size, nominal * room / max(1, w))
+        }
+        return size
+    }
+
     private func caption(for line: MixtapeTextLine) -> some View {
-        let label: String = {
-            switch line.field {
-            case "artist": return "ARTIST"
-            case "album": return load.isRadio ? "STATION" : "ALBUM"
-            default: return "SONG TITLE"
-            }
-        }()
-        let capH = line.xHeight * H * 0.62
-        let size = capH / 0.70
+        let label = captionLabel(line)
+        let size = captionSize
         let bx = line.captionX ?? line.x
         let by = line.captionBaselineY ?? (line.baselineY - line.xHeight * 1.9)
         return Color.clear.frame(width: 0, height: 0)
             .overlay(alignment: .topLeading) {
                 Text(label)
-                    .font(.system(size: size, weight: .semibold))
-                    .kerning(size * 0.12)
-                    .foregroundStyle(Color(white: 0.22).opacity(0.8))
+                    .font(.system(size: size, weight: .medium))
+                    .kerning(size * Self.captionKern)
+                    .foregroundStyle(Color(red: 0.30, green: 0.30, blue: 0.31).opacity(0.85))
                     .fixedSize()
                     .alignmentGuide(.top) { $0[.firstTextBaseline] }
             }

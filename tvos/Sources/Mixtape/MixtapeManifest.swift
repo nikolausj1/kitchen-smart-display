@@ -143,6 +143,7 @@ struct MixtapeManifest {
         let fh = num(frame?["h"]) ?? 2160
         let deck = parseDeck(root["deck"] as? [String: Any] ?? [:])
         let tapes = (root["tapes"] as? [[String: Any]] ?? []).compactMap(parseTape)
+            .map { windowFilledPack($0, aspect: fh / fw) }
 
         // Shared FNV-1a test vector: both renderers must pick the same tape.
         var ok = true
@@ -156,6 +157,29 @@ struct MixtapeManifest {
         }
         if tapes.isEmpty { log.warning("mixtape manifest has no usable tapes") }
         return MixtapeManifest(frameW: fw, frameH: fh, deck: deck, tapes: tapes, hashCheckOK: ok)
+    }
+
+    // The measured packMaxRadius is the pack the tape PHOTO showed (a few
+    // percent over the hub), which would barely move as a progress bar. Per
+    // design decision 16 the full pack instead reaches the far corner of its
+    // own half of the window (hub centre to the corner at the window's
+    // centre line), so the pack edge sweeps across the window over one song.
+    // Radii are fractions of frame WIDTH; `aspect` = frameH / frameW converts
+    // the window's vertical extent.
+    static func windowFilledPack(_ t: MixtapeTape, aspect: Double) -> MixtapeTape {
+        guard let w = t.windowRect else { return t }
+        func far(_ hub: NPoint, x0: Double, x1: Double) -> Double {
+            let dx = max(abs(hub.x - x0), abs(hub.x - x1))
+            let dy = max(abs(hub.y - w.y), abs(hub.y - w.maxY)) * aspect
+            return (dx * dx + dy * dy).squareRoot()
+        }
+        let left = far(t.hubL, x0: w.x, x1: w.midX)
+        let right = far(t.hubR, x0: w.midX, x1: w.maxX)
+        // Both packs share one R; the smaller keeps the two full packs from
+        // crossing the centre line.
+        var out = t
+        out.packMaxRadius = max(t.packMaxRadius, min(left, right))
+        return out
     }
 
     // MARK: - Pieces

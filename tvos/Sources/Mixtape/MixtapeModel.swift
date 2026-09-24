@@ -54,6 +54,12 @@ final class MixtapeModel: ObservableObject {
     static let minGap = 0.25
     static let artCap = 1.5
     static let stopGrace = 5.0
+    // Rapid skips: the insert waits until the wanted track has held this long,
+    // so a burst of skips lands as one insert of the LAST track. A normal song
+    // change has held since before the eject began, so it never waits on this.
+    static let settle = 0.8
+    // Hard cap on the empty well during a burst that never settles.
+    static let gapCap = 4.0
 
     @Published private(set) var phase: Phase = .empty
     @Published private(set) var phaseStart = Date()
@@ -76,6 +82,7 @@ final class MixtapeModel: ObservableObject {
     let clock = MixtapeClock()
 
     private var desired: MixtapeLoad?
+    private var desiredSince = Date.distantPast
     private var lastVariant: Int?
     private var seenFirst = false
     private var running = false
@@ -157,6 +164,7 @@ final class MixtapeModel: ObservableObject {
 
         if want?.key != desired?.key {
             desired = want
+            desiredSince = now
             if let w = want { prefetch(w) }
         } else if var w = want {
             // Same tape, but art or album can arrive a poll late.
@@ -234,7 +242,8 @@ final class MixtapeModel: ObservableObject {
     private func runSequence() async {
         defer { running = false; refreshIdle() }
         while current?.key != desired?.key {
-            if current != nil {
+            if let c = current {
+                MixtapeManifest.log.info("mixtape eject: \(c.key, privacy: .public)")
                 await hold(.opening, Self.doorTime)
                 await hold(.ejecting, Self.ejectTime)
                 current = nil
@@ -253,14 +262,20 @@ final class MixtapeModel: ObservableObject {
                 continue
             }
 
-            // Empty well: at least a beat, until the new art is ready (cap 1.5 s).
+            // Empty well: at least a beat, then until the new art and tape
+            // are ready (cap 1.5 s) AND the wanted track has settled (rapid
+            // skips coalesce onto the last one; hard cap 4 s).
             let t0 = Date()
             try? await Task.sleep(nanoseconds: UInt64(Self.minGap * 1e9))
-            while Date().timeIntervalSince(t0) < Self.artCap {
+            while true {
                 guard let d = desired else { break }
+                let now = Date()
+                let settled = now.timeIntervalSince(desiredSince) >= Self.settle
                 let artReady = d.artURL.map { art[$0] != nil } ?? true
                 let tapeReady = tapeImages[tapes.isEmpty ? "" : tapes[pickVariant(for: d.key) % tapes.count].id] != nil
-                if artReady && tapeReady { break }
+                let waitedOnAssets = now.timeIntervalSince(max(t0, desiredSince)) >= Self.artCap
+                if settled && ((artReady && tapeReady) || waitedOnAssets) { break }
+                if now.timeIntervalSince(t0) >= Self.gapCap { break }
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
             guard var next = desired else { continue }
@@ -268,6 +283,7 @@ final class MixtapeModel: ObservableObject {
             lastVariant = next.variant
             if let t = tape(for: next) { await ensureTapeImages(t) }
             current = next
+            MixtapeManifest.log.info("mixtape insert: \(next.key, privacy: .public) -> \(self.tape(for: next)?.id ?? "?", privacy: .public)")
             await hold(.inserting, Self.insertTime)
             await hold(.closing, Self.doorTime)
             setPhase(.seated)

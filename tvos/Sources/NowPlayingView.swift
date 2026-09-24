@@ -37,7 +37,7 @@ struct NowPlayingView: View {
         // Sim-only: `defaults write <bundle> debug.fakeMusic -bool YES` fakes a
         // playing track (with stub cover art) so the Off/Fit/Framed treatments
         // can be verified without a reachable Sonos. Mirrors PhotosView.
-        // With debug.fakeMusicSequence also YES, it cycles three tracks (see
+        // With debug.fakeMusicSequence also YES, it cycles six tracks (see
         // FakeMusicSequence below) so Mixtape's eject / insert / stop show.
         if UserDefaults.standard.bool(forKey: "debug.fakeMusic"),
            UserDefaults.standard.bool(forKey: "debug.fakeMusicSequence") {
@@ -422,77 +422,122 @@ private struct AlbumArt: View {
 //   B=com.nikolaus.kitchendisplay.tv; SIM="Apple TV 4K (3rd generation)"
 //   xcrun simctl spawn "$SIM" defaults write $B debug.fakeMusic -bool YES
 //   xcrun simctl spawn "$SIM" defaults write $B debug.fakeMusicSequence -bool YES
+//   xcrun simctl spawn "$SIM" defaults write $B debug.noHubSync -bool YES
 //   xcrun simctl spawn "$SIM" defaults write $B tv.musicMatMode -int 2      # framed
 //   xcrun simctl spawn "$SIM" defaults write $B tv.framedBackdrop -int 8    # mixtape
 //   xcrun simctl spawn "$SIM" defaults write $B debug.view music
+//   optional: ... defaults write $B debug.fakeMusicRapid -bool YES
 //   (then terminate and relaunch the app)
 //
-// Cycle (69 s): three tracks of 20 s each, then a 9 s stopped gap. The gap is
+// Cycle (105 s): six tracks of 16 s each, then a 9 s stopped gap. The gap is
 // longer than Mixtape's 5 s stop grace so the eject-to-empty actually plays
 // (about 5 s of grace, 1 s of eject and door, 3 s of empty well) before track
 // one inserts again. Track two pauses for 3 s in the middle (reels ease out,
-// PAUSE key latches). Durations are short (30-40 s) so the tape packs visibly
-// wind during each 20 s window.
+// PAUSE key latches). Track four is radio (station name, duration 0, no art).
+// Durations are 18 s starting at 1 s, so over each 16 s window the packs sweep
+// from nearly all on the left reel to nearly all on the right.
+//
+// Tapes (fnv1a32(key) mod 14, see the manifest): memorex_dbs_blank,
+// tdk_sax_printed, sony_hf_blank (long-title shrink test), basf_ce2_printed
+// (radio, STATION caption), maxell_udxl2_printed, memorex_dbs_printed.
+//
+// debug.fakeMusicRapid: at the start of track six, two decoy tracks come
+// first, so three track changes land 0.7 s apart (decoy A, decoy B, track
+// six). Mixtape must coalesce them: ONE eject of track five and ONE insert,
+// of track six's tape. The model logs "mixtape eject:" / "mixtape insert:".
 @MainActor
 final class FakeMusicSequence: ObservableObject {
     @Published private(set) var state = SonosState.empty
     private var timer: Timer?
     private let epoch = Date()
 
-    private struct Fake { let title, artist, album, art: String; let durationMs, startMs: Int }
+    private struct Fake {
+        let title, artist, album: String
+        let art: String?
+        var station = ""
+        var durationMs = 18_000
+        var startMs = 1_000
+    }
     private let tracks: [Fake] = [
         Fake(title: "Landslide", artist: "Fleetwood Mac", album: "Fleetwood Mac",
-             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg", durationMs: 32_000, startMs: 4_000),
+             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg"),
+        Fake(title: "Take On Me", artist: "a-ha", album: "Hunting High and Low",
+             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg"),
         Fake(title: "A Very Long Song Title That Will Not Fit On The Label At All",
              artist: "The Unreasonably Named Orchestra Of Eastern Kentucky",
              album: "Harvest Moon",
-             art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg", durationMs: 40_000, startMs: 8_000),
-        Fake(title: "Heroes", artist: "David Bowie", album: "\"Heroes\"",
-             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg", durationMs: 30_000, startMs: 2_000),
+             art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg"),
+        Fake(title: "Morning Edition", artist: "", album: "", art: nil,
+             station: "KEXP 90.3 FM", durationMs: 0, startMs: 0),
+        Fake(title: "Clair de Lune", artist: "Claude Debussy", album: "Suite bergamasque",
+             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg"),
+        Fake(title: "Blue in Green", artist: "Miles Davis", album: "Kind of Blue",
+             art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg"),
     ]
+    // Rapid-skip decoys (tapes maxell_udxl2_blank, tdk_sax_blank).
+    private let decoys: [Fake] = [
+        Fake(title: "Superstition", artist: "Stevie Wonder", album: "Talking Book",
+             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg"),
+        Fake(title: "Hey Ya!", artist: "OutKast", album: "Speakerboxxx/The Love Below",
+             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg"),
+    ]
+    private let slot = 16.0
+    private let stopGap = 9.0
+    private var cycle: Double { slot * Double(tracks.count) + stopGap }
 
     func startIfEnabled() {
         guard timer == nil,
               UserDefaults.standard.bool(forKey: "debug.fakeMusicSequence") else { return }
         tick()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // 0.1 s ticks so the rapid-skip changes land on time; the published
+        // state only changes when it differs (elapsed is quantised to 0.5 s,
+        // about the real 1.5 s poll's granularity or finer).
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
     }
 
     private func tick() {
-        let t = Date().timeIntervalSince(epoch).truncatingRemainder(dividingBy: 69)
-        let slot = Int(t / 20)
-        if slot >= 3 {
+        let next = compute()
+        if next != state { state = next }
+    }
+
+    private func compute() -> SonosState {
+        let t = Date().timeIntervalSince(epoch).truncatingRemainder(dividingBy: cycle)
+        let n = tracks.count
+        let i = Int(t / slot)
+        if i >= n {
             // Stopped: Sonos keeps reporting the last track while STOPPED.
-            var st = make(tracks[2], elapsedS: 20)
+            var st = make(tracks[n - 1], elapsedS: slot)
             st.playing = false
             st.paused = false
-            state = st
-            return
+            return st
         }
-        let within = t - Double(slot) * 20
-        if slot == 1, within >= 8, within < 11 {
-            var st = make(tracks[1], elapsedS: 8)
+        let within = t - Double(i) * slot
+        if i == n - 1, within < 1.4, UserDefaults.standard.bool(forKey: "debug.fakeMusicRapid") {
+            return make(decoys[within < 0.7 ? 0 : 1], elapsedS: 0)
+        }
+        if i == 1, within >= 6, within < 9 {
+            var st = make(tracks[1], elapsedS: 6)
             st.playing = false
             st.paused = true
-            state = st
-            return
+            return st
         }
         // Track two's elapsed skips the paused 3 s.
-        let e = (slot == 1 && within >= 11) ? within - 3 : within
-        state = make(tracks[slot], elapsedS: e)
+        let e = (i == 1 && within >= 9) ? within - 3 : within
+        return make(tracks[i], elapsedS: e)
     }
 
     private func make(_ f: Fake, elapsedS: Double) -> SonosState {
-        SonosState(
+        let q = (elapsedS * 2).rounded(.down) / 2
+        return SonosState(
             playing: true, paused: false,
             track: NowPlayingTrack(
                 title: f.title, artist: f.artist, album: f.album,
-                albumArtURL: URL(string: AppConfig.photosBase.absoluteString + "/stub-photos/" + f.art),
+                albumArtURL: f.art.flatMap { URL(string: AppConfig.photosBase.absoluteString + "/stub-photos/" + $0) },
                 durationMs: f.durationMs,
-                elapsedMs: min(f.durationMs, f.startMs + Int(elapsedS * 1000))),
-            stationName: "", volume: 30, loaded: true)
+                elapsedMs: f.durationMs == 0 ? 0 : min(f.durationMs, f.startMs + Int(q * 1000))),
+            stationName: f.station, volume: 30, loaded: true)
     }
 }
 #endif
