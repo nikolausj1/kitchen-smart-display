@@ -1,38 +1,73 @@
 #!/usr/bin/env node
 // FrameServer - the Smart Display hub.
 //
-// Runs as a Windows service on the NUC (C:\Services\FrameServer) and serves the
-// photo manifest + derivatives that every screen in the house reads. Replaces
-// the kitchen Pi as the content host; the Pi keeps only its own panel hardware
-// (wlr-randr power, ddcutil brightness).
+// Runs as a Windows service on the NUC (C:\Services\FrameServer). Since
+// 2026-09-24 it is the only server a screen needs: it serves the web app
+// itself, the photos, every screen's settings, the shared house state, lunch,
+// the school calendar, the photo-flag queue and Sonos. The kitchen Pi keeps
+// only its own panel hardware (wlr-randr power, ddcutil brightness). See
+// docs/designs/echo-show-and-hub.md.
 //
+//   GET  / , /index.html              the web app (Vite build in APP_DIR),
+//                                     with the hub marker meta injected
+//   GET  /assets/*, /icons/*, ...     the rest of the build
 //   GET  /stub-photos/manifest.json   the manifest, no-store
 //   GET  /stub-photos/<file>          a derivative JPEG
 //   POST /api/photos/refresh          start a rebuild (409 if one is running)
 //   GET  /api/photos/refresh/status   {running, lastRun, ok, photoCount, error}
-//   GET  /healthz                     liveness + photo count
+//   GET  /api/albums                  album index for the dashboard
+//   GET  /admin                       the dashboard
+//   ...  /api/devices, /api/settings  the device registry (below)
+//   GET|POST /api/state               shared house state (lib/houseState.mjs)
+//   GET  /api/schoolcal               SPS calendar (lib/schoolData.mjs)
+//   GET  /api/lunch?school=<slug>     MealViewer lunch (lib/schoolData.mjs)
+//   GET|POST /api/flags, POST /api/flags/resolve, /api/flags/import
+//                                     photo-flag queue (lib/flags.mjs)
+//   GET  /api/sonos/*                 proxy to node-sonos-http-api
+//   GET  /healthz                     liveness + a glance at everything
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.
 // Renaming it would mean a coordinated rebuild + tvOS deploy for no gain.
 //
-// CORS is wide open: after the migration the kitchen app is served from the Pi
-// but fetches the manifest from here, which is cross-origin. Images in <img>
-// tags do not need it, but the manifest fetch() does. LAN-only service, so
-// allow-all is the right level of ceremony.
+// CORS is wide open: the kitchen app is served from the Pi but fetches
+// everything here, which is cross-origin. LAN-only service, so allow-all is
+// the right level of ceremony.
+//
+// lib/*.mjs sits next to this file (C:\Services\FrameServer\lib\ on the NUC)
+// and is imported relative to it, not to FRAMESERVER_ROOT.
 
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { createReadStream, existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs'
+import { createReadStream, existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
-import { dirname, join, normalize, resolve } from 'node:path'
+import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fetchWithTimeout, isDict, readJsonFile, writeJsonFileAtomic } from './lib/io.mjs'
+import { acceptStatePost, composeState } from './lib/houseState.mjs'
+import { createTravelDefault } from './lib/travelDefault.mjs'
+import { createFlags } from './lib/flags.mjs'
+import {
+  DEFAULT_SCHOOL_SLUG,
+  getCachedSchoolCal,
+  initSchoolData,
+  lunchResponse,
+  schoolCalResponse,
+  warmSchoolCal,
+} from './lib/schoolData.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.FRAMESERVER_ROOT || resolve(__dirname)
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
+// The Vite build of code/ (index.html, assets/, icons/, build.json, ...).
+const APP_DIR = process.env.FRAMESERVER_APP_DIR || join(ROOT, 'app')
+// node-sonos-http-api on this box (nssm service SmartDisplaySonosAPI), bound
+// to loopback so the proxy below is the only way in from the LAN.
+const SONOS_UPSTREAM = (process.env.SONOS_UPSTREAM || 'http://127.0.0.1:5005').replace(/\/+$/, '')
 const STATUS_FILE = join(ROOT, 'refresh-status.json')
+const STATE_FILE = join(ROOT, 'state.json')
+const FLAGS_FILE = join(ROOT, 'flags.json')
 const PORT = Number(process.env.FRAMESERVER_PORT || 8095)
 const BIND = process.env.FRAMESERVER_BIND || '0.0.0.0'
 
@@ -42,6 +77,18 @@ const MIME = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.json': 'application/json',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8',
+  '.map': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 }
 
 // --- refresh state -----------------------------------------------------------
@@ -119,7 +166,7 @@ function startRefresh(trigger) {
 // room shows different albums than the kitchen".
 //
 //   { shared:  { location, school, timerThresholds, weatherSlots },
-//     devices: { "<id>": { name, kind, createdAt, config: { slideshow, display, sonos } } } }
+//     devices: { "<id>": { name, kind, createdAt, seededFrom?, config: { slideshow, display, sonos } } } }
 //
 // Shared = one value for the family. Config = per screen. Values are stored
 // per-field rather than as opaque blobs so a `locked` flag could be added later
@@ -161,17 +208,46 @@ function deepMerge(base, override) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    const chunks = []
+    let size = 0
+    let tooLarge = false
     req.on('data', (c) => {
-      raw += c
-      if (raw.length > 1_000_000) reject(new Error('body too large'))
+      size += c.length
+      if (size > 1_000_000) tooLarge = true
+      else chunks.push(c)
     })
     req.on('end', () => {
+      if (tooLarge) return reject(new Error('body too large'))
+      // Join the bytes before decoding: a multi-byte character (a caption like
+      // "Zürich") split across two chunks would otherwise decode as garbage.
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try { resolve(JSON.parse(raw)) } catch (e) { reject(e) }
     })
     req.on('error', reject)
   })
+}
+
+// What a brand-new screen may inherit from an existing one (seedFrom): taste,
+// not plumbing. The albums and slide timing, the Sonos ROOM, and when the house
+// goes dim / dark / wakes. Never sonos.apiBase (a per-host URL; the kitchen's
+// stored value was a stale http://localhost:5005), never `command` (a one-shot
+// dashboard action meant for the seed screen), never anything else.
+const SEED_DISPLAY_KEYS = ['dimAt', 'offAt', 'wakeAt', 'wakeBrightness', 'eveningBrightness']
+
+function seedSubset(cfg) {
+  const out = {}
+  if (!isDict(cfg)) return out
+  if (isDict(cfg.slideshow)) out.slideshow = structuredClone(cfg.slideshow)
+  if (isDict(cfg.sonos) && cfg.sonos.room !== undefined) out.sonos = { room: cfg.sonos.room }
+  if (isDict(cfg.display)) {
+    const d = {}
+    for (const k of SEED_DISPLAY_KEYS) {
+      if (cfg.display[k] !== undefined) d[k] = structuredClone(cfg.display[k])
+    }
+    if (Object.keys(d).length) out.display = d
+  }
+  return out
 }
 
 // Register (or look up) a device. A device that already exists is NEVER
@@ -181,18 +257,28 @@ function readBody(req) {
 // migration instead of being reset to code defaults. The kitchen is currently
 // running drivingDepart 7:38 against a 7:42 default; resetting that would shift
 // the family's morning timer by four minutes.
-function registerDevice({ id, name, kind, config, shared }) {
+//
+// seedFrom: a NEW screen can start from another screen's settings instead of
+// its own code defaults (the family-room Echo seeds from the kitchen). Applied
+// once, at creation; afterwards the two are independent.
+function registerDevice({ id, name, kind, config, shared, seedFrom }) {
   const reg = readRegistry()
   const existing = reg.devices[id]
   let changed = false
 
   if (!existing) {
-    reg.devices[id] = {
-      name: name || id,
-      kind: kind || 'unknown',
-      createdAt: new Date().toISOString(),
-      config: config && typeof config === 'object' ? config : {},
+    const own = isDict(config) ? config : {}
+    const seed = typeof seedFrom === 'string' && seedFrom !== id ? reg.devices[seedFrom] : null
+    const entry = { name: name || id, kind: kind || 'unknown', createdAt: new Date().toISOString() }
+    if (seed) {
+      entry.seededFrom = seedFrom
+      // The seed's values win over the new screen's defaults for the seeded
+      // keys; its own keys (e.g. display.nightFace) survive.
+      entry.config = deepMerge(own, seedSubset(seed.config))
+    } else {
+      entry.config = own
     }
+    reg.devices[id] = entry
     changed = true
   } else if (name && existing.name !== name) {
     existing.name = name
@@ -208,8 +294,45 @@ function registerDevice({ id, name, kind, config, shared }) {
   }
 
   if (changed) writeRegistry(reg)
-  return { id, ...reg.devices[id], shared: reg.shared }
+  return reg
 }
+
+// When each screen last polled its config: the "which screen is down" glance
+// for the dashboard. In memory only - writing it to devices.json would rewrite
+// that file every few seconds - so it starts empty after a restart and fills
+// within one poll interval (10 s web, 30 s TV).
+const lastSeen = new Map()
+const markSeen = (id) => lastSeen.set(id, new Date().toISOString())
+const deviceView = (id, d, shared) => ({ id, ...d, lastSeenAt: lastSeen.get(id) ?? null, shared })
+
+// --- house state, school data, flags -----------------------------------------
+
+const cachedSchool = initSchoolData({ dir: ROOT })
+const flags = createFlags(FLAGS_FILE)
+const travel = createTravelDefault({ dir: ROOT, getShared: () => readRegistry().shared })
+
+// state.json holds ONLY { countdown } - the user's decisions. Everything else
+// in /api/state is derived or owned elsewhere (registry, calendar, forecast).
+function readStoredState() {
+  const v = readJsonFile(STATE_FILE, {})
+  return isDict(v) ? v : {}
+}
+
+function currentState(now = new Date()) {
+  const registry = readRegistry()
+  // Picks up a location / departure-hour edit made by any route (or by hand)
+  // without every writer having to remember to poke the forecast.
+  travel.noteShared(registry.shared)
+  return composeState({
+    now,
+    registry,
+    stored: readStoredState(),
+    calendar: getCachedSchoolCal(),
+    travelDefault: travel.current(now),
+  })
+}
+
+const loggedLegacyStateKeys = new Set()
 
 // --- http --------------------------------------------------------------------
 
@@ -218,7 +341,8 @@ function cors(res) {
   // PATCH is what the screens send for settings writes (settings.js hubPatch);
   // without it here the browser's preflight fails and every write from a
   // screen is dropped silently, reverted by the next poll. Found 2026-09-04.
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
+  // DELETE is the dashboard's "Remove screen".
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
@@ -233,47 +357,228 @@ function json(res, code, body) {
   res.end(buf)
 }
 
-async function serveFile(res, urlPath) {
-  // Resolve inside PHOTOS_DIR only: normalize collapses ../ before we join, and
-  // the startsWith check catches anything that still escapes.
-  const rel = normalize(decodeURIComponent(urlPath)).replace(/^([/\\])+/, '')
-  const full = resolve(join(PHOTOS_DIR, rel))
-  if (!full.startsWith(resolve(PHOTOS_DIR))) return json(res, 403, { error: 'forbidden' })
-
-  let st
+// Map a URL path onto a file inside `base`, or null when it cannot be one:
+// a malformed escape, a NUL byte, or anything that resolves outside `base`.
+// normalize() collapses ../ first, and the containment check (with the
+// trailing separator, so a sibling like photos-old is not "inside" photos)
+// catches whatever still escapes.
+function resolveInside(base, urlPath) {
+  let decoded
   try {
-    st = await stat(full)
-    if (!st.isFile()) throw new Error('not a file')
+    decoded = decodeURIComponent(urlPath)
   } catch {
-    return json(res, 404, { error: 'not found' })
+    return null
   }
+  if (decoded.includes('\0')) return null
+  const rel = normalize(decoded).replace(/^([/\\])+/, '')
+  const root = resolve(base)
+  const full = resolve(root, rel)
+  if (full !== root && !full.startsWith(root + sep)) return null
+  return { full, rel }
+}
 
-  const ext = full.slice(full.lastIndexOf('.')).toLowerCase()
-  const isManifest = full.endsWith('manifest.json')
+// Stream a stat()ed file. With `ranges`, a single `bytes=a-b` Range is
+// honoured: Chromium loops an <audio> (the Echo's silent keep-alive) far more
+// reliably from a seekable source.
+function sendFile(req, res, full, st, headers, { ranges = false } = {}) {
+  let start = 0
+  let end = st.size - 1
+  let status = 200
+  if (ranges) {
+    headers['Accept-Ranges'] = 'bytes'
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '')
+    if (m && (m[1] || m[2])) {
+      if (m[1]) {
+        start = Number(m[1])
+        if (m[2]) end = Math.min(Number(m[2]), st.size - 1)
+      } else {
+        start = Math.max(0, st.size - Number(m[2])) // suffix: the last N bytes
+      }
+      if (start > end || start >= st.size) {
+        cors(res)
+        res.writeHead(416, { 'Content-Range': `bytes */${st.size}`, 'Cache-Control': 'no-store' })
+        return res.end()
+      }
+      status = 206
+      headers['Content-Range'] = `bytes ${start}-${end}/${st.size}`
+    }
+  }
+  headers['Content-Length'] = Math.max(0, end - start + 1)
   cors(res)
-  res.writeHead(200, {
-    'Content-Type': MIME[ext] || 'application/octet-stream',
-    'Content-Length': st.size,
+  res.writeHead(status, headers)
+  if (req.method === 'HEAD' || st.size === 0) return res.end()
+  // A file replaced mid-read (a deploy, the nightly photo build) must drop
+  // this one response, not crash the service on an unhandled stream error.
+  const stream = createReadStream(full, { start, end })
+  stream.on('error', () => res.destroy())
+  stream.pipe(res)
+}
+
+async function statFile(full) {
+  try {
+    const st = await stat(full)
+    return st.isFile() ? st : null
+  } catch {
+    return null
+  }
+}
+
+async function serveFile(req, res, urlPath) {
+  const hit = resolveInside(PHOTOS_DIR, urlPath)
+  if (!hit) return json(res, 403, { error: 'forbidden' })
+  const st = await statFile(hit.full)
+  if (!st) return json(res, 404, { error: 'not found' })
+
+  const isManifest = hit.full.endsWith('manifest.json')
+  return sendFile(req, res, hit.full, st, {
+    'Content-Type': MIME[extname(hit.full).toLowerCase()] || 'application/octet-stream',
     // The manifest is polled every 5 min and must never be stale. The JPEGs are
     // immutable per filename (asset id), so they can cache hard.
     'Cache-Control': isManifest ? 'no-store' : 'public, max-age=604800',
   })
-  createReadStream(full).pipe(res)
 }
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+// --- the web app ---------------------------------------------------------------
+// Silk on the family-room Echo Show cannot resolve nuc.local, so the Echo
+// loads the app from here by IP (http://192.168.4.61:8095/?kiosk=echo). The
+// marker tells code/src/lib/hub.js "whoever served this page is the hub", so
+// every API call follows the page's own origin, whatever name or IP the
+// screen typed.
+const HUB_META = '<meta name="smart-display-hub" content="self">'
+
+function appDeployed() {
+  return existsSync(join(APP_DIR, 'index.html'))
+}
+
+function injectHubMeta(html) {
+  const open = /<head(\s[^>]*)?>/i.exec(html)
+  if (open) {
+    const at = open.index + open[0].length
+    return `${html.slice(0, at)}\n    ${HUB_META}${html.slice(at)}`
+  }
+  const close = /<\/head>/i.exec(html)
+  if (close) return `${html.slice(0, close.index)}${HUB_META}\n${html.slice(close.index)}`
+  return `${HUB_META}\n${html}`
+}
+
+function serveAppIndex(req, res) {
+  let html
+  try {
+    html = readFileSync(join(APP_DIR, 'index.html'), 'utf8')
+  } catch {
+    return json(res, 404, { error: 'app not deployed', appDir: APP_DIR })
+  }
+  const buf = Buffer.from(injectHubMeta(html))
+  cors(res)
+  res.writeHead(200, {
+    'Content-Type': MIME['.html'],
+    'Content-Length': buf.length,
+    // Never cached: it names the current content-hashed bundle, so a stale
+    // copy would pin a screen to an old build.
+    'Cache-Control': 'no-store',
+  })
+  return res.end(req.method === 'HEAD' ? undefined : buf)
+}
+
+async function serveAppFile(req, res, urlPath) {
+  const hit = resolveInside(APP_DIR, urlPath)
+  if (!hit) return json(res, 403, { error: 'forbidden' })
+
+  // The first path segment must be an exact, real entry of APP_DIR, and never
+  // stub-photos/: that folder is code/public/stub-photos riding along in a dev
+  // build, and photos come from PHOTOS_DIR only (the /stub-photos/ route).
+  // Matching real names byte for byte, rather than testing for the string
+  // "stub-photos", also shuts out the Windows aliases of that folder:
+  // STUB-PHOTOS (case-insensitive NTFS), "stub-photos." (trailing dot
+  // dropped), STUB-P~1 (8.3 short name).
+  const first = hit.rel.split(/[\\/]/)[0]
+  let entries
+  try {
+    entries = readdirSync(APP_DIR)
+  } catch {
+    return json(res, 404, { error: 'not found' })
+  }
+  if (!first || first.toLowerCase() === 'stub-photos' || !entries.includes(first)) {
+    return json(res, 404, { error: 'not found' })
+  }
+
+  const st = await statFile(hit.full)
+  if (!st) return json(res, 404, { error: 'not found' })
+  return sendFile(req, res, hit.full, st, {
+    'Content-Type': MIME[extname(hit.full).toLowerCase()] || 'application/octet-stream',
+    // Vite content-hashes every name under assets/, so a URL there never
+    // changes meaning. Everything else must never cache: build.json is polled
+    // to notice deploys, and the rest (favicon, icons, silence.wav) is tiny.
+    'Cache-Control': first === 'assets' ? 'public, max-age=31536000, immutable' : 'no-store',
+  }, { ranges: true })
+}
+
+// --- Sonos proxy -----------------------------------------------------------------
+// Port of _proxy_sonos from pi/kiosk-server.py. Every screen polls through
+// here every 1.5 s, so requests are not logged; an outage is logged when it
+// starts, every 5 minutes while it lasts, and when it ends.
+const SONOS_TIMEOUT_MS = 6000
+let sonosDownSince = 0
+let sonosLastLog = 0
+
+async function proxySonos(req, res, url) {
+  if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'GET only' })
+  // The rest of the path and the query string as received, still
+  // percent-encoded: /Main/favorite/My%20Station, /zones, /getaa?s=1&u=...
+  const rest = url.pathname.slice('/api/sonos'.length) + url.search
+  try {
+    const { res: up, body } = await fetchWithTimeout(SONOS_UPSTREAM + (rest || '/'), {
+      timeoutMs: SONOS_TIMEOUT_MS,
+    })
+    if (sonosDownSince) {
+      console.log(`[sonos] upstream back after ${Math.round((Date.now() - sonosDownSince) / 1000)}s`)
+      sonosDownSince = 0
+    }
+    cors(res)
+    res.writeHead(up.status, {
+      'Content-Type': up.headers.get('content-type') || 'application/json',
+      'Content-Length': body.length,
+      'Cache-Control': 'no-store',
+    })
+    return res.end(body)
+  } catch (e) {
+    const now = Date.now()
+    if (!sonosDownSince || now - sonosLastLog > 5 * 60_000) {
+      console.warn(`[sonos] upstream ${SONOS_UPSTREAM} unreachable: ${e.message}`)
+      sonosLastLog = now
+    }
+    if (!sonosDownSince) sonosDownSince = now
+    return json(res, 502, { ok: false, error: String(e.message || e) })
+  }
+}
+
+// --- routes ------------------------------------------------------------------------
+
+async function handle(req, res) {
+  let url
+  try {
+    url = new URL(req.url, 'http://localhost')
+  } catch {
+    return json(res, 400, { error: 'bad request' })
+  }
   const path = url.pathname
 
   if (req.method === 'OPTIONS') { cors(res); res.writeHead(204); return res.end() }
 
   if (path === '/healthz') {
+    const state = currentState()
     return json(res, 200, {
       ok: true,
       service: 'FrameServer',
       photos: countPhotos(),
       photosDir: PHOTOS_DIR,
       refreshRunning: running,
+      app: appDeployed(),
+      sonosUpstream: SONOS_UPSTREAM,
+      state: {
+        timerActive: state.timer.active,
+        travelDefault: state.travelDefault ? state.travelDefault.mode : null,
+      },
     })
   }
 
@@ -312,7 +617,9 @@ const server = createServer(async (req, res) => {
   if (path === '/api/devices' && req.method === 'GET') {
     const reg = readRegistry()
     return json(res, 200, {
-      devices: Object.entries(reg.devices).map(([id, d]) => ({ id, ...d })),
+      devices: Object.entries(reg.devices).map(([id, d]) => ({
+        id, ...d, lastSeenAt: lastSeen.get(id) ?? null,
+      })),
       shared: reg.shared,
     })
   }
@@ -320,8 +627,14 @@ const server = createServer(async (req, res) => {
   if (path === '/api/devices/register' && req.method === 'POST') {
     try {
       const body = await readBody(req)
-      if (!body.id) return json(res, 400, { error: 'id required' })
-      return json(res, 200, registerDevice(body))
+      if (!isDict(body) || !body.id) return json(res, 400, { error: 'id required' })
+      const reg = registerDevice(body)
+      // A screen registers itself with its kind and config. The dashboard's
+      // rename reuses this route with only {id, name}; that is not the screen
+      // being seen, and must not make a dead screen look alive.
+      if (body.kind != null || body.config != null) markSeen(body.id)
+      travel.noteShared(reg.shared)
+      return json(res, 200, deviceView(body.id, reg.devices[body.id], reg.shared))
     } catch (e) {
       return json(res, 400, { error: String(e.message || e) })
     }
@@ -334,6 +647,7 @@ const server = createServer(async (req, res) => {
         const reg = readRegistry()
         reg.shared = deepMerge(reg.shared, await readBody(req))
         writeRegistry(reg)
+        travel.noteShared(reg.shared) // location or departure hour may have moved
         return json(res, 200, reg.shared)
       } catch (e) {
         return json(res, 400, { error: String(e.message || e) })
@@ -348,6 +662,7 @@ const server = createServer(async (req, res) => {
     if (!reg.devices[devDel[1]]) return json(res, 404, { error: 'unknown device' })
     delete reg.devices[devDel[1]]
     writeRegistry(reg)
+    lastSeen.delete(devDel[1])
     // A deleted device that reconnects re-registers and seeds itself again from
     // whatever it still has cached locally, so this is recoverable, not fatal.
     return json(res, 200, { ok: true, removed: devDel[1] })
@@ -360,13 +675,14 @@ const server = createServer(async (req, res) => {
     if (!reg.devices[id]) return json(res, 404, { error: `unknown device: ${id}` })
 
     if (req.method === 'GET') {
-      return json(res, 200, { id, ...reg.devices[id], shared: reg.shared })
+      markSeen(id)
+      return json(res, 200, deviceView(id, reg.devices[id], reg.shared))
     }
     if (req.method === 'PATCH' || req.method === 'POST') {
       try {
         reg.devices[id].config = deepMerge(reg.devices[id].config || {}, await readBody(req))
         writeRegistry(reg)
-        return json(res, 200, { id, ...reg.devices[id], shared: reg.shared })
+        return json(res, 200, deviceView(id, reg.devices[id], reg.shared))
       } catch (e) {
         return json(res, 400, { error: String(e.message || e) })
       }
@@ -382,16 +698,121 @@ const server = createServer(async (req, res) => {
       : json(res, 409, { ok: false, running: true })
   }
 
+  // --- house state ---
+  // Every web screen polls this every 10 s and the Apple TV every 30 s. POST
+  // stores the countdown decisions (last writer wins) and answers with the
+  // same composed state as GET, so the poster can apply the result at once.
+  if (path === '/api/state') {
+    if (req.method === 'GET') return json(res, 200, currentState())
+    if (req.method === 'POST') {
+      let body
+      try {
+        body = await readBody(req)
+      } catch (e) {
+        return json(res, 400, { ok: false, error: String(e.message || e) })
+      }
+      if (!isDict(body)) return json(res, 400, { ok: false, error: 'expected JSON object' })
+      const now = new Date()
+      const { countdown, ignored } = acceptStatePost(body, now)
+      for (const k of ignored) {
+        if (loggedLegacyStateKeys.has(k)) continue
+        loggedLegacyStateKeys.add(k)
+        console.log(`[state] ignoring POST key "${k}" (only "countdown" is stored; an old kitchen bundle?) - logged once per key`)
+      }
+      if (countdown) {
+        try {
+          writeJsonFileAtomic(STATE_FILE, { countdown })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: String(e.message || e) })
+        }
+      }
+      return json(res, 200, currentState(now))
+    }
+    return json(res, 405, { error: 'GET or POST' })
+  }
+
+  // --- school data ---
+  if (path === '/api/schoolcal') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    const r = await schoolCalResponse()
+    return json(res, r.status, r.body)
+  }
+
+  if (path === '/api/lunch') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    const r = await lunchResponse(url.searchParams.get('school') || DEFAULT_SCHOOL_SLUG)
+    return json(res, r.status, r.body)
+  }
+
+  // --- photo-location flags ---
+  if (path === '/api/flags' || path === '/api/flags/resolve' || path === '/api/flags/import') {
+    if (path === '/api/flags' && req.method === 'GET') {
+      const u = url.searchParams.get('unresolved')
+      return json(res, 200, flags.list(u === '1' || u === 'true'))
+    }
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'POST only' })
+    try {
+      const body = await readBody(req)
+      const r = path === '/api/flags' ? flags.append(body)
+        : path === '/api/flags/resolve' ? flags.resolve(body)
+        : flags.import(body)
+      return json(res, r.status, r.body)
+    } catch (e) {
+      const status = e instanceof SyntaxError || e.message === 'body too large' ? 400 : 500
+      return json(res, status, { ok: false, error: String(e.message || e) })
+    }
+  }
+
+  // --- Sonos ---
+  if (path === '/api/sonos' || path.startsWith('/api/sonos/')) return proxySonos(req, res, url)
+
   if (path.startsWith('/stub-photos/') && req.method === 'GET') {
-    return serveFile(res, path.slice('/stub-photos'.length))
+    return serveFile(req, res, path.slice('/stub-photos'.length))
+  }
+
+  // --- the web app: last, so every route above keeps precedence ---
+  if ((req.method === 'GET' || req.method === 'HEAD') && !path.startsWith('/api/')) {
+    if (path === '/' || path === '/index.html') {
+      // The hub must keep serving the TV and the kitchen with no app deployed.
+      if (!appDeployed()) return json(res, 404, { error: 'app not deployed', appDir: APP_DIR })
+      return serveAppIndex(req, res)
+    }
+    return serveAppFile(req, res, path)
   }
 
   return json(res, 404, { error: 'not found' })
+}
+
+const server = createServer((req, res) => {
+  // A throw inside a handler (a malformed escape, a bad file) is an unhandled
+  // rejection, and Node's default for those is to kill the process. Answer
+  // 500 for that one request instead.
+  handle(req, res).catch((e) => {
+    console.error(`[http] ${req.method} ${req.url}: ${e && e.stack ? e.stack : e}`)
+    if (!res.headersSent) json(res, 500, { error: 'internal error' })
+    else res.destroy()
+  })
 })
+
+// Before listen: restore this morning's travel default from disk and start
+// its refresh cycle, so the first /api/state already has it.
+const restoredTravel = travel.start()
 
 server.listen(PORT, BIND, () => {
   console.log(`FrameServer listening on http://${BIND}:${PORT}`)
   console.log(`  photos : ${PHOTOS_DIR} (${countPhotos() ?? '?'} in manifest)`)
   console.log(`  scripts: ${SCRIPTS_DIR}`)
+  console.log(`  app    : ${APP_DIR} (${appDeployed() ? 'index.html present' : 'NOT DEPLOYED - GET / answers 404'})`)
+  console.log(`  sonos  : ${SONOS_UPSTREAM} (proxied at /api/sonos/*)`)
+  console.log(`  state  : ${STATE_FILE}`)
+  console.log(`  flags  : ${FLAGS_FILE}`)
+  console.log(`  cached : schoolcal ${cachedSchool.calendar ?? 'none'} | lunch ${cachedSchool.lunch ?? 'none'} | ` +
+              `travel ${restoredTravel ? `${restoredTravel.date} ${restoredTravel.mode}` : 'none'}`)
   if (!existsSync(PHOTOS_DIR)) console.warn(`  WARNING: photos dir does not exist`)
+
+  // The calendar feeds noSchoolToday in /api/state, so fetch it now rather
+  // than on the first screen's request, and look again daily (a no-op while
+  // the 7-day cache is fresh).
+  warmSchoolCal()
+  setInterval(warmSchoolCal, 24 * 3600 * 1000)
 })

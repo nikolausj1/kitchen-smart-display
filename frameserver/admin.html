@@ -89,7 +89,8 @@
   .pct { display: flex; align-items: center; gap: .75rem; }
   .pct input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
   .pct-val { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 3.2rem; text-align: right; }
-  .toolbar { display: flex; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; align-items: center; }
+  .toolbar-label { align-self: center; color: var(--muted, #666); font-size: 14px; margin-right: 4px; }
+.toolbar { display: flex; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; align-items: center; }
   .toolbar .note { color: var(--muted); font-size: .82rem; }
   #toast {
     position: fixed; right: 1rem; bottom: 1rem; background: var(--ink); color: var(--bg);
@@ -98,6 +99,13 @@
   }
   #toast.show { opacity: .95; }
   code { font-size: .82rem; color: var(--muted); }
+  /* "seen 12 s ago": when each screen last polled the hub. Warn-coloured once
+     it is overdue, which is the quickest way to spot a screen that is down. */
+  .seen { font-variant-numeric: tabular-nums; }
+  .seen.stale { color: var(--warn); }
+  section.card > h2 .seen { margin-left: .6rem; font-size: .8rem; font-weight: 400; color: var(--muted); }
+  section.card > h2 .seen.stale { color: var(--warn); }
+  nav button[aria-current="true"] .seen.stale { color: inherit; }
 
   /* ---- Narrow screens -------------------------------------------------
      Two breakpoints on purpose. A tablet in portrait (~768px) still has room
@@ -207,17 +215,49 @@ async function patchShared(body) {
   toast('Saved — applies to every screen')
 }
 
-async function loadAll() {
+async function loadAll(opts = {}) {
   const [d, a, h] = await Promise.all([
     api('/api/devices'), api('/api/albums').catch(() => ({ albums: [] })), api('/healthz'),
   ])
-  devices = d.devices; shared = d.shared || {}; albums = a.albums || []
+  albums = a.albums || []
   $('#stat').textContent = `${h.photos} photos`
+  applyDevices(d, opts.background)
+}
+
+// The 10s background tick: the device list only, to keep lastSeenAt fresh.
+async function loadDevices() {
+  applyDevices(await api('/api/devices'), true)
+}
+
+// What the page was last rendered from, minus lastSeenAt (which moves on every
+// screen poll and is patched in place by updateAges).
+let renderedSig = null
+function dataSig() {
+  return JSON.stringify([
+    devices.map(({ lastSeenAt, ...rest }) => rest), shared,
+    albums.map((x) => [x.id, x.name, x.count]),
+  ])
+}
+
+// True while a control in the main pane has focus. Re-rendering then would
+// throw away the control mid-edit (typed text, an open dropdown, a drag).
+function editing() {
+  const a = document.activeElement
+  return !!a && a !== document.body && $('#main').contains(a) &&
+    /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)
+}
+
+function applyDevices(d, background) {
+  devices = d.devices; shared = d.shared || {}
   $('#statScreens').textContent = `· ${devices.length} screens`
   if (!selected || (selected !== '__shared__' && !devices.find((x) => x.id === selected))) {
     selected = devices[0]?.id || '__shared__'
   }
-  render()
+  // A background refresh re-renders only when something besides the ages
+  // changed, and never under an edit in progress: that change is picked up on
+  // a later tick, once nothing has focus.
+  if (background && (dataSig() === renderedSig || editing())) updateAges()
+  else render()
 }
 
 function render() {
@@ -225,7 +265,9 @@ function render() {
   nav.innerHTML = ''
   for (const dev of devices) {
     const b = document.createElement('button')
-    b.innerHTML = `${escapeHtml(dev.name || dev.id)}<span class="kind">${escapeHtml(dev.kind || '')}</span>`
+    const kind = kindLabel(dev.kind)
+    b.innerHTML = `${escapeHtml(dev.name || dev.id)}<span class="kind">` +
+      `${kind ? `${escapeHtml(kind)} · ` : ''}<span class="seen" data-seen-id="${escapeHtml(dev.id)}"></span></span>`
     b.setAttribute('aria-current', String(dev.id === selected))
     b.onclick = () => { selected = dev.id; render() }
     nav.appendChild(b)
@@ -239,10 +281,59 @@ function render() {
   $('#main').innerHTML = ''
   if (selected === '__shared__') renderShared()
   else renderDevice(devices.find((d) => d.id === selected))
+  updateAges()
+  renderedSig = dataSig()
 }
 
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+// Friendlier names for the kinds screens register with. Anything not listed
+// shows its raw kind.
+const KIND_LABELS = { 'web-echo': 'Echo Show' }
+const kindLabel = (k) => KIND_LABELS[k] || k || ''
+
+// lastSeenAt is stamped by the hub on every config poll (web screens poll every
+// 10s, the Apple TV every 30s), so two minutes of silence means trouble.
+const STALE_MS = 2 * 60 * 1000
+
+// ISO string or epoch ms; null when the hub has never seen the screen.
+function seenTime(v) {
+  if (v == null || v === '') return null
+  const t = typeof v === 'number' ? v : Date.parse(v)
+  return Number.isFinite(t) ? t : null
+}
+
+function seenText(t) {
+  if (t == null) return 'never seen'
+  // Clamped: the hub's clock and this browser's can disagree by a second or two.
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
+  if (s < 60) return `seen ${s} s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `seen ${m} min ago`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `seen ${h} h ago`
+  return `seen ${Math.floor(h / 24)} d ago`
+}
+
+// A placeholder that updateAges() fills in and keeps current.
+function seenBadge(dev) {
+  const el = document.createElement('span')
+  el.className = 'seen'
+  el.dataset.seenId = dev.id
+  return el
+}
+
+// Rewrites every age on the page from the last fetched device list, without
+// touching anything else, so it can run while a control has focus.
+function updateAges() {
+  for (const el of document.querySelectorAll('[data-seen-id]')) {
+    const dev = devices.find((d) => d.id === el.dataset.seenId)
+    const t = seenTime(dev && dev.lastSeenAt)
+    el.textContent = seenText(t)
+    el.classList.toggle('stale', t != null && Date.now() - t > STALE_MS)
+  }
+}
 
 function card(title, hint) {
   const el = document.createElement('section')
@@ -317,37 +408,77 @@ function renderDevice(dev) {
   if (!dev) return
   const cfg = dev.config || {}
   const isTV = dev.kind === 'tvos'
+  const isWeb = (dev.kind || '').startsWith('web')
+  // The Echo has no panel of its own to drive: dimming is the CSS overlay and
+  // off is the night face, so the DDC rows do not apply to it.
+  const isEcho = dev.kind === 'web-echo'
 
   // --- screen power ---
   // Commands the APP, not the panel. Powering the panel down directly over DDC
   // would leave the app thinking it is still awake - no overlay, and touch
   // would not wake it, because the wake path only fires when the app believes
   // it is off. tvOS has no handler for this, so the card is web-only.
-  if (!isTV) {
+  {
     const p = card('Screen',
-      'Takes effect within about 10 seconds. Touching the screen also wakes it.')
-    const bar = document.createElement('div')
-    bar.className = 'toolbar'
-    for (const [action, label] of [['sleep', 'Turn off screen'], ['wake', 'Wake screen']]) {
-      const b = document.createElement('button')
-      b.className = action === 'sleep' ? 'action' : 'ghost'
-      b.textContent = label
-      b.onclick = async () => {
-        b.disabled = true
-        try {
-          // ts identifies the command; the device tracks the last one it ran and
-          // ignores anything older than two minutes, so a reload cannot replay it.
-          await api(`/api/devices/${encodeURIComponent(dev.id)}/config`, {
-            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: { action, ts: Date.now() } }),
-          })
-          toast(action === 'sleep' ? 'Turning the screen off…' : 'Waking the screen…')
-        } catch (e) { toast(String(e.message || e)) }
-        b.disabled = false
-      }
-      bar.appendChild(b)
+      (isTV
+        ? 'The Apple TV picks a command up within about 30 seconds. '
+        : 'Takes effect within about 10 seconds. Touching the screen also wakes it. ') +
+      (isEcho
+        ? 'Reload page restarts the app; if Silk wants a tap afterwards, the Echo shows "Tap to start". '
+        : isTV ? '' : 'Reload page restarts the app on that screen. ') +
+      'Show switches the view once, like tapping the menu; the morning schedule still applies afterwards.')
+    p.querySelector('h2').appendChild(seenBadge(dev))
+
+    // One-shot commands. ts identifies the command; the device tracks the last
+    // one it ran and ignores anything older than two minutes, so a reload (or
+    // a TV relaunch) cannot replay it.
+    const sendCommand = async (btn, command, sent) => {
+      btn.disabled = true
+      try {
+        await api(`/api/devices/${encodeURIComponent(dev.id)}/config`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: { ...command, ts: Date.now() } }),
+        })
+        toast(sent)
+      } catch (e) { toast(String(e.message || e)) }
+      btn.disabled = false
     }
-    p.appendChild(bar)
+
+    // Power and reload are web-only: the TV's dimming is its own overlay with
+    // no remote hook, and a native app has nothing to reload.
+    if (!isTV) {
+      const bar = document.createElement('div')
+      bar.className = 'toolbar'
+      for (const [action, label, sent] of [
+        ['sleep', 'Turn off screen', 'Turning the screen off…'],
+        ['wake', 'Wake screen', 'Waking the screen…'],
+        ['reload', 'Reload page', 'Reloading the page…'],
+      ]) {
+        const b = document.createElement('button')
+        b.className = action === 'sleep' ? 'action' : 'ghost'
+        b.textContent = label
+        b.onclick = () => sendCommand(b, { action }, sent)
+        bar.appendChild(b)
+      }
+      p.appendChild(bar)
+    }
+
+    // Show: nudge the screen to a view. Every screen understands this (the
+    // web app via settings.js handleHubCommand, the TV via TVSettingsHubSync).
+    const show = document.createElement('div')
+    show.className = 'toolbar'
+    const lbl = document.createElement('span')
+    lbl.className = 'toolbar-label'
+    lbl.textContent = 'Show'
+    show.appendChild(lbl)
+    for (const [view, label] of [['photos', 'Photos'], ['today', 'Today'], ['music', 'Now Playing']]) {
+      const b = document.createElement('button')
+      b.className = 'ghost'
+      b.textContent = label
+      b.onclick = () => sendCommand(b, { action: 'view', view }, `Showing ${label}…`)
+      show.appendChild(b)
+    }
+    p.appendChild(show)
   }
 
   // --- albums ---
@@ -414,7 +545,9 @@ function renderDevice(dev) {
         (v) => patchDevice(dev.id, { tv: { artDisplay: Number(v) } })))
     row(b, 'Music backdrop', 'Framed Now Playing background',
       select([[0, 'Still'], [1, 'Drift'], [2, 'Lava'], [3, 'Smoke'], [4, 'Caustics'],
-        [5, 'Ripple'], [6, 'Bars'], [7, 'Marble'], [8, 'Mixtape']], tv.framedBackdrop,
+        [5, 'Ripple'], [6, 'Bars'], [7, 'Marble'], [8, 'Mixtape']],
+        // Nothing stored means the TV is on its own default, Lava (TVSettings.swift).
+        tv.framedBackdrop ?? 2,
         (v) => patchDevice(dev.id, { tv: { framedBackdrop: Number(v) } })))
 
     const m = card('Mats', 'Picture-frame mat per view')
@@ -464,21 +597,32 @@ function renderDevice(dev) {
       select([[true, 'On'], [false, 'Off']], disp.pixelShift === true,
         (v) => patchDevice(dev.id, { display: { pixelShift: v === 'true' } })))
 
-    const d = card('Display', 'Panel brightness and the night schedule')
+    const d = card('Display', isEcho
+      ? 'Brightness and the night schedule. Dimming is a black overlay here; off shows the night face.'
+      : 'Panel brightness and the night schedule')
     row(d, 'Daytime brightness', '',
       percentControl(disp.wakeBrightness ?? 0.9,
         (v) => patchDevice(dev.id, { display: { wakeBrightness: v } })))
-    row(d, 'Hardware dimming', 'Dim the real backlight over HDMI (DDC/CI) instead of a black overlay',
-      select([[true, 'On'], [false, 'Off']], disp.hardwareDim !== false,
-        (v) => patchDevice(dev.id, { display: { hardwareDim: v === 'true' } })))
-    row(d, 'Power off panel', 'At the off time, standby the panel instead of covering it. Touch still wakes it.',
-      select([[true, 'On'], [false, 'Off']], disp.hardwarePowerOff !== false,
-        (v) => patchDevice(dev.id, { display: { hardwarePowerOff: v === 'true' } })))
+    if (!isEcho) {
+      row(d, 'Hardware dimming', 'Dim the real backlight over HDMI (DDC/CI) instead of a black overlay',
+        select([[true, 'On'], [false, 'Off']], disp.hardwareDim !== false,
+          (v) => patchDevice(dev.id, { display: { hardwareDim: v === 'true' } })))
+      row(d, 'Power off panel', 'At the off time, standby the panel instead of covering it. Touch still wakes it.',
+        select([[true, 'On'], [false, 'Off']], disp.hardwarePowerOff !== false,
+          (v) => patchDevice(dev.id, { display: { hardwarePowerOff: v === 'true' } })))
+    }
     row(d, 'Evening brightness', 'After the dim time below',
       percentControl(disp.eveningBrightness ?? 0.4,
         (v) => patchDevice(dev.id, { display: { eveningBrightness: v } })))
     for (const [key, label] of [['dimAt', 'Dim at'], ['offAt', 'Off at'], ['wakeAt', 'Wake at']]) {
       row(d, label, '', timeControl(disp[key], (hm) => patchDevice(dev.id, { display: { [key]: hm } })))
+    }
+    // What the off window shows. Unset follows the app's default for the
+    // kind: the Echo keeps a clock, everything else goes black.
+    if (isWeb) {
+      row(d, 'Night face', 'What the screen shows between Off and Wake. Clock is a faint time and date that drifts on black.',
+        select([['black', 'Black'], ['clock', 'Clock']], disp.nightFace || (isEcho ? 'clock' : 'black'),
+          (v) => patchDevice(dev.id, { display: { nightFace: v } })))
     }
 
     const so = card('Music')
@@ -488,6 +632,7 @@ function renderDevice(dev) {
 
   // --- device management ---
   const dm = card('This screen', `id: ${dev.id}  ·  registered ${(dev.createdAt || '').slice(0, 10)}`)
+  dm.querySelector('h2').appendChild(seenBadge(dev))
   row(dm, 'Name', 'Shown in this list only',
     textControl(dev.name, async (v) => {
       await api('/api/devices/register', {
@@ -591,8 +736,16 @@ $('#refreshBtn').onclick = async () => {
 }
 
 loadAll().catch((e) => { $('#stat').textContent = 'error: ' + e.message })
-// Pick up screens that register while this page is open.
-setInterval(() => loadAll().catch(() => {}), 30000)
+// Every 10s: fresh lastSeenAt for the ages; every third tick the full reload
+// that also picks up new screens, albums and the photo count. Neither
+// re-renders under an edit in progress (applyDevices), and a failed fetch
+// still ages what is on screen.
+let refreshTick = 0
+setInterval(() => {
+  refreshTick += 1
+  const job = refreshTick % 3 === 0 ? loadAll({ background: true }) : loadDevices()
+  job.catch(() => updateAges())
+}, 10000)
 </script>
 </body>
 </html>
