@@ -83,6 +83,8 @@ enum FramedBackdrop: Int, CaseIterable {
                         // (noise-driven - Sonos exposes no audio analysis)
     case marble   = 7   // Metal shader: scrambled album texture folding like
                         // stirred paint (the most aggressive)
+    case mixtape  = 8   // full-screen cassette deck (MixtapeView); replaces
+                        // the mat entirely, see docs/designs/mixtape.md
 
     var label: String {
         switch self {
@@ -94,6 +96,7 @@ enum FramedBackdrop: Int, CaseIterable {
         case .ripple:   return "Ripple"
         case .bars:     return "Bars"
         case .marble:   return "Marble"
+        case .mixtape:  return "Mixtape"
         }
     }
 }

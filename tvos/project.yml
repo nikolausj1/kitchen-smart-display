@@ -17,6 +17,16 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+        excludes:
+          - "Mixtape"
+          - "Mixtape/**"
+      # Mixtape assets ship as a FOLDER REFERENCE so the manifest and each
+      # tape's subfolder keep their paths inside the bundle (tape.png, hub.png
+      # and pack.png repeat per tape and would collide in a flat group).
+      # Read at runtime from Bundle.main.resourceURL/Mixtape/...
+      - path: Resources/Mixtape
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nikolaus.kitchendisplay.tv

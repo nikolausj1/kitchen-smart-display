@@ -52,6 +52,12 @@ private struct HubDevicePayload: Codable {
 extension TVSettings {
 
     func startHubSync() {
+        #if targetEnvironment(simulator)
+        // Sim-only: `defaults write <bundle> debug.noHubSync -bool YES` keeps a
+        // simulator (which shares the living-room-tv device id) from pulling the
+        // real TV's settings over locally forced ones, or pushing its own.
+        if UserDefaults.standard.bool(forKey: "debug.noHubSync") { return }
+        #endif
         Task { await registerWithHub() }
 
         // objectWillChange fires just BEFORE a property lands, so the debounce

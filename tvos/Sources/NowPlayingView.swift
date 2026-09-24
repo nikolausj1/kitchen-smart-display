@@ -19,11 +19,17 @@ struct NowPlayingView: View {
     // The shell owns the SonosController (so its remote handler can drive
     // transport from any view) and injects it here as an observed object.
     @ObservedObject var sonos: SonosController
+    @ObservedObject var mixtapeRemote: MixtapeRemoteSignal
     let mat: MusicMatMode
+    #if targetEnvironment(simulator)
+    @StateObject private var fakeSequence = FakeMusicSequence()
+    #endif
 
-    init(controller: SonosController, mat: MusicMatMode) {
+    init(controller: SonosController, mat: MusicMatMode,
+         mixtapeRemote: MixtapeRemoteSignal = MixtapeRemoteSignal()) {
         self.sonos = controller
         self.mat = mat
+        self.mixtapeRemote = mixtapeRemote
     }
 
     private var s: SonosState {
@@ -31,6 +37,12 @@ struct NowPlayingView: View {
         // Sim-only: `defaults write <bundle> debug.fakeMusic -bool YES` fakes a
         // playing track (with stub cover art) so the Off/Fit/Framed treatments
         // can be verified without a reachable Sonos. Mirrors PhotosView.
+        // With debug.fakeMusicSequence also YES, it cycles three tracks (see
+        // FakeMusicSequence below) so Mixtape's eject / insert / stop show.
+        if UserDefaults.standard.bool(forKey: "debug.fakeMusic"),
+           UserDefaults.standard.bool(forKey: "debug.fakeMusicSequence") {
+            return fakeSequence.state
+        }
         if UserDefaults.standard.bool(forKey: "debug.fakeMusic") {
             return SonosState(
                 playing: true, paused: false,
@@ -79,7 +91,13 @@ struct NowPlayingView: View {
                 switch mat {
                 case .off:    fullBleed(geo.size)
                 case .fit:    fitted(geo.size)
-                case .framed: framed(geo.size)
+                case .framed:
+                    if tvSettings.framedBackdrop == .mixtape {
+                        // Mixtape replaces the mat: the deck is its own frame.
+                        MixtapeView(state: s, remote: mixtapeRemote)
+                    } else {
+                        framed(geo.size)
+                    }
                 }
                 if let toast = backdropToast, mat == .framed {
                     Text(toast)
@@ -94,6 +112,9 @@ struct NowPlayingView: View {
             }
         }
         .ignoresSafeArea()
+        #if targetEnvironment(simulator)
+        .onAppear { fakeSequence.startIfEnabled() }
+        #endif
         .animation(.easeInOut(duration: 0.3), value: backdropToast)
         // Center-button backdrop cycling feedback: flash the new mode's name.
         .onChange(of: tvSettings.framedBackdrop) { _, newVal in
@@ -283,6 +304,9 @@ struct NowPlayingView: View {
             FluidBackdrop(url: url, opening: opening, style: .bars)
         case .marble:
             FluidBackdrop(url: url, opening: opening, style: .marble)
+        case .mixtape:
+            // Never reached: Mixtape replaces the whole framed layout (body).
+            washBody(url: url, opening: opening, scale: 1, offset: .zero)
         }
     }
 
@@ -391,3 +415,84 @@ private struct AlbumArt: View {
                 .foregroundStyle(.white.opacity(0.25)))
     }
 }
+
+#if targetEnvironment(simulator)
+// Sim-only fake Sonos sequence for verifying Mixtape without a Sonos:
+//
+//   B=com.nikolaus.kitchendisplay.tv; SIM="Apple TV 4K (3rd generation)"
+//   xcrun simctl spawn "$SIM" defaults write $B debug.fakeMusic -bool YES
+//   xcrun simctl spawn "$SIM" defaults write $B debug.fakeMusicSequence -bool YES
+//   xcrun simctl spawn "$SIM" defaults write $B tv.musicMatMode -int 2      # framed
+//   xcrun simctl spawn "$SIM" defaults write $B tv.framedBackdrop -int 8    # mixtape
+//   xcrun simctl spawn "$SIM" defaults write $B debug.view music
+//   (then terminate and relaunch the app)
+//
+// Cycle (69 s): three tracks of 20 s each, then a 9 s stopped gap. The gap is
+// longer than Mixtape's 5 s stop grace so the eject-to-empty actually plays
+// (about 5 s of grace, 1 s of eject and door, 3 s of empty well) before track
+// one inserts again. Track two pauses for 3 s in the middle (reels ease out,
+// PAUSE key latches). Durations are short (30-40 s) so the tape packs visibly
+// wind during each 20 s window.
+@MainActor
+final class FakeMusicSequence: ObservableObject {
+    @Published private(set) var state = SonosState.empty
+    private var timer: Timer?
+    private let epoch = Date()
+
+    private struct Fake { let title, artist, album, art: String; let durationMs, startMs: Int }
+    private let tracks: [Fake] = [
+        Fake(title: "Landslide", artist: "Fleetwood Mac", album: "Fleetwood Mac",
+             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg", durationMs: 32_000, startMs: 4_000),
+        Fake(title: "A Very Long Song Title That Will Not Fit On The Label At All",
+             artist: "The Unreasonably Named Orchestra Of Eastern Kentucky",
+             album: "Harvest Moon",
+             art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg", durationMs: 40_000, startMs: 8_000),
+        Fake(title: "Heroes", artist: "David Bowie", album: "\"Heroes\"",
+             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg", durationMs: 30_000, startMs: 2_000),
+    ]
+
+    func startIfEnabled() {
+        guard timer == nil,
+              UserDefaults.standard.bool(forKey: "debug.fakeMusicSequence") else { return }
+        tick()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+    }
+
+    private func tick() {
+        let t = Date().timeIntervalSince(epoch).truncatingRemainder(dividingBy: 69)
+        let slot = Int(t / 20)
+        if slot >= 3 {
+            // Stopped: Sonos keeps reporting the last track while STOPPED.
+            var st = make(tracks[2], elapsedS: 20)
+            st.playing = false
+            st.paused = false
+            state = st
+            return
+        }
+        let within = t - Double(slot) * 20
+        if slot == 1, within >= 8, within < 11 {
+            var st = make(tracks[1], elapsedS: 8)
+            st.playing = false
+            st.paused = true
+            state = st
+            return
+        }
+        // Track two's elapsed skips the paused 3 s.
+        let e = (slot == 1 && within >= 11) ? within - 3 : within
+        state = make(tracks[slot], elapsedS: e)
+    }
+
+    private func make(_ f: Fake, elapsedS: Double) -> SonosState {
+        SonosState(
+            playing: true, paused: false,
+            track: NowPlayingTrack(
+                title: f.title, artist: f.artist, album: f.album,
+                albumArtURL: URL(string: AppConfig.photosBase.absoluteString + "/stub-photos/" + f.art),
+                durationMs: f.durationMs,
+                elapsedMs: min(f.durationMs, f.startMs + Int(elapsedS * 1000))),
+            stationName: "", volume: 30, loaded: true)
+    }
+}
+#endif

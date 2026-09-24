@@ -109,6 +109,7 @@ struct RootView: View {
     @StateObject private var router = AppRouter()
     @StateObject private var sonos = SonosController()
     @StateObject private var photoRemote = PhotoRemoteSignal()
+    @StateObject private var mixtapeRemote = MixtapeRemoteSignal()
     @StateObject private var settingsNav = SettingsNav()
     @StateObject private var dim = DimModel()
     @FocusState private var focused: Bool
@@ -187,7 +188,8 @@ struct RootView: View {
         case .settings:
             SettingsView(nav: settingsNav, dim: dim)
         case .music:
-            NowPlayingView(controller: sonos, mat: tvSettings.musicMatMode)
+            NowPlayingView(controller: sonos, mat: tvSettings.musicMatMode,
+                           mixtapeRemote: mixtapeRemote)
         }
     }
 
@@ -226,6 +228,8 @@ struct RootView: View {
             toggleCurrentSettingsRow()
             return
         }
+        // Mixtape presses the deck's PLAY key (decoration only; decision 14).
+        if router.view == .music { mixtapeRemote.sendPlayPause() }
         sonos.playPause()
     }
 
