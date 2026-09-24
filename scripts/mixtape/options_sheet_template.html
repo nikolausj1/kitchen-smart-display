@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mixtape Deck Options</title>
+<style>
+:root{--bg:#0e0e10;--panel:#17171a;--line:#2a2a2f;--text:#ecebe6;--muted:#9a9890;--accent:#e2a64b}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif}
+.wrap{max-width:1680px;margin:0 auto;padding:56px 32px 120px}
+header{max-width:900px;margin-bottom:72px}
+h1{font-size:44px;letter-spacing:-.02em;margin:0 0 20px;font-weight:650}
+h2{font-size:28px;margin:0 0 6px;font-weight:600}
+h3{font-size:17px;margin:40px 0 14px;color:var(--accent);font-weight:600;letter-spacing:.02em;text-transform:uppercase}
+p{margin:0 0 14px}
+.lede{font-size:18px;color:#d6d4cc}
+.note{color:var(--muted);font-size:15px;border-left:3px solid var(--accent);padding:4px 0 4px 14px}
+nav{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:22px;font-size:14px}
+nav a{color:var(--muted);text-decoration:none}nav a:hover{color:var(--text)}
+section{padding-top:64px;margin-top:64px;border-top:1px solid var(--line)}
+.sub{color:var(--muted);margin-bottom:8px;max-width:900px}
+.warn{color:#f0c27a}
+.grid{display:grid;gap:28px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media (max-width:1100px){.g3{grid-template-columns:1fr}}
+@media (max-width:760px){.g2{grid-template-columns:1fr}.wrap{padding:32px 16px 80px}h1{font-size:32px}}
+figure{margin:0}
+figure img{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:6px;background:#000;cursor:zoom-in}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+figcaption b{color:var(--text);font-weight:600;font-size:15px;display:block;margin-bottom:2px}
+.cmp{position:relative;max-width:1280px;aspect-ratio:16/9;border-radius:6px;overflow:hidden;background:#000;user-select:none}
+.cmp img{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cmp .top{clip-path:inset(0 50% 0 0)}
+.cmp .bar{position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--accent);pointer-events:none}
+.cmp .lbl{position:absolute;top:10px;padding:3px 9px;background:rgba(0,0,0,.6);border-radius:4px;font-size:12px}
+.cmp .l{left:10px}.cmp .r{right:10px}
+.cmp input{position:absolute;left:0;right:0;bottom:10px;width:calc(100% - 20px);margin:0 10px}
+.cmpctl{display:flex;gap:10px;align-items:center;margin:10px 0 18px;font-size:14px;color:var(--muted)}
+button{font:inherit;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+.primary{background:var(--accent);color:#1a1206;border-color:var(--accent);font-weight:600}
+video{width:100%;border-radius:6px;background:#000}
+form{max-width:760px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 28px}
+fieldset{border:0;padding:0;margin:0 0 20px}
+legend{font-weight:600;margin-bottom:8px}
+label.opt{display:inline-flex;align-items:center;gap:6px;margin:0 18px 6px 0;cursor:pointer}
+textarea{width:100%;min-height:90px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:10px;font:inherit}
+#copied{margin-left:12px;color:var(--accent);font-size:14px}
+pre#summary{white-space:pre-wrap;color:var(--muted);font-size:13px;margin:16px 0 0}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:10;padding:20px}
+#lb.on{display:flex}
+#lb img{max-width:min(1280px,100%);max-height:calc(100vh - 110px);width:auto;height:auto}
+#lb p{color:var(--muted);font-size:14px;margin:12px 0 0;text-align:center}
+#lb .x{position:absolute;top:14px;right:18px}
+#lb .pv,#lb .nx{position:absolute;top:50%;transform:translateY(-50%);font-size:22px;padding:10px 16px}
+#lb .pv{left:14px}#lb .nx{right:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Mixtape: choose the deck</h1>
+  <p class="lede">Four decisions, in order. <b>Deck style</b>: which era the cassette deck comes from. <b>Door</b>: whether a smoked cassette door sits over the tape well or the tape is bare. <b>Extras</b>: which panel details earn their space (a tape counter, transport keys, VU meters). <b>Tape scale</b>: how wide the cassette is as a share of the screen, since a big tape and visible extras compete for the frame. Section E shows how different tapes read in each deck, and Section G collects your picks into text you can paste back to Claude.</p>
+  <p class="note">These are Eevee previews, not final Cycles quality: expect softer shadows and simpler reflections in the finished renders. The label strip is a known placeholder: its printed block is narrower than the label and will be re-authored, so please ignore it when judging. Click any image to open it large; use the left and right arrow keys to step through.</p>
+  <nav><a href="#a">A. Deck style</a><a href="#b">B. Door</a><a href="#c">C. Extras</a><a href="#d">D. Tape scale</a><a href="#e">E. Tapes</a><a href="#f">F. Eject mood</a><a href="#g">G. Your picks</a></nav>
+</header>
+
+<section id="a"><h2>A. Deck style</h2><p class="sub">Door on, all extras on, tape at 60% of screen width, TDK tape.</p><div class="grid g3" id="secA"></div></section>
+<section id="b"><h2>B. Door on or off</h2><p class="sub">All extras on, tape at 60%. Drag the slider to wipe between door on (left) and door off (right); both are also shown side by side below.</p><div id="secB"></div></section>
+<section id="c"><h2>C. Extras</h2><p class="sub">Door on, tape at 60%. Four combinations per style, building up from a bare well.</p><div id="secC"></div></section>
+<section id="d"><h2>D. Tape scale</h2><p class="sub">Door on, all extras on. Tape width at 50, 60 and 70% of the frame. <span class="warn">At 0.7 the meters, counter and keys fall outside the 16:10 crop (the living-room screen), so choosing 0.7 means giving up the extras there.</span></p><div id="secD"></div></section>
+<section id="e"><h2>E. The collection reads</h2><p class="sub">Door on, all extras on, tape at 60%. TDK black, Sony white and BASF clear, to check the range of tapes reads in each deck.</p><div id="secE"></div></section>
+<section id="f"><h2>F. Eject mood</h2><p class="sub">Two Runway clips, 5 seconds each. These are timing references only (how fast the door opens, how the tape lifts), not a look to match.</p>
+  <div class="grid g2">
+    <figure><video controls loop muted playsinline preload="metadata" src="mixtape-options/runway_eject_1.mp4"></video><figcaption><b>Eject mood 1</b>runway_eject_1.mp4, timing reference only</figcaption></figure>
+    <figure><video controls loop muted playsinline preload="metadata" src="mixtape-options/runway_eject_2.mp4"></video><figcaption><b>Eject mood 2</b>runway_eject_2.mp4, timing reference only</figcaption></figure>
+  </div>
+</section>
+<section id="g"><h2>G. Your picks</h2><p class="sub">Nothing leaves this page: the button only copies a plain-text summary to your clipboard so you can paste it into chat.</p>
+<form id="picks" onsubmit="return false">
+  <fieldset><legend>Deck style</legend><label class="opt"><input type="radio" name="style" value="silver70s">silver70s</label><label class="opt"><input type="radio" name="style" value="black80s">black80s</label><label class="opt"><input type="radio" name="style" value="hifi">hifi</label></fieldset>
+  <fieldset><legend>Door</legend><label class="opt"><input type="radio" name="door" value="on">on</label><label class="opt"><input type="radio" name="door" value="off">off</label></fieldset>
+  <fieldset><legend>Extras</legend><label class="opt"><input type="radio" name="extras" value="none">none</label><label class="opt"><input type="radio" name="extras" value="counter">counter</label><label class="opt"><input type="radio" name="extras" value="counter+keys">counter+keys</label><label class="opt"><input type="radio" name="extras" value="counter+keys+vu">counter+keys+vu</label></fieldset>
+  <fieldset><legend>Tape scale</legend><label class="opt"><input type="radio" name="scale" value="0.5">0.5</label><label class="opt"><input type="radio" name="scale" value="0.6">0.6</label><label class="opt"><input type="radio" name="scale" value="0.7">0.7</label></fieldset>
+  <fieldset><legend>Notes</legend><textarea name="notes" placeholder="Anything else: mix and match, a colour tweak, what bugged you..."></textarea></fieldset>
+  <button type="button" class="primary" id="copy">Copy decisions</button><span id="copied"></span>
+  <pre id="summary"></pre>
+</form>
+</section>
+</div>
+
+<div id="lb" role="dialog" aria-modal="true"><button class="x" aria-label="Close">Close</button><button class="pv" aria-label="Previous">&lsaquo;</button><img alt=""><p></p><button class="nx" aria-label="Next">&rsaquo;</button></div>
+
+<script>
+const R=/*DATA*/null;
+const STYLES=[["silver70s","Silver 70s","Silver late-70s deck with walnut cheeks and VU needles."],["black80s","Black 80s","Black 80s deck with LED bar meters and a VFD counter."],["hifi","Brushed hi-fi","Brushed dark hi-fi component, minimal."]];
+const SN=Object.fromEntries(STYLES.map(s=>[s[0],s[1]]));
+const TAPE={tdk:"TDK black",sony:"Sony white",basf:"BASF clear"};
+const ALL={vu:true,counter:true,keys:true};
+function find(q){return R.find(r=>Object.keys(q).every(k=>r[k]===q[k]))}
+function extras(r){const a=[];if(r.counter)a.push("counter");if(r.keys)a.push("keys");if(r.vu)a.push("VU");return a.length?a.join(" + "):"no extras"}
+function cap(r){return SN[r.style]+" · door "+(r.door?"on":"off")+" · "+extras(r)+" · scale "+r.scale+" · "+TAPE[r.tape]}
+const shown=[];
+function fig(r,title,desc){
+  const f=document.createElement("figure");
+  if(!r){f.innerHTML="<figcaption>Render missing from index.json</figcaption>";return f}
+  const i=new Image();i.src=r.src;i.alt=cap(r);i.dataset.n=shown.push(r)-1;
+  f.append(i);const c=document.createElement("figcaption");c.innerHTML=(title?"<b>"+title+"</b>":"")+(desc?"<span style=\"color:var(--text)\">"+desc+"</span><br>":"")+cap(r);f.append(c);return f}
+function grid(cls,figs){const g=document.createElement("div");g.className="grid "+cls;figs.forEach(x=>g.append(x));return g}
+function h3(t){const h=document.createElement("h3");h.textContent=t;return h}
+const $=id=>document.getElementById(id);
+const base={door:true,...ALL,scale:0.6,tape:"tdk"};
+STYLES.forEach(([s,n,d])=>$("secA").append(fig(find({style:s,...base}),n,d)));
+STYLES.forEach(([s,n])=>{
+  const on=find({style:s,...base}),off=find({style:s,...base,door:false});
+  $("secB").append(h3(n));
+  if(on&&off){
+    const c=document.createElement("div");c.className="cmp";
+    c.innerHTML='<img src="'+off.src+'" alt="door off"><img class="top" src="'+on.src+'" alt="door on"><div class="bar"></div><span class="lbl l">Door on</span><span class="lbl r">Door off</span><input type="range" min="0" max="100" value="50" aria-label="Wipe door on to door off">';
+    const t=c.querySelector(".top"),b=c.querySelector(".bar"),rg=c.querySelector("input");
+    const set=v=>{rg.value=v;t.style.clipPath="inset(0 "+(100-v)+"% 0 0)";b.style.left=v+"%"};
+    rg.oninput=()=>set(+rg.value);
+    const ctl=document.createElement("div");ctl.className="cmpctl";
+    [["Door on",100],["Half",50],["Door off",0]].forEach(([l,v])=>{const k=document.createElement("button");k.type="button";k.textContent=l;k.onclick=()=>set(v);ctl.append(k)});
+    $("secB").append(c,ctl);
+  }
+  $("secB").append(grid("g2",[fig(on,"Door on"),fig(off,"Door off")]));
+});
+const COMBOS=[["None",{vu:false,counter:false,keys:false}],["Counter",{vu:false,counter:true,keys:false}],["Counter and keys",{vu:false,counter:true,keys:true}],["Counter, keys and VU",ALL]];
+STYLES.forEach(([s,n])=>{$("secC").append(h3(n),grid("g2",COMBOS.map(([l,q])=>fig(find({style:s,...base,...q}),l))))});
+STYLES.forEach(([s,n])=>{$("secD").append(h3(n),grid("g3",[0.5,0.6,0.7].map(v=>fig(find({style:s,...base,scale:v}),"Scale "+v+(v===0.7?" (extras lost in 16:10 crop)":"")))))});
+STYLES.forEach(([s,n])=>{$("secE").append(h3(n),grid("g3",["tdk","sony","basf"].map(t=>fig(find({style:s,...base,tape:t}),TAPE[t]))))});
+
+/* lightbox: only figure images, in page order */
+const lb=$("lb"),li=lb.querySelector("img"),lp=lb.querySelector("p");let cur=-1;
+function open(n){cur=(n+shown.length)%shown.length;li.src=shown[cur].src;lp.textContent=(cur+1)+" / "+shown.length+"  ·  "+cap(shown[cur]);lb.classList.add("on")}
+function close(){lb.classList.remove("on");cur=-1}
+document.addEventListener("click",e=>{const i=e.target.closest("figure img");if(i)open(+i.dataset.n)});
+lb.querySelector(".x").onclick=close;lb.querySelector(".pv").onclick=()=>open(cur-1);lb.querySelector(".nx").onclick=()=>open(cur+1);
+lb.addEventListener("click",e=>{if(e.target===lb)close()});
+document.addEventListener("keydown",e=>{if(cur<0)return;if(e.key==="ArrowRight")open(cur+1);else if(e.key==="ArrowLeft")open(cur-1);else if(e.key==="Escape")close()});
+
+/* picks */
+function summary(){const f=$("picks"),v=n=>(f.querySelector('input[name="'+n+'"]:checked')||{}).value||"(not picked)";
+  const notes=f.notes.value.trim();
+  return "Mixtape deck picks\nstyle: "+v("style")+"\ndoor: "+v("door")+"\nextras: "+v("extras")+"\nscale: "+v("scale")+(notes?"\nnotes: "+notes:"")}
+$("picks").addEventListener("input",()=>$("summary").textContent=summary());
+$("summary").textContent=summary();
+$("copy").onclick=async()=>{const t=summary();let ok=false;
+  try{await navigator.clipboard.writeText(t);ok=true}catch(e){const a=document.createElement("textarea");a.value=t;document.body.append(a);a.select();try{ok=document.execCommand("copy")}catch(_){}a.remove()}
+  $("copied").textContent=ok?"Copied. Paste it into chat.":"Copy blocked: select the text below instead.";};
+</script>
+</body>
+</html>
