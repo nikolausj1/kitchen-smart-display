@@ -2,14 +2,15 @@
 title: "Mixtape asset scripts"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.0
+version: 1.1
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [mixtape, blender, scripts, assets]
 ---
 
 # Mixtape asset scripts
 
-Headless Blender scripts that build the Mixtape cassette and render its plates.
+Headless Blender scripts that build the Mixtape cassette and decks and render its plates
+and the look-development option matrix.
 Design: `docs/designs/mixtape.md`. Everything is reproducible from these scripts;
 nothing in the .blend is hand placed.
 
@@ -30,7 +31,86 @@ $B -b art-src/mixtape/cassette_base.blend --python scripts/mixtape/render_phase0
 `render_phase0.py` takes an optional `-- --only plates|sprite|manifest` to redo one
 part (for example the manifest alone, with no rendering).
 
-## Scripts
+## Run (work package B: label, materials, decks, option matrix)
+
+From the project root, after phase 0:
+
+```sh
+B=/Applications/Blender.app/Contents/MacOS/Blender
+python3 scripts/mixtape/make_label_decals.py                     # system python3: Pillow, numpy, rsvg-convert
+$B -b art-src/mixtape/cassette_base.blend --python scripts/mixtape/lookdev_cassette.py
+python3 scripts/mixtape/render_options.py --build                # builds the 3 decks, renders all 36
+```
+
+One deck by hand:
+
+```sh
+$B -b art-src/mixtape/cassette_look.blend --python scripts/mixtape/build_deck.py -- \
+    --style silver70s --tape-scale 0.6 --door on --vu on --counter on --keys on
+```
+
+`render_options.py` flags: `--build` (rebuild the deck .blend files first), `--style <s>`
+and `--match <substring of file name>` to render a subset; `index.json` and
+`render-times.json` merge with what is already there.
+
+| Script | What it does | Output |
+|--------|--------------|--------|
+| `label_layout.py` | Pure-Python shared numbers: strip and band rects (mm), uniform SVG scale, SVG named-element parser (`art_slot`, `field_*`, `rule_1..3`, background), SVG to cassette-mm mapping, per-brand paper and wear level. Imported by both pythons. | none |
+| `make_label_decals.py` | rsvg-convert each `label_<style>.svg` 2000 px wide, centre it on the strip canvas, extend the right edge column to both ends, multiply paper grain, overlay grime, foxing and scuffs. Plus a plain band per brand. | `art-src/mixtape/textures/labels/<brand>_<style>_strip.png` (3370 x 682), `<brand>_band.png` (3370 x 244) |
+| `mixtape_common.py` | bpy helpers: `set_tape_scale` (moves Cam_Front only, tight clip range), textured materials, `apply_tape`, `set_deck_parts`, manifest builders (reuse `render_phase0` projection helpers), 16:10 safe-zone check. | none |
+| `lookdev_cassette.py` | Opens `cassette_base.blend`, replaces the 87 x 45 mm `Label` with `Label_Strip` + `Label_Band`, 12 strip + 6 band materials, materials pass (plastic grain, roughness from texture, clear coat, scuffed window, darker AO hub, metal screws, glossier pack), new `Shell_White` / `Shell_Clear`, real origins on transparent parts so BLENDED sorting works. | `art-src/mixtape/cassette_look.blend` |
+| `build_deck.py` | Deck around the unchanged cassette + camera: faceplate, walnut cheeks (silver70s), shared well (lip overlapping the tape by 1 mm, cavity, spindles), optional collections `Deck_Door` (hinge empty at the bottom edge, closed), `Deck_Vu`, `Deck_Counter`, `Deck_Keys`. Objects tagged `mf` feed the manifest. | `art-src/mixtape/deck_<style>.blend` |
+| `render_options.py` | Driver (python3) plus in-Blender renderer (same file). 36 renders, index, times, per-scale manifests. | `art-src/mixtape/renders/options/` |
+
+### Styles
+
+| Style | Faceplate | Door | Meters | Counter | Keys |
+|-------|-----------|------|--------|---------|------|
+| `silver70s` | brushed silver, walnut cheeks at the frame edges | silver frame, smoked glass | two cream VU meters, 19 x 18 mm, flanking the well (upper corners) | 3-wheel mechanical, right column, reset button | six satin piano keys with REW PLAY FF STOP PAUSE EJECT, PLAY latched |
+| `black80s` | black anodised | black frame with finger notch, smoked glass | LED bar meter (2 x 20 segments) above the well | cyan 7-segment VFD "000" above the well | flat black push buttons with geometry symbols, green LED over PLAY |
+| `hifi` | brushed dark aluminium | wide (122 mm) thin-framed smoked door | two small VU meters stacked in the right column | small mechanical counter, left column | slim key row with printed symbols above |
+
+### Composition
+
+At tape scale 0.6 the frame at the faceplate is about 166 x 94 mm; the 16:10 crop keeps
+|x| <= 74.8 mm and the 6% bands leave |y| <= 41.1 mm, so there is only about 7 mm above
+and below the well. Keys and the 80s displays sit in those bands; the larger meters go
+in the side columns. The per-scale manifests carry a `safeZone` report: all inside at
+0.5 and 0.6; at 0.7 meters, counters and keys fall outside the crop or the frame.
+
+### Manifests
+
+`renders/options/mixtape-manifest.scale-<50|60|70>.json` (schema draft-1): `tape` (hubs,
+radii, `labelRect` = the top strip, `labelBandRect`, `labels.<brand>.<style>` with
+`artSlotRect` and `textLines` derived from the SVG named elements; top-level
+`artSlotRect` / `textLines` = TDK printed), `deck.<style>` (well, door, doorHinge,
+counter, vu/ledMeter, vuNeedle pivots with sweep, key rects), `safeZone`, `hashCheck`.
+Text lines: baseline on the printed rule, maxWidth = rule length, xHeight = 0.30 of the
+rule pitch.
+
+### Render times observed (2026-09-23, M1 Pro, Eevee 64 samples, 1920x1080)
+
+| Output | Time |
+|--------|------|
+| Label decals (18 PNGs, python3) | 28 s |
+| `lookdev_cassette.py` | about 3 s |
+| `build_deck.py` per style | about 3 s |
+| One option render | 4.5 to 9 s, mean 5.8 s (first render per process pays shader compile) |
+| Full matrix, 36 renders incl. deck builds | 3 min 40 s wall (about 72 s per style process) |
+
+Per-file seconds are in `renders/options/render-times.json`.
+
+### Known limits (work package B)
+
+- The label SVGs are 88 x 30 mm, but the cassette has only 17.6 mm between the shell
+  rim and the window. The SVG is scaled uniformly (x 0.587, 51.6 mm wide) and centred;
+  the strip's remaining width repeats the SVG's right-edge column. Re-authoring the
+  SVGs at about 88 x 17.6 mm would let the art slot and lines use the full width.
+- View transform is Khronos PBR Neutral at -0.6 EV. Only emitters (LEDs, VFD) clip.
+- Blank decal sides, flat lighting in the lower half of the black80s plate at scale 0.5,
+  and CG-clean surfaces are expected under Eevee; Cycles comes after the pick.
+
+## Scripts (phase 0)
 
 | Script | What it does | Output |
 |--------|--------------|--------|
