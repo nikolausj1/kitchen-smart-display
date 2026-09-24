@@ -116,6 +116,7 @@ private struct MixtapeAnimatedLayer: View {
                 let m = Self.tapeMotion(phase: phase, t: t, tape: tape)
                 let sr = F.rect(tape.spriteRect)
                 TapeGroup(tape: tape, load: load, images: imgs,
+                          packTexture: model.deckImages?.pack ?? imgs.pack,
                           art: load.artURL.flatMap { model.art[$0] },
                           F: F, angleL: model.clock.angleL, angleR: model.clock.angleR,
                           f: f)
@@ -300,6 +301,7 @@ private struct TapeGroup: View {
     let tape: MixtapeTape
     let load: MixtapeLoad
     let images: MixtapeTapeImages
+    let packTexture: UIImage?
     let art: UIImage?
     let F: MixFrame
     let angleL: Double
@@ -319,17 +321,25 @@ private struct TapeGroup: View {
 
             // Tape packs, seen through the window only. tape.png is opaque with
             // the photo's own packs baked into the window, so the window is
-            // first blacked out (a near-black cavity, so the baked packs never
-            // show through mismatched), then both live packs go on top. The
-            // clip is the window's stadium (the manifest windowRect with fully
-            // rounded ends): its corners are label paper on every measured tape.
+            // first covered by a dark cavity (so the baked packs never show
+            // through mismatched), then both live packs go on top. The cavity
+            // is not flat black: a faint amber glow sits in the middle, the
+            // way the reference deck's lamp lights the tape between the reels.
+            // The clip is the window's stadium (the manifest windowRect with
+            // fully rounded ends): its corners are label paper on every tape.
             if let w = tape.windowRect {
                 let wr = CGRect(x: lx(w.x), y: ly(w.y), width: w.w * F.W, height: w.h * F.H)
                 ZStack(alignment: .topLeading) {
-                    Color(white: 0.025).opacity(0.9)
-                        .frame(width: wr.width, height: wr.height)
-                        .offset(x: wr.minX, y: wr.minY)
-                    if let pack = images.pack {
+                    ZStack {
+                        Color(white: 0.03)
+                        EllipticalGradient(colors: [Self.amber.opacity(0.08),
+                                                    Self.amber.opacity(0.03), .clear],
+                                           center: .center, startRadiusFraction: 0,
+                                           endRadiusFraction: 0.5)
+                    }
+                    .frame(width: wr.width, height: wr.height)
+                    .offset(x: wr.minX, y: wr.minY)
+                    if let pack = packTexture {
                         packDisc(pack, r: radii.rs, angle: angleL)
                             .position(x: lx(tape.hubL.x), y: ly(tape.hubL.y))
                         packDisc(pack, r: radii.rt, angle: angleR)
@@ -363,31 +373,41 @@ private struct TapeGroup: View {
         .frame(width: sr.width, height: sr.height, alignment: .topLeading)
     }
 
-    // The pack texture keeps its scale (sized to the full pack) and is revealed
-    // by a disc of the current radius, so the spiral does not stretch as the
-    // pack grows. The generated texture is very dark, so the disc is lifted a
-    // touch and its outer wraps catch a warm sheen and a thin bright edge:
-    // that edge is what reads, from the couch, as the pack growing.
+    static let amber = Color(red: 1.0, green: 0.66, blue: 0.30)
+
+    // A wound pack of brown oxide tape: the shared pack texture drawn at the
+    // pack's current radius and turning with its hub. The raw texture is a
+    // deep, saturated brown; it is desaturated and lifted a little toward the
+    // reference's warmer, dustier brown. On top, the outer wraps darken
+    // (a radial falloff to the edge, the pack's side in shadow) and a soft
+    // warm highlight sits on the upper-left, as the deck lamp catches it.
+    // Neither overlay rotates, so the light stays put while the tape turns.
     private func packDisc(_ img: UIImage, r: Double, angle: Double) -> some View {
         let full = 2 * tape.packMaxRadius * F.W
         let d = 2 * r * F.W
-        let warm = Color(red: 0.62, green: 0.44, blue: 0.27)
         return ZStack {
             Image(uiImage: img).resizable()
-                .frame(width: full, height: full)
+                .interpolation(.high)
+                .frame(width: d, height: d)
                 .rotationEffect(.degrees(angle))
-                .brightness(0.05)
-                .mask(Circle().frame(width: d, height: d))
+                .saturation(Self.packSaturation)
+                .brightness(Self.packLift)
             Circle()
-                .fill(RadialGradient(colors: [.clear, warm.opacity(0.10), warm.opacity(0.26)],
-                                     center: .center, startRadius: d * 0.22, endRadius: d / 2))
+                .fill(RadialGradient(colors: [.clear, .clear, .black.opacity(0.18), .black.opacity(0.42)],
+                                     center: .center, startRadius: 0, endRadius: d / 2))
                 .frame(width: d, height: d)
             Circle()
-                .strokeBorder(warm.opacity(0.55), lineWidth: max(1, F.px(3)))
+                .fill(RadialGradient(colors: [Self.amber.opacity(0.30), Self.amber.opacity(0.10), .clear],
+                                     center: UnitPoint(x: 0.30, y: 0.28),
+                                     startRadius: 0, endRadius: d * 0.62))
+                .blendMode(.screen)
                 .frame(width: d, height: d)
         }
         .frame(width: full, height: full)
     }
+
+    static let packSaturation = 0.72
+    static let packLift = 0.10
 }
 
 // MARK: - Label
@@ -429,7 +449,9 @@ private struct MixtapeLabel: View, Equatable {
             }
             ForEach(Array(tape.textLines.enumerated()), id: \.offset) { i, line in
                 let text = value(for: line.field)
-                if tape.printedFields {
+                // A caption with nothing after it (a radio stream has no
+                // artist) is hidden; the other lines keep their baselines.
+                if tape.printedFields, !text.isEmpty {
                     caption(for: line)
                 }
                 if !text.isEmpty {

@@ -35,6 +35,9 @@ struct MixtapeDeckImages {
     var glass: UIImage?
     var frame: UIImage?
     var caps: [String: UIImage]
+    /// Wound-tape pack disc (brown, faint spiral, alpha outside), shared by
+    /// every tape in place of the per-tape pack.png.
+    var pack: UIImage? = nil
 }
 
 struct MixtapeTapeImages {
@@ -355,7 +358,7 @@ final class MixtapeModel: ObservableObject {
                 }
                 return MixtapeDeckImages(plate: plate, wellOpen: load("well_open"),
                                          glass: load("door_glass"), frame: load("door_frame"),
-                                         caps: caps)
+                                         caps: caps, pack: load("pack_shared"))
             }.value
             self?.deckImages = imgs
             if imgs == nil { MixtapeManifest.log.error("Mixtape deck plate failed to load") }
