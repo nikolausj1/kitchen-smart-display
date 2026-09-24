@@ -15,7 +15,7 @@
 const VALID_VIEWS = ['today', 'photos', 'music', 'settings']
 // Mirrors views/TodayLayouts/registry.js (not imported: keep this module
 // dependency-free so it can run before the tree mounts).
-const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient']
+const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient', 'entry']
 
 function parseParams() {
   if (typeof window === 'undefined') {

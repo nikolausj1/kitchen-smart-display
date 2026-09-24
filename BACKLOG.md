@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-24
-version: 6.8
+version: 6.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -470,6 +470,15 @@ progress bar). Remaining:
   extend the kitchen press-and-hold flag flow to cover "no location" photos
   (flag exists, but the triage page needs coords to anchor a bubble).
 
+- **Entry board phase 1.5 and 2** (TODO, after Justin has lived with phase 1) -
+  1.5: backdrop legibility (gradient scrims where the text sits, translucent
+  cards, per-photo brightness sampling, optional blur), headline weather rules
+  (rain from 3 pm, frost tonight), a "suggested countdowns" list on the
+  dashboard, per-calendar status on the dashboard, and multi-day timed events
+  in the headline. 2: day-part adaptive slots (evening shows tomorrow, weekends
+  widen the agenda, night hands over to the clock). Design:
+  `docs/designs/entry-board.md`.
+
 ### Cross-cutting themes (design once, use on both surfaces)
 
 - **Google Calendar** - kitchen agenda first; TV mirrors later.
@@ -740,6 +749,21 @@ Newest first.
   deleted. Verified end to end at 1280x800 against the live hub from the Mac;
   the on-device Silk check is Justin's. Design:
   `docs/designs/echo-show-and-hub.md`.
+- **2026-09-24 - Entry board, phase 1: the front-door DAKboard replacement**
+  (`feature/echo-hub`, deployed; the Echo Show 15 runs it as its home view).
+  Hub: Google Calendar through a service account (JWT signed with Node's
+  crypto, no dependency; Justin's calendar live, Sheena's pending sharing),
+  `GET /api/calendar` with the agenda window and the countdowns marked by
+  `countdown` in an event's description (lead days, `label:`, `image:`), the
+  Immich album "Countdown Art" synced hourly into `countdown-art/` with
+  keywords from file names and descriptions, the headline rules in
+  `frameserver/lib/headline.mjs` and Open-Meteo air quality in `/api/state`.
+  Web: the `entry` Today layout (clock, weather, what to wear, air quality
+  chip, headline, three-day agenda, countdown tiles, the departure countdown
+  in the school-morning window) over a photo backdrop with a per-screen
+  toggle and darkness slider, and `display.homeView` so a screen can rest on
+  Today. Dashboard: calendars and countdown settings, hub status, the art
+  library. Design: `docs/designs/entry-board.md`.
 - **2026-09-24 - Third Echo: `echo-show5-office`** (Echo Show 5, 960x480, a
   2:1 panel). Same URL pattern, seeded from the kitchen, verified at 960x480
   from the Mac: nothing overflows, the views scale with the viewport units

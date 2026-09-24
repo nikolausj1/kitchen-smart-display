@@ -1,0 +1,174 @@
+/* AgendaPanel - three day columns sharing one grid: the headers sit on one row
+ * and the lists on the next, so the three lists always start on the same line
+ * and the "not connected" message can span all three.
+ *
+ * Two size containers. The panel body sizes the day headers; each day's list
+ * is its own container and sizes its rows, so a narrow 1280x800 column and a
+ * wide 1920x1080 one both fit six rows.
+ *
+ * THE ROW BUDGET. Worst case is six two-line titles plus the "+N more" line:
+ * 6 x (2 x 1.22em + 0.32em padding) + 6 x 0.3em gaps + 1.2em = 19.8em. The row
+ * font is capped at 4.9cqh of the list, so 19.8em is at most 97cqh and the
+ * worst day still fits; overflow: hidden is only the belt. The first
+ * declaration of each size is the fallback for an engine without container
+ * units (the declaration using them is dropped whole there). */
+
+.tl-agenda__body {
+  container-type: size;
+  container-name: agenda;
+}
+
+.tl-agenda__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: calc(var(--tl-gap) * 1.4);
+  row-gap: clamp(6px, 1.2vh, 16px);
+  row-gap: clamp(6px, 2.6cqh, 18px);
+}
+
+/* --- Day headers ---------------------------------------------------------- */
+
+.tl-agenda__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6em;
+  min-width: 0;
+  padding-bottom: 0.45em;
+  border-bottom: 1px solid var(--tl-rule);
+  font-size: clamp(12px, 1.5vh, 24px);
+  font-size: clamp(12px, min(2.3cqw, 6.2cqh), 26px);
+}
+
+.tl-agenda__label {
+  min-width: 0;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-agenda__head--today .tl-agenda__label {
+  color: var(--tl-fg);
+}
+
+.tl-agenda__stamp {
+  flex: 0 0 auto;
+}
+
+/* --- Rows ------------------------------------------------------------------ */
+
+.tl-agenda__list {
+  container-type: size;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tl-agenda__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  min-width: 0;
+  font-size: clamp(12px, 1.9vh, 28px);
+  font-size: clamp(12px, min(7.4cqw, 4.9cqh), 30px);
+}
+
+/* Bar, time, title. The time column is fixed so titles line up down the day
+ * whatever the hour ("5:00" and "12:30" alike). */
+.tl-agenda__item {
+  display: grid;
+  grid-template-columns: 0.2em 4.15em minmax(0, 1fr);
+  column-gap: 0.5em;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.16em 0.45em 0.16em 0;
+  border-radius: var(--tl-radius-sm);
+  line-height: 1.22;
+}
+
+.tl-agenda__bar {
+  align-self: stretch;
+  border-radius: 1em;
+  background: var(--tl-agenda-color, var(--tl-fg-3));
+}
+
+/* All-day rows are washed in their calendar's colour (a tint computed from it,
+ * or the neutral surface for a colour that is not hex). */
+.tl-agenda__item--allday {
+  background: var(--tl-agenda-tint, var(--tl-surface-2));
+}
+
+.tl-agenda__time {
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "12:30" is 2.76em in tabular figures; "pm" at 0.68em brings the widest
+ * time to about 3.9em, inside the 4.15em column with air before the title. */
+.tl-agenda__ampm {
+  margin-left: 0.1em;
+  font-size: 0.68em;
+}
+
+.tl-agenda__time--allday {
+  font-size: 0.64em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tl-fg);
+}
+
+/* Two lines at most, then an ellipsis: a long title wraps rather than losing
+ * its end, but one event can never take the column. */
+.tl-agenda__title {
+  min-width: 0;
+  color: var(--tl-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Over, but still today: kept for context, stepped back. */
+.tl-agenda__item--past {
+  opacity: 0.45;
+}
+
+.tl-agenda__more {
+  padding-left: 0.7em;
+  font-size: 0.8em;
+  line-height: 1.5;
+  color: var(--tl-fg-3);
+}
+
+.tl-agenda__none {
+  font-size: 0.86em;
+  line-height: 1.4;
+  color: var(--tl-fg-3);
+}
+
+/* One honest line across all three columns when the calendar cannot be read.
+ * A step brighter than the per-day "Nothing scheduled": it is the only thing
+ * in the card, and it has to read over a busy photo. */
+.tl-agenda__message {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  align-self: center;
+  justify-self: center;
+  color: var(--tl-fg-2);
+  font-size: clamp(14px, 2.2vh, 30px);
+  font-size: clamp(14px, min(3cqw, 9cqh), 34px);
+}

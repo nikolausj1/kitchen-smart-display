@@ -103,7 +103,11 @@ if [ "$TARGET" = all ] || [ "$TARGET" = hub ]; then
 
   echo "==> FrameServer: service, lib + dashboard"
   # server.mjs imports ./lib/*.mjs, so lib/ ships with it (cmd.exe syntax).
+  # secrets/ holds the Google Calendar service-account key (copied by hand,
+  # never through git); countdown-art/ is the hub's synced Immich album.
   nuc_ssh 'if not exist C:\Services\FrameServer\lib mkdir C:\Services\FrameServer\lib'
+  nuc_ssh 'if not exist C:\Services\FrameServer\secrets mkdir C:\Services\FrameServer\secrets'
+  nuc_ssh 'if not exist C:\Services\FrameServer\countdown-art mkdir C:\Services\FrameServer\countdown-art'
   nuc_scp frameserver/lib/*.mjs "$NUC_HOST:$NUC_DIR/lib/"
   nuc_scp frameserver/server.mjs frameserver/admin.html "$NUC_HOST:$NUC_DIR/"
   nuc_ssh 'powershell -NoProfile -Command "Restart-Service SmartDisplayFrameServer; Start-Sleep -Seconds 2; (Invoke-WebRequest http://127.0.0.1:8095/healthz -UseBasicParsing).Content"'

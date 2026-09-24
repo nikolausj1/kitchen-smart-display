@@ -86,3 +86,7 @@ __pycache__/
 # Mixtape source files (.blend, raw textures): large binaries kept on disk.
 # Rendered plates and mixtape-manifest.json are committed.
 art-src/
+
+# Hub runtime folders that only exist on the NUC (the calendar key, synced art)
+frameserver/secrets/
+frameserver/countdown-art/

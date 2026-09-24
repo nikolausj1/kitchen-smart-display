@@ -1,0 +1,167 @@
+/* CountdownsPanel - tiles side by side, each its own card and its own size
+ * container, so the art, title and number scale with the tile whether there
+ * are one, two or three of them.
+ *
+ * Every tile stacks the same four rows: art (the flexible one), a two-line
+ * title box of fixed height, the number, the unit. The fixed title box is what
+ * keeps the numbers on one line across tiles when one title wraps and another
+ * does not. First declaration of each size = the no-container-units fallback. */
+
+/* The frame gives up its own card: the tiles are the cards. --tl-cd-bar is
+ * the calendar-colour edge along each tile's top (a layout that restyles the
+ * tile's shadow reuses it). */
+.tl-panel.tl-cd {
+  --tl-cd-bar: clamp(2px, 0.3vh, 5px);
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.tl-cd__body {
+  container-type: size;
+  container-name: countdowns;
+}
+
+.tl-cd__row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  gap: var(--tl-gap);
+}
+
+.tl-cd__tile {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  padding: var(--tl-pad) calc(var(--tl-pad) * 0.8) calc(var(--tl-pad) * 0.85);
+  border-radius: var(--tl-radius);
+  background: var(--tl-surface);
+  /* The calendar's colour as a hairline along the top edge: enough to say
+   * whose it is, not enough to compete with the art. */
+  box-shadow: inset 0 var(--tl-cd-bar) 0 0 var(--tl-cd-color, transparent);
+  overflow: hidden;
+  text-align: center;
+}
+
+/* --- Art ------------------------------------------------------------------ */
+
+.tl-cd__art {
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Transparent PNGs from the "Countdown Art" album, contained in whatever box
+ * the tile has left after the text. */
+.tl-cd__img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tl-cd__emoji {
+  display: block;
+  line-height: 1;
+  font-size: clamp(28px, 7vh, 110px);
+  font-size: clamp(28px, min(52cqw, 30cqh), 160px);
+}
+
+.tl-cd__glyph {
+  display: block;
+  color: var(--tl-fg-3);
+  width: clamp(28px, 6vh, 90px);
+  height: clamp(28px, 6vh, 90px);
+  width: clamp(28px, min(40cqw, 24cqh), 120px);
+  height: clamp(28px, min(40cqw, 24cqh), 120px);
+}
+
+/* --- Text ----------------------------------------------------------------- */
+
+/* A fixed two-line box, text sitting on its bottom edge next to the number. */
+.tl-cd__title {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 2.36em;
+  margin-top: 0.55em;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-size: clamp(12px, 1.8vh, 26px);
+  font-size: clamp(12px, min(10cqw, 5.2cqh), 30px);
+  font-weight: 600;
+  line-height: 1.18;
+  color: var(--tl-fg);
+}
+
+.tl-cd__title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* A fixed box one number tall, whatever it holds: the day-of word inside it is
+ * smaller, and must not move the title above or the unit below. */
+.tl-cd__num {
+  flex: 0 0 auto;
+  height: 1em;
+  margin-top: 0.12em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--tl-font-display);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--tl-fg);
+  white-space: nowrap;
+  font-size: clamp(28px, 7vh, 110px);
+  font-size: clamp(28px, min(34cqw, 16cqh), 150px);
+}
+
+/* The day itself: the word takes the number's box at half its size (it has
+ * to fit a narrow tile), in the accent so it reads as an occasion, not a
+ * count. */
+.tl-cd__today {
+  font-size: 0.5em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tl-accent);
+}
+
+.tl-cd__unit {
+  flex: 0 0 auto;
+  margin-top: 0.35em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  font-size: clamp(10px, 1.3vh, 20px);
+  font-size: clamp(10px, min(7cqw, 3.4cqh), 22px);
+}
+
+/* --- Empty ---------------------------------------------------------------- */
+
+/* Small and quiet: no countdowns is a normal week, not a fault. */
+.tl-cd__empty {
+  margin: auto;
+  color: var(--tl-fg-3);
+  font-size: clamp(12px, 1.6vh, 22px);
+  font-size: clamp(12px, min(3.4cqw, 5cqh), 24px);
+}

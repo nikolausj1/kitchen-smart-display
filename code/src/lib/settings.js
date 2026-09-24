@@ -450,6 +450,18 @@ export const DEFAULTS = {
     // view; the others live in views/TodayLayouts/ and are chosen per screen
     // (DEVICE scope). Preview any of them with ?layout=<id> without saving.
     todayLayout: 'framed',
+    // What this screen rests on: 'photos' (the slideshow) or 'today' (its
+    // Today layout). Every "go home" path lands here: boot outside the school
+    // morning, the morning-end watcher, and the idle returns from Settings and
+    // Now Playing (shell/homeView.js). The Echo Show 15 by the front door is
+    // the screen that wants 'today' (docs/designs/entry-board.md).
+    homeView: 'photos',
+    // Entry board only. 'photos' puts the slideshow, darkened, behind the
+    // board; 'black' is the plain DAKboard look.
+    entryBackdrop: 'photos',
+    // Entry board only. Opacity of the black wash over the photos, 0..0.9
+    // (clamped by the layout, so a hand-edited 1 cannot black the photo out).
+    entryDim: 0.5,
     // Burn-in care: nudge the whole view a pixel or two on an irregular timer.
     // Off by default. The Framed views drift on their own; a static panel grid
     // does not, so the Board layout wants this on.

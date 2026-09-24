@@ -1,0 +1,99 @@
+/* AirQualityChip - square left, two short lines right, all sized against the
+ * chip's height (the body is a size container), so it is a chip in a thin band
+ * and a small panel in a tall one. Colours are the --tl-aqi-* tokens; the ink
+ * on the square flips dark on the light bands so the number always reads.
+ * First font-size of each pair = the no-container-units fallback. */
+
+.tl-aq__body {
+  container-type: size;
+  flex-direction: row;
+  align-items: center;
+  gap: calc(var(--tl-gap) * 0.8);
+}
+
+.tl-aq {
+  --tl-aq-fill: var(--tl-surface-2);
+  --tl-aq-ink: var(--tl-fg-2);
+}
+
+.tl-aq--good {
+  --tl-aq-fill: var(--tl-aqi-good);
+  --tl-aq-ink: var(--tl-aqi-ink-dark);
+}
+
+.tl-aq--moderate {
+  --tl-aq-fill: var(--tl-aqi-moderate);
+  --tl-aq-ink: var(--tl-aqi-ink-dark);
+}
+
+.tl-aq--usg {
+  --tl-aq-fill: var(--tl-aqi-usg);
+  --tl-aq-ink: var(--tl-aqi-ink-dark);
+}
+
+.tl-aq--unhealthy {
+  --tl-aq-fill: var(--tl-aqi-unhealthy);
+  --tl-aq-ink: var(--tl-aqi-ink-light);
+}
+
+.tl-aq--very {
+  --tl-aq-fill: var(--tl-aqi-very);
+  --tl-aq-ink: var(--tl-aqi-ink-light);
+}
+
+.tl-aq--hazardous {
+  --tl-aq-fill: var(--tl-aqi-hazardous);
+  --tl-aq-ink: var(--tl-aqi-ink-light);
+}
+
+.tl-aq__square {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-aq-fill);
+  color: var(--tl-aq-ink);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: none;
+  width: clamp(26px, 5vh, 64px);
+  height: clamp(26px, 5vh, 64px);
+  font-size: clamp(11px, 2vh, 26px);
+  width: clamp(26px, 92cqh, 76px);
+  height: clamp(26px, 92cqh, 76px);
+  font-size: clamp(11px, 38cqh, 30px);
+}
+
+.tl-aq__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.12em;
+}
+
+.tl-aq__word,
+.tl-aq__detail {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+
+.tl-aq__word {
+  font-weight: 600;
+  color: var(--tl-fg);
+  font-size: clamp(12px, 1.9vh, 24px);
+  font-size: clamp(12px, min(34cqh, 6cqw), 26px);
+}
+
+.tl-aq__detail {
+  color: var(--tl-fg-2);
+  font-size: clamp(10px, 1.5vh, 19px);
+  font-size: clamp(10px, min(27cqh, 4.8cqw), 20px);
+}

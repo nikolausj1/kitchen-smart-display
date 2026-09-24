@@ -12,6 +12,7 @@ import DimOverlay from './DimOverlay.jsx'
 import PixelShift from './PixelShift.jsx'
 import EchoMode from './EchoMode.jsx'
 import useReloadOnDeploy from './useReloadOnDeploy.js'
+import { getHomeView } from './homeView.js'
 import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
 import { isNoSchoolToday } from '../lib/schoolDay.js'
 import { AUTO_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
@@ -21,7 +22,10 @@ import { AUTO_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMod
 // Priority at page load (highest first):
 //   1. Sonos is currently playing  -> 'music'   (decided async, post-mount)
 //   2. School day AND 5:00 <= now < 8:00       -> 'today'
-//   3. Default                                  -> 'photos'
+//   3. Default                                  -> the home view
+//
+// The home view is display.homeView (shell/homeView.js): 'photos' unless the
+// screen rests on its Today board, as the front-door Echo Show 15 does.
 //
 // (1) requires an async Sonos /state fetch, so initial render uses the
 // synchronous (2)/(3) answer; if Sonos comes back playing we bounce to
@@ -37,17 +41,19 @@ function computeInitialView(now = new Date()) {
   const { school } = getSettings()
   const hour = now.getHours()
   const minute = now.getMinutes()
+  const home = getHomeView()
   // No-school days (weekends, holidays/breaks, summer, manual overrides) never
-  // boot to Today. Uses the cached SPS calendar; falls back to schoolDays +
-  // overrides if the feed hasn't been fetched yet.
-  if (isNoSchoolToday(school, getCachedCalendar(), now)) return 'photos'
-  if (hour < MORNING_START_HOUR) return 'photos'
+  // boot to Today for the school morning; they boot to the home view (which is
+  // Today anyway on a screen that rests there). Uses the cached SPS calendar;
+  // falls back to schoolDays + overrides if the feed hasn't been fetched yet.
+  if (isNoSchoolToday(school, getCachedCalendar(), now)) return home
+  if (hour < MORNING_START_HOUR) return home
   // Compare minute precision against school.morningEndsAt so the boot
   // window matches the runtime auto-leave watcher exactly.
   const end = school?.morningEndsAt || { hour: 8, minute: 0 }
   const nowMin = hour * 60 + minute
   const endMin = (end.hour | 0) * 60 + (end.minute | 0)
-  return nowMin < endMin ? 'today' : 'photos'
+  return nowMin < endMin ? 'today' : home
 }
 
 // Resolve the initial view at boot. An explicit ?view=today|photos|music|
@@ -149,8 +155,11 @@ function Shell({ initialView }) {
   //    the TV resolved to Today.
   //  - The TV never runs the kitchen's runtime schedule watchers; once it is
   //    launched into a view it stays there (PRD 5.4).
+  // A screen that rests on its Today board (the front-door Echo Show 15)
+  // never boots into Now Playing just because the Sonos is on: the board is
+  // its job, the same way a school-morning Today wins on the TV.
   const sonosBootOverrideAllowed =
-    AUTO_MODE && !(KIOSK_TV && initialView === 'today')
+    AUTO_MODE && !(KIOSK_TV && initialView === 'today') && getHomeView() !== 'today'
   const runScheduleWatchers = AUTO_MODE && !KIOSK_TV
 
   // Imperative navigation for the tvOS shell (and any external driver).
@@ -301,8 +310,8 @@ function Shell({ initialView }) {
   }, [setView, runScheduleWatchers])
 
   // Runtime morning-end watcher. Mirrors the auto-show watcher above, but
-  // switches Today -> Photos at school.morningEndsAt instead of Photos ->
-  // Today at autoShowAt.
+  // switches Today -> the home view at school.morningEndsAt instead of Photos
+  // -> Today at autoShowAt. A screen whose home view is Today stays put.
   //
   // Marker semantics:
   //   - If view isn't Today  : set marker, don't switch (nothing to do).
@@ -310,7 +319,7 @@ function Shell({ initialView }) {
   //     watcher will re-check on its next 30s tick, so the auto-leave
   //     fires as soon as the user dismisses the timer or it expires past
   //     the morning-end window.
-  //   - Otherwise            : set marker AND switch to Photos.
+  //   - Otherwise            : set marker AND switch to the home view.
   function isTimerActive(now) {
     const mode = localStorage.getItem('kioskTimerMode') || 'no-timer'
     if (mode === 'set-timer') return true
@@ -346,8 +355,10 @@ function Shell({ initialView }) {
       // Past the time, no timer in the way - mark the day as handled.
       localStorage.setItem(FIRED_KEY, key)
       if (view !== 'today') return
-      logEvent(`auto-leave: today -> photos at ${target.hour}:${String(target.minute).padStart(2, '0')}`)
-      setView('photos')
+      const home = getHomeView()
+      if (home === 'today') return
+      logEvent(`auto-leave: today -> ${home} at ${target.hour}:${String(target.minute).padStart(2, '0')}`)
+      setView(home)
     }
     check()
     const id = setInterval(check, 30 * 1000)

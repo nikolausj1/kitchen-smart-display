@@ -1,0 +1,70 @@
+/* HeadlinePanel - one line, as large as the cell allows, never two.
+ *
+ * Sized against the body (a size container): 56cqh fills a short band, 5cqw
+ * keeps a 35-character line ("Tomorrow: Sheena Chicago at 10:00 am") inside the
+ * width. Anything longer ends in an ellipsis rather than wrapping. The first
+ * font-size is the no-container-units fallback. */
+
+.tl-headline__body {
+  container-type: size;
+  justify-content: center;
+}
+
+.tl-headline__line {
+  display: flex;
+  align-items: center;
+  gap: 0.34em;
+  min-width: 0;
+  font-family: var(--tl-font-display);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.012em;
+  color: var(--tl-fg);
+  font-size: clamp(16px, 4.4vh, 60px);
+  font-size: clamp(16px, min(56cqh, 5cqw), 76px);
+}
+
+.tl-headline__text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The kind, at a glance, before a word is read. */
+.tl-headline__dot {
+  flex: 0 0 auto;
+  width: 0.34em;
+  height: 0.34em;
+  border-radius: 50%;
+  background: var(--tl-fg-3);
+}
+
+.tl-headline--now .tl-headline__dot {
+  background: var(--tl-band-green);
+}
+
+.tl-headline--soon .tl-headline__dot {
+  background: var(--tl-band-orange);
+}
+
+.tl-headline--next .tl-headline__dot {
+  background: var(--tl-accent);
+}
+
+.tl-headline--today .tl-headline__dot {
+  background: var(--tl-fg-2);
+}
+
+.tl-headline--tomorrow .tl-headline__dot {
+  background: var(--tl-fg-3);
+}
+
+/* Relative wording past its time: kept, but no longer asserted. */
+.tl-headline--outdated .tl-headline__line {
+  color: var(--tl-fg-3);
+}
+
+.tl-headline--outdated .tl-headline__dot {
+  background: var(--tl-fg-3);
+}

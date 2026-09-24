@@ -106,6 +106,64 @@
   section.card > h2 .seen { margin-left: .6rem; font-size: .8rem; font-weight: 400; color: var(--muted); }
   section.card > h2 .seen.stale { color: var(--warn); }
   nav button[aria-current="true"] .seen.stale { color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* Colour and range inputs need explicit theming as well: without it a
+     colour input is a light system button on the dark page. */
+  input[type=color] {
+    inline-size: 2.6rem; block-size: 2.1rem; padding: 2px; cursor: pointer;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type=color]::-webkit-color-swatch { border: 0; border-radius: 4px; }
+  input[type=color]::-moz-color-swatch { border: 0; border-radius: 4px; }
+  input[type=range] { accent-color: var(--accent); }
+  input::placeholder { color: var(--muted); opacity: .8; }
+
+  /* Calendars: the header and every row share one grid so the columns line
+     up (rows are display: contents). On a phone each calendar is a block. */
+  .cal-table {
+    display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) auto auto;
+    gap: .5rem .6rem; align-items: center; margin-bottom: .8rem;
+  }
+  .cal-head, .cal-row { display: contents; }
+  .cal-head span { color: var(--muted); font-size: .78rem; }
+  .cal-row input[type=text] { min-width: 0; width: 100%; }
+  .cal-row .draft-note { grid-column: 1 / -1; margin-top: -.3rem; color: var(--muted); font-size: .78rem; }
+  .empty-note { color: var(--muted); font-size: .88rem; margin: 0 0 .8rem; }
+
+  /* Read-only status under the editable rows. Repainted in place every
+     minute and it never holds a control, so it cannot disturb an edit. */
+  .status-block { margin-top: .5rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+  .status-block > h3 { margin: 0 0 .1rem; font-size: .85rem; }
+  .status-block > h3 small { margin-left: .5rem; color: var(--muted); font-size: .78rem; font-weight: 400; }
+  .row.info { align-items: start; }
+  .row > .k { font-size: .9rem; }
+  .row > .v { font-size: .9rem; min-width: 0; overflow-wrap: anywhere; }
+  .ok { color: var(--accent); }
+  .bad { color: var(--warn); }
+  .muted { color: var(--muted); }
+  [data-age-at].stale { color: var(--warn); }
+  .dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .45rem; }
+  .cd-list { display: grid; gap: .6rem; }
+  .cd { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); gap: .7rem; align-items: center; }
+  .cd-title { font-weight: 600; }
+  .cd-meta { color: var(--muted); font-size: .8rem; }
+
+  /* Countdown art is transparent PNGs, so every tile is dark like the board
+     it lands on, in either theme. */
+  .art-pic, .cd-thumb {
+    position: relative; aspect-ratio: 1; overflow: hidden;
+    background: #16171a; border: 1px solid var(--line); border-radius: 8px;
+  }
+  .art-pic img, .cd-thumb img { position: absolute; inset: 10%; width: 80%; height: 80%; object-fit: contain; }
+  .cd-thumb { display: grid; place-items: center; border-radius: 6px; font-size: 1.2rem; }
+  .art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem .9rem; }
+  .art-tile { min-width: 0; }
+  .art-name { margin-top: .4rem; font-size: .88rem; font-weight: 600; overflow-wrap: anywhere; }
+  .art-kw { color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
+  .art-empty { margin: .2rem 0 .35rem; }
+  .err-line { color: var(--warn); font-size: .88rem; margin: 0 0 .8rem; overflow-wrap: anywhere; }
 
   /* ---- Narrow screens -------------------------------------------------
      Two breakpoints on purpose. A tablet in portrait (~768px) still has room
@@ -164,6 +222,21 @@
     .row .albums label { border-bottom: 0; }
     .toolbar { gap: .4rem; }
     .toolbar button { min-height: 44px; }
+    /* Each calendar becomes a block: the ID on its own line, then label,
+       colour and Remove. The column headings go; the placeholders say it. */
+    .cal-table { display: block; margin-bottom: .6rem; }
+    .cal-head { display: none; }
+    .cal-row {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .5rem;
+      align-items: center; padding: .7rem 0; border-top: 1px solid var(--line);
+    }
+    .cal-head + .cal-row { border-top: 0; }
+    .cal-row .cal-id { grid-column: 1 / -1; }
+    .cal-row input[type=text] { min-height: 44px; font-size: 16px; }
+    .cal-row input[type=color] { inline-size: 44px; block-size: 44px; }
+    .cal-row button { min-height: 44px; }
+    .cal-row .draft-note { margin-top: 0; }
+    .art-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem .7rem; }
     #toast { left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom)); text-align: center; }
   }
 </style>
@@ -185,6 +258,12 @@
 <script>
 const $ = (s, r = document) => r.querySelector(s)
 let devices = [], shared = {}, albums = [], selected = null
+// Calendars added on this page that have no ID yet. Not stored until they do
+// (a blank ID would reach the hub as a calendar to fetch), and kept here
+// rather than only in the DOM so a background re-render does not drop them.
+let calDrafts = []
+// Calendar saves run one after another (see renderCalendars).
+let calSaving = Promise.resolve()
 
 const toast = (msg) => {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show')
@@ -207,12 +286,14 @@ async function patchDevice(id, body) {
   })
   toast('Saved — screens pick it up within 30s')
 }
+// Resolves to the merged shared settings the hub answers with.
 async function patchShared(body) {
-  await api('/api/settings/shared', {
+  const merged = await api('/api/settings/shared', {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   toast('Saved — applies to every screen')
+  return merged
 }
 
 async function loadAll(opts = {}) {
@@ -304,16 +385,20 @@ function seenTime(v) {
   return Number.isFinite(t) ? t : null
 }
 
-function seenText(t) {
-  if (t == null) return 'never seen'
+// "12 s ago", "3 min ago": the screen ages and the house-wide status.
+function agoText(t) {
   // Clamped: the hub's clock and this browser's can disagree by a second or two.
   const s = Math.max(0, Math.floor((Date.now() - t) / 1000))
-  if (s < 60) return `seen ${s} s ago`
+  if (s < 60) return `${s} s ago`
   const m = Math.floor(s / 60)
-  if (m < 60) return `seen ${m} min ago`
+  if (m < 60) return `${m} min ago`
   const h = Math.floor(m / 60)
-  if (h < 48) return `seen ${h} h ago`
-  return `seen ${Math.floor(h / 24)} d ago`
+  if (h < 48) return `${h} h ago`
+  return `${Math.floor(h / 24)} d ago`
+}
+
+function seenText(t) {
+  return t == null ? 'never seen' : `seen ${agoText(t)}`
 }
 
 // A placeholder that updateAges() fills in and keeps current.
@@ -332,6 +417,13 @@ function updateAges() {
     const t = seenTime(dev && dev.lastSeenAt)
     el.textContent = seenText(t)
     el.classList.toggle('stale', t != null && Date.now() - t > STALE_MS)
+  }
+  // Other timestamps on the page: the calendar's last fetch, the art sync.
+  for (const el of document.querySelectorAll('[data-age-at]')) {
+    const t = seenTime(el.dataset.ageAt)
+    el.textContent = t == null ? (el.dataset.never || 'never') : agoText(t)
+    const staleMs = Number(el.dataset.staleMs) || 0
+    el.classList.toggle('stale', t != null && staleMs > 0 && Date.now() - t > staleMs)
   }
 }
 
@@ -375,14 +467,34 @@ function percentControl(fraction, onChange, opts = {}) {
   const el = document.createElement('input')
   el.type = 'range'
   el.min = opts.min ?? 10
-  el.max = 100
+  el.max = opts.max ?? 100
   el.step = 5
   el.value = Math.round(((fraction ?? 0) * 100))
   const out = document.createElement('span')
   out.className = 'pct-val'
   out.textContent = `${el.value}%`
   el.oninput = () => { out.textContent = `${el.value}%` }
-  el.onchange = () => onChange(Number(el.value) / 100)
+  if (opts.debounceMs) {
+    // Saves during a drag as well, once the thumb rests for debounceMs, rather
+    // than once per 5% step. The value it lands on is always sent, once.
+    let timer = null
+    let sent = el.value
+    const soon = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (el.value === sent) return
+        sent = el.value
+        onChange(Number(el.value) / 100)
+      }, opts.debounceMs)
+    }
+    el.addEventListener('input', soon)
+    el.onchange = soon
+    // Safari does not reliably focus a range input on click, and editing()
+    // needs the focus to hold off a background re-render mid-drag.
+    el.onpointerdown = () => el.focus()
+  } else {
+    el.onchange = () => onChange(Number(el.value) / 100)
+  }
   wrap.append(el, out)
   return wrap
 }
@@ -589,13 +701,32 @@ function renderDevice(dev) {
     // room screen can differ. Pixel shift is burn-in care for the static Board.
     const disp = cfg.display || {}
     const t = card('Today screen', 'Which Today layout this screen shows. Takes effect within about 10 seconds.')
-    row(t, 'Layout', 'Framed is the original. Board, Briefing and Ambient are the 2026-09 layouts.',
-      select([['framed', 'Framed (original)'], ['board', 'Board'], ['briefing', 'Briefing'], ['ambient', 'Ambient']],
+    row(t, 'Layout', 'Framed is the original. Board, Briefing and Ambient are the 2026-09 layouts; Entry board is the front-door calendar board.',
+      select([['framed', 'Framed (original)'], ['board', 'Board'], ['briefing', 'Briefing'], ['ambient', 'Ambient'],
+        ['entry', 'Entry board']],
         disp.todayLayout || 'framed',
         (v) => patchDevice(dev.id, { display: { todayLayout: v } })))
     row(t, 'Pixel shift', 'Nudge the whole picture a pixel or two every few minutes. Recommended with Board.',
       select([[true, 'On'], [false, 'Off']], disp.pixelShift === true,
         (v) => patchDevice(dev.id, { display: { pixelShift: v === 'true' } })))
+
+    // --- Entry board (web screens) ---
+    // The front-door layout's look, and the view the screen rests on. Unset
+    // values are the web app's defaults: photos behind, 50% darker, home is
+    // Photos. See docs/designs/entry-board.md.
+    if (isWeb) {
+      const e = card('Entry board',
+        'How the Entry board layout looks on this screen, and which view the screen rests on. Takes effect within about 10 seconds.')
+      row(e, 'Photos behind the board', 'Black is the plain DAKboard look',
+        select([['photos', 'Photos'], ['black', 'Black']], disp.entryBackdrop || 'photos',
+          (v) => patchDevice(dev.id, { display: { entryBackdrop: v } })))
+      row(e, 'Darken photos', 'A black wash over the photos so the board reads. Used only with photos behind it.',
+        percentControl(disp.entryDim ?? 0.5,
+          (v) => patchDevice(dev.id, { display: { entryDim: v } }), { min: 0, max: 90, debounceMs: 300 }))
+      row(e, 'Home view', 'Where this screen rests outside the school morning. The front-door board wants Today.',
+        select([['photos', 'Photos'], ['today', 'Today']], disp.homeView || 'photos',
+          (v) => patchDevice(dev.id, { display: { homeView: v } })))
+    }
 
     const d = card('Display', isEcho
       ? 'Brightness and the night schedule. Dimming is a black overlay here; off shows the night face.'
@@ -713,6 +844,483 @@ function renderShared() {
   const l = shared.location || {}
   row(loc, 'Latitude', '', numberInput(l.lat, (v) => patchShared({ location: { lat: v } }), { step: 'any' }))
   row(loc, 'Longitude', '', numberInput(l.lon, (v) => patchShared({ location: { lon: v } }), { step: 'any' }))
+
+  renderCalendars()
+  renderArt()
+  // Paint the status from what was last fetched, so a re-render does not flash
+  // "Loading", then refetch it if that is over a minute old.
+  paintExtras()
+  loadExtras()
+}
+
+// ---- House-wide: calendars, countdowns, headline, countdown art -----------
+// docs/designs/entry-board.md. The calendar list is edited like everything
+// else here; the status under it (GET /api/calendar, /api/state and
+// /api/countdown-art) is read-only and repainted in place.
+
+// A small element builder for the read-only blocks.
+function make(tag, cls, text) {
+  const e = document.createElement(tag)
+  if (cls) e.className = cls
+  if (text != null) e.textContent = text
+  return e
+}
+
+// A timestamp that updateAges() keeps current ("3 min ago"), warn-coloured
+// once it is older than staleMs.
+function ageSpan(iso, never, staleMs) {
+  const e = make('span')
+  e.dataset.ageAt = iso || ''
+  e.dataset.never = never
+  if (staleMs) e.dataset.staleMs = String(staleMs)
+  return e
+}
+
+// A read-only row, laid out like row() and stacked the same way on a phone.
+function infoRow(parent, label, value) {
+  const r = make('div', 'row info')
+  value.classList.add('v')
+  r.append(make('div', 'k', label), value)
+  parent.appendChild(r)
+}
+
+// Colours offered to a new calendar, first unused wins. The first two are the
+// spec's Justin / Sheena example.
+const CAL_COLORS = ['#e0457b', '#4a90e2', '#f5a623', '#3fae6a', '#8e5bd6', '#20a8a8', '#d0573a', '#7a8791']
+
+// <input type=color> only takes #rrggbb.
+function hexColor(c) {
+  const s = String(c || '').trim().toLowerCase()
+  if (/^#[0-9a-f]{6}$/.test(s)) return s
+  if (/^#[0-9a-f]{3}$/.test(s)) return '#' + [...s.slice(1)].map((x) => x + x).join('')
+  return '#888888'
+}
+
+// A whole number clamped to [min, max]. Empty or junk puts the last value back
+// instead of saving it.
+function intInput(value, min, max, onChange) {
+  let last = value
+  const el = numberInput(value, (v) => {
+    const n = v == null || !Number.isFinite(v) ? last : Math.min(max, Math.max(min, Math.round(v)))
+    el.value = n
+    if (n === last) return
+    last = n
+    onChange(n)
+  }, { min, max, step: 1 })
+  return el
+}
+
+// shared.calendar = { calendars: [{ id, label, color }], countdownLeadDays,
+// countdownMax }. The hub replaces arrays wholesale, so every save sends the
+// whole list, with the two numbers alongside: one body shape for every edit.
+function renderCalendars() {
+  const stored = shared.calendar || {}
+  // What this render's controls edit. Entries are copied whole, so a field the
+  // dashboard does not show survives the replace.
+  const model = {
+    calendars: (Array.isArray(stored.calendars) ? stored.calendars : [])
+      .map((x) => (typeof x === 'string' ? { id: x } : { ...x })),
+    countdownLeadDays: stored.countdownLeadDays ?? 30,
+    countdownMax: stored.countdownMax ?? 3,
+  }
+  // Each save replaces the whole list, so they go one at a time, each with the
+  // list as it is when it leaves: quick edits (label, Tab, colour) cannot land
+  // out of order and put an older list back.
+  const save = () => {
+    calSaving = calSaving.then(async () => {
+      try {
+        const merged = await patchShared({ calendar: {
+          calendars: model.calendars,
+          countdownLeadDays: model.countdownLeadDays,
+          countdownMax: model.countdownMax,
+        } })
+        if (merged && typeof merged === 'object') shared = merged
+      } catch (e) {
+        // Show what the hub holds, not an edit that did not land.
+        toast(`Not saved: ${e.message || e}`)
+        loadAll().catch(() => {})
+      }
+    })
+    return calSaving
+  }
+
+  const c = card('Calendars and countdowns',
+    "The Google calendars every screen shows. Share each one (read-only) with the hub's service account first. " +
+    "A calendar's ID is in Google Calendar under its Settings > Integrate calendar; a personal calendar's ID is its Gmail address.")
+
+  const table = make('div', 'cal-table')
+  const head = make('div', 'cal-head')
+  for (const t of ['Calendar ID', 'Label', 'Colour', '']) head.appendChild(make('span', null, t))
+  table.appendChild(head)
+  const none = make('p', 'empty-note',
+    'No calendars yet. Until one is added the agenda stays empty and the headline sticks to greetings.')
+  const showEmpty = () => {
+    const n = model.calendars.length + calDrafts.length
+    table.hidden = n === 0
+    none.hidden = n > 0
+  }
+
+  const addRow = (entry) => {
+    const draft = () => calDrafts.includes(entry)
+    const r = make('div', 'cal-row')
+    const id = document.createElement('input')
+    id.type = 'text'; id.className = 'cal-id'; id.value = entry.id ?? ''
+    id.placeholder = 'Calendar ID, e.g. name@gmail.com'
+    id.setAttribute('aria-label', 'Calendar ID')
+    id.spellcheck = false; id.autocomplete = 'off'; id.inputMode = 'email'
+    id.setAttribute('autocapitalize', 'off')
+    const label = document.createElement('input')
+    label.type = 'text'; label.value = entry.label ?? ''
+    label.placeholder = 'Label, e.g. Justin'
+    label.setAttribute('aria-label', 'Label')
+    const color = document.createElement('input')
+    color.type = 'color'; color.value = hexColor(entry.color)
+    color.setAttribute('aria-label', 'Colour')
+    const rm = make('button', 'action danger', 'Remove')
+    rm.type = 'button'
+    const note = make('div', 'draft-note', 'Not saved until it has a calendar ID.')
+    r.append(id, label, color, rm)
+    if (draft()) r.appendChild(note)
+
+    id.onchange = () => {
+      const v = id.value.trim()
+      if (v && model.calendars.some((o) => o !== entry && o.id === v)) {
+        id.value = entry.id ?? ''
+        return toast('That calendar is already in the list')
+      }
+      if (!v) {
+        id.value = entry.id ?? ''
+        if (!draft()) toast('A calendar needs an ID. Use Remove to drop it.')
+        return
+      }
+      id.value = v
+      entry.id = v
+      if (draft()) {
+        calDrafts.splice(calDrafts.indexOf(entry), 1)
+        model.calendars.push(entry)
+        note.remove()
+      }
+      save()
+    }
+    label.onchange = () => {
+      entry.label = label.value.trim()
+      label.value = entry.label
+      if (!draft()) save()
+    }
+    color.onchange = () => {
+      entry.color = color.value
+      if (!draft()) save()
+    }
+    rm.onclick = () => {
+      if (draft()) {
+        calDrafts.splice(calDrafts.indexOf(entry), 1)
+      } else {
+        if (!confirm(`Remove ${entry.label || entry.id} from every screen?`)) return
+        model.calendars.splice(model.calendars.indexOf(entry), 1)
+        save()
+      }
+      r.remove()
+      showEmpty()
+    }
+    table.appendChild(r)
+    return r
+  }
+  for (const entry of model.calendars) addRow(entry)
+  for (const entry of calDrafts) addRow(entry)
+  c.append(table, none)
+  showEmpty()
+
+  const bar = make('div', 'toolbar')
+  const add = make('button', 'action ghost', 'Add calendar')
+  add.type = 'button'
+  add.onclick = () => {
+    const used = new Set([...model.calendars, ...calDrafts].map((x) => hexColor(x.color)))
+    const entry = { id: '', label: '', color: CAL_COLORS.find((x) => !used.has(x)) || CAL_COLORS[0] }
+    calDrafts.push(entry)
+    const r = addRow(entry)
+    showEmpty()
+    r.querySelector('.cal-id').focus()
+  }
+  bar.appendChild(add)
+  c.appendChild(bar)
+
+  row(c, 'Countdown lead days',
+    'How early a countdown appears when its event says just "countdown". "countdown 14" in the description sets its own.',
+    intInput(model.countdownLeadDays, 1, 365, (n) => { model.countdownLeadDays = n; save() }))
+  row(c, 'Max countdown tiles', 'The most countdowns a screen shows at once, soonest first',
+    intInput(model.countdownMax, 1, 6, (n) => { model.countdownMax = n; save() }))
+
+  const st = make('div', 'status-block')
+  const title = make('h3', null, 'On the hub now')
+  title.appendChild(make('small', null, 'refreshes every minute'))
+  const box = make('div')
+  box.id = 'calStatus'
+  st.append(title, box)
+  c.appendChild(st)
+}
+
+// GET /api/countdown-art (lib/countdownArt.mjs status()): { album: { id, name }
+// | null, syncedAt (the last good sync), error, running, items: [{ id, file,
+// name, keywords, updatedAt, url }] }. A bare array (the index alone) works.
+function artView() {
+  const d = extras.art && extras.art.data
+  if (Array.isArray(d)) return { items: d, album: null, albumId: null, syncedAt: null, error: null, running: false }
+  const o = d && typeof d === 'object' ? d : {}
+  const album = o.album && typeof o.album === 'object' ? o.album : { name: o.album }
+  return {
+    items: Array.isArray(o.items) ? o.items : [],
+    album: album.name || null,
+    albumId: o.albumId || album.id || null,
+    syncedAt: o.syncedAt || null,
+    error: o.error || null,
+    running: !!o.running,
+  }
+}
+
+const artSrc = (file) => {
+  const f = String(file || '')
+  return f.startsWith('/') ? f : `/countdown-art/${encodeURIComponent(f)}`
+}
+
+function renderArt() {
+  const c = card('Countdown art',
+    'Pictures for the countdown tiles, from the Immich album Countdown Art, synced every hour. A countdown shows the one ' +
+    'named by "image: <name>" in its event description, otherwise the first whose keyword is a word in the event title.')
+  const bar = make('div', 'toolbar')
+  const sync = make('button', 'action', 'Sync now')
+  sync.type = 'button'
+  sync.id = 'artSync'
+  sync.onclick = syncArt
+  const meta = make('span', 'note')
+  meta.id = 'artMeta'
+  bar.append(sync, meta)
+  const body = make('div')
+  body.id = 'artBody'
+  c.append(bar, body)
+  setSyncButton()
+}
+
+let artSyncing = false
+function setSyncButton() {
+  const b = $('#artSync')
+  if (!b) return
+  b.disabled = artSyncing
+  b.textContent = artSyncing ? 'Syncing…' : 'Sync now'
+}
+
+async function syncArt() {
+  artSyncing = true
+  setSyncButton()
+  let background = false
+  try {
+    const r = await api('/api/countdown-art/refresh', { method: 'POST' })
+    background = !!(r && (r.started || r.running))
+    toast(syncResultText(r))
+  } catch (e) {
+    const m = String(e.message || e)
+    toast(m.startsWith('409') ? 'A sync is already running' : `Sync failed: ${m}`)
+  }
+  artSyncing = false
+  setSyncButton()
+  loadExtras(true)
+  // A sync that runs in the background lands after the answer: look again.
+  if (background) for (const ms of [5000, 15000]) setTimeout(() => loadExtras(true), ms)
+}
+
+// POST /api/countdown-art/refresh: { ok, count, added, removed, error }, or
+// the new art view, or { started } for a sync left running in the background.
+function syncResultText(r) {
+  const o = r && typeof r === 'object' ? r : {}
+  if (o.ok === false || o.error) return `Sync failed: ${o.error || 'no reason given'}`
+  if (o.started || o.running) return 'Sync started'
+  const n = Array.isArray(r) ? r.length : o.count ?? (Array.isArray(o.items) ? o.items.length : null)
+  const changes = [o.added ? `${o.added} new` : '', o.removed ? `${o.removed} removed` : ''].filter(Boolean)
+  return 'Synced' + (n != null ? `: ${n} image${n === 1 ? '' : 's'}` : '') +
+    (changes.length ? ` (${changes.join(', ')})` : '')
+}
+
+// The read-only house-wide status. Fetched when the House-wide pane opens and
+// every minute while it is open, then painted in place (paintExtras): it never
+// rebuilds the calendar table, so it cannot disturb an edit.
+const EXTRAS_MS = 60 * 1000
+const CAL_STALE_MS = 20 * 60 * 1000     // the hub refetches Google every 5 min
+const ART_STALE_MS = 3 * 60 * 60 * 1000 // and syncs the album hourly
+let extras = { calendar: null, state: null, art: null, at: 0 }
+let extrasJob = null
+
+function loadExtras(force) {
+  if (extrasJob) return force ? extrasJob.then(() => loadExtras(true)) : extrasJob
+  if (!force && Date.now() - extras.at < EXTRAS_MS) return Promise.resolve()
+  // Each source fails on its own: a hub without /api/calendar still shows its
+  // headline and art.
+  const get = (path) => api(path).then((data) => ({ data }), (e) => ({ error: String(e.message || e) }))
+  extrasJob = Promise.all([get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art')])
+    .then(([calendar, state, art]) => {
+      extras = { calendar, state, art, at: Date.now() }
+      paintExtras()
+    })
+    .catch((e) => console.error('house-wide status', e))
+    .finally(() => { extrasJob = null })
+  return extrasJob
+}
+
+function paintExtras() {
+  const status = $('#calStatus')
+  if (status) paintCalendarStatus(status)
+  const art = $('#artBody')
+  if (art) paintArt(art)
+  updateAges()
+}
+
+function paintCalendarStatus(box) {
+  box.innerHTML = ''
+  const { calendar, state } = extras
+  if (!calendar) {
+    infoRow(box, 'Calendar', make('span', 'muted', 'Loading…'))
+  } else if (calendar.error) {
+    infoRow(box, 'Calendar', make('span', 'bad', `Could not read /api/calendar: ${calendar.error}`))
+  } else {
+    const c = calendar.data || {}
+    // The address to share each calendar with (read-only, "See all event
+    // details"). Null until the key file is on the hub.
+    if (c.serviceAccount) infoRow(box, 'Share calendars with', make('code', null, String(c.serviceAccount)))
+    infoRow(box, 'Connected', make('span', c.connected ? 'ok' : 'bad', c.connected ? 'Yes' : 'No'))
+    // Per-calendar health, so "Sheena's is not shared yet" is one glance.
+    if (Array.isArray(c.calendars) && c.calendars.length) {
+      const wrap = make('div', null)
+      for (const cal of c.calendars) {
+        const line = make('div', null)
+        line.appendChild(make('span', cal.ok ? 'ok' : 'bad', cal.ok ? 'ok' : 'failing'))
+        line.appendChild(document.createTextNode(` ${cal.label || cal.id}: ${cal.ok ? `${cal.events ?? 0} event(s)` : (cal.error || 'no answer')}`))
+        wrap.appendChild(line)
+      }
+      infoRow(box, 'Per calendar', wrap)
+    }
+    infoRow(box, 'Last fetch', ageSpan(c.fetchedAt, 'never', CAL_STALE_MS))
+    infoRow(box, `Events, next ${c.days ?? 3} days`,
+      make('span', null, String(Array.isArray(c.events) ? c.events.length : 0)))
+    if (c.error) infoRow(box, 'Error', make('span', 'bad', String(c.error)))
+    infoRow(box, 'Countdowns', countdownList(c.countdowns))
+  }
+  const hl = state && state.data && state.data.headline
+  infoRow(box, 'Headline now',
+    !state ? make('span', 'muted', 'Loading…')
+      : state.error ? make('span', 'bad', `Could not read /api/state: ${state.error}`)
+      : hl && hl.text ? headlineLine(hl)
+      : make('span', 'muted', 'None (this hub does not send a headline yet)'))
+}
+
+function countdownList(list) {
+  const box = make('div', 'cd-list')
+  if (!Array.isArray(list) || !list.length) {
+    box.appendChild(make('span', 'muted', 'None right now. Write "countdown" in an event\'s description to add one.'))
+    return box
+  }
+  const names = new Map(artView().items.map((a) => [String(a.file), a.name]))
+  for (const cd of list) {
+    const item = make('div', 'cd')
+    const thumb = make('div', 'cd-thumb')
+    let art = 'no art'
+    if (typeof cd.image === 'string' && cd.image) {
+      const img = document.createElement('img')
+      img.src = cd.image; img.alt = ''; img.decoding = 'async'
+      thumb.appendChild(img)
+      const file = fileOf(cd.image)
+      art = `art: ${names.get(file) || file}`
+    } else {
+      // What the board falls back to: the title's emoji, else a calendar glyph.
+      thumb.textContent = cd.emoji || '\u{1F4C5}'
+      if (cd.emoji) art = `no art, shows ${cd.emoji}`
+    }
+    const title = make('div', 'cd-title')
+    if (cd.color) {
+      const dot = make('span', 'dot')
+      dot.style.background = cd.color
+      if (cd.calendarLabel) dot.title = cd.calendarLabel
+      title.appendChild(dot)
+    }
+    title.appendChild(document.createTextNode(cd.title || '(untitled)'))
+    const meta = make('div', 'cd-meta',
+      [fmtDay(cd.date), daysLeftText(cd.daysLeft), art].filter(Boolean).join(' · '))
+    const text = make('div')
+    text.append(title, meta)
+    item.append(thumb, text)
+    box.appendChild(item)
+  }
+  return box
+}
+
+function fileOf(path) {
+  const last = String(path).split('?')[0].split('/').pop()
+  try { return decodeURIComponent(last) } catch { return last }
+}
+
+function fmtDay(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''))
+  if (!m) return key || ''
+  return new Date(+m[1], +m[2] - 1, +m[3])
+    .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const daysLeftText = (n) => (typeof n !== 'number' ? ''
+  : n <= 0 ? 'today' : n === 1 ? '1 day left' : `${n} days left`)
+
+// headline.kind, from frameserver/lib/headline.mjs.
+const HEADLINE_KINDS = {
+  now: 'an event is on now', soon: 'starts within the hour', next: 'next event today',
+  today: 'all-day event today', tomorrow: 'first thing tomorrow', daypart: 'nothing on, time-of-day line',
+}
+function headlineLine(hl) {
+  const e = make('span', null, hl.text)
+  if (hl.kind) {
+    const gloss = HEADLINE_KINDS[hl.kind]
+    e.appendChild(make('span', 'muted', ` · ${hl.kind}${gloss ? ` (${gloss})` : ''}`))
+  }
+  return e
+}
+
+function paintArt(box) {
+  box.innerHTML = ''
+  const meta = $('#artMeta')
+  if (meta) meta.textContent = ''
+  const a = extras.art
+  if (!a) return box.appendChild(make('p', 'empty-note', 'Loading…'))
+  if (a.error) return box.appendChild(make('p', 'err-line', `Could not read /api/countdown-art: ${a.error}`))
+  const v = artView()
+  const n = v.items.length
+  if (meta) {
+    // The album's name once the hub has found it (or evidently has: it has art).
+    const name = v.album || (n || v.albumId ? 'Countdown Art' : null)
+    meta.append(name ? `Album "${name}"` : 'No album found')
+    if (v.syncedAt) meta.append(name ? ' · synced ' : ' · last synced ', ageSpan(v.syncedAt, 'never', ART_STALE_MS))
+    else meta.append(' · not synced yet')
+    if (name) meta.append(` · ${n} image${n === 1 ? '' : 's'}`)
+    if (v.running) meta.append(' · syncing now')
+  }
+  // The hub reports a missing album as an error; the empty state says that
+  // better. Any other error (Immich not configured or unreachable) shows as
+  // it is, without guessing that the album is missing.
+  const noAlbum = !n && !v.albumId && (!v.error || /no immich album/i.test(v.error))
+  if (v.error && !noAlbum) box.appendChild(make('p', 'err-line', v.error))
+  if (!n) {
+    if (noAlbum) box.appendChild(make('p', 'art-empty', 'No album named Countdown Art in Immich yet.'))
+    else if (v.albumId && !v.error) box.appendChild(make('p', 'art-empty', 'The Countdown Art album has no images yet.'))
+    box.appendChild(make('p', 'empty-note', (noAlbum ? 'Make one and add' : 'Add') +
+      " PNGs with transparent backgrounds; each file's name and Immich description are its keywords."))
+    return
+  }
+  const grid = make('div', 'art-grid')
+  for (const it of v.items) {
+    const tile = make('div', 'art-tile')
+    const pic = make('div', 'art-pic')
+    const img = document.createElement('img')
+    img.src = artSrc(it.file); img.alt = it.name || ''; img.loading = 'lazy'; img.decoding = 'async'
+    pic.appendChild(img)
+    const kw = Array.isArray(it.keywords) ? it.keywords.join(', ') : ''
+    tile.append(pic, make('div', 'art-name', it.name || it.file || '?'), make('div', 'art-kw', kw || 'no keywords'))
+    grid.appendChild(tile)
+  }
+  box.appendChild(grid)
 }
 
 $('#refreshBtn').onclick = async () => {
@@ -746,6 +1354,13 @@ setInterval(() => {
   const job = refreshTick % 3 === 0 ? loadAll({ background: true }) : loadDevices()
   job.catch(() => updateAges())
 }, 10000)
+// The house-wide status every minute while that pane is open (loadExtras).
+setInterval(() => {
+  if (selected === '__shared__' && !document.hidden) loadExtras(true)
+}, EXTRAS_MS)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && selected === '__shared__') loadExtras()
+})
 </script>
 </body>
 </html>

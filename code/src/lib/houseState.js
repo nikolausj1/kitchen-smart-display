@@ -15,6 +15,13 @@ import { DEVICE_ID, deepEqual } from './settings.js'
 //                  departure-hour forecast, computed once, on the hub
 //   noSchoolToday  from the shared school settings + the hub's school calendar
 //   timer          the derived timer the hub publishes for the Apple TV
+//   headline       { text, kind, eventId, until }: the Entry board's one line,
+//                  computed on the hub (frameserver/lib/headline.mjs) so every
+//                  screen says the same thing. kind is 'now' | 'soon' | 'next'
+//                  | 'today' | 'tomorrow' | 'daypart'; until is an ISO time
+//                  after which the line may change (null for most kinds).
+//   airQuality     { pm25, aqi, label, fetchedAt }: Open-Meteo air quality for
+//                  the house location, refreshed hourly on the hub.
 //
 // Screens share decisions, never a derived timer: each one derives the
 // countdown itself with frameserver/lib/countdown.mjs (hooks/useTimer.js).
@@ -26,9 +33,11 @@ import { DEVICE_ID, deepEqual } from './settings.js'
 // a localStorage cache so a reload while the hub is down still knows today's
 // decisions, and a 10 s poll that picks up the other screens' writes.
 //
-// Snapshot: { countdown, travelDefault, noSchoolToday, timer, fetchedAt,
-// error, stale }. noSchoolToday is null until the hub has said. `stale` is true
-// once the last successful fetch is over a minute old (or there has been none).
+// Snapshot: { countdown, travelDefault, noSchoolToday, timer, headline,
+// airQuality, fetchedAt, error, stale }. noSchoolToday, headline and airQuality
+// are null until the hub has said (a hub from before the Entry board never
+// sends the last two, and they stay null). `stale` is true once the last
+// successful fetch is over a minute old (or there has been none).
 
 const CACHE_KEY = 'kitchenHouseState'
 const POLL_MS = 10 * 1000
@@ -38,7 +47,7 @@ const POLL_MS = 10 * 1000
 const LOCAL_WRITE_GRACE_MS = 5 * 1000
 const STALE_AFTER_MS = 60 * 1000
 
-const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer']
+const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer', 'headline', 'airQuality']
 
 function emptyState() {
   return {
@@ -46,6 +55,8 @@ function emptyState() {
     travelDefault: null,
     noSchoolToday: null,
     timer: null,
+    headline: null,
+    airQuality: null,
     fetchedAt: null,
     error: null,
     stale: true,
@@ -57,6 +68,44 @@ const SERVER_SNAPSHOT = Object.freeze(emptyState())
 
 function cleanTravelDefault(v) {
   return v && typeof v === 'object' && (v.mode === 'driving' || v.mode === 'walking') ? v : null
+}
+
+function finiteOrNull(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+function stringOrNull(v) {
+  return typeof v === 'string' && v.trim() ? v.trim() : null
+}
+
+// A headline is only worth holding with words in it. Normalized to exactly the
+// four fields the hub documents, so a field it adds later cannot change what
+// the panels read.
+function cleanHeadline(v) {
+  if (!v || typeof v !== 'object') return null
+  const text = stringOrNull(v.text)
+  if (!text) return null
+  return {
+    text,
+    kind: stringOrNull(v.kind),
+    eventId: v.eventId == null ? null : String(v.eventId),
+    until: stringOrNull(v.until),
+  }
+}
+
+// A reading needs at least one number; a label on its own is not a reading.
+function cleanAirQuality(v) {
+  if (!v || typeof v !== 'object') return null
+  const pm25 = finiteOrNull(v.pm25)
+  const aqi = finiteOrNull(v.aqi)
+  if (pm25 == null && aqi == null) return null
+  const at = v.fetchedAt
+  return {
+    pm25,
+    aqi,
+    label: stringOrNull(v.label),
+    fetchedAt: typeof at === 'string' || typeof at === 'number' ? at : null,
+  }
 }
 
 // Keep the object we already hold when the new one is structurally identical,
@@ -82,6 +131,12 @@ function stateFrom(payload, base) {
   if ('timer' in payload) {
     const t = payload.timer && typeof payload.timer === 'object' ? payload.timer : null
     next.timer = keep(base.timer, t)
+  }
+  if ('headline' in payload) {
+    next.headline = keep(base.headline, cleanHeadline(payload.headline))
+  }
+  if ('airQuality' in payload) {
+    next.airQuality = keep(base.airQuality, cleanAirQuality(payload.airQuality))
   }
   return next
 }
@@ -113,6 +168,8 @@ function writeCache(s) {
         travelDefault: s.travelDefault,
         noSchoolToday: s.noSchoolToday,
         timer: s.timer,
+        headline: s.headline,
+        airQuality: s.airQuality,
         fetchedAt: s.fetchedAt,
       })
     )

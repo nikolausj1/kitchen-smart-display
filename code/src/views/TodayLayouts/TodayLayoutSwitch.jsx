@@ -2,6 +2,7 @@ import TodayView from '../TodayView/TodayView.jsx'
 import AmbientLayout from './Ambient/AmbientLayout.jsx'
 import BoardLayout from './Board/BoardLayout.jsx'
 import BriefingLayout from './Briefing/BriefingLayout.jsx'
+import EntryLayout from './Entry/EntryLayout.jsx'
 import { useSettings } from '../../lib/settings.js'
 import { REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import { normalizeLayoutId } from './registry.js'
@@ -14,6 +15,7 @@ const LAYOUTS = {
   board: BoardLayout,
   briefing: BriefingLayout,
   ambient: AmbientLayout,
+  entry: EntryLayout,
 }
 
 export default function TodayLayoutSwitch() {

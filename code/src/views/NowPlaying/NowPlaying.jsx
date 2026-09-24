@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import useSonosState, { useSonosActions, getLastPlayingAt } from '../../hooks/useSonosState.js'
 import { useView } from '../../shell/ViewContext.jsx'
+import { getHomeView } from '../../shell/homeView.js'
 import Jukebox from './Jukebox.jsx'
 import './NowPlaying.css'
 
@@ -10,9 +11,10 @@ import './NowPlaying.css'
 const IDLE_OPEN_PICKER_MS = 60_000
 
 // While sitting on the Music tab with nothing playing, after this long bounce
-// back to the Photos view. Cancelled if music starts, the Jukebox picker is
-// open, or the user navigates away on their own.
-const IDLE_TO_PHOTOS_MS = 60_000
+// back to the home view (display.homeView, shell/homeView.js: Photos unless
+// the screen rests on Today). Cancelled if music starts, the Jukebox picker
+// is open, or the user navigates away on their own.
+const IDLE_TO_HOME_MS = 60_000
 
 // NowPlaying view per Figma node 83:461.
 // Left: station name pill, track title (bold), artist, progress bar, three
@@ -96,7 +98,7 @@ export default function NowPlaying() {
   }, [loading, playing])
 
   // While on the Music tab with nothing playing, auto-bounce back to the
-  // Photos view after IDLE_TO_PHOTOS_MS. Cancelled if music starts, the
+  // home view after IDLE_TO_HOME_MS. Cancelled if music starts, the
   // user opens the Jukebox picker, or NowPlaying unmounts (user navigated
   // away on their own). If music transitions paused -> playing -> paused
   // the timer resets, which is the behavior we want.
@@ -104,7 +106,7 @@ export default function NowPlaying() {
     if (loading) return
     if (playing) return
     if (jukeboxOpen) return
-    const id = setTimeout(() => setView('photos'), IDLE_TO_PHOTOS_MS)
+    const id = setTimeout(() => setView(getHomeView()), IDLE_TO_HOME_MS)
     return () => clearTimeout(id)
   }, [loading, playing, jukeboxOpen, setView])
 

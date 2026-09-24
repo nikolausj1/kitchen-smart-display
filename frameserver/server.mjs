@@ -24,7 +24,18 @@
 //   GET|POST /api/flags, POST /api/flags/resolve, /api/flags/import
 //                                     photo-flag queue (lib/flags.mjs)
 //   GET  /api/sonos/*                 proxy to node-sonos-http-api
+//   GET  /api/calendar?days=N         Google Calendar agenda + countdown tiles
+//                                     (lib/googleCalendar.mjs, lib/countdowns.mjs)
+//   GET  /api/countdown-art           the Countdown Art index (lib/countdownArt.mjs)
+//   POST /api/countdown-art/refresh   sync it from Immich now (409 if one is running)
+//   GET  /countdown-art/<file>        one art image
 //   GET  /healthz                     liveness + a glance at everything
+//
+// Secrets and keys come from the environment or the service root's .env
+// (lib/env.mjs; the environment wins): IMMICH_URL, IMMICH_API_KEY,
+// GOOGLE_CALENDAR_KEY_FILE (default secrets/google-calendar.json, the service
+// account key, never in git), GOOGLE_CALENDAR_FIXTURE (tests). The Entry board
+// additions are specified in docs/designs/entry-board.md.
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.
@@ -44,9 +55,15 @@ import { stat } from 'node:fs/promises'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { fetchWithTimeout, isDict, readJsonFile, writeJsonFileAtomic } from './lib/io.mjs'
+import { loadEnvFile } from './lib/env.mjs'
 import { acceptStatePost, composeState } from './lib/houseState.mjs'
 import { createTravelDefault } from './lib/travelDefault.mjs'
 import { createFlags } from './lib/flags.mjs'
+import { calendarSettings, createGoogleCalendar, eventsForDays, publicEvent } from './lib/googleCalendar.mjs'
+import { buildCountdowns } from './lib/countdowns.mjs'
+import { ART_EXTS, createCountdownArt } from './lib/countdownArt.mjs'
+import { createAirQuality } from './lib/airQuality.mjs'
+import { headlineFor } from './lib/headline.mjs'
 import {
   DEFAULT_SCHOOL_SLUG,
   getCachedSchoolCal,
@@ -58,6 +75,9 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.FRAMESERVER_ROOT || resolve(__dirname)
+// Before anything below reads process.env. Names only are logged, never values.
+const ENV_FILE = loadEnvFile(join(ROOT, '.env'))
+const ENV_KEYS = ['IMMICH_URL', 'IMMICH_API_KEY', 'GOOGLE_CALENDAR_KEY_FILE', 'GOOGLE_CALENDAR_FIXTURE']
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
 // The Vite build of code/ (index.html, assets/, icons/, build.json, ...).
@@ -69,6 +89,11 @@ const STATUS_FILE = join(ROOT, 'refresh-status.json')
 const STATE_FILE = join(ROOT, 'state.json')
 const FLAGS_FILE = join(ROOT, 'flags.json')
 const PORT = Number(process.env.FRAMESERVER_PORT || 8095)
+// The Google service account's JSON key: copied to the hub by hand, never in
+// git. Relative values resolve against ROOT.
+const CALENDAR_KEY_FILE = resolve(ROOT, process.env.GOOGLE_CALENDAR_KEY_FILE || join('secrets', 'google-calendar.json'))
+const CALENDAR_FIXTURE = process.env.GOOGLE_CALENDAR_FIXTURE ? resolve(ROOT, process.env.GOOGLE_CALENDAR_FIXTURE) : null
+const ART_DIR = join(ROOT, 'countdown-art')
 const BIND = process.env.FRAMESERVER_BIND || '0.0.0.0'
 
 const MIME = {
@@ -76,6 +101,8 @@ const MIME = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
   '.json': 'application/json',
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -311,6 +338,29 @@ const cachedSchool = initSchoolData({ dir: ROOT })
 const flags = createFlags(FLAGS_FILE)
 const travel = createTravelDefault({ dir: ROOT, getShared: () => readRegistry().shared })
 
+// --- Entry board: calendar, countdown art, air quality (docs/designs/entry-board.md)
+const getShared = () => readRegistry().shared
+const calendar = createGoogleCalendar({
+  dir: ROOT,
+  getShared,
+  keyFile: CALENDAR_KEY_FILE,
+  fixtureFile: CALENDAR_FIXTURE,
+})
+const art = createCountdownArt({
+  dir: ART_DIR,
+  getConfig: () => ({ url: process.env.IMMICH_URL, apiKey: process.env.IMMICH_API_KEY }),
+})
+const air = createAirQuality({ dir: ROOT, getShared })
+
+// Everything derived from the shared settings refreshes as soon as its inputs
+// move: location and departure hour (travel default, air quality), the
+// calendar list (Google). Each is a string compare unless something changed.
+function noteShared(shared) {
+  travel.noteShared(shared)
+  air.noteShared(shared)
+  calendar.noteShared(shared)
+}
+
 // state.json holds ONLY { countdown } - the user's decisions. Everything else
 // in /api/state is derived or owned elsewhere (registry, calendar, forecast).
 function readStoredState() {
@@ -320,16 +370,53 @@ function readStoredState() {
 
 function currentState(now = new Date()) {
   const registry = readRegistry()
-  // Picks up a location / departure-hour edit made by any route (or by hand)
-  // without every writer having to remember to poke the forecast.
-  travel.noteShared(registry.shared)
-  return composeState({
+  // Picks up a location / departure-hour / calendar edit made by any route (or
+  // by hand) without every writer having to remember to poke each module.
+  noteShared(registry.shared)
+  const state = composeState({
     now,
     registry,
     stored: readStoredState(),
     calendar: getCachedSchoolCal(),
     travelDefault: travel.current(now),
   })
+  // The Entry board's line, the same on every screen: headline.mjs over every
+  // cached event (60 days; it needs today's and tomorrow's), and the air
+  // quality chip (null without a reading from the last 6 hours).
+  state.headline = headlineFor({ now, events: calendar.snapshot(registry.shared).events })
+  state.airQuality = air.current(now)
+  return state
+}
+
+// GET /api/calendar?days=N: 1..14, default 3.
+function calendarDays(raw) {
+  const n = Number.parseInt(raw ?? '', 10)
+  return Number.isFinite(n) ? Math.min(14, Math.max(1, n)) : 3
+}
+
+// Answers from the cache the 5-minute refresh keeps; never waits on Google.
+// `events` is the window only; countdowns look at everything cached (60 days).
+function calendarResponse(now, days) {
+  const shared = readRegistry().shared
+  calendar.noteShared(shared)
+  const snap = calendar.snapshot(shared)
+  return {
+    connected: snap.connected,
+    error: snap.error,
+    fetchedAt: snap.fetchedAt,
+    // The address to share each calendar with, for the dashboard; null
+    // without a (readable) key file, or in fixture mode.
+    serviceAccount: snap.serviceAccount,
+    days,
+    calendars: snap.calendars,
+    events: eventsForDays(snap.events, { now, days }).map(publicEvent),
+    countdowns: buildCountdowns(snap.events, {
+      now,
+      artIndex: art.items(),
+      defaultLeadDays: snap.settings.countdownLeadDays,
+      max: snap.settings.countdownMax,
+    }),
+  }
 }
 
 const loggedLegacyStateKeys = new Set()
@@ -435,6 +522,22 @@ async function serveFile(req, res, urlPath) {
     // The manifest is polled every 5 min and must never be stale. The JPEGs are
     // immutable per filename (asset id), so they can cache hard.
     'Cache-Control': isManifest ? 'no-store' : 'public, max-age=604800',
+  })
+}
+
+// Countdown Art images. A file is named by its Immich asset id, which never
+// changes meaning, so it caches for a week. Images only, top level only:
+// index.json is served by /api/countdown-art.
+async function serveArtFile(req, res, urlPath) {
+  const hit = resolveInside(ART_DIR, urlPath)
+  if (!hit) return json(res, 403, { error: 'forbidden' })
+  const ext = extname(hit.full).toLowerCase()
+  if (!ART_EXTS.has(ext) || /[\\/]/.test(hit.rel)) return json(res, 404, { error: 'not found' })
+  const st = await statFile(hit.full)
+  if (!st) return json(res, 404, { error: 'not found' })
+  return sendFile(req, res, hit.full, st, {
+    'Content-Type': MIME[ext] || 'application/octet-stream',
+    'Cache-Control': 'public, max-age=604800',
   })
 }
 
@@ -567,6 +670,8 @@ async function handle(req, res) {
 
   if (path === '/healthz') {
     const state = currentState()
+    const cal = calendar.snapshot()
+    const artStatus = art.status()
     return json(res, 200, {
       ok: true,
       service: 'FrameServer',
@@ -579,6 +684,9 @@ async function handle(req, res) {
         timerActive: state.timer.active,
         travelDefault: state.travelDefault ? state.travelDefault.mode : null,
       },
+      calendar: { connected: cal.connected, events: cal.events.length, fetchedAt: cal.fetchedAt, error: cal.error },
+      countdownArt: { items: artStatus.items.length, syncedAt: artStatus.syncedAt },
+      airQuality: state.airQuality ? state.airQuality.label : null,
     })
   }
 
@@ -633,7 +741,7 @@ async function handle(req, res) {
       // rename reuses this route with only {id, name}; that is not the screen
       // being seen, and must not make a dead screen look alive.
       if (body.kind != null || body.config != null) markSeen(body.id)
-      travel.noteShared(reg.shared)
+      noteShared(reg.shared)
       return json(res, 200, deviceView(body.id, reg.devices[body.id], reg.shared))
     } catch (e) {
       return json(res, 400, { error: String(e.message || e) })
@@ -647,7 +755,9 @@ async function handle(req, res) {
         const reg = readRegistry()
         reg.shared = deepMerge(reg.shared, await readBody(req))
         writeRegistry(reg)
-        travel.noteShared(reg.shared) // location or departure hour may have moved
+        // Location, departure hour or the calendar list may have moved: the
+        // calendar refetches at once when its ids change.
+        noteShared(reg.shared)
         return json(res, 200, reg.shared)
       } catch (e) {
         return json(res, 400, { error: String(e.message || e) })
@@ -731,6 +841,26 @@ async function handle(req, res) {
     return json(res, 405, { error: 'GET or POST' })
   }
 
+  // --- Entry board: calendar, countdown art ---
+  if (path === '/api/calendar') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, calendarResponse(new Date(), calendarDays(url.searchParams.get('days'))))
+  }
+
+  if (path === '/api/countdown-art') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, art.status())
+  }
+
+  // Waits for the sync (seconds; a few small PNGs) and answers with the same
+  // body as GET plus `ok`, so the dashboard can render the result at once.
+  if (path === '/api/countdown-art/refresh') {
+    if (req.method !== 'POST') return json(res, 405, { error: 'POST only' })
+    if (art.running()) return json(res, 409, { ok: false, running: true, error: 'a sync is already running' })
+    const s = await art.refresh('dashboard')
+    return json(res, 200, { ok: !s.error, ...s })
+  }
+
   // --- school data ---
   if (path === '/api/schoolcal') {
     if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
@@ -770,6 +900,10 @@ async function handle(req, res) {
     return serveFile(req, res, path.slice('/stub-photos'.length))
   }
 
+  if (path.startsWith('/countdown-art/') && (req.method === 'GET' || req.method === 'HEAD')) {
+    return serveArtFile(req, res, path.slice('/countdown-art'.length))
+  }
+
   // --- the web app: last, so every route above keeps precedence ---
   if ((req.method === 'GET' || req.method === 'HEAD') && !path.startsWith('/api/')) {
     if (path === '/' || path === '/index.html') {
@@ -797,6 +931,17 @@ const server = createServer((req, res) => {
 // Before listen: restore this morning's travel default from disk and start
 // its refresh cycle, so the first /api/state already has it.
 const restoredTravel = travel.start()
+const restoredCalendar = calendar.start()
+const restoredArt = art.start()
+const restoredAir = air.start()
+
+function envSummary() {
+  const file = ENV_FILE.found
+    ? `.env set ${ENV_FILE.loaded.join(', ') || 'nothing'}` +
+      (ENV_FILE.kept.length ? ` (environment kept ${ENV_FILE.kept.join(', ')})` : '')
+    : ENV_FILE.error ? `.env unreadable (${ENV_FILE.error})` : 'no .env'
+  return `${file}; ${ENV_KEYS.map((k) => `${k} ${process.env[k] ? 'yes' : 'no'}`).join(', ')}`
+}
 
 server.listen(PORT, BIND, () => {
   console.log(`FrameServer listening on http://${BIND}:${PORT}`)
@@ -806,6 +951,16 @@ server.listen(PORT, BIND, () => {
   console.log(`  sonos  : ${SONOS_UPSTREAM} (proxied at /api/sonos/*)`)
   console.log(`  state  : ${STATE_FILE}`)
   console.log(`  flags  : ${FLAGS_FILE}`)
+  console.log(`  env    : ${envSummary()}`)
+  const calCount = calendarSettings(readRegistry().shared).calendars.length
+  console.log(`  gcal   : ${CALENDAR_FIXTURE
+    ? `FIXTURE ${CALENDAR_FIXTURE} (instead of Google); ${calCount} calendar(s) in shared.calendar`
+    : `key ${CALENDAR_KEY_FILE} (${existsSync(CALENDAR_KEY_FILE) ? 'present' : 'MISSING: /api/calendar stays empty'}); ` +
+      `${calCount} calendar(s) in shared.calendar; cache ${restoredCalendar.events} events` +
+      (restoredCalendar.fetchedAt ? ` from ${restoredCalendar.fetchedAt}` : '')}`)
+  console.log(`  art    : ${ART_DIR} (${restoredArt.items} image(s) in index.json` +
+              `${restoredArt.syncedAt ? `, written ${restoredArt.syncedAt}` : ''}); Immich album "Countdown Art", hourly`)
+  console.log(`  air    : ${restoredAir ? `restored AQI ${restoredAir.aqi} (${restoredAir.label}) from ${restoredAir.fetchedAt}` : 'no recent reading'}`)
   console.log(`  cached : schoolcal ${cachedSchool.calendar ?? 'none'} | lunch ${cachedSchool.lunch ?? 'none'} | ` +
               `travel ${restoredTravel ? `${restoredTravel.date} ${restoredTravel.mode}` : 'none'}`)
   if (!existsSync(PHOTOS_DIR)) console.warn(`  WARNING: photos dir does not exist`)

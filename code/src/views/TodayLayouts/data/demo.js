@@ -129,3 +129,118 @@ export function demoWeather(today) {
     sunset: days[0].sunset,
   }
 }
+
+// --- Entry board: calendar, countdowns, headline, air quality ----------------
+//
+// The same shapes the hub serves (GET /api/calendar, /api/state headline and
+// airQuality; docs/designs/entry-board.md), so the demo exercises the very code
+// paths live data takes. Built relative to the day the page opened and frozen
+// there by useTodayData (a state initializer), so nothing slides with the clock.
+
+export const DEMO_CALENDARS = [
+  { id: 'justin@example.com', label: 'Justin', color: '#e0457b' },
+  { id: 'sheena@example.com', label: 'Sheena', color: '#4a90e2' },
+]
+
+// Fixed on purpose: it names the 5:00 pm soccer below, whatever the time.
+export const DEMO_HEADLINE = {
+  text: 'Vinny soccer at 5:00 pm',
+  kind: 'next',
+  eventId: 'demo-soccer',
+  until: null,
+}
+
+export const DEMO_AIR_QUALITY = { pm25: 17, aqi: 31, label: 'Good', fetchedAt: null }
+
+function dayOffset(base, offsetDays) {
+  const d = new Date(base)
+  d.setDate(base.getDate() + offsetDays)
+  return d
+}
+
+function demoTimed(base, id, cal, title, offsetDays, [h1, m1], [h2, m2]) {
+  const start = atTime(base, offsetDays, { hour: h1, minute: m1 })
+  const end = atTime(base, offsetDays, { hour: h2, minute: m2 })
+  return {
+    id,
+    calendarId: cal.id,
+    calendarLabel: cal.label,
+    color: cal.color,
+    title,
+    description: '',
+    location: '',
+    allDay: false,
+    start: start.toISOString(),
+    end: end.toISOString(),
+    startDate: dateKey(start),
+    endDate: dateKey(end),
+    status: 'confirmed',
+  }
+}
+
+// endDate exclusive, as Google sends it: a one-day event ends the next day.
+function demoAllDay(base, id, cal, title, offsetDays, lengthDays) {
+  return {
+    id,
+    calendarId: cal.id,
+    calendarLabel: cal.label,
+    color: cal.color,
+    title,
+    description: '',
+    location: '',
+    allDay: true,
+    start: null,
+    end: null,
+    startDate: dateKey(dayOffset(base, offsetDays)),
+    endDate: dateKey(dayOffset(base, offsetDays + lengthDays)),
+    status: 'confirmed',
+  }
+}
+
+// demoCalendar(today) -> { events, countdowns, calendars }: eight events over
+// three days (one all-day event spans tomorrow and the day after, so it shows
+// in two columns), and two countdowns - one whose art is a hub path that does
+// not exist, so the tile's fallback runs, and one with an emoji.
+export function demoCalendar(today) {
+  const base = new Date(today)
+  base.setHours(0, 0, 0, 0)
+  const [justin, sheena] = DEMO_CALENDARS
+
+  const events = [
+    demoAllDay(base, 'demo-pj', sheena, 'PJ and Stuffy day', 0, 1),
+    demoTimed(base, 'demo-dentist', sheena, 'Chase dentist', 0, [8, 15], [9, 0]),
+    demoTimed(base, 'demo-lunch', justin, 'Lunch with Dana', 0, [12, 30], [13, 30]),
+    demoTimed(base, 'demo-soccer', justin, 'Vinny soccer', 0, [17, 0], [18, 15]),
+    demoAllDay(base, 'demo-chicago', sheena, 'Sheena in Chicago', 1, 2),
+    demoTimed(base, 'demo-piano', sheena, 'Chase piano lesson', 1, [16, 0], [16, 45]),
+    demoTimed(base, 'demo-bts', justin, 'Back to school night', 1, [18, 30], [20, 0]),
+    demoTimed(base, 'demo-swim', justin, 'Vinny swim meet', 2, [9, 0], [11, 30]),
+  ]
+
+  const countdowns = [
+    {
+      id: 'demo-cd-birthday',
+      title: "Grandma's birthday",
+      date: dateKey(dayOffset(base, 5)),
+      daysLeft: 5,
+      leadDays: 30,
+      image: null,
+      emoji: '\u{1F382}',
+      calendarLabel: justin.label,
+      color: justin.color,
+    },
+    {
+      id: 'demo-cd-cabin',
+      title: 'Cabin weekend',
+      date: dateKey(dayOffset(base, 12)),
+      daysLeft: 12,
+      leadDays: 30,
+      image: '/countdown-art/demo-missing-cabin.png',
+      emoji: null,
+      calendarLabel: sheena.label,
+      color: sheena.color,
+    },
+  ]
+
+  return { events, countdowns, calendars: DEMO_CALENDARS }
+}

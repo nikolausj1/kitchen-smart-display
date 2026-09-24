@@ -6,6 +6,8 @@ import useSonosState from '../../../hooks/useSonosState.js'
 import useImmichPhotos from '../../../hooks/useImmichPhotos.js'
 import useLunch from '../../../hooks/useLunch.js'
 import useSchoolCalendar from '../../../hooks/useSchoolCalendar.js'
+import useCalendar from '../../../hooks/useCalendar.js'
+import { useHouseState } from '../../../lib/houseState.js'
 import { decideTravelMode } from '../../../lib/travelDefault.js'
 import {
   dateKey,
@@ -17,9 +19,19 @@ import {
 import { fmtDayShort, greetingFor } from '../lib/format.js'
 import { moonPhase } from '../lib/sun.js'
 import { decideWear } from '../lib/wear.js'
+import { buildAgendaDays, countdownsFor } from '../lib/agenda.js'
 import useDailyForecast from './useDailyForecast.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
-import { DEMO_MUSIC, DEMO_SCHOOL, DEMO_TIMER, DEMO_TIMER_MINUTES, demoWeather } from './demo.js'
+import {
+  DEMO_AIR_QUALITY,
+  DEMO_HEADLINE,
+  DEMO_MUSIC,
+  DEMO_SCHOOL,
+  DEMO_TIMER,
+  DEMO_TIMER_MINUTES,
+  demoCalendar,
+  demoWeather,
+} from './demo.js'
 
 // useTodayData - the single data hook every new Today layout calls. Layouts
 // call it once and hand slices to purely presentational panels, which is what
@@ -30,6 +42,19 @@ import { DEMO_MUSIC, DEMO_SCHOOL, DEMO_TIMER, DEMO_TIMER_MINUTES, demoWeather } 
 // every screen derives the timer from them, and the hub derives the Apple TV's
 // copy with the same code. No layout posts anything, so two layouts (or two
 // screens) cannot fight over what the TV shows.
+//
+// Returns { now, demo, greeting, settings, weather, moon, school, timer, wear,
+// music, photos, calendar, agendaDays, countdowns, headline, airQuality }. The
+// Entry board's five (docs/designs/entry-board.md):
+//   calendar    the hooks/useCalendar.js snapshot: { events, countdowns,
+//               calendars, connected, fetchedAt, error, stale }
+//   agendaDays  [{ dateKey, date, label: 'Today' | 'Tomorrow' | weekday,
+//               events: [{ key, id, title, allDay, start, end, color, tint,
+//               calendarLabel }] }] for today and the next two days
+//   countdowns  calendar.countdowns with daysLeft recounted against today
+//   headline    the hub's { text, kind, eventId, until }, or null when the hub
+//               has not said so today (the layout decides the fallback)
+//   airQuality  the hub's { pm25, aqi, label, fetchedAt }, or null
 
 // URL params, parsed ONCE at module load the way lib/kioskMode.js does.
 // Reading window.location in a render body trips the React Compiler purity
@@ -82,6 +107,9 @@ export default function useTodayData() {
     FLAGS.demo ? new Date(Date.now() + DEMO_TIMER_MINUTES * 60_000) : null
   )
   const [demoFetchedAt] = useState(() => (FLAGS.demo ? Date.now() : null))
+  const [demoCalendarData] = useState(() =>
+    FLAGS.demo ? demoCalendar(startOfDay(new Date())) : null
+  )
 
   const settings = useSettings()
   const schoolSettings = settings.school
@@ -101,6 +129,8 @@ export default function useTodayData() {
   const photoData = useImmichPhotos()
   const lunch = useLunch()
   const calendar = useSchoolCalendar()
+  const liveCalendar = useCalendar()
+  const house = useHouseState()
 
   const todayKey = useMemo(() => dateKey(today), [today])
 
@@ -232,6 +262,9 @@ export default function useTodayData() {
         walking: schoolSettings?.walkingDepart ?? null,
       },
       morningEndsAt: schoolSettings?.morningEndsAt ?? null,
+      // When the school-morning window opens (the Entry board swaps its
+      // countdown tiles for the departure panel inside it).
+      autoShowAt: schoolSettings?.autoShowAt ?? null,
     }
   }, [schoolSettings, calendar, lunch, today])
 
@@ -324,6 +357,41 @@ export default function useTodayData() {
     ]
   )
 
+  // --- Entry board --------------------------------------------------------
+  //
+  // The family calendar. The demo fixture always wins in demo mode (unlike the
+  // weather): the headline fixture names one of its events, and a design shot
+  // should not depend on, or publish, whatever the family has on this week.
+  const calendarOut = useMemo(() => {
+    if (!FLAGS.demo) return liveCalendar
+    return {
+      ...demoCalendarData,
+      connected: true,
+      fetchedAt: demoFetchedAt,
+      error: null,
+      stale: false,
+    }
+  }, [liveCalendar, demoCalendarData, demoFetchedAt])
+
+  const agendaDays = useMemo(
+    () => buildAgendaDays(calendarOut.events, today),
+    [calendarOut.events, today]
+  )
+  const countdowns = useMemo(
+    () => countdownsFor(calendarOut.countdowns, today),
+    [calendarOut.countdowns, today]
+  )
+
+  // The hub's headline and air quality ride in /api/state. Only trusted once
+  // the hub has confirmed them TODAY: yesterday's "Today: PJ day", carried
+  // into this morning by a hub that went down overnight, would be wrong in a
+  // way nobody would notice. Same guard useTimer puts on noSchoolToday.
+  const houseToday = house.fetchedAt != null && dateKey(new Date(house.fetchedAt)) === todayKey
+  const headline = FLAGS.demo ? DEMO_HEADLINE : houseToday ? house.headline : null
+  // Air quality follows the weather's demo rule: a live reading wins.
+  const liveAir = houseToday ? house.airQuality : null
+  const airQuality = liveAir || (FLAGS.demo ? DEMO_AIR_QUALITY : null)
+
   return {
     now,
     demo: FLAGS.demo,
@@ -336,5 +404,10 @@ export default function useTodayData() {
     wear,
     music,
     photos,
+    calendar: calendarOut,
+    agendaDays,
+    countdowns,
+    headline,
+    airQuality,
   }
 }

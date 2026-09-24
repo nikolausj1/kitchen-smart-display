@@ -29,6 +29,17 @@
   --tl-band-yellow: #fffb00;
   --tl-band-orange: #ffa100;
   --tl-band-red: #ea0303;
+  /* US AQI bands (EPA order) for the air quality chip. The first four ride on
+   * the timer bands, so a layout that re-inks those re-inks these; purple and
+   * maroon are the EPA's own. The inks are the number on the square. */
+  --tl-aqi-good: var(--tl-band-green);
+  --tl-aqi-moderate: var(--tl-band-yellow);
+  --tl-aqi-usg: var(--tl-band-orange);
+  --tl-aqi-unhealthy: var(--tl-band-red);
+  --tl-aqi-very: #8f3f97;
+  --tl-aqi-hazardous: #7e0023;
+  --tl-aqi-ink-dark: #101214;
+  --tl-aqi-ink-light: #ffffff;
   --tl-scrim: rgba(0, 0, 0, 0.55);
 
   position: fixed;

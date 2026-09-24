@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { DEVICE_ID, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
 import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
+import { getHomeView, normalizeHomeView } from '../../shell/homeView.js'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
 import { LAYOUT_IDS, LAYOUT_LABELS, normalizeLayoutId } from '../TodayLayouts/registry.js'
+import { REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import './SettingsView.css'
 
 // If the Settings screen sees no user activity for this long, auto-bounce
-// back to the Photos view so the device returns to its ambient state.
-const IDLE_TO_PHOTOS_MS = 60_000
+// back to the home view (display.homeView: Photos unless the screen rests on
+// Today) so the device returns to its ambient state.
+const IDLE_TO_HOME_MS = 60_000
 
 // SettingsView - the four main config groups, all auto-saved to localStorage
 // via updateSettings(). Stays full-screen until the user navigates away via
@@ -17,6 +20,13 @@ const IDLE_TO_PHOTOS_MS = 60_000
 const DAY_LABELS = [
   'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
 ]
+
+// Entry board photo wash, as a fraction. Same bounds the layout enforces.
+const ENTRY_DIM_MAX = 0.9
+function entryDimOf(v) {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 0.5
+  return Math.max(0, Math.min(ENTRY_DIM_MAX, n))
+}
 
 function Row({ label, children, hint }) {
   return (
@@ -413,6 +423,10 @@ export default function SettingsView() {
   const { location, school, sonos, slideshow, display } = settings
   const { setView } = useView()
   const { albums: manifestAlbums } = useImmichPhotos()
+  // The layout this screen is actually showing: a ?layout= preview wins, as it
+  // does in TodayLayoutSwitch, so its own options are here while previewing.
+  const shownLayout = normalizeLayoutId(REQUESTED_LAYOUT || display?.todayLayout)
+  const entryPhotos = display?.entryBackdrop !== 'black'
 
   // Album picker. selectedAlbumIds=null means "all albums" - we show every
   // album toggled on. Toggling one switches us to an explicit array.
@@ -429,18 +443,20 @@ export default function SettingsView() {
     updateSettings({ slideshow: { selectedAlbumIds: [...next] } })
   }
 
-  // Idle-bounce to Photos: any touch, scroll, or input within Settings
-  // resets a 60s timer. When it fires, navigate to Photos. Listeners are
+  // Idle-bounce home: any touch, scroll, or input within Settings resets a
+  // 60s timer. When it fires, navigate to the home view (read when it fires,
+  // so changing Home view here applies to this very bounce). Listeners are
   // attached to the scroll root and use the capture phase so they fire
   // even when a child stops propagation.
   const rootRef = useRef(null)
   useEffect(() => {
     const node = rootRef.current
     if (!node) return
-    let timerId = setTimeout(() => setView('photos'), IDLE_TO_PHOTOS_MS)
+    const goHome = () => setView(getHomeView())
+    let timerId = setTimeout(goHome, IDLE_TO_HOME_MS)
     function bump() {
       clearTimeout(timerId)
-      timerId = setTimeout(() => setView('photos'), IDLE_TO_PHOTOS_MS)
+      timerId = setTimeout(goHome, IDLE_TO_HOME_MS)
     }
     const events = ['pointerdown', 'touchmove', 'wheel', 'input', 'change', 'keydown']
     events.forEach((e) => node.addEventListener(e, bump, { capture: true, passive: true }))
@@ -501,7 +517,7 @@ export default function SettingsView() {
           <h2 className="settings-section__title">Today screen</h2>
           <Row
             label="Layout"
-            hint="Framed is the original Today screen. Board, Briefing and Ambient are the new layouts. Each screen keeps its own choice."
+            hint="Framed is the original Today screen. Board, Briefing, Ambient and Entry board are the new layouts. Each screen keeps its own choice."
           >
             <select
               className="settings-select"
@@ -518,6 +534,49 @@ export default function SettingsView() {
               ))}
             </select>
           </Row>
+          <Row
+            label="Home view"
+            hint="What this screen rests on: after the school morning, when it starts up outside it, and when Settings or Now Playing sit idle."
+          >
+            <select
+              className="settings-select"
+              value={normalizeHomeView(display?.homeView)}
+              onChange={(e) =>
+                updateSettings({ display: { homeView: normalizeHomeView(e.target.value) } })
+              }
+              data-interactive="true"
+            >
+              <option value="photos">Photos</option>
+              <option value="today">Today</option>
+            </select>
+          </Row>
+          {shownLayout === 'entry' && (
+            <Row
+              label="Photos behind the board"
+              hint="Entry board: the slideshow, darkened, behind the board. Off is the plain black board."
+            >
+              <OnOffSelect
+                on={entryPhotos}
+                onChange={(on) =>
+                  updateSettings({ display: { entryBackdrop: on ? 'photos' : 'black' } })
+                }
+              />
+            </Row>
+          )}
+          {shownLayout === 'entry' && entryPhotos && (
+            <Row label="Darken photos" hint="How much the photos behind the board are darkened, so the board reads over any picture.">
+              <Slider
+                value={Math.round(entryDimOf(display?.entryDim) * 100)}
+                min={0}
+                max={ENTRY_DIM_MAX * 100}
+                step={5}
+                suffix="%"
+                onChange={(pct) =>
+                  updateSettings({ display: { entryDim: entryDimOf(pct / 100) } })
+                }
+              />
+            </Row>
+          )}
         </section>
 
         <section className="settings-section">
@@ -543,7 +602,7 @@ export default function SettingsView() {
               onChange={(t) => updateSettings({ school: { autoShowAt: t } })}
             />
           </Row>
-          <Row label="Morning ends at" hint="Today screen auto-switches back to Photos at this time on school days.">
+          <Row label="Morning ends at" hint="On school days the Today screen hands back to the home view (above) at this time.">
             <TimeOfDay
               hour={school.morningEndsAt?.hour ?? 8}
               minute={school.morningEndsAt?.minute ?? 0}
