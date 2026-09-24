@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "deploy": "../deploy.sh",
     "deploy:pi": "../deploy.sh pi",
-    "deploy:hub": "../deploy.sh hub"
+    "deploy:hub": "../deploy.sh hub",
+    "deploy:migrate": "../deploy.sh migrate"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

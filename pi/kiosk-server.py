@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 # Kitchen Smart Display - kiosk HTTP server.
 #
+# TODO(2026-10-01, end of the rollback week that began 2026-09-24): delete the
+# legacy shared-service routes below. They moved to FrameServer on the NUC and
+# stay here only so a screen can be pointed back at the Pi during the soak:
+#   GET/POST /api/state
+#   GET/POST /api/flags, POST /api/flags/resolve
+#   GET      /api/lunch
+#   GET      /api/schoolcal
+#   GET      /api/sonos/*
+# Take their helpers, STATE_FILE, FLAGS_FILE and SONOS_UPSTREAM with them, and
+# flip BIND's default to 127.0.0.1 (see the note there). The Pi's own
+# node-sonos-http-api service can be retired at the same time.
+#
+# Topology since 2026-09-24 (docs/designs/echo-show-and-hub.md): FrameServer
+# (nuc.local:8095) is the hub every screen depends on. It serves the web app to
+# the Echo Show and laptops and hosts every shared service: photos, the
+# settings registry, house state, lunch, the school calendar, the photo-flag
+# queue and the Sonos proxy. This Pi serves the kitchen only.
+#
 # Replaces `python3 -m http.server`. Serves the built React app from
-# /home/pi/kiosk over HTTP on 127.0.0.1:8080, and adds two endpoints the
-# kiosk uses to control the display panel power:
+# /home/pi/kiosk on port 8080 to the kitchen's own Chromium (which loads
+# http://localhost:8080/), and owns the kitchen panel's hardware:
 #
 #   POST /api/display/off  -> shells out to wlr-randr --output <out> --off
 #   POST /api/display/on   -> shells out to wlr-randr --output <out> --on
@@ -11,6 +29,9 @@
 #   POST /api/display/brightness {"value": 0-100} -> DDC/CI backlight
 #   GET  /api/display/brightness -> {"value": N}
 #   POST /api/display/power {"on": bool} -> DDC/CI panel standby
+#
+# Every /api/display/* route answers loopback callers only and 403s the rest:
+# the panel belongs to the Chromium on this Pi, not to anything on the LAN.
 #
 # The output name is auto-detected from wlr-randr at request time (so the
 # server stays correct even if the cable is plugged into a different HDMI
@@ -31,14 +52,14 @@ from socketserver import ThreadingMixIn
 from urllib.parse import parse_qs, urlparse
 
 KIOSK_DIR = '/home/pi/kiosk'
-# Shared settings state synced from the kitchen display to secondary clients
-# (the Apple TV). The kitchen POSTs a subset of settings here on change; the
-# TV polls GET /api/state and applies them. Persisted to disk so it survives
-# Pi restarts.
+# LEGACY, rollback week only (see the TODO at the top). Shared state the
+# kitchen used to POST here for the Apple TV to poll; FrameServer's /api/state
+# replaced it. Persisted to disk so it survives Pi restarts.
 STATE_FILE = '/home/pi/state.json'
-# Photo-location correction flags. The kitchen long-press-flags a photo whose
-# caption is wrong; flags accumulate here as a list and get triaged later on
-# the Mac. Persisted to disk so they survive Pi restarts.
+# LEGACY, rollback week only. Photo-location correction flags (the kitchen
+# long-press-flags a photo whose caption is wrong). The queue now lives on
+# FrameServer's /api/flags; `deploy.sh migrate` copied this file's list there.
+# Persisted to disk so they survive Pi restarts.
 FLAGS_FILE = '/home/pi/flags.json'
 # Photo-refresh: the Pi rebuilds its own photo manifest from Immich (see
 # docs/designs/photo-refresh-automation.md). photo-refresh.sh owns the status
@@ -52,17 +73,28 @@ REFRESH_STATUS_FILE = '/home/pi/photo-build/refresh-status.json'
 # (the wrapper traps EXIT, so this should never trigger in practice).
 REFRESH_STALE_SECS = 45 * 60
 PORT = 8080
-# Bind on all interfaces so LAN clients (the Apple TV) can reach the kiosk
-# app and the /api endpoints. The kitchen Chromium still loads via localhost.
-BIND = '0.0.0.0'
+# 0.0.0.0 for the rollback week, so a screen pointed back at the Pi still
+# reaches the legacy routes. After the soak it flips to 127.0.0.1: nothing on
+# the LAN needs this Pi any more (every screen talks to FrameServer, and the
+# kitchen's Chromium loads the app from localhost). Two launchers run this
+# file and race after a deploy: the labwc autostart's respawn loop (no
+# KIOSK_BIND) and kiosk-restart.sh (passes KIOSK_BIND, falling back to
+# 0.0.0.0). Change the default here and that fallback together, or export
+# KIOSK_BIND to both.
+BIND = os.environ.get('KIOSK_BIND', '0.0.0.0')
+# The only callers allowed to drive the panel (/api/display/*). The server
+# binds IPv4, so in practice this is 127.0.0.1; the IPv6 forms cover a
+# dual-stack bind.
+LOCAL_ONLY_CLIENTS = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
 
-# Upstream node-sonos-http-api (runs locally on the Pi). The TV reaches it
-# through the /api/sonos/* proxy below, so node-sonos-http-api itself does
-# not need to be exposed on the LAN.
+# LEGACY, rollback week only. Upstream node-sonos-http-api on this Pi, behind
+# the /api/sonos/* proxy below. Every screen now goes through FrameServer's
+# /api/sonos proxy to the NUC's own node-sonos-http-api instead.
 SONOS_UPSTREAM = 'http://127.0.0.1:5005'
 
-# School-schedule data sources, fetched server-side (the kiosk browser would
-# hit CORS) and cached in memory.
+# LEGACY, rollback week only (FrameServer serves both now). School-schedule
+# data sources, fetched server-side (the kiosk browser would hit CORS) and
+# cached in memory.
 #   GET /api/lunch?school=<slug>  -> today-ish lunch menu, parsed + compact
 #   GET /api/schoolcal            -> no-school ranges + first/last day, from the
 #                                    SPS "School Year Dates" iCal feed
@@ -528,6 +560,34 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _refuse_remote_display(self):
+        """403 any /api/display/* request not from loopback. True = refused.
+
+        The panel belongs to the kitchen's own Chromium, which loads the app
+        from localhost. Before 2026-09-24 any LAN caller could drive it: the
+        kitchen bundle opened on another device with no URL flags called
+        itself `kitchen` and POSTed /api/display/* to its own origin, which on
+        this Pi is the kitchen's backlight.
+        """
+        path = urlparse(self.path).path
+        if path != '/api/display' and not path.startswith('/api/display/'):
+            return False
+        client = self.client_address[0]
+        if client in LOCAL_ONLY_CLIENTS:
+            return False
+        print(f'refused {self.command} {path} from {client}: display control is local-only',
+              file=sys.stderr)
+        # Drain a small body first: closing with unread bytes can RST the
+        # socket before the caller reads the 403.
+        try:
+            length = min(int(self.headers.get('Content-Length') or 0), 64 * 1024)
+            if length > 0:
+                self.rfile.read(length)
+        except Exception:
+            pass
+        self._json(403, {'ok': False, 'error': 'display control is local-only'})
+        return True
+
     def _write_state(self):
         try:
             length = int(self.headers.get('Content-Length', 0) or 0)
@@ -626,6 +686,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(502, {'ok': False, 'error': str(e)})
 
     def do_GET(self):
+        if self._refuse_remote_display():
+            return
         if self.path == '/api/display/state':
             out = detect_output()
             state = get_display_state(out)
@@ -665,6 +727,8 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if self._refuse_remote_display():
+            return
         if self.path == '/api/display/off':
             ok, info = set_display(False)
             return self._json(200 if ok else 500, {'ok': ok, 'output': info if ok else None, 'error': None if ok else info})

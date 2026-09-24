@@ -46,8 +46,9 @@ echo "starting kiosk-server with WAYLAND_DISPLAY=$WAYLAND_SOCK"
 # which hid a genuine diagnostic (the DDC panel-wake line) during the 2026-08-18
 # hardware-dimming work. Losing a race is harmless; losing the log is not.
 { echo; echo "=== kiosk-server start $(date "+%F %T") ==="; } >>/tmp/kiosk-server.log
-setsid env WAYLAND_DISPLAY="$WAYLAND_SOCK" python3 /home/pi/kiosk-server.py \
-  >>/tmp/kiosk-server.log 2>&1 </dev/null &
+# KIOSK_BIND: see BIND in kiosk-server.py; this fallback must match its default.
+setsid env WAYLAND_DISPLAY="$WAYLAND_SOCK" KIOSK_BIND="${KIOSK_BIND:-0.0.0.0}" \
+  python3 /home/pi/kiosk-server.py >>/tmp/kiosk-server.log 2>&1 </dev/null &
 disown 2>/dev/null || true
 
 # 4. Bounce Chromium. The existing autostart's `while true; do chromium...

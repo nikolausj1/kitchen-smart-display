@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Triage step for photo-location corrections.
 //
-// Pulls the unresolved flags from the Pi, recovers each photo's GPS from
-// Immich and the source that named it from the location cache, and writes a
-// self-serve review page to _review/flag-review.html. Justin opens it, fills
-// in the correct labels, clicks Export, and drops the downloaded file into
-// _inbox/ for flags-apply.mjs.
+// Pulls the unresolved flags from the hub (FrameServer /api/flags, where the
+// queue has lived since 2026-09-24; it was on the kitchen Pi before), recovers
+// each photo's GPS from Immich and the source that named it from the location
+// cache, and writes a self-serve review page to _review/flag-review.html.
+// Justin opens it, fills in the correct labels, clicks Export, and drops the
+// downloaded file into _inbox/ for flags-apply.mjs.
 //
 // Usage:
 //   node --env-file=.env scripts/flags-review.mjs
-//   (optional)  PI_BASE=http://smartdisplay.local:8080
+//   (optional)  HUB_BASE=http://nuc.local:8095
 
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -23,7 +24,7 @@ const REVIEW_DIR = join(PROJECT_ROOT, '_review')
 const OUT = join(REVIEW_DIR, 'flag-review.html')
 const LOCATION_CACHE = join(__dirname, '.location-cache.json')
 
-const PI_BASE = (process.env.PI_BASE || 'http://smartdisplay.local:8080').replace(/\/+$/, '')
+const HUB_BASE = (process.env.HUB_BASE || 'http://nuc.local:8095').replace(/\/+$/, '')
 const immichUrl = (process.env.IMMICH_URL || '').replace(/\/+$/, '')
 const immichKey = process.env.IMMICH_API_KEY || ''
 
@@ -131,11 +132,11 @@ document.getElementById('export').addEventListener('click', () => {
 async function main() {
   let flags = []
   try {
-    const res = await fetch(`${PI_BASE}/api/flags?unresolved=1`)
+    const res = await fetch(`${HUB_BASE}/api/flags?unresolved=1`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     flags = await res.json()
   } catch (e) {
-    console.error(`! could not reach the Pi flags endpoint at ${PI_BASE}: ${e.message}`)
+    console.error(`! could not reach the hub flags endpoint at ${HUB_BASE}: ${e.message}`)
     process.exit(1)
   }
   if (!Array.isArray(flags)) flags = []

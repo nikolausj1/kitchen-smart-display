@@ -7,15 +7,15 @@
 // resolve flags here, so you can eyeball custom-places.json and only resolve
 // the flags after a successful refresh.
 //
-// Since the 2026-08 migration this hand-off spans TWO hosts:
-//   FrameServer (nuc.local:8095)  owns custom-places.json and the rebuild
-//   kitchen Pi  (smartdisplay)    still owns the flag queue (/api/flags)
-// See docs/designs/photo-refresh-automation.md.
+// The whole hand-off lives on FrameServer (nuc.local:8095): it owns
+// custom-places.json and the rebuild (since the 2026-08 migration) and the
+// flag queue at /api/flags (since 2026-09-24; it was on the kitchen Pi).
+// See docs/designs/photo-refresh-automation.md and echo-show-and-hub.md.
 //
 // Usage:
 //   node scripts/flags-apply.mjs [path-to-flag-corrections.json]
 //   (defaults to the newest _inbox/flag-corrections*.json)
-//   Override target file with KIOSK_CUSTOM_PLACES_PATH.
+//   Override target file with KIOSK_CUSTOM_PLACES_PATH, the hub with HUB_BASE.
 
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
@@ -27,8 +27,7 @@ const PROJECT_ROOT = resolve(__dirname, '..', '..')
 const INBOX = join(PROJECT_ROOT, '_inbox')
 const CUSTOM_PLACES =
   process.env.KIOSK_CUSTOM_PLACES_PATH || join(PROJECT_ROOT, 'custom-places.json')
-// The Pi still holds the flag queue; FrameServer holds the build inputs.
-const PI_BASE = (process.env.PI_BASE || 'http://smartdisplay.local:8080').replace(/\/+$/, '')
+// FrameServer holds the build inputs, the rebuild and the flag queue.
 const HUB_BASE = (process.env.HUB_BASE || 'http://nuc.local:8095').replace(/\/+$/, '')
 const HUB_SSH = process.env.HUB_SSH || 'micro@nuc.local'
 const HUB_DIR = process.env.HUB_DIR || 'C:/Services/FrameServer'
@@ -100,11 +99,11 @@ async function main() {
   }
   const ids = applied.map((a) => a.assetId).filter(Boolean)
   console.log('\nNext steps (push the corrections to FrameServer, let it rebuild, then resolve')
-  console.log('the flags on the Pi, which still owns the flag queue):')
+  console.log('the flags in its queue):')
   console.log(`  scp '${CUSTOM_PLACES}' ${HUB_SSH}:${HUB_DIR}/custom-places.json`)
   console.log(`  curl -s -X POST ${HUB_BASE}/api/photos/refresh`)
   console.log(`  curl -s ${HUB_BASE}/api/photos/refresh/status   # wait for running:false, ok:true`)
-  console.log(`  curl -s -X POST -H 'Content-Type: application/json' -d '${JSON.stringify({ assetIds: ids })}' ${PI_BASE}/api/flags/resolve`)
+  console.log(`  curl -s -X POST -H 'Content-Type: application/json' -d '${JSON.stringify({ assetIds: ids })}' ${HUB_BASE}/api/flags/resolve`)
 }
 
 main()
