@@ -413,7 +413,8 @@ function renderDevice(dev) {
       select([[0, 'Shadow box'], [1, 'Fill'], [2, 'Fill + music']], tv.artDisplay,
         (v) => patchDevice(dev.id, { tv: { artDisplay: Number(v) } })))
     row(b, 'Music backdrop', 'Framed Now Playing background',
-      select([[0, 'Drift'], [1, 'Lava'], [2, 'Marble'], [3, 'Ink'], [7, 'Current']], tv.framedBackdrop,
+      select([[0, 'Still'], [1, 'Drift'], [2, 'Lava'], [3, 'Smoke'], [4, 'Caustics'],
+        [5, 'Ripple'], [6, 'Bars'], [7, 'Marble'], [8, 'Mixtape']], tv.framedBackdrop,
         (v) => patchDevice(dev.id, { tv: { framedBackdrop: Number(v) } })))
 
     const m = card('Mats', 'Picture-frame mat per view')
