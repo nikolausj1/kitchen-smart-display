@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-23
-version: 5.9
+version: 6.0
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -109,9 +109,10 @@ pipeline and phases: `docs/designs/mixtape.md` (v1.1, reviewed).
 plus six Opus workers: headless-Blender cassette and three deck styles, 36 option
 renders, hand-made logos for six brands, 17 OpenAI textures, two Runway eject
 references, and the options sheet `_review/mockups/mixtape-options.html`.
-**Waiting on Justin**: deck style, door on/off, extras, tape scale (the sheet's
-"Copy decisions" button pastes the picks). Then Phase 1, the hero tape in
-SwiftUI, with a Cycles re-render of the chosen look.
+**Look chosen the same evening** from a ChatGPT reference image (silver 70s,
+door on, VU + keys, about 50%, warm). Pipeline pivots to camera projection of the
+photo onto Blender proxies; proof of concept and upscaler bake-off in progress,
+then Phase 1 is re-planned around it.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 
@@ -454,6 +455,16 @@ captures decisions made during working sessions.
   the Pi port reuses them; logos are hand-made vectors because AI image tools
   garble lettering. Deck style, door and panel extras are chosen from an
   options sheet first. Design: `docs/designs/mixtape.md`.
+- **2026-09-23 - Mixtape look chosen from a ChatGPT reference; pipeline pivots to
+  camera projection.** Justin skipped the options form and supplied a photoreal
+  image of the target (silver 70s deck, framed smoked door, lit VU meters,
+  transport keys, tape at about 50%, warm glow, fictional "Horizon HX-7" brand,
+  full-face label). Eevee and even Cycles will not reach it, so the plates come
+  from the photograph and Blender is demoted to geometry and motion via camera
+  projection (photo projected onto a 3D proxy that animates the eject, door and
+  key press). Proof of concept and an upscaler bake-off (1672 px source, 3840 px
+  screen) run before Phase 1 is re-planned. Design: `docs/designs/mixtape.md`,
+  "The chosen look" and "Camera projection".
 - **2026-09-23 - Mixtape review: one tape per song, empty well on stop, packs as a
   progress bar.** The design review dropped the album-keyed hybrid (eject on album
   change, rewind whir between songs) for a plain per-song eject: Justin wants to

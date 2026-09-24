@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-09-23
-version: 3.9
+version: 4.0
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -29,8 +29,6 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Waiting on Me
 
-- [ ] **Pick the Mixtape look** - open `_review/mockups/mixtape-options.html` (double-click in Finder), choose deck style, door, extras and tape scale, press "Copy decisions" and paste into chat (~10 min)
-      - unblocks: Mixtape Phase 1, the first cassette running in the Apple TV app
 - [ ] **Review the three Today layouts and deploy the kitchen bundle** - open `_review/today-layouts/README.md`, look at the shots, try them on your Mac (`cd code && npm run dev`, then `http://localhost:5173/?device=dev-mac&layout=board&demo=1`), then `cd code && npm run deploy:pi` outside the school-morning window (~20 min)
       - unblocks: choosing a layout on the kitchen panel (Settings > Today screen), and it carries the fix for kitchen settings not persisting. `npm run deploy:hub` afterwards lands the server half of that fix (optional; the client half suffices).
 - [ ] **Replace the kitchen Pi's power supply** - it is running off a USB-A port
@@ -102,7 +100,7 @@ Wrong captions get long-press-flagged on the kitchen display and queue up on the
 
 Topics we are actively talking through. Each gets its detail captured per-topic (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary + decision live here once settled.
 
-**Mixtape: cassette deck Now Playing** (opened and decided 2026-09-23; Phase 0 look development done the same day, on `feature/mixtape`, not merged). A photoreal cassette in a tape deck as a new TV music style, full-bleed, reels turning with real-deck physics, album art and handwritten metadata on the label, a collection of 12 real-brand tapes, eject-and-insert when the album changes. Apple TV first; the kitchen Pi later as a touch-first version where eject is the station picker. Done so far: a reproducible headless-Blender pipeline (cassette, three deck styles, 36 option renders, hand-made brand logos, generated textures) and an options sheet at `_review/mockups/mixtape-options.html`. Waiting on Justin to pick deck style, door, extras and tape scale before Phase 1 (the SwiftUI hero tape). Design: `docs/designs/mixtape.md`.
+**Mixtape: cassette deck Now Playing** (opened and decided 2026-09-23; Phase 0 look development done the same day, on `feature/mixtape`, not merged). A photoreal cassette in a tape deck as a new TV music style, full-bleed, reels turning with real-deck physics, album art and handwritten metadata on the label, a collection of 12 real-brand tapes, eject-and-insert when the album changes. Apple TV first; the kitchen Pi later as a touch-first version where eject is the station picker. Done so far: a reproducible headless-Blender pipeline (cassette, three deck styles, 36 option renders, hand-made brand logos, generated textures) and an options sheet at `_review/mockups/mixtape-options.html`. Look chosen from a ChatGPT reference image (silver 70s deck, door, lit VU meters, keys); the pipeline is pivoting to camera projection of that photo onto Blender proxies, with a proof of concept and an upscaler test running before Phase 1 is re-planned. Design: `docs/designs/mixtape.md`.
 
 **Today, second layout** (opened 2026-08-31, BUILT 2026-09-04 as three layouts, in review). Board, Briefing and Ambient are on `feature/today-layouts`; see `docs/designs/today-layouts.md` and `_review/today-layouts/`. Remaining from the original topic: the TV port, auto-select by time of day, the house name as a setting. The original note follows for history. Sourced from a review of Theatrium, a commercial tvOS home-dashboard app. Leave Framed Today as it is and add a second selectable Today layout, a calm board of six to eight panels, chosen per screen through the hub's existing per-device settings. Framed Today stays the 6-8am departure instrument; the board is the rest of the day. This is also what unblocks the long-deferred "Configurable Today panels" idea, since the ROADOM living-room screen is finally a screen that wants a different composition. Open: which surfaces get it, auto-select vs manual, whether panels are focusable, and a name. Pixel shift is a prerequisite, since a static grid would be the first thing on our screens that does not drift. Full detail and the borrowed conventions are in BACKLOG. Next step is an HTML mockup in `_review/mockups/` before any SwiftUI.
 

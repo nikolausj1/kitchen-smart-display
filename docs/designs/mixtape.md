@@ -2,7 +2,7 @@
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.3
+version: 1.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -18,7 +18,7 @@ it looks like somebody ejected one tape and put in another. There is a collectio
 tapes (real vintage brands, different label styles, different amounts of wear), so it
 is not the same cassette for every song.
 
-Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 look development done 2026-09-23; waiting on Justin's picks from the options sheet.**
+Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 done and the look picked 2026-09-23 (see "The chosen look"); pipeline pivot to camera projection under proof of concept.**
 Apple TV first; the kitchen Pi follows as its own, more interactive, experience (see
 "Phase 2: the kitchen Pi").
 
@@ -56,6 +56,34 @@ This reverses part of the 2026-08-31 Theatrium decision ("retro visualiser objec
 fight the framed-art aesthetic"). The distinction we are drawing: the iPod and
 mirrorball were novelty props floating over the art; Mixtape is a photographed still
 life that replaces the frame entirely and is opt-in from the backdrop cycle.
+
+## The chosen look (2026-09-23)
+
+Justin answered the options sheet with a reference image he generated in ChatGPT,
+kept at `art-src/mixtape/reference/horizon_deck_reference.png` (1672x941): a
+straight-on **silver late-70s deck** with walnut cheeks, the tape behind a **framed
+smoked door**, two **lamp-lit VU meters**, a row of **transport keys** (REW, PLAY,
+FF, STOP, PAUSE) with the PLAY key lit, an output knob and phones jack, no tape
+counter, the tape at roughly **50% of frame width**, and a warm amber glow through
+the reels. The deck brand is fictional (**Horizon HX-7**), which keeps real logos to
+the tapes only. The label is **full-face**: album art at the left, artist / album /
+song at the right, the window cut through the middle.
+
+Consequence: Blender renders will not reach this. The plates come from the
+photograph; Blender's job becomes geometry and motion, see "Camera projection".
+
+## Camera projection (pipeline pivot, proof of concept 2026-09-23)
+
+The photo is projected from a fixed camera onto a crude 3D proxy (faceplate, well
+recess, bottom-hinged door, cassette box, keys). Rendered from that camera the
+proxy reproduces the photo; animating the proxy (cassette lifting, door tilting,
+key pressing) moves the photo's pixels with the geometry, in the photo's own
+lighting. Surfaces the photo never saw (the cassette's underside, the well behind
+the door) are filled once by an image-edit inpaint or a flat material. Tape
+variants: Blender geometry plus a masked image-edit pass styled on the reference,
+with the label and hubs left blank for the vector header, art, handwriting and the
+code-driven reels. The 1672 px source needs an upscale to 3840 (bake-off in
+progress). Only valid from this one viewpoint, which is the decision anyway.
 
 ## What the viewer sees
 
