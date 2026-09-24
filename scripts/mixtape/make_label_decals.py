@@ -4,13 +4,13 @@ Run with the system python3 (needs Pillow, numpy and rsvg-convert on PATH):
     python3 scripts/mixtape/make_label_decals.py
 
 For every brand x style (printed, blank) writes
-    art-src/mixtape/textures/labels/<brand>_<style>_strip.png   top strip, 88 x 17.6 mm
+    art-src/mixtape/textures/labels/<brand>_<style>_strip.png   top strip, 87 x 17.6 mm
 and for every brand
     art-src/mixtape/textures/labels/<brand>_band.png            plain band below the window
 
-Pipeline per strip: rsvg-convert the SVG 2000 px wide, centre it on the strip canvas
-(uniform scale, see label_layout.py), extend the right-hand edge column out to both
-strip ends, multiply in the brand's paper grain, then overlay wear: grime (multiply),
+Pipeline per strip: rsvg-convert the 88 x 17.6 mm SVG at 40 px/mm (1:1 with the strip,
+see label_layout.py), crop the 0.5 mm bleed off each side to the 87 mm strip,
+multiply in the brand's paper grain, then overlay wear: grime (multiply),
 foxing (multiply) and scuffs (lighten towards bare paper). The band is the SVG
 background colour through the same paper and wear. Deterministic (fixed tile offsets
 per brand).
@@ -47,10 +47,10 @@ def lum(a):
     return a[..., 0] * 0.2126 + a[..., 1] * 0.7152 + a[..., 2] * 0.0722
 
 
-def rasterise(svg, width):
+def rasterise(svg, width, height):
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
         out = f.name
-    subprocess.run(["rsvg-convert", "-w", str(width), svg, "-o", out], check=True)
+    subprocess.run(["rsvg-convert", "-w", str(width), "-h", str(height), svg, "-o", out], check=True)
     im = np.asarray(Image.open(out).convert("RGB"), dtype=np.float32) / 255.0
     os.unlink(out)
     return im
@@ -88,15 +88,9 @@ def main():
     sw, sh = LL.STRIP_PX
     for bi, brand in enumerate(LL.BRANDS):
         for style in LL.STYLES:
-            art = rasterise(LL.svg_path(brand, style), LL.SVG_RASTER_W)
-            art = np.asarray(Image.fromarray((art * 255).astype(np.uint8)).resize((LL.SVG_RASTER_W, sh), Image.LANCZOS),
-                             dtype=np.float32) / 255.0
-            canvas = np.empty((sh, sw, 3), dtype=np.float32)
-            x0 = (sw - LL.SVG_RASTER_W) // 2
-            edge = art[:, -2:-1, :]  # right edge column: background + full-width rules
-            canvas[:, :x0] = edge
-            canvas[:, x0 + LL.SVG_RASTER_W:] = edge
-            canvas[:, x0:x0 + LL.SVG_RASTER_W] = art
+            art = rasterise(LL.svg_path(brand, style), LL.SVG_RASTER_W, sh)
+            assert art.shape[0] == sh, "SVG raster height %d != strip %d" % (art.shape[0], sh)
+            canvas = art[:, LL.CROP_X0:LL.CROP_X0 + sw]
             out = weather(canvas, brand, bi + 1)
             p = LL.strip_png(brand, style)
             save(out, p)
@@ -107,7 +101,8 @@ def main():
         out = weather(band, brand, bi + 11)
         save(out, LL.band_png(brand))
         print("band ", LL.band_png(brand), bw, "x", bh)
-    print("svg scale %.4f, svg width on strip %.2f mm, %.1f px/mm" % (LL.SVG_SCALE, LL.SVG_W_MM, LL.PX_PER_MM))
+    print("svg scale %.4f (1:1), svg %.1f mm wide, %.2f mm bleed per side cropped, %.1f px/mm"
+          % (LL.SVG_SCALE, LL.SVG_W_MM, LL.BLEED_MM, LL.PX_PER_MM))
 
 
 if __name__ == "__main__":

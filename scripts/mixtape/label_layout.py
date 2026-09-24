@@ -3,12 +3,12 @@
 Pure Python (no bpy, no PIL) so both the system python3 (make_label_decals.py) and
 Blender's python (lookdev_cassette.py, render_options.py) import the same numbers.
 
-The label artwork is an 880 x 300 SVG (0.1 mm units = 88 x 30 mm). The cassette only
-has about 17.6 mm of face between the shell's top rim and the window, so the SVG is
-scaled UNIFORMLY to the strip height (never squashed) and centred on the strip. The
-strip is 87 mm wide like the old label; the rest of its width is filled by repeating
-the SVG's right-hand edge column (background plus the full-width header rules), so
-the printed rules run the full width of the tape.
+The label artwork is an 880 x 176 SVG (0.1 mm units = 88 x 17.6 mm), authored at the
+exact height of the paper strip between the shell's top rim and the window (work
+package C2). It maps 1:1 onto the strip (SVG_SCALE = 1.0), no scaling and no padding.
+The strip on the cassette face is 87 mm wide, so the 88 mm SVG is centred on it and
+0.5 mm per side is bleed that the decal crops off; build_logos.py keeps all type and
+the art slot inside that.
 
 Coordinates: mm on the cassette face, origin at the shell centre, x right, y up
 (the same frame as build_cassette.py).
@@ -25,7 +25,7 @@ LABEL_TEX = os.path.join(ART, "textures", "labels")
 BRANDS = ["tdk", "maxell", "sony", "basf", "memorex", "fuji"]
 STYLES = ["printed", "blank"]
 
-SVG_W, SVG_H = 880.0, 300.0  # viewBox units (0.1 mm at 1:1)
+SVG_W, SVG_H = 880.0, 176.0  # viewBox units (0.1 mm at 1:1)
 
 # Paper strip above the window and the plain band below it (mm, cassette face).
 # Window cut in the shell is +-33 x +-11.5; shell top edge at +31.9; the raised pad
@@ -36,13 +36,17 @@ PAPER_Z0, PAPER_Z1 = 6.0, 6.12  # label paper sits on the shell face (z = 6)
 
 STRIP_H = STRIP["y1"] - STRIP["y0"]
 STRIP_W = STRIP["x1"] - STRIP["x0"]
-SVG_SCALE = STRIP_H / (SVG_H * 0.1)  # uniform: SVG mm -> strip mm
-SVG_W_MM = SVG_W * 0.1 * SVG_SCALE
+SVG_SCALE = STRIP_H / (SVG_H * 0.1)  # SVG mm -> strip mm; 1.0 since C2
+assert abs(SVG_SCALE - 1.0) < 1e-9, "label SVG height must equal the strip height"
+SVG_W_MM = SVG_W * 0.1 * SVG_SCALE  # 88 mm; centred on the 87 mm strip
+BLEED_MM = (SVG_W_MM - STRIP_W) / 2  # cropped off each side by the decal step
 
-# Decal raster: the SVG itself is rasterised 2000 px wide.
-SVG_RASTER_W = 2000
-PX_PER_MM = SVG_RASTER_W / SVG_W_MM
+# Decal raster: 40 px per mm. The SVG is rasterised 88 mm wide, then cropped to the
+# 87 mm strip.
+PX_PER_MM = 40
+SVG_RASTER_W = int(round(SVG_W_MM * PX_PER_MM))
 STRIP_PX = (int(round(STRIP_W * PX_PER_MM)), int(round(STRIP_H * PX_PER_MM)))
+CROP_X0 = (SVG_RASTER_W - STRIP_PX[0]) // 2
 BAND_PX = (STRIP_PX[0], int(round((BAND["y1"] - BAND["y0"]) * PX_PER_MM)))
 
 # Per brand: paper stock multiplied in and wear level (0 light .. 1 beat up).
@@ -86,7 +90,7 @@ def read_svg(brand, style):
     for el in root.iter():
         tag = _strip_ns(el.tag)
         if bg is None and tag == "rect" and el.get("x") == "0" and el.get("y") == "0" \
-                and el.get("width") == "880" and el.get("height") == "300":
+                and float(el.get("width")) == SVG_W and float(el.get("height")) == SVG_H:
             bg = el.get("fill")
         if el.get("id"):
             named[el.get("id")] = el

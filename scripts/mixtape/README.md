@@ -2,7 +2,7 @@
 title: "Mixtape asset scripts"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.1
+version: 1.2
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [mixtape, blender, scripts, assets]
 ---
@@ -55,8 +55,8 @@ and `--match <substring of file name>` to render a subset; `index.json` and
 
 | Script | What it does | Output |
 |--------|--------------|--------|
-| `label_layout.py` | Pure-Python shared numbers: strip and band rects (mm), uniform SVG scale, SVG named-element parser (`art_slot`, `field_*`, `rule_1..3`, background), SVG to cassette-mm mapping, per-brand paper and wear level. Imported by both pythons. | none |
-| `make_label_decals.py` | rsvg-convert each `label_<style>.svg` 2000 px wide, centre it on the strip canvas, extend the right edge column to both ends, multiply paper grain, overlay grime, foxing and scuffs. Plus a plain band per brand. | `art-src/mixtape/textures/labels/<brand>_<style>_strip.png` (3370 x 682), `<brand>_band.png` (3370 x 244) |
+| `label_layout.py` | Pure-Python shared numbers: strip and band rects (mm), 1:1 SVG mapping (88 x 17.6 mm SVG centred on the 87 mm strip, 0.5 mm bleed per side), SVG named-element parser (`art_slot`, `field_*`, `rule_1..3`, background), SVG to cassette-mm mapping, per-brand paper and wear level. Imported by both pythons. | none |
+| `make_label_decals.py` | rsvg-convert each `label_<style>.svg` at 40 px/mm (1:1, no scaling or padding), crop the 0.5 mm bleed off each side, multiply paper grain, overlay grime, foxing and scuffs. Plus a plain band per brand. | `art-src/mixtape/textures/labels/<brand>_<style>_strip.png` (3480 x 704), `<brand>_band.png` (3480 x 252) |
 | `mixtape_common.py` | bpy helpers: `set_tape_scale` (moves Cam_Front only, tight clip range), textured materials, `apply_tape`, `set_deck_parts`, manifest builders (reuse `render_phase0` projection helpers), 16:10 safe-zone check. | none |
 | `lookdev_cassette.py` | Opens `cassette_base.blend`, replaces the 87 x 45 mm `Label` with `Label_Strip` + `Label_Band`, 12 strip + 6 band materials, materials pass (plastic grain, roughness from texture, clear coat, scuffed window, darker AO hub, metal screws, glossier pack), new `Shell_White` / `Shell_Clear`, real origins on transparent parts so BLENDED sorting works. | `art-src/mixtape/cassette_look.blend` |
 | `build_deck.py` | Deck around the unchanged cassette + camera: faceplate, walnut cheeks (silver70s), shared well (lip overlapping the tape by 1 mm, cavity, spindles), optional collections `Deck_Door` (hinge empty at the bottom edge, closed), `Deck_Vu`, `Deck_Counter`, `Deck_Keys`. Objects tagged `mf` feed the manifest. | `art-src/mixtape/deck_<style>.blend` |
@@ -102,10 +102,11 @@ Per-file seconds are in `renders/options/render-times.json`.
 
 ### Known limits (work package B)
 
-- The label SVGs are 88 x 30 mm, but the cassette has only 17.6 mm between the shell
-  rim and the window. The SVG is scaled uniformly (x 0.587, 51.6 mm wide) and centred;
-  the strip's remaining width repeats the SVG's right-edge column. Re-authoring the
-  SVGs at about 88 x 17.6 mm would let the art slot and lines use the full width.
+- Resolved in work package C2: the label SVGs were 88 x 30 mm and had to be shrunk to
+  0.587 and side-padded to fit the 17.6 mm strip. They are now authored at 88 x 17.6 mm
+  and map 1:1 onto the strip (art slot about 11.2 to 11.5 mm square). The option
+  renders in `renders/options/` predate this and still show the old padded labels
+  until the matrix is re-rendered.
 - View transform is Khronos PBR Neutral at -0.6 EV. Only emitters (LEDs, VFD) clip.
 - Blank decal sides, flat lighting in the lower half of the black80s plate at scale 0.5,
   and CG-clean surfaces are expected under Eevee; Cycles comes after the pick.
