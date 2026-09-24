@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-09-23
-version: 3.8
+version: 3.9
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -29,6 +29,8 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Waiting on Me
 
+- [ ] **Pick the Mixtape look** - open `_review/mockups/mixtape-options.html` (double-click in Finder), choose deck style, door, extras and tape scale, press "Copy decisions" and paste into chat (~10 min)
+      - unblocks: Mixtape Phase 1, the first cassette running in the Apple TV app
 - [ ] **Review the three Today layouts and deploy the kitchen bundle** - open `_review/today-layouts/README.md`, look at the shots, try them on your Mac (`cd code && npm run dev`, then `http://localhost:5173/?device=dev-mac&layout=board&demo=1`), then `cd code && npm run deploy:pi` outside the school-morning window (~20 min)
       - unblocks: choosing a layout on the kitchen panel (Settings > Today screen), and it carries the fix for kitchen settings not persisting. `npm run deploy:hub` afterwards lands the server half of that fix (optional; the client half suffices).
 - [ ] **Replace the kitchen Pi's power supply** - it is running off a USB-A port
@@ -100,7 +102,7 @@ Wrong captions get long-press-flagged on the kitchen display and queue up on the
 
 Topics we are actively talking through. Each gets its detail captured per-topic (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary + decision live here once settled.
 
-**Mixtape: cassette deck Now Playing** (opened and decided 2026-09-23, nothing built). A photoreal cassette in a tape deck as a new TV music style, full-bleed, reels turning with real-deck physics, album art and handwritten metadata on the label, a collection of 12 real-brand tapes, eject-and-insert when the album changes. Apple TV first; the kitchen Pi later as a touch-first version where eject is the station picker. Next: an options sheet of deck styles, door on/off and panel extras for Justin to choose from, likely led by Fable with Opus workers. Design: `docs/designs/mixtape.md`.
+**Mixtape: cassette deck Now Playing** (opened and decided 2026-09-23; Phase 0 look development done the same day, on `feature/mixtape`, not merged). A photoreal cassette in a tape deck as a new TV music style, full-bleed, reels turning with real-deck physics, album art and handwritten metadata on the label, a collection of 12 real-brand tapes, eject-and-insert when the album changes. Apple TV first; the kitchen Pi later as a touch-first version where eject is the station picker. Done so far: a reproducible headless-Blender pipeline (cassette, three deck styles, 36 option renders, hand-made brand logos, generated textures) and an options sheet at `_review/mockups/mixtape-options.html`. Waiting on Justin to pick deck style, door, extras and tape scale before Phase 1 (the SwiftUI hero tape). Design: `docs/designs/mixtape.md`.
 
 **Today, second layout** (opened 2026-08-31, BUILT 2026-09-04 as three layouts, in review). Board, Briefing and Ambient are on `feature/today-layouts`; see `docs/designs/today-layouts.md` and `_review/today-layouts/`. Remaining from the original topic: the TV port, auto-select by time of day, the house name as a setting. The original note follows for history. Sourced from a review of Theatrium, a commercial tvOS home-dashboard app. Leave Framed Today as it is and add a second selectable Today layout, a calm board of six to eight panels, chosen per screen through the hub's existing per-device settings. Framed Today stays the 6-8am departure instrument; the board is the rest of the day. This is also what unblocks the long-deferred "Configurable Today panels" idea, since the ROADOM living-room screen is finally a screen that wants a different composition. Open: which surfaces get it, auto-select vs manual, whether panels are focusable, and a name. Pixel shift is a prerequisite, since a static grid would be the first thing on our screens that does not drift. Full detail and the borrowed conventions are in BACKLOG. Next step is an HTML mockup in `_review/mockups/` before any SwiftUI.
 
@@ -242,3 +244,6 @@ Newest first.
 - **Overnight builds: lead writes the contract, workers build against it in parallel.** Fixed the data shape, the theme tokens and the shared chrome first, then ran three panel/data workers and three composition workers concurrently with file-disjoint ownership and a lint+isolated-build gate. Each worker's report listed deviations, which is where the design calls surfaced.
 - **Headless Chrome via `puppeteer-core` against the installed Chrome is a zero-download screenshot harness** at exact panel resolutions (1920x1080, 1280x800), and pinning a throwaway `?device=` id keeps dev writes off the production device record.
 - **React Compiler lint rules change how you write React:** no `Date.now()`/`Math.random()` in render (seed the shuffle), no `ref.current` reads in render, no `setState` at the top of an effect, and an object literal with a key named `current` gets mis-flagged as a ref. Container-query-sized panels need definite grid tracks or the type collapses.
+
+- **Blender MCP vs headless (2026-09-23).** The interactive Blender MCP server accepted connections but every request timed out; running Blender as `Blender -b file.blend --python script.py` was reliable, reproducible and parallelisable, so the whole Mixtape asset pipeline is CLI scripts with the MCP as an optional viewer. Default to headless for any Blender work driven by agents.
+- **Options sheets for taste decisions.** A render matrix plus a self-contained HTML sheet with a copy-to-clipboard picks form is a cheap way to keep look-and-feel decisions with Justin while agents do the production work.

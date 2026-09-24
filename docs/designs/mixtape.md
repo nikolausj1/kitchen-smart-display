@@ -2,7 +2,7 @@
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.2
+version: 1.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -18,7 +18,7 @@ it looks like somebody ejected one tape and put in another. There is a collectio
 tapes (real vintage brands, different label styles, different amounts of wear), so it
 is not the same cassette for every song.
 
-Status: **DESIGN, decided 2026-09-23, reviewed 2026-09-23 (v1.1), nothing built.**
+Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 look development done 2026-09-23; waiting on Justin's picks from the options sheet.**
 Apple TV first; the kitchen Pi follows as its own, more interactive, experience (see
 "Phase 2: the kitchen Pi").
 
@@ -354,8 +354,19 @@ under the kitchen section.
   - D: 17 textures via `gpt-image-1` for about $0.95. The two wound-tape packs
     have a centre moire; the pack disc comes from A's numpy generator instead.
   - E: two Runway `gen4.5` clips, 120 credits. Useful for timing only.
-- Open from A for B: the label was a full-face 87 x 45 mm panel; C's artwork is
-  the 88 x 30 mm top strip. B reconciles to a two-part label.
+- B: three deck styles (`build_deck.py --style silver70s|black80s|hifi`), each with
+  toggleable door / VU / counter / keys and a tape-scale camera move; 36 option
+  renders at 1920x1080 in about 3.5 min (`render_options.py`). The label became
+  two parts: a printed top strip and a plain band below the window. Finding: at
+  tape scale 0.7 the extras fall outside the 16:10 crop, and a 16:10 crop of 16:9
+  trims 5% left and right (not 6% top and bottom), so both limits are applied.
+- C2: the label face between rim and window is only **17.6 mm** tall, so all 12
+  strips were re-authored at 88 x 17.6 mm (art slot 11.2 to 11.5 mm, smallest
+  type 0.93 mm cap height, handwriting lines 3.7 mm apart). Decals map 1:1.
+- F: `build_options_sheet.py` produces `_review/mockups/mixtape-options.html`
+  (36 renders, door wipe, lightbox, picks form with copy-to-clipboard).
+- **Checkpoint reached**: Justin picks deck style, door, extras and tape scale.
+  Phase 1 does not start before that.
 
 ## Review log
 

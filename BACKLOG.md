@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-23
-version: 5.8
+version: 5.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -105,9 +105,13 @@ The tape packs deliberately double as a progress bar. Reached as the 9th stop in
 the Framed backdrop cycle. Full design, states, physics, manifest contract, asset
 pipeline and phases: `docs/designs/mixtape.md` (v1.1, reviewed).
 
-Next: **look development**, an options sheet (`_review/mockups/mixtape-options.html`)
-of deck styles by era, each with and without the smoked door, and panel extras
-(tape counter, transport keys, VU meters). Justin picks before any app code.
+**Phase 0 (look development) done 2026-09-23** on `feature/mixtape`, Fable lead
+plus six Opus workers: headless-Blender cassette and three deck styles, 36 option
+renders, hand-made logos for six brands, 17 OpenAI textures, two Runway eject
+references, and the options sheet `_review/mockups/mixtape-options.html`.
+**Waiting on Justin**: deck style, door on/off, extras, tape scale (the sheet's
+"Copy decisions" button pastes the picks). Then Phase 1, the hero tape in
+SwiftUI, with a Cycles re-render of the chosen look.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 
