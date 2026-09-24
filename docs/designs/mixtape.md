@@ -2,7 +2,7 @@
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.1
+version: 1.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -208,14 +208,15 @@ motion reading as real, so we model it rather than spinning both hubs at one spe
 Target total of about 2 s, on every song change:
 
 1. **Door open** (if the door exists): a 16-frame swing sequence rendered in Blender
-   per deck style, about 0.4 s. Rendered rather than `rotation3DEffect`, because a
+   per deck style, about 0.5 s. The door is **hinged at the bottom** and falls toward
+   the camera, as on a real front-loading deck (confirmed in the Runway reference). Rendered rather than `rotation3DEffect`, because a
    flat door plate rotated in 3D has no edge thickness and reads as paper.
 2. **Eject**: the tape group rises out of the well, scales up a few percent toward
    the camera and picks up a little motion blur, about 0.5 s, then leaves frame.
 3. **Empty well** for about 0.25 s, or until the new art is ready (cap 1.5 s).
 4. **Insert**: the new tape comes down into the well, settles with a small overshoot,
    about 0.6 s. Counter resets to 000.
-5. **Door close** about 0.3 s, then the reels start.
+5. **Door close** about 0.5 s, then the reels start.
 
 Metadata swaps while the tape is out of frame, so no label ever visibly rewrites
 itself. On stop, steps 1 and 2 run and the well stays empty; when music starts from
@@ -271,7 +272,7 @@ re-rendered.
   Memorex dBS 90, Fuji DR 90. The manifest records the SKU per variant.
 - **Logos**: recreated by hand as clean vectors and applied as decals in Blender.
   **Never generate logos with AI image tools**; they garble lettering.
-- **OpenAI image generation** (key in `code/.env`): surfaces only, meaning label paper
+- **OpenAI image generation** (`OPENAI_API_KEY`): surfaces only, meaning label paper
   stock, grime and scuff maps, plastic wear, background surfaces around the deck.
 - **Meshy** (API, optional): a starting mesh for a deck body if hand modelling is
   slow; expect cleanup. The cassette itself is modelled by hand.
@@ -332,9 +333,29 @@ under the kitchen section.
   so taste decisions stay with Justin, not an agent.
 - **Eject fatigue.** Per-song eject is what Justin asked to see; if it wears thin, the
   v1.0 hybrid (album-keyed tape, rewind whir between songs) is the fallback design.
-- **API keys**: confirm the OpenAI, Runway and Meshy variable names in `code/.env`.
+- **API keys** live in `~/.secrets/api-keys.env` (`OPENAI_API_KEY`, `RUNWAYML_API_KEY`,
+  `MESHY_API_KEY`); load with `set -a; source ~/.secrets/api-keys.env; set +a` and read
+  from the environment. Values never go in files, commits, logs or chat.
 - **Frame TV burn-in**: long static sessions of a mostly still deck. The Frame is
   QLED, so low risk; the "pixel shift" backlog item would cover it anyway.
+
+## Phase 0 run log
+
+- **2026-09-23, packages A, C, D, E done (Opus 5.5 workers, Fable lead).**
+  - A: `scripts/mixtape/build_cassette.py` + `render_phase0.py`, headless Blender
+    5.2.2 (the interactive MCP server timed out, so the whole pipeline is CLI;
+    the MCP is optional for peeking). Eevee plate renders take 7 to 11 s at 4K.
+    Hub radius 11 mm, full pack 25 mm, hubs 42.5 mm apart on the centre line.
+    Manifest is projected, not typed; FNV-1a check value for
+    `landslide|fleetwood mac|` is 190110897.
+  - C: 18 hand-built SVGs (`art-src/mixtape/logos/`), lettering from outlined
+    system fonts or hand-drawn paths. TDK and Fuji emblems and the Maxell and
+    Sony wordmarks are close approximations; refine after the look is chosen.
+  - D: 17 textures via `gpt-image-1` for about $0.95. The two wound-tape packs
+    have a centre moire; the pack disc comes from A's numpy generator instead.
+  - E: two Runway `gen4.5` clips, 120 credits. Useful for timing only.
+- Open from A for B: the label was a full-face 87 x 45 mm panel; C's artwork is
+  the 88 x 30 mm top strip. B reconciles to a two-part label.
 
 ## Review log
 
