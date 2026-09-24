@@ -1,8 +1,8 @@
 ---
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
-modified: 2026-09-23
-version: 1.5
+modified: 2026-09-24
+version: 1.6
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -18,7 +18,7 @@ it looks like somebody ejected one tape and put in another. There is a collectio
 tapes (real vintage brands, different label styles, different amounts of wear), so it
 is not the same cassette for every song.
 
-Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 done and the look picked 2026-09-23 (see "The chosen look"); camera-projection pipeline proven end to end 2026-09-23; Phase 1 (SwiftUI hero tape) ready to plan.**
+Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 done and the look picked 2026-09-23 (see "The chosen look"); BUILT overnight 2026-09-23/24 on `feature/mixtape` and installed on the Living Room Apple TV; awaiting Justin's on-device review. Not merged.**
 Apple TV first; the kitchen Pi follows as its own, more interactive, experience (see
 "Phase 2: the kitchen Pi").
 
@@ -420,6 +420,54 @@ under the kitchen section.
   (36 renders, door wipe, lightbox, picks form with copy-to-clipboard).
 - **Checkpoint reached**: Justin picks deck style, door, extras and tape scale.
   Phase 1 does not start before that.
+
+## Overnight build log (2026-09-23 to 24, Fable lead, Opus workers)
+
+What shipped to the branch and the TV:
+- `tvos/Sources/Mixtape/` (`MixtapeManifest`, `MixtapeModel`, `MixtapeView`):
+  the deck plate as a plain Image outside the animation subtree; the tape group
+  (tape sprite, live packs and hubs clipped to the window, label content) inside
+  a TimelineView; door frame and glass tilting 72 degrees on the manifest hinge
+  with perspective (a keystone, no Blender sequence needed); PLAY / PAUSE key glow
+  and press; ambient VU needles. `FramedBackdrop.mixtape = 8` joins the center
+  button cycle. About 11 to 14% CPU on the simulator, no per-frame plate redraw.
+- The States table as written, plus two refinements found in testing: music
+  starting from an empty well opens the door before the insert (a tape cannot
+  pass through a closed door), and coalescing waits 0.8 s for the track to
+  settle (cap 4 s) so a burst of skips gives exactly one eject and one insert.
+- `tvos/Resources/Mixtape/` (59 MB, a folder reference so the manifest and
+  tape folders ship as files): `deck/deck_empty.png` (needles painted out, the
+  app draws them), `door_frame.png`, `door_glass.png`, `well_open.png`, and 14
+  tapes with per-tape geometry in `mixtape-manifest.json`.
+- Sim-only debug flags on the app's defaults: `debug.fakeMusic`,
+  `debug.fakeMusicSequence` (six tracks, a pause, a radio entry, a stop gap),
+  `debug.fakeMusicRapid`, `debug.noHubSync` (the simulator otherwise pulls the
+  real TV's settings). Recipe in the `FakeMusicSequence` comment.
+- `frameserver/admin.html` backdrop list corrected, Mixtape added.
+- Xcode 27 needed `xcodebuild -downloadComponent MetalToolchain` before
+  `Backdrop.metal` would compile; done on this Mac.
+
+Tape generation, honestly: none of the 12 brand tapes passed the automatic
+geometry screen (the model draws the hubs 2 to 4 mm too close together and
+shifts the slice a pixel or two), so every keeper is the best of its candidates
+with its own measured hub positions. That is invisible in use because the
+manifest is per tape; the only trace is that hubs do not land exactly on the
+inpainted spindles mid-eject. Fuji came out opaque rather than clear and the
+manifest says so. Spend: $11.38 for the batch, about $15.50 in image credits for
+the whole feature, 120 Runway credits.
+
+Known gaps for the on-device review:
+- The live packs cover the tapes' own hub rims, so every shell reads as a clear
+  window (most visible on the white Sony and the square-cut Maxell blank).
+- The label strip above the window is only 0.09 to 0.12 of frame height, so the
+  three lines cannot be as large as the reference's "Neon Avenue" without
+  overlapping; they are as large as the strip allows.
+- "Printed" tapes carry no printed brand header yet; the vector logos in
+  `art-src/mixtape/logos/` are not applied to the generated labels. The printed
+  look is the code captions only.
+- No label wear overlay (element 6) and no edge thickness on the tilting door.
+- Real-remote key press and the true frame rate are unverified until the TV is
+  awake; the simulator recording's small hitches were the 4K encoder.
 
 ## Review log
 

@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-23
-version: 6.1
+modified: 2026-09-24
+version: 6.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -91,7 +91,7 @@ Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
 
-### Mixtape: cassette deck Now Playing (DESIGN, decided 2026-09-23)
+### Mixtape: cassette deck Now Playing (BUILT 2026-09-24, on the TV, in review)
 
 A new Now Playing style for the Apple TV first, the kitchen Pi later: a photoreal
 cassette seen straight on inside a tape deck, full-bleed (it replaces the mat).
@@ -114,8 +114,13 @@ door on, VU + keys, about 50%, warm). Pipeline pivoted to camera projection of t
 photo onto Blender proxies and **proven end to end the same night**: still match
 0.95 levels, empty-well deck plate and door layers at 4K (Apple VT upscale),
 two generated tape variants seated in the same well with per-variant measured
-geometry. **Next: Phase 1**, the hero tape in SwiftUI, plus the 12-variant batch
-(about $7.50). Both wait on Justin's go.
+geometry. **Built overnight 2026-09-23/24** (Fable lead, Opus workers) on
+`feature/mixtape`: `MixtapeView` with the States table, live reels, handwritten
+labels, door tilt, key glow, 14 tapes, sim debug flags; **installed on the
+Living Room Apple TV** (launch deferred until the TV wakes). Build log and known
+gaps: `docs/designs/mixtape.md`, "Overnight build log". Captures:
+`_review/mixtape/final/` and `final2/`. **Waiting on Justin**: the on-device
+review, then merge.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 
@@ -271,6 +276,13 @@ Remaining:
   React renderer. Design: `docs/designs/mixtape.md`, "Phase 2: the kitchen Pi".
 
 ### Apple TV / Frame TV app
+
+- **Mixtape follow-ups** (POLISH, after Justin's on-device review) - apply the
+  vector brand headers to the "printed" tapes; a label wear overlay; keep the
+  tapes' own hub rims visible around the live packs; door edge thickness;
+  align the inpainted spindles with the hubs (about 30 px high); verify the
+  Siri Remote key press and frame rate on the real TV. Detail in
+  `docs/designs/mixtape.md`, "Known gaps".
 
 Phase 1 shipped (per-view mats, Framed Now Playing, Today mat, linear nav, smooth
 progress bar). Remaining:
@@ -650,6 +662,13 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-24 - Mixtape: a photoreal cassette deck Now Playing style on the
+  Apple TV** (`feature/mixtape`, installed on the Living Room TV, not merged).
+  Justin's ChatGPT deck photo camera-projected onto proxies, an inpainted empty
+  well, 14 generated tapes with per-tape measured geometry, live reels as a
+  progress bar, handwritten labels with album art, per-song eject and insert,
+  stop to an empty well. Nine-hour overnight build; design, build log and gaps
+  in `docs/designs/mixtape.md`.
 - **2026-09-04 - Three selectable Today layouts (kitchen).** Board, Briefing,
   Ambient in `code/src/views/TodayLayouts/`, chosen per screen via
   `display.todayLayout` or previewed with `?layout=<id>`. Verified in headless
