@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-24
-version: 6.2
+version: 6.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -119,8 +119,12 @@ geometry. **Built overnight 2026-09-23/24** (Fable lead, Opus workers) on
 labels, door tilt, key glow, 14 tapes, sim debug flags; **installed on the
 Living Room Apple TV** (launch deferred until the TV wakes). Build log and known
 gaps: `docs/designs/mixtape.md`, "Overnight build log". Captures:
-`_review/mixtape/final/` and `final2/`. **Waiting on Justin**: the on-device
-review, then merge.
+`_review/mixtape/final/` and `final2/`. **Reviewed on the TV 2026-09-24: "overall it's great."** Follow-up round
+opened the same day: **label layout**, much larger album art and bigger song /
+artist text, with new concepts including a full-bleed art label with text over
+the art. Concepts sheet: `_review/mockups/mixtape-label-concepts.html`
+(six concepts on real deck and tape pixels). Justin picks, then it is built
+and redeployed; merge after that.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 

@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-09-24
-version: 4.2
+version: 4.3
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -29,8 +29,8 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Waiting on Me
 
-- [ ] **Review Mixtape on the Living Room TV** - the overnight build is installed; wake the TV, open Kitchen Display, go to Music, and press the center button on the remote until the toast says "Mixtape" (music mat must be Framed). Play something on Sonos and skip a track to see the eject. Watch the 1080p loop first: `_review/mixtape/final/mixtape-loop-1080p.mp4` (~10 min)
-      - unblocks: merging `feature/mixtape` (also carries the admin backdrop-list fix) and the polish list in BACKLOG
+- [ ] **Pick a Mixtape label layout** - open `_review/mockups/mixtape-label-concepts.html`, choose among six concepts (full-bleed art, blurred full-bleed, tall art column, wide banner, two-line hierarchy, sticker), Copy decisions, paste into chat (~10 min)
+      - unblocks: the label rebuild, redeploy, and merging `feature/mixtape`
 - [ ] **Review the three Today layouts and deploy the kitchen bundle** - open `_review/today-layouts/README.md`, look at the shots, try them on your Mac (`cd code && npm run dev`, then `http://localhost:5173/?device=dev-mac&layout=board&demo=1`), then `cd code && npm run deploy:pi` outside the school-morning window (~20 min)
       - unblocks: choosing a layout on the kitchen panel (Settings > Today screen), and it carries the fix for kitchen settings not persisting. `npm run deploy:hub` afterwards lands the server half of that fix (optional; the client half suffices).
 - [ ] **Replace the kitchen Pi's power supply** - it is running off a USB-A port
@@ -102,7 +102,7 @@ Wrong captions get long-press-flagged on the kitchen display and queue up on the
 
 Topics we are actively talking through. Each gets its detail captured per-topic (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary + decision live here once settled.
 
-**Mixtape: cassette deck Now Playing** (opened, designed, built and installed on the TV between 2026-09-23 and 24; awaiting on-device review). A photoreal cassette deck from Justin's ChatGPT reference, camera-projected onto 3D proxies so the photo's pixels move with the eject, door and keys; 14 generated tapes with per-tape measured geometry; live reels double as a progress bar; per-song eject and insert. On `feature/mixtape`, not merged. Design and build log: `docs/designs/mixtape.md`.
+**Mixtape: cassette deck Now Playing** (opened, designed, built and installed on the TV between 2026-09-23 and 24; reviewed on the TV 2026-09-24 as "overall great"; a label-layout round is open). A photoreal cassette deck from Justin's ChatGPT reference, camera-projected onto 3D proxies so the photo's pixels move with the eject, door and keys; 14 generated tapes with per-tape measured geometry; live reels double as a progress bar; per-song eject and insert. On `feature/mixtape`, not merged. Design and build log: `docs/designs/mixtape.md`.
 
 **Today, second layout** (opened 2026-08-31, BUILT 2026-09-04 as three layouts, in review). Board, Briefing and Ambient are on `feature/today-layouts`; see `docs/designs/today-layouts.md` and `_review/today-layouts/`. Remaining from the original topic: the TV port, auto-select by time of day, the house name as a setting. The original note follows for history. Sourced from a review of Theatrium, a commercial tvOS home-dashboard app. Leave Framed Today as it is and add a second selectable Today layout, a calm board of six to eight panels, chosen per screen through the hub's existing per-device settings. Framed Today stays the 6-8am departure instrument; the board is the rest of the day. This is also what unblocks the long-deferred "Configurable Today panels" idea, since the ROADOM living-room screen is finally a screen that wants a different composition. Open: which surfaces get it, auto-select vs manual, whether panels are focusable, and a name. Pixel shift is a prerequisite, since a static grid would be the first thing on our screens that does not drift. Full detail and the borrowed conventions are in BACKLOG. Next step is an HTML mockup in `_review/mockups/` before any SwiftUI.
 
