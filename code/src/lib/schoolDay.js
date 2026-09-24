@@ -1,53 +1,15 @@
-// School-schedule helpers - the single source of truth for "is today a
-// no-school day", the lunch entree to show, and which per-kid activities land
-// today. Pure functions (no React/IO) so they are easy to unit-test and can be
-// reused by the Today view, the boot/auto-show gating, and the noSchoolToday
-// post to the Pi.
+// School-schedule helpers: "is today a no-school day", the lunch entree to
+// show, and which per-kid activities land today. Pure functions (no React/IO)
+// so they are easy to unit-test and can be reused by the Today view and the
+// boot/auto-show gating.
+//
+// dateKey and isNoSchoolToday now live in lib/countdown.js (the shared
+// frameserver/lib/countdown.mjs), because the hub computes noSchoolToday for
+// every screen with the same code. Re-exported here so existing imports keep
+// working; do not grow a second copy - two copies are how screens drift.
+import { dateKey } from './countdown.js'
 
-// Local 'YYYY-MM-DD' for a Date (NOT toISOString, which is UTC and can be a day
-// off). ISO date strings compare lexicographically == chronologically.
-export function dateKey(d = new Date()) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-// Is `date` a no-school day? True if any of:
-//   - the weekday is not in school.schoolDays (weekend / non-school weekday)
-//   - the date is in school.noSchoolOverrides (manual: snow days, Lawton-only)
-//   - the date falls in a "No School ..." range from the SPS calendar feed
-//   - the calendar has session bounds and the date is outside them (summer /
-//     before the year starts)
-// The calendar arg is the /api/schoolcal payload (may be null if unavailable -
-// in which case only schoolDays + overrides apply, so we never falsely suppress
-// just because the feed failed).
-export function isNoSchoolToday(school, calendar, date = new Date()) {
-  const key = dateKey(date)
-
-  const schoolDays = school?.schoolDays || []
-  if (!schoolDays.includes(date.getDay())) return true
-
-  const overrides = school?.noSchoolOverrides || []
-  if (overrides.includes(key)) return true
-
-  if (calendar) {
-    const ranges = calendar.noSchoolRanges || []
-    if (ranges.some((r) => key >= r.start && key <= r.end)) return true
-
-    const firsts = calendar.firstDays || []
-    const lasts = calendar.lastDays || []
-    if (firsts.length && lasts.length) {
-      const inSession = firsts.some((f, i) => {
-        const l = lasts[i]
-        return l && key >= f && key <= l
-      })
-      if (!inSession) return true
-    }
-  }
-
-  return false
-}
+export { dateKey, isNoSchoolToday } from './countdown.js'
 
 // MealViewer often lists the entree as a "CHEFS CHOICE MON" placeholder. Treat
 // those as no real entree.

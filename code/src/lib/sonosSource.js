@@ -76,6 +76,8 @@ export function extractDcTitle(xml) {
 // Treat anything <= 2 printable chars as effectively empty.
 function isMeaningfulStationName(s) {
   if (!s) return false
+  // Matching control characters is the point here, so no-control-regex is wrong.
+  // eslint-disable-next-line no-control-regex
   const stripped = s.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim()
   return stripped.length >= 2
 }

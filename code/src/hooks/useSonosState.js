@@ -3,6 +3,7 @@ import { useSettings } from '../lib/settings.js'
 import { computeSourceLabel, detectSource } from '../lib/sonosSource.js'
 
 // useSonosState - reads node-sonos-http-api via Settings-configured base + room.
+// The base is the hub's /api/sonos proxy on every screen (lib/settings.js).
 
 // Strip Pandora's "(My Station)" suffix so the UI shows clean names.
 export function cleanStationName(name) {
@@ -69,12 +70,12 @@ function findPlayerInZones(zones, roomName) {
   return null
 }
 
-async function loadFavorites(sonos) {
+async function loadFavorites({ apiBase, room }) {
   if (Date.now() - favoritesLoadedAt < FAVORITES_REFRESH_MS && favoritesCache.length) {
     return favoritesCache
   }
   try {
-    const res = await fetch(`${sonos.apiBase}/${sonos.room}/favorites/detailed`, {
+    const res = await fetch(`${apiBase}/${room}/favorites/detailed`, {
       cache: 'no-store',
     })
     if (!res.ok) return favoritesCache
@@ -99,6 +100,9 @@ export function getCachedFavorites() {
 
 export default function useSonosState() {
   const { sonos } = useSettings()
+  // Scalars, so the poll effect below restarts only when one of them changes,
+  // not whenever the settings object is replaced.
+  const { apiBase, room, pollIntervalMs } = sonos
   const [state, setState] = useState({
     playing: false,
     paused: false,
@@ -126,15 +130,15 @@ export default function useSonosState() {
         // /state alone strips those out, so we use /zones as the single
         // source of truth.
         const [zonesRes, favorites] = await Promise.all([
-          fetch(`${sonos.apiBase}/zones`, { cache: 'no-store' }),
-          loadFavorites(sonos),
+          fetch(`${apiBase}/zones`, { cache: 'no-store' }),
+          loadFavorites({ apiBase, room }),
         ])
         if (!zonesRes.ok) throw new Error(`HTTP ${zonesRes.status}`)
         const zones = await zonesRes.json()
         if (cancelled) return
 
-        const player = findPlayerInZones(zones, sonos.room)
-        if (!player) throw new Error(`room "${sonos.room}" not in zones`)
+        const player = findPlayerInZones(zones, room)
+        if (!player) throw new Error(`room "${room}" not in zones`)
 
         const raw = player.state || {}
         const parsed = parseState(raw)
@@ -169,12 +173,12 @@ export default function useSonosState() {
     }
 
     fetchState()
-    const id = setInterval(fetchState, sonos.pollIntervalMs)
+    const id = setInterval(fetchState, pollIntervalMs)
     return () => {
       cancelled = true
       clearInterval(id)
     }
-  }, [sonos.apiBase, sonos.room, sonos.pollIntervalMs])
+  }, [apiBase, room, pollIntervalMs])
 
   return state
 }

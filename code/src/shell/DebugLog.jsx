@@ -8,6 +8,10 @@ import './DebugLog.css'
 let listeners = []
 let events = []
 
+// Lives beside the HUD on purpose (the log and its viewer are one tool), and
+// the shell, the menu, the slideshow and the timer all import it from here.
+// The cost is Fast Refresh on this one file in dev, which the kiosk never uses.
+// eslint-disable-next-line react-refresh/only-export-components
 export function logEvent(msg) {
   const ev = { msg, t: new Date().toLocaleTimeString([], { hour12: false }) }
   events = [...events, ev].slice(-14)

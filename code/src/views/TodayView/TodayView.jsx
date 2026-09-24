@@ -6,7 +6,6 @@ import useWeather, { placeholderSlots } from '../../hooks/useWeather.js'
 import useTimer from '../../hooks/useTimer.js'
 import useLunch from '../../hooks/useLunch.js'
 import useSchoolCalendar from '../../hooks/useSchoolCalendar.js'
-import { postTimerState } from '../../lib/settings.js'
 import { useSettings } from '../../lib/settings.js'
 import { decideTravelMode } from '../../lib/travelDefault.js'
 import {
@@ -19,9 +18,8 @@ import './TodayView.css'
 
 // Dev-only visual override of the timer state. Lets us preview every Figma
 // reference state without waiting for the real timer to tick into it. Use
-// ?state=green|yellow|orange|red|noTimer|setTimer in the URL, or click the
-// "state:" pill in the bottom-right to cycle. With no override (?state= unset)
-// the real timer state machine drives the panel.
+// ?state=green|yellow|orange|red|noTimer|setTimer in the URL. With no override
+// (?state= unset) the real, house-shared countdown drives the panel.
 const DEV_STATES = ['off', 'green', 'yellow', 'orange', 'red', 'noTimer', 'setTimer']
 
 function readDevState() {
@@ -59,8 +57,9 @@ export default function TodayView() {
   const slots = weather.slots || placeholderSlots()
 
   // Weather-based default travel mode: read the forecast at the (walking)
-  // departure hour and decide drive-vs-walk. The timer uses this as the default
-  // when it auto-arms; a manual toggle on the kitchen overrides it for the day.
+  // departure hour and decide drive-vs-walk. Only a fallback now: the timer
+  // follows the hub's house-wide travelDefault once the hub has answered, and
+  // a manual toggle on any screen overrides both for the day.
   const depHour = school?.walkingDepart?.hour ?? 7
   const weatherDefaultMode = decideTravelMode(weather.forecastForHour?.(depHour))
   const timer = useTimer({ weatherDefaultMode })
@@ -71,33 +70,9 @@ export default function TodayView() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  // Mirror the live timer to the Pi so the Apple TV can show the same
-  // countdown. Push only on MEANINGFUL changes (active flag / target / travel
-  // mode / kind) - not the 1Hz minutesLeft tick. The TV recomputes
-  // minutesLeft + band itself from targetISO, so we don't need to post those.
-  // No-op on the TV surface (postTimerState gates on IS_TV).
-  const timerActive = timer.mode === 'active'
-  const timerTargetISO =
-    timer.mode === 'active' && timer.target instanceof Date && !Number.isNaN(timer.target.getTime())
-      ? timer.target.toISOString()
-      : null
-  useEffect(() => {
-    postTimerState({
-      active: timerActive,
-      travelMode: timer.travelMode,
-      targetISO: timerTargetISO,
-      kind: timer.kind || null,
-    })
-  }, [timerActive, timerTargetISO, timer.travelMode, timer.kind])
-
-  function cycleDevState() {
-    const next = DEV_STATES[(DEV_STATES.indexOf(devState) + 1) % DEV_STATES.length]
-    const url = new URL(window.location.href)
-    if (next === 'off') url.searchParams.delete('state')
-    else url.searchParams.set('state', next)
-    window.history.replaceState(null, '', url)
-    setDevState(next)
-  }
+  // (No timer mirroring here any more. The countdown is shared through the
+  // hub: taps write decisions via useTimer, and the hub derives the timer the
+  // Apple TV shows from the same decisions with the same code.)
 
   const override = devOverrideProps(devState, timer.actions, timer.travelMode)
   const timerProps = override || {

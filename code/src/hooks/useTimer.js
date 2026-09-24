@@ -1,247 +1,157 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
-import { useView } from '../shell/ViewContext.jsx'
+import { getHouseState, postCountdown, useHouseState } from '../lib/houseState.js'
+import {
+  dateKey,
+  deriveCountdown,
+  isNoSchoolToday,
+  withCancel,
+  withManualTime,
+  withTravelToggle,
+} from '../lib/countdown.js'
+import { getCachedCalendar } from './useSchoolCalendar.js'
 
-// Timer state machine for the Today view countdown panel.
-// See PRD - Smart Displays.md "Today view interactions / Timer states" for the
-// full behavior contract. All tunable values come from Settings.
-
-const POST_EXPIRY_LIFETIME_MS = 15 * 60 * 1000
-
-function isoDate(date) {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function departureTimeFor(school, travelMode, baseDate) {
-  const { hour, minute } =
-    travelMode === 'walking' ? school.walkingDepart : school.drivingDepart
-  const d = new Date(baseDate)
-  d.setHours(hour, minute, 0, 0)
-  return d
-}
-
-function colourBandForMinutes(minutesLeft, t) {
-  if (minutesLeft <= t.orangeAbove) return 'red'
-  if (minutesLeft <= t.yellowAbove) return 'orange'
-  if (minutesLeft <= t.greenAbove) return 'yellow'
-  return 'green'
-}
+// useTimer - the Today view's morning countdown, shared by every screen.
+//
+// Since 2026-09-24 this is a view over the HOUSE countdown, not a per-screen
+// state machine. Screens share only the user's decisions (lib/houseState.js:
+// dismissed today, walk/drive override, manual target), and every screen
+// derives the timer from them with the same pure function the hub runs for the
+// Apple TV (deriveCountdown, frameserver/lib/countdown.mjs). Set, cancel or
+// flip walk/drive on any screen and it applies everywhere within a poll. The
+// old machine kept its own auto-arm and dismissed-date memory per screen, which
+// is exactly what would have let the kitchen and the Echo disagree.
+//
+// Only the picker (set-timer) is local: opening it on one screen must not open
+// it on another, and nothing is shared until DONE.
+//
+// Public shape unchanged: { mode, kind, travelMode, target, minutesLeft, band,
+// actions: { cancel, enterSetTimer, exitSetTimer, confirmManualTimer,
+// toggleTravel } }. See PRD - Smart Displays.md "Today view interactions /
+// Timer states" for the behaviour contract.
+//
+// weatherDefaultMode is this screen's own walk/drive guess from its forecast.
+// It is only a fallback now; the hub's travelDefault wins once it has answered.
 
 export default function useTimer({ weatherDefaultMode } = {}) {
   const { school, timerThresholds } = useSettings()
-  const { setView } = useView()
+  const house = useHouseState()
+  const [pickerOpen, setPickerOpen] = useState(false)
 
-  const [state, setState] = useState({
-    mode: 'no-timer',
-    kind: null,
-    target: null,
-    travelMode: 'driving',
-    dismissedDate: null,
-    autoArmedDate: null,
-    // isoDate of the last MANUAL travel toggle. While this equals today, the
-    // weather default does not override the user's explicit choice.
-    travelManualDate: null,
-    noTimerEnteredAt: Date.now(),
-  })
-
-  // Keep the latest weather default in a ref so effects can read it without
-  // re-subscribing every render.
-  const weatherDefaultRef = useRef(weatherDefaultMode)
-  weatherDefaultRef.current = weatherDefaultMode
-
-  // Tick once a second.
-  const [, setTick] = useState(0)
+  // Tick once a second. `now` lives in state rather than being read in the
+  // render body, which keeps the render pure.
+  const [now, setNow] = useState(() => new Date())
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => (t + 1) % 1_000_000), 1000)
+    const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const stateRef = useRef(state)
-  stateRef.current = state
+  const today = dateKey(now)
 
-  useEffect(() => {
-    const now = new Date()
-    const today = isoDate(now)
-    const s = stateRef.current
+  // Inputs. Once the hub has answered TODAY, its values win, even if that
+  // answer is a few minutes old: every screen then derives from the same
+  // inputs, and consistency beats freshness. Before that (first boot, or an
+  // outage that began yesterday) use what this screen can work out alone: its
+  // own forecast and the cached school calendar. "Today" matters because
+  // noSchoolToday is a bare boolean - Sunday's answer, carried into Monday by a
+  // hub that went down overnight, would silently suppress the school-day timer.
+  const hubToday = house.fetchedAt != null && dateKey(new Date(house.fetchedAt)) === today
+  const localTravelDefault = useMemo(
+    () => (weatherDefaultMode ? { date: today, mode: weatherDefaultMode } : null),
+    [today, weatherDefaultMode]
+  )
+  const travelDefault = hubToday ? house.travelDefault : localTravelDefault
+  const noSchoolToday =
+    hubToday && typeof house.noSchoolToday === 'boolean'
+      ? house.noSchoolToday
+      : isNoSchoolToday(school, getCachedCalendar(), now)
 
-    if (s.dismissedDate && s.dismissedDate !== today) {
-      setState((prev) => ({ ...prev, dismissedDate: null, autoArmedDate: null }))
-      return
-    }
-
-    // Auto-arm default timer on weekday mornings.
-    if (
-      s.mode === 'no-timer' &&
-      s.dismissedDate !== today &&
-      s.autoArmedDate !== today &&
-      school.schoolDays.includes(now.getDay())
-    ) {
-      const autoShowStart = new Date(now)
-      autoShowStart.setHours(school.autoShowAt.hour, school.autoShowAt.minute, 0, 0)
-      // Default travel mode comes from the weather (driving when wet/cold) unless
-      // the user already toggled manually today. Falls back to the prior mode.
-      const armMode =
-        s.travelManualDate === today
-          ? s.travelMode
-          : weatherDefaultRef.current || s.travelMode
-      const target = departureTimeFor(school, armMode, now)
-      const dropoff = new Date(target.getTime() + POST_EXPIRY_LIFETIME_MS)
-      if (now >= autoShowStart && now <= dropoff) {
-        setState((prev) => ({
-          ...prev,
-          mode: 'active',
-          kind: 'default',
-          travelMode: armMode,
-          target,
-          autoArmedDate: today,
-        }))
-        return
-      }
-    }
-
-    // Keep an active DEFAULT timer's travel mode synced to the weather default
-    // until the user manually toggles today. Handles the common case where the
-    // timer auto-arms at 6 AM (weather maybe still loading) and the departure-
-    // hour forecast resolves later, or the forecast updates.
-    if (
-      s.mode === 'active' &&
-      s.kind === 'default' &&
-      s.travelManualDate !== today &&
-      weatherDefaultRef.current &&
-      weatherDefaultRef.current !== s.travelMode
-    ) {
-      const wm = weatherDefaultRef.current
-      setState((prev) => ({
-        ...prev,
-        travelMode: wm,
-        target: departureTimeFor(school, wm, now),
-      }))
-      return
-    }
-
-    // Post-expiry: revert to no-timer (Photos handoff disabled for now).
-    if (s.mode === 'active' && s.target) {
-      const past = now.getTime() - s.target.getTime()
-      if (past > POST_EXPIRY_LIFETIME_MS) {
-        setState((prev) => ({
-          ...prev,
-          mode: 'no-timer',
-          kind: null,
-          target: null,
-          dismissedDate: prev.kind === 'default' ? today : prev.dismissedDate,
-          noTimerEnteredAt: Date.now(),
-        }))
-        // setView('photos')
-        return
-      }
-    }
-    void setView
+  const derived = deriveCountdown({
+    now,
+    school,
+    decisions: house.countdown,
+    travelDefault,
+    noSchoolToday,
+    thresholds: timerThresholds,
   })
 
+  const mode = pickerOpen ? 'set-timer' : derived.mode
+
+  // deriveCountdown builds a fresh Date every call. Hand out the same object
+  // for as long as the target time is unchanged, so consumers memoising on it
+  // (useTodayData) and the storage mirror below do not churn once a second.
+  const targetMs = derived.target ? derived.target.getTime() : null
+  const target = useMemo(() => (targetMs == null ? null : new Date(targetMs)), [targetMs])
+
   // --- Actions ---
+  // Built from the LATEST decisions (getHouseState()), not the `house` this
+  // render captured: a second tap before the re-render must build on the first
+  // tap's optimistic write, not quietly undo it.
+  const deriveAt = useCallback(
+    (at) =>
+      deriveCountdown({
+        now: at,
+        school,
+        decisions: getHouseState().countdown,
+        travelDefault,
+        noSchoolToday,
+        thresholds: timerThresholds,
+      }),
+    [school, travelDefault, noSchoolToday, timerThresholds]
+  )
 
+  // A default timer is dismissed for the day; a manual one is cleared.
   const cancel = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      mode: 'no-timer',
-      kind: null,
-      target: null,
-      dismissedDate: prev.kind === 'default' ? isoDate(new Date()) : prev.dismissedDate,
-      noTimerEnteredAt: Date.now(),
-    }))
-  }, [])
+    const at = new Date()
+    postCountdown(withCancel(getHouseState().countdown, deriveAt(at), at))
+  }, [deriveAt])
 
-  const enterSetTimer = useCallback(() => {
-    setState((prev) => ({ ...prev, mode: 'set-timer' }))
-  }, [])
-
-  const exitSetTimer = useCallback(() => {
-    setState((prev) => ({
-      ...prev,
-      mode: 'no-timer',
-      noTimerEnteredAt: Date.now(),
-    }))
-  }, [])
-
-  const confirmManualTimer = useCallback((hour12, minute, ampm) => {
-    let hour24 = hour12 % 12
-    if (ampm === 'PM') hour24 += 12
-    const now = new Date()
-    const target = new Date(now)
-    target.setHours(hour24, minute, 0, 0)
-    if (target.getTime() <= now.getTime()) {
-      target.setDate(target.getDate() + 1)
-    }
-    setState((prev) => ({
-      ...prev,
-      mode: 'active',
-      kind: 'manual',
-      target,
-    }))
-  }, [])
-
+  // Recorded as today's explicit override, so the weather default stops
+  // fighting the choice for the rest of the day, on every screen.
   const toggleTravel = useCallback(() => {
-    setState((prev) => {
-      const next = prev.travelMode === 'driving' ? 'walking' : 'driving'
-      // Mark a manual override for today so the weather default stops fighting
-      // the user's explicit choice for the rest of the day.
-      const travelManualDate = isoDate(new Date())
-      if (prev.mode === 'active' && prev.kind === 'default') {
-        return {
-          ...prev,
-          travelMode: next,
-          travelManualDate,
-          target: departureTimeFor(school, next, new Date()),
-        }
-      }
-      return { ...prev, travelMode: next, travelManualDate }
-    })
-  }, [school])
+    const at = new Date()
+    postCountdown(withTravelToggle(getHouseState().countdown, deriveAt(at), at))
+  }, [deriveAt])
+
+  const enterSetTimer = useCallback(() => setPickerOpen(true), [])
+  const exitSetTimer = useCallback(() => setPickerOpen(false), [])
+
+  // A time earlier than now rolls to tomorrow (withManualTime).
+  const confirmManualTimer = useCallback((hour12, minute, ampm) => {
+    const at = new Date()
+    postCountdown(withManualTime(getHouseState().countdown, hour12, minute, ampm, at))
+    setPickerOpen(false)
+  }, [])
+
+  const actions = useMemo(
+    () => ({ cancel, enterSetTimer, exitSetTimer, confirmManualTimer, toggleTravel }),
+    [cancel, enterSetTimer, exitSetTimer, confirmManualTimer, toggleTravel]
+  )
 
   // Mirror the current timer mode + target to localStorage so other parts
   // of the app (specifically the morning-end auto-leave watcher in
   // AppShell) can tell whether a timer is in flight when Today isn't
-  // mounted. Updated on every state change.
+  // mounted. Updated on every change.
   useEffect(() => {
     try {
-      localStorage.setItem('kioskTimerMode', state.mode || 'no-timer')
-      if (state.target instanceof Date && !Number.isNaN(state.target.getTime())) {
-        localStorage.setItem('kioskTimerTarget', state.target.toISOString())
+      localStorage.setItem('kioskTimerMode', mode || 'no-timer')
+      if (target) {
+        localStorage.setItem('kioskTimerTarget', target.toISOString())
       } else {
         localStorage.removeItem('kioskTimerTarget')
       }
     } catch {
       // no-op if storage unavailable
     }
-  }, [state.mode, state.target])
-
-  // --- Derived view-model ---
-
-  const now = new Date()
-  let minutesLeft = null
-  let band = null
-  if (state.mode === 'active' && state.target) {
-    const msLeft = state.target.getTime() - now.getTime()
-    minutesLeft = Math.max(0, Math.ceil(msLeft / 60_000))
-    band = colourBandForMinutes(minutesLeft, timerThresholds)
-  }
+  }, [mode, target])
 
   return {
-    mode: state.mode,
-    kind: state.kind,
-    travelMode: state.travelMode,
-    target: state.target,   // absolute departure Date (or null); used to mirror to the TV
-    minutesLeft,
-    band,
-    actions: {
-      cancel,
-      enterSetTimer,
-      exitSetTimer,
-      confirmManualTimer,
-      toggleTravel,
-    },
+    mode,
+    kind: derived.kind,
+    travelMode: derived.travelMode,
+    target,   // absolute departure Date (or null)
+    minutesLeft: derived.minutesLeft,
+    band: derived.band,
+    actions,
   }
 }

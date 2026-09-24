@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
-import { KIOSK_TV } from '../lib/kioskMode.js'
+import { HAS_PANEL } from '../lib/hub.js'
 
 // useDisplaySchedule - night-mode state machine for the kiosk.
 //
@@ -31,6 +31,13 @@ import { KIOSK_TV } from '../lib/kioskMode.js'
 // delivering input events to clients when the output is fully disabled, which
 // breaks touch-to-wake. `setvcp 10` only lowers the backlight and leaves the
 // output enabled, which is exactly why it is safe here where DPMS was not.
+//
+// All of the hardware half runs only where HAS_PANEL (lib/hub.js): a Pi serving
+// its own bundle to its own panel. Everywhere else - the Echo, the legacy web
+// TV, a laptop on the hub - there is no panel to drive, the schedule still runs,
+// dim is the CSS overlay alone, and 'off' is the night face (black, or the
+// faint clock). Before this gate, any stray tab on the kitchen's origin could
+// POST /api/display/* and drive the kitchen's backlight.
 
 // Convert {hour, minute} -> minutes since midnight.
 function timeToMin(t) {
@@ -166,18 +173,21 @@ export default function useDisplaySchedule() {
   // Drive the real backlight on every mode change (and whenever the brightness
   // settings change). hardwareDim reports whether that actually worked, so the
   // overlay knows whether it still needs to do the dimming itself.
-  const [hardwareDim, setHardwareDim] = useState(false)
+  //
+  // The gate is folded into the returned value rather than resetting state in
+  // the effect: with no panel, or hardware dimming switched off, hardwareDim is
+  // false in the very same render, and the overlay takes over at once.
+  const hardwareDimActive = HAS_PANEL && hardwareDimEnabled
+  const [hardwareDimOk, setHardwareDimOk] = useState(false)
   useEffect(() => {
-    if (KIOSK_TV || !hardwareDimEnabled) {
-      setHardwareDim(false)
-      return undefined
-    }
+    if (!hardwareDimActive) return undefined
     let cancelled = false
     const value = backlightFor(actualMode, wakeBrightness, eveningBrightness)
     const wantOff = actualMode === 'off' && hardwarePowerOff
 
-    // Relative URLs: the app bundle is still served by the Pi, so these reach
-    // the same origin. (Photos moved to FrameServer; the app did not.)
+    // Relative URLs on purpose: HAS_PANEL means the Pi served this bundle, so
+    // the same origin is the Pi whose panel this is. Never hubUrl() - the hub
+    // has no panel, and a hub-served page must not reach a Pi's endpoints.
     const post = (path, body) =>
       fetch(path, {
         method: 'POST',
@@ -197,11 +207,12 @@ export default function useDisplaySchedule() {
       if (!wantOff && hardwarePowerOff) await post('/api/display/power', { on: true })
       const ok = await post('/api/display/brightness', { value })
       if (wantOff) await post('/api/display/power', { on: false })
-      if (!cancelled) setHardwareDim(ok)
+      if (!cancelled) setHardwareDimOk(ok)
     })()
 
     return () => { cancelled = true }
-  }, [actualMode, wakeBrightness, eveningBrightness, hardwareDimEnabled, hardwarePowerOff])
+  }, [actualMode, wakeBrightness, eveningBrightness, hardwareDimActive, hardwarePowerOff])
+  const hardwareDim = hardwareDimActive && hardwareDimOk
 
   const api = useMemo(() => ({}), [])
 

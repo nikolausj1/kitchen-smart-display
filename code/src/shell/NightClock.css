@@ -1,0 +1,58 @@
+/* NightClock - the faint drifting clock of the 'clock' night face.
+ *
+ * Sized in vh so it reads the same on the Echo's 1280x800 and anywhere else.
+ * position: absolute inside DimOverlay's fixed layer; the block is moved with
+ * an inline translate (NightClock.jsx), and this transition makes it glide.
+ * Chrome 80-safe (Silk): explicit offsets rather than `inset`.
+ */
+
+.night-clock {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  background: #000000;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.night-clock__block {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #3a3a3a;
+  font-family: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: transform 2s ease;
+  will-change: transform;
+}
+
+.night-clock__time {
+  display: flex;
+  align-items: baseline;
+  font-size: 22vh;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.night-clock__ampm {
+  margin-left: 0.14em;
+  font-size: 0.4em;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.02em;
+}
+
+.night-clock__date {
+  margin-top: 0.3em;
+  font-size: 11vh;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}

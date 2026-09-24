@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
-import { PHOTOS } from '../config.js'
+import { HUB } from '../lib/hub.js'
 
 // useImmichPhotos - photo source for the slideshow.
 //
@@ -20,14 +20,15 @@ import { PHOTOS } from '../config.js'
 
 const REFRESH_MS = 5 * 60 * 1000 // re-fetch the manifest every 5 min
 
-// FrameServer on the NUC serves both the manifest and the images. Empty string
-// keeps the old same-origin behavior (samplePhotos dev mode, and the rollback
-// path if photo serving ever moves back to the Pi).
-const PHOTO_BASE = (PHOTOS.baseUrl || '').replace(/\/+$/, '')
+// FrameServer on the NUC serves both the manifest and the images, at whatever
+// address lib/hub.js resolved (the Echo reaches it by IP, the kitchen by
+// nuc.local). Empty string keeps the old same-origin behavior (samplePhotos dev
+// mode, and the rollback path if photo serving ever moves back to the Pi).
+const PHOTO_BASE = HUB
 
 // The manifest stores app-relative srcs ("/stub-photos/immich-<id>.jpg") because
-// it used to be served from the same origin as the app. Now that the app is
-// served by the Pi and the photos by FrameServer, absolutize them once here so
+// it used to be served from the same origin as the app. The kitchen's app is
+// served by the Pi and the photos by FrameServer, so absolutize them once here so
 // every consumer (slideshow <img> tags, the long-press flag flow) keeps working
 // untouched. Substring matching on the src, e.g. the asset-id regex in
 // PhotoSlideshow, is unaffected by the prefix.

@@ -3,18 +3,18 @@ import TodayLayoutSwitch from '../views/TodayLayouts/TodayLayoutSwitch.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
 import NowPlaying from '../views/NowPlaying/NowPlaying.jsx'
 import SettingsView from '../views/Settings/SettingsView.jsx'
-import ComingSoonView from '../views/ComingSoon/ComingSoonView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
 import { DebugHud, logEvent } from './DebugLog.jsx'
-import { getSettings, postSchoolDayState, useSettings } from '../lib/settings.js'
+import { getSettings, useSettings } from '../lib/settings.js'
 import useDisplaySchedule from './useDisplaySchedule.js'
 import DimOverlay from './DimOverlay.jsx'
 import PixelShift from './PixelShift.jsx'
-import useSharedState from '../hooks/useSharedState.js'
+import EchoMode from './EchoMode.jsx'
+import useReloadOnDeploy from './useReloadOnDeploy.js'
 import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
 import { isNoSchoolToday } from '../lib/schoolDay.js'
-import { AUTO_MODE, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
+import { AUTO_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
 
 // --- Boot-time view selection -----------------------------------------------
 //
@@ -73,7 +73,7 @@ async function fetchSonosIsPlaying() {
 }
 
 // Fire-and-forget Sonos command via the Settings-configured base + room.
-// On the TV, sonos.apiBase points at the Pi /api/sonos proxy, so these work
+// sonos.apiBase is the hub's /api/sonos proxy on every screen, so these work
 // from any view without node-sonos-http-api being exposed on the LAN.
 function sonosCmd(path) {
   const { sonos } = getSettings()
@@ -127,14 +127,23 @@ function Shell({ initialView }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { view, setView } = useView()
   const display = useDisplaySchedule()
-  // Only the pixel-shift flag is read here; the schedule state above owns the
-  // rest of the display behaviour.
-  const pixelShift = useSettings().display?.pixelShift === true
+  // Only these two display flags are read here; the schedule state above owns
+  // the rest of the display behaviour.
+  const displaySettings = useSettings().display
+  const pixelShift = displaySettings?.pixelShift === true
+  const nightFace = displaySettings?.nightFace || 'black'
 
-  // Keep the TV's synced settings fresh from the Pi (no-op on the kitchen).
-  useSharedState()
+  // Reload when a new bundle is deployed (polls the hub's /build.json).
+  useReloadOnDeploy()
 
-  // Gating for boot/runtime auto behaviors:
+  // Keep the school-calendar cache warm. Nothing here reads the result, but
+  // getCachedCalendar() does - the boot view, the morning watchers below and
+  // useTimer's offline fallback - and without a mounted consumer the cache
+  // would only refresh on days Today happens to open, then expire mid-break.
+  useSchoolCalendar()
+
+  // Gating for boot/runtime auto behaviors. The Echo (KIOSK_ECHO) behaves like
+  // the kitchen in all of these; only the legacy web TV opts out:
   //  - On the TV, a school-morning Today must win over a playing Sonos (the
   //    kitchen lets Sonos override). So suppress the Sonos boot override when
   //    the TV resolved to Today.
@@ -147,9 +156,13 @@ function Shell({ initialView }) {
   // Imperative navigation for the tvOS shell (and any external driver).
   // Accepts a concrete view id, or 'next'/'prev' to cycle the TV-reachable
   // views. Kept on a ref so the cycler always sees the current view without
-  // re-registering the handler on every navigation.
+  // re-registering the handler on every navigation. The ref is written after
+  // commit, not during render (a render may be thrown away); the handlers
+  // only read it on a remote press, long after.
   const viewRef = useRef(view)
-  viewRef.current = view
+  useEffect(() => {
+    viewRef.current = view
+  }, [view])
   useEffect(() => {
     const ORDER = ['today', 'photos', 'music']
     window.appNav = (target) => {
@@ -208,6 +221,23 @@ function Shell({ initialView }) {
     }
   }, [setView])
 
+  // A dashboard nudge ("Show Photos" on the hub's admin page). Arrives through
+  // the settings poll as a one-shot command (settings.js handleHubCommand),
+  // so it lands within about 10 s. It also wakes a dimmed or dark screen,
+  // because a person asking to see a view expects to see it, the same as if
+  // they had touched the panel.
+  useEffect(() => {
+    function onShowView(e) {
+      const target = e?.detail?.view
+      if (!['today', 'photos', 'music', 'settings'].includes(target)) return
+      logEvent(`hub: show ${target}`)
+      window.dispatchEvent(new CustomEvent('display-wake-now'))
+      setView(target)
+    }
+    window.addEventListener('hub-show-view', onShowView)
+    return () => window.removeEventListener('hub-show-view', onShowView)
+  }, [setView])
+
   // One-shot Sonos check at app boot. If music is playing, bounce to the
   // Music view (overrides the synchronous Today/Photos initial choice).
   // Fires exactly once per page load; afterwards normal navigation rules
@@ -255,6 +285,13 @@ function Shell({ initialView }) {
       const key = todayKey(now)
       if (localStorage.getItem(FIRED_KEY) === key) return
       localStorage.setItem(FIRED_KEY, key)
+      // Only switch INSIDE the morning window. A page that first loads after
+      // morningEndsAt with no marker for today (a fresh browser profile: the
+      // Echo's first run, a laptop) used to jump to Today at 10 AM and stay
+      // there, because the morning-end watcher had already marked the day.
+      const end = settings.school?.morningEndsAt || { hour: 8, minute: 0 }
+      const endMin = (end.hour | 0) * 60 + (end.minute | 0)
+      if (nowMin >= endMin) return
       logEvent(`auto-show: today screen at ${target.hour}:${String(target.minute).padStart(2, '0')}`)
       setView('today')
     }
@@ -317,25 +354,9 @@ function Shell({ initialView }) {
     return () => clearInterval(id)
   }, [view, setView, runScheduleWatchers])
 
-  // Push the derived no-school flag to the Pi so the Apple TV mirrors the
-  // kitchen's suppression. Runs regardless of the current view (so the TV knows
-  // even when the kitchen is on Photos), posting only when the value flips.
-  // Re-runs when the live calendar loads; a 60s tick catches the midnight roll.
-  const schoolCal = useSchoolCalendar()
-  const lastNoSchoolRef = useRef(null)
-  useEffect(() => {
-    if (KIOSK_TV) return undefined
-    function push() {
-      const ns = isNoSchoolToday(getSettings().school, getCachedCalendar(), new Date())
-      if (ns !== lastNoSchoolRef.current) {
-        lastNoSchoolRef.current = ns
-        postSchoolDayState(ns)
-      }
-    }
-    push()
-    const id = setInterval(push, 60 * 1000)
-    return () => clearInterval(id)
-  }, [schoolCal])
+  // (No no-school push here any more. The hub derives noSchoolToday itself,
+  // from the shared school settings and its own calendar, for every screen and
+  // the Apple TV; the kitchen used to POST its own answer to the Pi.)
 
   function onShellClick(e) {
     const tag = e.target.tagName
@@ -362,14 +383,19 @@ function Shell({ initialView }) {
         <CurrentView />
       </PixelShift>
       <MenuPill open={menuOpen} onClose={closeMenu} />
+      {/* The kitchen and the Echo. On the Echo there is no panel, so this is
+        * the only dimmer, and 'off' shows the night face (the faint clock). */}
       {!KIOSK_TV && (
         <DimOverlay
           actualMode={display.actualMode}
           hardwareDim={display.hardwareDim}
           wakeBrightness={display.wakeBrightness}
           eveningBrightness={display.eveningBrightness}
+          nightFace={nightFace}
         />
       )}
+      {/* Keep-alive audio, fullscreen and the tap-to-start overlay for Silk. */}
+      {KIOSK_ECHO && <EchoMode />}
       <DebugHud />
     </div>
   )

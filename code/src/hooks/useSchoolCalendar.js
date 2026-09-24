@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react'
+import { hubUrl } from '../lib/hub.js'
 
-// Fetches the parsed SPS "School Year Dates" calendar from the Pi proxy
-// (/api/schoolcal), which returns { noSchoolRanges, firstDays, lastDays }.
+// Fetches the parsed SPS "School Year Dates" calendar from the hub's proxy
+// (/api/schoolcal), which returns { noSchoolRanges, firstDays, lastDays }. It
+// was the kitchen Pi's route until 2026-09-24.
 // The calendar is static across the year, so we refresh daily and cache a long
 // time - a stale copy is far better than none. Returns the payload or null.
+//
+// The cache matters beyond this hook: getCachedCalendar() feeds the boot view,
+// AppShell's morning watchers and useTimer's offline fallback, which is why
+// AppShell mounts this hook even when no view needs the data.
 
-const ENDPOINT = '/api/schoolcal'
+const ENDPOINT = hubUrl('/api/schoolcal')
 const REFRESH_MS = 24 * 60 * 60 * 1000
 const ERROR_RETRY_MS = 30 * 60 * 1000
 const CACHE_KEY = 'kioskSchoolCalCache'

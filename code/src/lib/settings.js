@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { PHOTOS } from '../config.js'
+import { HUB, hubUrl, SERVED_BY_HUB } from './hub.js'
 
 // Settings store.
 //
@@ -13,22 +13,55 @@ import { PHOTOS } from '../config.js'
 //   SHARED  one value for the family (location, school, timer colours)
 //   DEVICE  per screen (albums, display mode, brightness, Sonos room)
 //
+// Nothing here writes /api/state any more. The hub composes that document from
+// the registry itself (shared location + school, the kitchen's slideshow), and
+// the live house state - the shared morning countdown - has its own store in
+// lib/houseState.js. The old postSharedState / postTimerState /
+// postSchoolDayState pushes to the Pi went with that move (2026-09-24).
+//
+// Where the hub is comes from lib/hub.js; every URL below goes through hubUrl().
+//
 // The SettingsView writes; every hook reads via useSettings().
 
 const STORAGE_KEY = 'kitchenDisplaySettings'
 const DEVICE_ID_KEY = 'kitchenDisplayDeviceId'
-
-const HUB = (PHOTOS.baseUrl || '').replace(/\/+$/, '')
+// Which device id wrote the settings cache. The cache belongs to the browser
+// ORIGIN, the identity to the URL: switch ?device= on one origin and, without
+// this tag, the old device's per-screen settings would ride into the new
+// device's registry entry on its self-seeding registration (seen in testing:
+// a dev Echo registered with the dev Mac's hardwareDim). On a mismatch only
+// the house-wide keys are kept from the cache.
+const STORAGE_DEVICE_KEY = 'kitchenDisplaySettingsDevice'
+const LAST_COMMAND_KEY = 'kitchenDisplayLastCommandTs'
 
 // House-wide vs per-screen. Anything not listed here stays local-only.
 const SHARED_SCOPE = ['location', 'school', 'timerThresholds', 'weatherSlots']
 const DEVICE_SCOPE = ['slideshow', 'display', 'sonos']
+
+// Which kiosk surface this is, parsed directly from the URL (not via
+// kioskMode.js) to avoid an import cycle.
+const KIOSK =
+  typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('kiosk')
+    : null
+// The legacy web TV surface. It no longer implies read-only: every screen owns
+// its own device config. It still may not flag photos (postPhotoFlag).
+const IS_TV = KIOSK === 'tv'
+// The family-room Echo Show in Silk: its own default identity, no panel of its
+// own (see the display DEFAULTS), and a first registration seeded from the
+// kitchen.
+const IS_ECHO = KIOSK === 'echo'
 
 // Identity comes from the kiosk URL (?device=living-room), extending the
 // existing ?kiosk=tv pattern, and is remembered so a reload without the param
 // keeps the same identity. The hub assigns nothing - devices name themselves,
 // and the dashboard can re-point an existing config at a new device, so
 // reflashing a Pi never loses its settings.
+//
+// With no ?device and nothing remembered: ?kiosk=echo is 'family-room-echo',
+// ?kiosk=tv is 'web-tv', anything else is 'kitchen'. Trap: that last default
+// means a browser opening the app with no flags at all claims the kitchen's
+// identity and edits its config, so a laptop should always pass ?device=.
 function resolveDeviceId() {
   if (typeof window === 'undefined') return 'kitchen'
   const q = new URLSearchParams(window.location.search).get('device')
@@ -40,50 +73,78 @@ function resolveDeviceId() {
     const saved = localStorage.getItem(DEVICE_ID_KEY)
     if (saved) return saved
   } catch { /* storage disabled */ }
-  return IS_TV ? 'web-tv' : 'kitchen'
+  if (IS_ECHO) return 'family-room-echo'
+  if (IS_TV) return 'web-tv'
+  // A page FrameServer served with no identity at all is a laptop or a phone
+  // having a look, not the kitchen. Give it a guest identity of its own rather
+  // than the kitchen's: otherwise a casual open of http://nuc.local:8095/ would
+  // adopt the kitchen's registry entry and any setting touched there would
+  // change the kitchen panel. The kitchen itself is served by its Pi.
+  if (SERVED_BY_HUB) return 'web-guest'
+  return 'kitchen'
+}
+
+// Resolved once at module load, after the kiosk flags exist. Exported for
+// lib/houseState.js, which stamps its countdown writes with it. houseState
+// imports this module and never the reverse, so there is no import cycle.
+export const DEVICE_ID = resolveDeviceId()
+
+const DEVICE_KIND = IS_ECHO ? 'web-echo' : IS_TV ? 'web-tv' : 'web'
+
+// Which existing device a NEW registry entry copies its starting settings from.
+// The hub copies slideshow, sonos.room and the display schedule once, and never
+// onto an entry that already exists, so this is safe to send on every
+// registration. ?seed=<deviceId> names a source for any screen; the Echo
+// defaults to the kitchen, so it starts with the family's albums and night
+// schedule instead of code defaults. Never seed a device from itself.
+function resolveSeedFrom() {
+  if (typeof window === 'undefined') return null
+  const q = new URLSearchParams(window.location.search).get('seed')
+  // The Echo and a hub-served guest both start as a copy of the kitchen.
+  const seed = q || (IS_ECHO || DEVICE_ID === 'web-guest' ? 'kitchen' : null)
+  return seed && seed !== DEVICE_ID ? seed : null
+}
+const SEED_FROM = resolveSeedFrom()
+
+// --- Sonos base --------------------------------------------------------------
+// Every screen reaches node-sonos-http-api through the hub's proxy (GET only).
+// Changing the default alone would have moved nobody: a stored value beats a
+// default, and the registry still held the kitchen's 'http://localhost:5005'.
+// On any screen but the kitchen Pi, "localhost" is the screen itself, and once
+// the Pi's service goes that address is dead everywhere. So these stored values
+// are stale and get replaced on read, from the cache and from the hub alike:
+const HUB_SONOS_BASE = hubUrl('/api/sonos')
+const STALE_SONOS_BASES = [
+  /^https?:\/\/(localhost|127\.0\.0\.1):5005\/?$/i, // the Pi's own node-sonos-http-api
+  /:8080\/api\/sonos\/?$/i,                          // the Pi's proxy (the old TV route)
+]
+
+function isStaleSonosBase(value) {
+  if (typeof value !== 'string' || !value.trim()) return true
+  const v = value.trim()
+  if (STALE_SONOS_BASES.some((re) => re.test(v))) return true
+  // A page FrameServer served is on the hub's own origin, and that origin is the
+  // one name for the hub this browser is known to resolve (Silk on the Echo
+  // cannot resolve nuc.local). Any other host's /api/sonos is stale here too.
+  if (SERVED_BY_HUB && /\/api\/sonos\/?$/i.test(v) && v.replace(/\/+$/, '') !== HUB_SONOS_BASE) {
+    return true
+  }
+  return false
+}
+
+// Returns the SAME object when nothing needed fixing, so callers can tell.
+// Only an apiBase that is present is judged; a partial payload without one
+// merges over the good value we already hold.
+function normalizeSonos(sonos) {
+  if (!sonos || typeof sonos !== 'object' || !('apiBase' in sonos)) return sonos
+  if (!isStaleSonosBase(sonos.apiBase)) return sonos
+  return { ...sonos, apiBase: HUB_SONOS_BASE }
 }
 
 function pick(obj, keys) {
   const out = {}
   for (const k of keys) if (obj?.[k] !== undefined) out[k] = obj[k]
   return out
-}
-
-// True when this instance is the secondary web TV surface. Parsed directly
-// from the URL (not via kioskMode.js) to avoid an import cycle. It no longer
-// implies read-only: every screen owns its own device config. It still gates
-// the kitchen-authoritative pushes below (timer, no-school flag).
-const IS_TV =
-  typeof window !== 'undefined' &&
-  new URLSearchParams(window.location.search).get('kiosk') === 'tv'
-
-// Resolved once at module load, after IS_TV exists.
-const DEVICE_ID = resolveDeviceId()
-
-// Settings keys mirrored to the Pi shared-state endpoint for secondary
-// displays (the TV). The kitchen is the sole writer; the TV reads these.
-// Must match SHARED_KEYS in hooks/useSharedState.js.
-const SHARED_KEYS = ['location', 'school', 'slideshow']
-
-// Best-effort push of the synced subset to the Pi. No-op on the TV (read-only)
-// and silent on failure (the kitchen keeps working offline).
-function postSharedState(next) {
-  if (IS_TV) return
-  if (typeof fetch === 'undefined') return
-  const subset = {}
-  for (const k of SHARED_KEYS) {
-    if (next[k] !== undefined) subset[k] = next[k]
-  }
-  try {
-    fetch('/api/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(subset),
-      cache: 'no-store',
-    }).catch(() => {})
-  } catch {
-    // best-effort
-  }
 }
 
 // --- hub sync ----------------------------------------------------------------
@@ -105,7 +166,7 @@ let queuedShared = {}
 // settings whichever half is deployed first.
 function hubPatch(path, body) {
   if (!HUB || typeof fetch === 'undefined') return
-  fetch(`${HUB}${path}`, {
+  fetch(hubUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -144,8 +205,21 @@ function syncToHub(next) {
 // idempotent for free. The freshness window matters: without it, a page reload
 // would replay whatever command was last written and put the screen to sleep
 // for no reason.
+//
+// The last-run ts is persisted, not just held in memory, because of 'reload':
+// the fresh page would otherwise meet the same command, still inside its
+// freshness window, and reload again - a two-minute reload loop.
 const COMMAND_MAX_AGE_MS = 2 * 60 * 1000
-let lastCommandTs = 0
+
+function readLastCommandTs() {
+  if (typeof localStorage === 'undefined') return 0
+  try {
+    return Number(localStorage.getItem(LAST_COMMAND_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+let lastCommandTs = readLastCommandTs()
 
 function handleHubCommand(cmd) {
   if (!cmd || typeof cmd !== 'object') return
@@ -153,12 +227,30 @@ function handleHubCommand(cmd) {
   if (!ts || ts === lastCommandTs) return
   if (Date.now() - ts > COMMAND_MAX_AGE_MS) return   // stale; ignore
   lastCommandTs = ts
+  try { localStorage.setItem(LAST_COMMAND_KEY, String(ts)) } catch { /* storage disabled */ }
   if (cmd.action === 'sleep') {
     window.dispatchEvent(new CustomEvent('display-sleep-now'))
   } else if (cmd.action === 'wake') {
     window.dispatchEvent(new CustomEvent('display-wake-now'))
+  } else if (cmd.action === 'reload') {
+    // The dashboard's Reload button: pick up a new bundle, or clear a wedged
+    // page on a screen nobody can reach with a keyboard (the Echo).
+    window.location.reload()
+  } else if (cmd.action === 'view') {
+    // The dashboard's Show Photos / Today / Now Playing buttons: a one-time
+    // nudge, exactly as if someone had tapped the menu on the screen. The
+    // schedule watchers and idle rules carry on afterwards; nothing is pinned.
+    // AppShell owns the view state, so it listens for this and switches.
+    const VIEWS = ['photos', 'today', 'music', 'settings']
+    if (VIEWS.includes(cmd.view)) {
+      window.dispatchEvent(new CustomEvent('hub-show-view', { detail: { view: cmd.view } }))
+    }
   }
 }
+
+// Heal a stale Sonos base in the registry once per page load, not per poll: if
+// the write-back fails, the next page load tries again.
+let sonosHealQueued = false
 
 // Apply a hub payload without echoing it straight back as a PATCH - otherwise
 // every poll would rewrite what it just read.
@@ -169,6 +261,17 @@ function applyFromHub(payload) {
     ...pick(payload.shared || {}, SHARED_SCOPE),
     ...pick(payload.config || {}, DEVICE_SCOPE),
   }
+  // A stale Sonos base from the registry is corrected BEFORE it merges over
+  // our good value, then written back so the registry heals itself (the
+  // dashboard, and this screen after a cache wipe, then see the proxy too).
+  let healSonos = false
+  if (patch.sonos) {
+    const fixed = normalizeSonos(patch.sonos)
+    if (fixed !== patch.sonos) {
+      patch.sonos = fixed
+      healSonos = true
+    }
+  }
   if (!Object.keys(patch).length) return
   const next = deepMerge(currentValue, patch)
   // Almost every poll returns exactly what we already hold. Publishing it
@@ -177,12 +280,17 @@ function applyFromHub(payload) {
   // That silently broke the slideshow: its advance timer was torn down and
   // rebuilt on each poll, so any photo duration longer than HUB_POLL_MS
   // could never elapse and the photo never changed.
-  if (deepEqual(next, currentValue)) return
-  currentValue = next
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentValue))
-  } catch { /* storage disabled */ }
-  listeners.forEach((fn) => fn())
+  if (!deepEqual(next, currentValue)) {
+    currentValue = next
+    writeCache(currentValue)
+    listeners.forEach((fn) => fn())
+  }
+  // Checked even when nothing changed locally: our cached value may already be
+  // right while the registry still holds the stale one.
+  if (healSonos && !sonosHealQueued) {
+    sonosHealQueued = true
+    syncToHub({ sonos: currentValue.sonos })   // device scope only
+  }
 }
 
 // Self-seeding registration. The hub NEVER overwrites a device that already
@@ -191,18 +299,22 @@ function applyFromHub(payload) {
 // defaults. This screen is running drivingDepart 7:38 against a 7:42 default;
 // silently shifting the family's morning timer by four minutes is exactly the
 // kind of small wrongness that makes people stop trusting the display.
+//
+// seedFrom (see resolveSeedFrom) asks the hub to start a NEW entry from another
+// device's slideshow, Sonos room and display schedule instead.
 async function registerWithHub() {
   if (!HUB || typeof fetch === 'undefined') return
   try {
-    const res = await fetch(`${HUB}/api/devices/register`, {
+    const res = await fetch(hubUrl('/api/devices/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: DEVICE_ID,
         name: DEVICE_ID,
-        kind: IS_TV ? 'web-tv' : 'web',
+        kind: DEVICE_KIND,
         config: pick(currentValue, DEVICE_SCOPE),
         shared: pick(currentValue, SHARED_SCOPE),
+        ...(SEED_FROM ? { seedFrom: SEED_FROM } : {}),
       }),
       cache: 'no-store',
     })
@@ -222,7 +334,7 @@ async function pollHub() {
   if (!HUB || typeof fetch === 'undefined') return
   if (Date.now() - lastLocalWriteAt < 5000) return
   try {
-    const res = await fetch(`${HUB}/api/devices/${encodeURIComponent(DEVICE_ID)}/config`, {
+    const res = await fetch(hubUrl(`/api/devices/${encodeURIComponent(DEVICE_ID)}/config`), {
       cache: 'no-store',
     })
     if (res.ok) applyFromHub(await res.json())
@@ -232,53 +344,16 @@ async function pollHub() {
   }
 }
 
-// Push the live Today-timer state to the Pi so the Apple TV can mirror the
-// kitchen's countdown. Same best-effort + TV-gated semantics as
-// postSharedState. `timer` is a small plain object (see TodayView). Posted
-// under the `timer` key, which the Pi merges into /api/state alongside the
-// settings subset.
-export function postTimerState(timer) {
-  if (IS_TV) return
-  if (typeof fetch === 'undefined') return
-  try {
-    fetch('/api/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timer }),
-      cache: 'no-store',
-    }).catch(() => {})
-  } catch {
-    // best-effort
-  }
-}
-
-// Push the derived "is today a no-school day" flag to the Pi so the Apple TV
-// mirrors the kitchen's suppression (its boot picker + Today view read it).
-// Derived daily state, not a setting, so it is posted on its own like the timer.
-export function postSchoolDayState(noSchoolToday) {
-  if (IS_TV) return
-  if (typeof fetch === 'undefined') return
-  try {
-    fetch('/api/state', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ noSchoolToday: !!noSchoolToday }),
-      cache: 'no-store',
-    }).catch(() => {})
-  } catch {
-    // best-effort
-  }
-}
-
-// Flag the on-screen photo's location caption as wrong (long-press on the
-// kitchen). Best-effort POST to the Pi, which stores the assetId + caption for
-// later triage. No-op on the TV (read-only) and silent on failure.
+// Flag the on-screen photo's location caption as wrong (long-press). Best-effort
+// POST to the hub's flag queue, which stores the assetId + caption for triage by
+// flags-review.mjs / flags-apply.mjs. Any screen may flag except the legacy web
+// TV surface - the Echo included. Silent on failure.
 export function postPhotoFlag(assetId, wrongCaption) {
   if (IS_TV) return
   if (typeof fetch === 'undefined') return
   if (!assetId) return
   try {
-    fetch('/api/flags', {
+    fetch(hubUrl('/api/flags'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -307,7 +382,7 @@ export const DEFAULTS = {
     // Photos (and the boot-time view selector also stops choosing Today).
     morningEndsAt: { hour: 8, minute: 0 },
     schoolDays: [1, 2, 3, 4, 5], // 0=Sun, 1=Mon, ..., 6=Sat
-    // Lunch menu (MealViewer, fetched via the Pi /api/lunch proxy). schoolSlug
+    // Lunch menu (MealViewer, fetched via the hub's /api/lunch proxy). schoolSlug
     // is the school name in the MealViewer URL (schools.mealviewer.com/school/<slug>).
     lunch: { enabled: true, schoolSlug: 'Lawton' },
     // Manual no-school dates layered on top of the SPS calendar feed: snow days
@@ -326,7 +401,10 @@ export const DEFAULTS = {
   },
   weatherSlots: [8, 11, 14, 17, 20],
   sonos: {
-    apiBase: 'http://localhost:5005',
+    // The hub's proxy in front of node-sonos-http-api on the NUC. Stale stored
+    // values (the Pi's localhost:5005, its :8080 proxy) are moved here on read;
+    // see normalizeSonos().
+    apiBase: HUB_SONOS_BASE,
     room: 'Main',
     pollIntervalMs: 1500,
   },
@@ -337,10 +415,16 @@ export const DEFAULTS = {
   // Any touch during dim/off wakes; manual wake holds until the next
   // scheduled transition fires.
   //
-  // Brightness values are "fraction of native panel brightness." These now
-  // drive the REAL backlight over DDC/CI (ddcutil setvcp 10) via the Pi's
-  // /api/display/brightness endpoint. The CSS overlay (opacity = 1 - brightness)
-  // remains as the fallback when DDC is unavailable or hardwareDim is off.
+  // Brightness values are "fraction of native panel brightness." On a Pi with
+  // its own panel (HAS_PANEL in lib/hub.js) these drive the REAL backlight over
+  // DDC/CI (ddcutil setvcp 10) via the Pi's /api/display/brightness endpoint.
+  // The CSS overlay (opacity = 1 - brightness) remains as the fallback when DDC
+  // is unavailable or hardwareDim is off, and is the only dimmer on the Echo.
+  //
+  // The Echo's hardware defaults are off: it has no panel to drive, so the
+  // Settings rows should not claim otherwise. Decided per surface HERE, before
+  // readStored() runs, so a value the Echo or the dashboard has saved still wins
+  // and the kitchen's defaults are untouched.
   display: {
     dimAt: { hour: 21, minute: 0 },  // 9:00 PM
     offAt: { hour: 0, minute: 0 },   // midnight
@@ -350,13 +434,18 @@ export const DEFAULTS = {
     // Drive the panel's real backlight over DDC/CI instead of painting a black
     // overlay over a full-brightness screen. Off = overlay-only (the old
     // behavior), which is the escape hatch if the panel ever misbehaves.
-    hardwareDim: true,
+    hardwareDim: !IS_ECHO,
     // Power the panel down over DDC/CI (VCP D6) for 'off', instead of only
     // painting an opaque overlay over a lit screen. Kept SEPARATE from
     // hardwareDim because the risk profiles differ: a failed dim just looks
     // wrong, while a panel left in standby is dark until something wakes it.
     // The server wakes the panel on startup so a reboot always self-heals.
-    hardwarePowerOff: true,
+    hardwarePowerOff: !IS_ECHO,
+    // What the screen shows in its 'off' window: 'black', or 'clock' - a faint
+    // drifting clock on black. The Echo defaults to the clock: Silk keeps the
+    // page alive all night anyway (there is no panel to power down), and a
+    // living-room screen that tells the time beats a black rectangle.
+    nightFace: IS_ECHO ? 'clock' : 'black',
     // Which Today layout this screen shows. 'framed' is the original Today
     // view; the others live in views/TodayLayouts/ and are chosen per screen
     // (DEVICE scope). Preview any of them with ?layout=<id> without saving.
@@ -392,8 +481,9 @@ export const DEFAULTS = {
 
 // Structural equality for settings blobs (plain objects, arrays, primitives).
 // Lets an unchanged hub poll be dropped instead of republished - see
-// applyFromHub.
-function deepEqual(a, b) {
+// applyFromHub. Exported for lib/houseState.js, which drops identical polls of
+// /api/state for the same reason.
+export function deepEqual(a, b) {
   if (a === b) return true
   if (a == null || b == null) return false
   if (typeof a !== 'object' || typeof b !== 'object') return false
@@ -452,6 +542,14 @@ function migrateLegacy(merged) {
     t.yellowAbove = 4
   }
 
+  // Sonos: a cached base from before the hub proxy (the Pi's localhost:5005
+  // or :8080 proxy, or blank) moves to the hub. Replaced, never mutated, so a
+  // merge that shares its sonos object with DEFAULTS cannot touch DEFAULTS.
+  if (merged?.sonos) {
+    const s = normalizeSonos(merged.sonos)
+    if (s !== merged.sonos) merged.sonos = s
+  }
+
   return merged
 }
 
@@ -459,22 +557,26 @@ function readStored() {
   if (typeof localStorage === 'undefined') return DEFAULTS
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    const merged = raw ? deepMerge(DEFAULTS, JSON.parse(raw)) : DEFAULTS
+    let stored = raw ? JSON.parse(raw) : null
+    if (stored && localStorage.getItem(STORAGE_DEVICE_KEY) !== DEVICE_ID) {
+      stored = pick(stored, SHARED_SCOPE)   // another device's cache: shared keys only
+    }
+    const merged = stored ? deepMerge(DEFAULTS, stored) : DEFAULTS
     return migrateLegacy(merged)
   } catch {
     return DEFAULTS
   }
 }
 
+function writeCache(value) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
+    localStorage.setItem(STORAGE_DEVICE_KEY, DEVICE_ID)
+  } catch { /* storage full or disabled */ }
+}
+
 let currentValue = readStored()
 const listeners = new Set()
-
-// Push the kitchen's current full settings to the Pi once on boot, so the
-// shared state the TV reads always reflects real (merged-with-defaults)
-// kitchen values - not just deltas from later changes. Without this, a fresh
-// /api/state (or one left with stale data) would only get populated if/when
-// the user happens to change a setting. No-op on the TV (read-only).
-postSharedState(currentValue)
 
 // Register with the hub and start polling for dashboard-side changes. Both are
 // no-ops without a hub URL, which keeps samplePhotos dev mode and the rollback
@@ -501,15 +603,7 @@ export function updateSettings(updater) {
       ? updater(currentValue)
       : deepMerge(currentValue, updater)
   currentValue = next
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  } catch {
-    // no-op if storage is full / disabled
-  }
-  // Dual-write during the transition: the hub is the new source of truth, but
-  // the native Apple TV still reads settings from the Pi's /api/state. Drop the
-  // postSharedState call once tvOS reads its config from the hub instead.
-  postSharedState(next)
+  writeCache(next)
   syncToHub(next)
   listeners.forEach((fn) => fn())
 }

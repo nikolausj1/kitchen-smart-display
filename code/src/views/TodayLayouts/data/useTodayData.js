@@ -25,9 +25,11 @@ import { DEMO_MUSIC, DEMO_SCHOOL, DEMO_TIMER, DEMO_TIMER_MINUTES, demoWeather } 
 // call it once and hand slices to purely presentational panels, which is what
 // lets the same panel render on the dark Board and the light Briefing page.
 //
-// Deliberately NOT here: postTimerState(). The Framed Today view stays the one
-// authority that mirrors the timer to the Apple TV, so a second layout mounting
-// cannot start fighting it over what the TV shows.
+// Deliberately NOT here: posting any timer state. The countdown is shared
+// through the hub now: useTimer writes only user decisions (lib/houseState.js),
+// every screen derives the timer from them, and the hub derives the Apple TV's
+// copy with the same code. No layout posts anything, so two layouts (or two
+// screens) cannot fight over what the TV shows.
 
 // URL params, parsed ONCE at module load the way lib/kioskMode.js does.
 // Reading window.location in a render body trips the React Compiler purity
@@ -88,8 +90,9 @@ export default function useTodayData() {
   const daily = useDailyForecast()      // daily + current block
 
   // Weather-based default travel mode, exactly as views/TodayView does it: read
-  // the forecast at the walking departure hour and decide drive vs walk. The
-  // timer uses it when it auto-arms; a manual toggle wins for the rest of the day.
+  // the forecast at the walking departure hour and decide drive vs walk. Only a
+  // fallback until the hub's shared travelDefault arrives; a manual toggle on
+  // any screen wins for the rest of the day.
   const depHour = schoolSettings?.walkingDepart?.hour ?? 7
   const weatherDefaultMode = decideTravelMode(weather.forecastForHour?.(depHour))
   const timerState = useTimer({ weatherDefaultMode })
@@ -245,7 +248,7 @@ export default function useTodayData() {
   )
 
   // actions is passed through untouched: the same five callbacks useTimer
-  // handed us, so a panel button drives the real state machine.
+  // handed us, so a panel button drives the real, house-shared countdown.
   const timer = useMemo(
     () =>
       FLAGS.demo

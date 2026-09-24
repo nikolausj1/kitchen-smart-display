@@ -42,8 +42,11 @@ export const TIMER_THRESHOLDS = {
 export const WEATHER_SLOT_HOURS = [8, 11, 14, 17, 20]
 
 // --- Sonos ------------------------------------------------------------------
-// node-sonos-http-api runs as a local systemd service on the Pi, bound to
-// 127.0.0.1:5005. The kiosk app talks to it via this base URL.
+// Placeholder only; nothing reads apiBase from here. The real base is
+// hubUrl('/api/sonos') (the default in lib/settings.js): node-sonos-http-api
+// runs on the NUC behind FrameServer's /api/sonos proxy, for every screen. This
+// localhost:5005 was the Pi's loopback service, reachable from the kitchen
+// alone; settings.js treats it as stale wherever it is still stored.
 export const SONOS = {
   apiBase: 'http://localhost:5005',
   room: 'Main',
@@ -54,7 +57,14 @@ export const SONOS = {
 // FrameServer runs on the NUC (C:\Services\FrameServer) and serves the manifest
 // plus every photo derivative to all the screens in the house. Before the 2026-08
 // migration this was the kitchen Pi itself, which made the kitchen display a
-// single point of failure for the Apple TV.
+// single point of failure for the Apple TV. Since 2026-09-24 it is also where
+// settings, house state, lunch, the school calendar, photo flags and Sonos live.
+//
+// This is only the compiled DEFAULT for where the hub is. lib/hub.js resolves
+// the hub for real: ?hub= first, then the <meta> FrameServer injects when it
+// serves the app itself (the Echo, which cannot resolve nuc.local), then this
+// value (the kitchen Pi, whose Chromium resolves mDNS). Import HUB / hubUrl()
+// from lib/hub.js; do not read this directly.
 //
 // mDNS name, never a hard-coded IP: the Pi's lease moved from .127 to .131 and
 // left a dead address baked into the tvOS app. `nuc.local` has a DHCP

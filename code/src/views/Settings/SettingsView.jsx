@@ -1,18 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
+import { DEVICE_ID, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
+import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
-import { PHOTOS } from '../../config.js'
 import { LAYOUT_IDS, LAYOUT_LABELS, normalizeLayoutId } from '../TodayLayouts/registry.js'
 import './SettingsView.css'
 
 // If the Settings screen sees no user activity for this long, auto-bounce
 // back to the Photos view so the device returns to its ambient state.
 const IDLE_TO_PHOTOS_MS = 60_000
-
-// Photo rebuilds live on FrameServer now, not the Pi. Empty string falls back
-// to same-origin, which is what the dev server and the rollback path want.
-const PHOTO_HUB = (PHOTOS.baseUrl || '').replace(/\/+$/, '')
 
 // SettingsView - the four main config groups, all auto-saved to localStorage
 // via updateSettings(). Stays full-screen until the user navigates away via
@@ -302,30 +298,51 @@ function SonosRoomSelect({ apiBase, value, onChange }) {
 // status endpoint reflects refresh-status.json, which FrameServer owns. This
 // used to run on the Pi via photo-refresh.sh - that path stays installed but
 // disabled as the rollback. See docs/designs/photo-refresh-automation.md.
+// Both calls go to whatever hub lib/hub.js resolved; '' (same-origin) is what
+// the dev server and the rollback path want.
+
+// The status payload, or null when the hub or the endpoint is absent (dev
+// server): status stays null and the button still renders.
+async function fetchRefreshStatus() {
+  try {
+    const res = await fetch(hubUrl('/api/photos/refresh/status'), { cache: 'no-store' })
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
+}
+
 function PhotoRefreshControl() {
   const [status, setStatus] = useState(null)
   const [posting, setPosting] = useState(false)
   const [postError, setPostError] = useState(null)
 
-  async function loadStatus() {
-    try {
-      const res = await fetch(`${PHOTO_HUB}/api/photos/refresh/status`, { cache: 'no-store' })
-      if (res.ok) setStatus(await res.json())
-    } catch {
-      // Dev server / endpoint absent: leave status null, button still renders.
-    }
-  }
-
+  // State is set from the fetch's callback, never synchronously in the effect,
+  // and not at all once the control has unmounted.
   useEffect(() => {
-    loadStatus()
+    let cancelled = false
+    fetchRefreshStatus().then((s) => {
+      if (!cancelled && s) setStatus(s)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Poll only while a run is active, so an open Settings screen costs nothing.
   const running = !!status?.running
   useEffect(() => {
     if (!running) return undefined
-    const id = setInterval(loadStatus, 4000)
-    return () => clearInterval(id)
+    let cancelled = false
+    const id = setInterval(() => {
+      fetchRefreshStatus().then((s) => {
+        if (!cancelled && s) setStatus(s)
+      })
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [running])
 
   async function start(e) {
@@ -333,7 +350,7 @@ function PhotoRefreshControl() {
     setPosting(true)
     setPostError(null)
     try {
-      const res = await fetch(`${PHOTO_HUB}/api/photos/refresh`, { method: 'POST' })
+      const res = await fetch(hubUrl('/api/photos/refresh'), { method: 'POST' })
       if (!res.ok && res.status !== 409) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error || `HTTP ${res.status}`)
@@ -926,6 +943,22 @@ export default function SettingsView() {
               onChange={(t) => updateSettings({ display: { offAt: t } })}
             />
           </Row>
+          <Row
+            label="Night face"
+            hint="What the screen shows in its off window: black, or a faint clock. The Echo Show uses the clock."
+          >
+            <select
+              className="settings-select"
+              value={display?.nightFace === 'clock' ? 'clock' : 'black'}
+              onChange={(e) =>
+                updateSettings({ display: { nightFace: e.target.value } })
+              }
+              data-interactive="true"
+            >
+              <option value="black">Black</option>
+              <option value="clock">Faint clock</option>
+            </select>
+          </Row>
           <Row label="Wake at" hint="Screen returns to full brightness in the morning.">
             <TimeOfDay
               hour={display?.wakeAt?.hour ?? 6}
@@ -976,6 +1009,11 @@ export default function SettingsView() {
         <div className="settings__footer">
           Tap a dead area to open the menu and navigate away.
           <div className="settings__build">Build {__BUILD_STAMP__}</div>
+          {/* Which hub this screen resolved, and how (lib/hub.js): the first
+            * thing to check when one screen shows different data. */}
+          <div className="settings__build">
+            {`Hub: ${HUB || 'same origin'} (${HUB_SOURCE}) · Device: ${DEVICE_ID}`}
+          </div>
         </div>
       </div>
     </div>

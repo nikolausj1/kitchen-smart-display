@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
+import { hubUrl } from '../lib/hub.js'
 
-// Fetches the school lunch menu from the Pi proxy (/api/lunch?school=<slug>),
-// which returns { days: { 'YYYY-MM-DD': { entrees, grabAndGo, items } } }.
+// Fetches the school lunch menu from the hub's proxy (/api/lunch?school=<slug>),
+// which returns { days: { 'YYYY-MM-DD': { entrees, grabAndGo, items } } }. It
+// was the kitchen Pi's route until 2026-09-24; every screen now asks the hub.
 // Refreshes daily; cached so a transient outage still shows today's menu.
 // Returns the payload or null. No-op (null) when lunch is disabled in settings.
 
@@ -39,16 +41,15 @@ export default function useLunch() {
   const [data, setData] = useState(() => (enabled ? readCache(slug) : null))
 
   useEffect(() => {
-    if (!enabled) {
-      setData(null)
-      return
-    }
+    // Disabled: nothing to fetch. The hook returns null below rather than
+    // clearing state here, which would cost a second render for nothing.
+    if (!enabled) return undefined
     let cancelled = false
     let timer = null
 
     async function load() {
       try {
-        const res = await fetch(`/api/lunch?school=${encodeURIComponent(slug)}`, {
+        const res = await fetch(hubUrl(`/api/lunch?school=${encodeURIComponent(slug)}`), {
           cache: 'no-store',
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -75,5 +76,5 @@ export default function useLunch() {
     }
   }, [enabled, slug])
 
-  return data
+  return enabled ? data : null
 }
