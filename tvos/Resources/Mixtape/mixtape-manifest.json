@@ -1,0 +1,1253 @@
+{
+ "frame": {
+  "w": 3840,
+  "h": 2160
+ },
+ "units": "all positions normalised 0..1 of the 3840x2160 frame, origin top-left, y down; rects {x, y, w, h}; radii, maxWidth and x as fractions of frame width; baselineY and xHeight as fractions of frame height",
+ "deck": {
+  "source": "art-src/mixtape/reference/horizon_deck_reference.png",
+  "source_size": [
+   1672,
+   941
+  ],
+  "plate_size": [
+   3840,
+   2160
+  ],
+  "units": "normalised 0..1 of the plate (x right, y down); rects are x, y, w, h",
+  "plates": {
+   "deck_empty": "deck_empty_4k.png",
+   "door_frame": "door_frame_4k.png",
+   "door_glass": "door_glass_4k.png"
+  },
+  "empty_well_candidate": 2,
+  "well": {
+   "x": 0.25718,
+   "y": 0.11696,
+   "w": 0.48445,
+   "h": 0.58161
+  },
+  "cassette_seat": {
+   "x": 0.29785,
+   "y": 0.15949,
+   "w": 0.40191,
+   "h": 0.45401
+  },
+  "door": {
+   "x": 0.26675,
+   "y": 0.12759,
+   "w": 0.46411,
+   "h": 0.5614
+  },
+  "door_opaque_parts": [
+   {
+    "x": 0.26675,
+    "y": 0.12759,
+    "w": 0.46411,
+    "h": 0.01808
+   },
+   {
+    "x": 0.26675,
+    "y": 0.12759,
+    "w": 0.02392,
+    "h": 0.10845
+   },
+   {
+    "x": 0.26675,
+    "y": 0.52951,
+    "w": 0.02392,
+    "h": 0.08506
+   },
+   {
+    "x": 0.70694,
+    "y": 0.12759,
+    "w": 0.02392,
+    "h": 0.10845
+   },
+   {
+    "x": 0.70694,
+    "y": 0.52951,
+    "w": 0.02392,
+    "h": 0.08506
+   },
+   {
+    "x": 0.26675,
+    "y": 0.61457,
+    "w": 0.46411,
+    "h": 0.07443
+   }
+  ],
+  "door_hinge_y": 0.689,
+  "play_key_hole": {
+   "x": 0.29904,
+   "y": 0.79957,
+   "w": 0.11962,
+   "h": 0.12121
+  },
+  "key_caps": {
+   "rew": {
+    "x": 0.19557,
+    "y": 0.81127,
+    "w": 0.08732,
+    "h": 0.10101
+   },
+   "play": {
+    "x": 0.30622,
+    "y": 0.81127,
+    "w": 0.10407,
+    "h": 0.09995
+   },
+   "ff": {
+    "x": 0.44737,
+    "y": 0.81127,
+    "w": 0.10108,
+    "h": 0.10101
+   },
+   "stop": {
+    "x": 0.58194,
+    "y": 0.81127,
+    "w": 0.09569,
+    "h": 0.10101
+   },
+   "pause": {
+    "x": 0.71172,
+    "y": 0.81127,
+    "w": 0.09151,
+    "h": 0.09995
+   }
+  },
+  "vu_faces": {
+   "left": {
+    "x": 0.04366,
+    "y": 0.20202,
+    "w": 0.19557,
+    "h": 0.19351
+   },
+   "right": {
+    "x": 0.76077,
+    "y": 0.20202,
+    "w": 0.19498,
+    "h": 0.19351
+   }
+  },
+  "vu_needle_pivots": {
+   "left": {
+    "x": 0.14713,
+    "y": 0.53057
+   },
+   "right": {
+    "x": 0.85706,
+    "y": 0.52951
+   }
+  },
+  "vu_arc_radius_h": 0.24668,
+  "vu_hub_domes": {
+   "left": {
+    "x": 0.14474,
+    "y": 0.39341
+   },
+   "right": {
+    "x": 0.85526,
+    "y": 0.39341
+   }
+  },
+  "notes": [
+   "deck_empty keeps the door's frame and smoke baked in, as the photo saw it.",
+   "door_frame / door_glass redraw the door over a tape; over the empty well the glass would tint twice, so draw them only when a tape is shown or the door moves.",
+   "VU pivots are the scale-arc centres, below the faces (hidden by the hub dome); draw the needle from the pivot and clip it to the face."
+  ]
+ },
+ "hashCheck": {
+  "algorithm": "fnv1a32",
+  "input": "landslide|fleetwood mac|",
+  "expected": 190110897
+ },
+ "tapes": [
+  {
+   "id": "test_black",
+   "brand": "Test",
+   "sku": "test black shell",
+   "labelStyle": "blank",
+   "shell": "black",
+   "wear": "medium",
+   "logoDir": null,
+   "files": {
+    "tape": "tapes/test_black/tape.png",
+    "hub": "tapes/test_black/hub.png",
+    "pack": "tapes/test_black/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.29665,
+    "y": 0.15417,
+    "w": 0.40443,
+    "h": 0.46574
+   },
+   "hubL": {
+    "x": 0.41284,
+    "y": 0.37586
+   },
+   "hubR": {
+    "x": 0.5861,
+    "y": 0.37464
+   },
+   "hubRadius": 0.02353,
+   "packMinRadius": 0.02824,
+   "packMaxRadius": 0.03464,
+   "windowRect": {
+    "x": 0.37859,
+    "y": 0.3126,
+    "w": 0.24282,
+    "h": 0.12547
+   },
+   "labelRect": {
+    "x": 0.31699,
+    "y": 0.19564,
+    "w": 0.36483,
+    "h": 0.30197
+   },
+   "artSlotRect": {
+    "x": 0.32458,
+    "y": 0.20266,
+    "w": 0.05789,
+    "h": 0.10292
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.38942,
+     "baselineY": 0.22169,
+     "maxWidth": 0.27565,
+     "xHeight": 0.01921
+    },
+    {
+     "field": "album",
+     "x": 0.38942,
+     "baselineY": 0.25678,
+     "maxWidth": 0.28145,
+     "xHeight": 0.01409
+    },
+    {
+     "field": "song",
+     "x": 0.38942,
+     "baselineY": 0.2908,
+     "maxWidth": 0.27625,
+     "xHeight": 0.01409
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "test_clear",
+   "brand": "Test",
+   "sku": "test clear shell",
+   "labelStyle": "blank",
+   "shell": "clear",
+   "wear": "medium",
+   "logoDir": null,
+   "files": {
+    "tape": "tapes/test_clear/tape.png",
+    "hub": "tapes/test_clear/hub.png",
+    "pack": "tapes/test_clear/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30443,
+    "y": 0.17544,
+    "w": 0.39349,
+    "h": 0.43935
+   },
+   "hubL": {
+    "x": 0.4202,
+    "y": 0.37399
+   },
+   "hubR": {
+    "x": 0.58158,
+    "y": 0.37611
+   },
+   "hubRadius": 0.02288,
+   "packMinRadius": 0.02745,
+   "packMaxRadius": 0.02887,
+   "windowRect": {
+    "x": 0.38935,
+    "y": 0.32111,
+    "w": 0.22368,
+    "h": 0.10633
+   },
+   "labelRect": {
+    "x": 0.32596,
+    "y": 0.21584,
+    "w": 0.34988,
+    "h": 0.27858
+   },
+   "artSlotRect": {
+    "x": 0.33301,
+    "y": 0.22216,
+    "w": 0.05211,
+    "h": 0.09263
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39137,
+     "baselineY": 0.24624,
+     "maxWidth": 0.27397,
+     "xHeight": 0.01729
+    },
+    {
+     "field": "album",
+     "x": 0.39137,
+     "baselineY": 0.27712,
+     "maxWidth": 0.27397,
+     "xHeight": 0.01268
+    },
+    {
+     "field": "song",
+     "x": 0.39137,
+     "baselineY": 0.308,
+     "maxWidth": 0.27397,
+     "xHeight": 0.01268
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1b1b1f",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "tdk_sax_printed",
+   "brand": "TDK",
+   "sku": "SA-X 90",
+   "labelStyle": "printed",
+   "shell": "black",
+   "wear": "light",
+   "logoDir": "art-src/mixtape/logos/tdk",
+   "files": {
+    "tape": "tapes/tdk_sax_printed/tape.png",
+    "hub": "tapes/tdk_sax_printed/hub.png",
+    "pack": "tapes/tdk_sax_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30323,
+    "y": 0.14992,
+    "w": 0.39401,
+    "h": 0.46157
+   },
+   "hubL": {
+    "x": 0.41358,
+    "y": 0.36696
+   },
+   "hubR": {
+    "x": 0.58495,
+    "y": 0.36725
+   },
+   "hubRadius": 0.02222,
+   "packMinRadius": 0.02666,
+   "packMaxRadius": 0.03066,
+   "windowRect": {
+    "x": 0.38098,
+    "y": 0.31154,
+    "w": 0.23804,
+    "h": 0.11271
+   },
+   "labelRect": {
+    "x": 0.32356,
+    "y": 0.22222,
+    "w": 0.35227,
+    "h": 0.26582
+   },
+   "artSlotRect": {
+    "x": 0.3301,
+    "y": 0.22758,
+    "w": 0.04421,
+    "h": 0.0786
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.41462,
+     "baselineY": 0.24802,
+     "maxWidth": 0.25065,
+     "xHeight": 0.01467,
+     "captionX": 0.37962,
+     "captionBaselineY": 0.24802
+    },
+    {
+     "field": "album",
+     "x": 0.41462,
+     "baselineY": 0.27421,
+     "maxWidth": 0.25065,
+     "xHeight": 0.01076,
+     "captionX": 0.37962,
+     "captionBaselineY": 0.27421
+    },
+    {
+     "field": "song",
+     "x": 0.41462,
+     "baselineY": 0.30041,
+     "maxWidth": 0.25065,
+     "xHeight": 0.01076,
+     "captionX": 0.37962,
+     "captionBaselineY": 0.30041
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "tdk_sax_blank",
+   "brand": "TDK",
+   "sku": "SA-X 90",
+   "labelStyle": "blank",
+   "shell": "black",
+   "wear": "medium",
+   "logoDir": "art-src/mixtape/logos/tdk",
+   "files": {
+    "tape": "tapes/tdk_sax_blank/tape.png",
+    "hub": "tapes/tdk_sax_blank/hub.png",
+    "pack": "tapes/tdk_sax_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30323,
+    "y": 0.15843,
+    "w": 0.39167,
+    "h": 0.45833
+   },
+   "hubL": {
+    "x": 0.41767,
+    "y": 0.37131
+   },
+   "hubR": {
+    "x": 0.57734,
+    "y": 0.36946
+   },
+   "hubRadius": 0.02243,
+   "packMinRadius": 0.02691,
+   "packMaxRadius": 0.03149,
+   "windowRect": {
+    "x": 0.38816,
+    "y": 0.3126,
+    "w": 0.2189,
+    "h": 0.11483
+   },
+   "labelRect": {
+    "x": 0.32416,
+    "y": 0.20521,
+    "w": 0.34629,
+    "h": 0.28708
+   },
+   "artSlotRect": {
+    "x": 0.33125,
+    "y": 0.21165,
+    "w": 0.05316,
+    "h": 0.0945
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39079,
+     "baselineY": 0.23622,
+     "maxWidth": 0.26928,
+     "xHeight": 0.01764
+    },
+    {
+     "field": "album",
+     "x": 0.39079,
+     "baselineY": 0.26773,
+     "maxWidth": 0.26928,
+     "xHeight": 0.01294
+    },
+    {
+     "field": "song",
+     "x": 0.39079,
+     "baselineY": 0.29923,
+     "maxWidth": 0.26928,
+     "xHeight": 0.01294
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1b1b1f",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "maxell_udxl2_printed",
+   "brand": "Maxell",
+   "sku": "UDXL II 90",
+   "labelStyle": "printed",
+   "shell": "black",
+   "wear": "medium",
+   "logoDir": "art-src/mixtape/logos/maxell",
+   "files": {
+    "tape": "tapes/maxell_udxl2_printed/tape.png",
+    "hub": "tapes/maxell_udxl2_printed/hub.png",
+    "pack": "tapes/maxell_udxl2_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30203,
+    "y": 0.17225,
+    "w": 0.39844,
+    "h": 0.44444
+   },
+   "hubL": {
+    "x": 0.4155,
+    "y": 0.373
+   },
+   "hubR": {
+    "x": 0.58135,
+    "y": 0.37519
+   },
+   "hubRadius": 0.02344,
+   "packMinRadius": 0.02813,
+   "packMaxRadius": 0.03,
+   "windowRect": {
+    "x": 0.38457,
+    "y": 0.31685,
+    "w": 0.22787,
+    "h": 0.11164
+   },
+   "labelRect": {
+    "x": 0.32057,
+    "y": 0.21053,
+    "w": 0.35347,
+    "h": 0.28495
+   },
+   "artSlotRect": {
+    "x": 0.3277,
+    "y": 0.21691,
+    "w": 0.05263,
+    "h": 0.09357
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.42164,
+     "baselineY": 0.24123,
+     "maxWidth": 0.24179,
+     "xHeight": 0.01747,
+     "captionX": 0.38664,
+     "captionBaselineY": 0.24123
+    },
+    {
+     "field": "album",
+     "x": 0.42164,
+     "baselineY": 0.27242,
+     "maxWidth": 0.24179,
+     "xHeight": 0.01281,
+     "captionX": 0.38664,
+     "captionBaselineY": 0.27242
+    },
+    {
+     "field": "song",
+     "x": 0.42164,
+     "baselineY": 0.30361,
+     "maxWidth": 0.24179,
+     "xHeight": 0.01281,
+     "captionX": 0.38664,
+     "captionBaselineY": 0.30361
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#1b1b1f",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "maxell_udxl2_blank",
+   "brand": "Maxell",
+   "sku": "UDXL II 90",
+   "labelStyle": "blank",
+   "shell": "black",
+   "wear": "heavy",
+   "logoDir": "art-src/mixtape/logos/maxell",
+   "files": {
+    "tape": "tapes/maxell_udxl2_blank/tape.png",
+    "hub": "tapes/maxell_udxl2_blank/hub.png",
+    "pack": "tapes/maxell_udxl2_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30443,
+    "y": 0.17438,
+    "w": 0.3888,
+    "h": 0.44444
+   },
+   "hubL": {
+    "x": 0.41839,
+    "y": 0.37512
+   },
+   "hubR": {
+    "x": 0.57944,
+    "y": 0.37506
+   },
+   "hubRadius": 0.02132,
+   "packMinRadius": 0.02559,
+   "packMaxRadius": 0.03184,
+   "windowRect": {
+    "x": 0.38995,
+    "y": 0.30516,
+    "w": 0.2183,
+    "h": 0.12759
+   },
+   "labelRect": {
+    "x": 0.32476,
+    "y": 0.20734,
+    "w": 0.34809,
+    "h": 0.28177
+   },
+   "artSlotRect": {
+    "x": 0.33154,
+    "y": 0.21321,
+    "w": 0.04842,
+    "h": 0.08608
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.38577,
+     "baselineY": 0.23559,
+     "maxWidth": 0.27663,
+     "xHeight": 0.01607
+    },
+    {
+     "field": "album",
+     "x": 0.38577,
+     "baselineY": 0.26428,
+     "maxWidth": 0.27663,
+     "xHeight": 0.01178
+    },
+    {
+     "field": "song",
+     "x": 0.38577,
+     "baselineY": 0.29297,
+     "maxWidth": 0.27663,
+     "xHeight": 0.01178
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "sony_hf_printed",
+   "brand": "Sony",
+   "sku": "HF 90",
+   "labelStyle": "printed",
+   "shell": "white",
+   "wear": "heavy",
+   "logoDir": "art-src/mixtape/logos/sony",
+   "files": {
+    "tape": "tapes/sony_hf_printed/tape.png",
+    "hub": "tapes/sony_hf_printed/hub.png",
+    "pack": "tapes/sony_hf_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30861,
+    "y": 0.17119,
+    "w": 0.38333,
+    "h": 0.44537
+   },
+   "hubL": {
+    "x": 0.41881,
+    "y": 0.37058
+   },
+   "hubR": {
+    "x": 0.577,
+    "y": 0.37009
+   },
+   "hubRadius": 0.02069,
+   "packMinRadius": 0.02483,
+   "packMaxRadius": 0.02769,
+   "windowRect": {
+    "x": 0.39055,
+    "y": 0.32004,
+    "w": 0.21471,
+    "h": 0.10101
+   },
+   "labelRect": {
+    "x": 0.33493,
+    "y": 0.21053,
+    "w": 0.32895,
+    "h": 0.29133
+   },
+   "artSlotRect": {
+    "x": 0.34191,
+    "y": 0.2171,
+    "w": 0.05421,
+    "h": 0.09637
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.43763,
+     "baselineY": 0.24215,
+     "maxWidth": 0.21638,
+     "xHeight": 0.01799,
+     "captionX": 0.40263,
+     "captionBaselineY": 0.24215
+    },
+    {
+     "field": "album",
+     "x": 0.43763,
+     "baselineY": 0.27428,
+     "maxWidth": 0.21638,
+     "xHeight": 0.01319,
+     "captionX": 0.40263,
+     "captionBaselineY": 0.27428
+    },
+    {
+     "field": "song",
+     "x": 0.43763,
+     "baselineY": 0.3064,
+     "maxWidth": 0.21638,
+     "xHeight": 0.01319,
+     "captionX": 0.40263,
+     "captionBaselineY": 0.3064
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#4a4a50",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "sony_hf_blank",
+   "brand": "Sony",
+   "sku": "HF 90",
+   "labelStyle": "blank",
+   "shell": "white",
+   "wear": "light",
+   "logoDir": "art-src/mixtape/logos/sony",
+   "files": {
+    "tape": "tapes/sony_hf_blank/tape.png",
+    "hub": "tapes/sony_hf_blank/hub.png",
+    "pack": "tapes/sony_hf_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30801,
+    "y": 0.168,
+    "w": 0.38229,
+    "h": 0.45185
+   },
+   "hubL": {
+    "x": 0.42348,
+    "y": 0.37445
+   },
+   "hubR": {
+    "x": 0.57606,
+    "y": 0.37179
+   },
+   "hubRadius": 0.02159,
+   "packMinRadius": 0.02591,
+   "packMaxRadius": 0.02806,
+   "windowRect": {
+    "x": 0.39474,
+    "y": 0.32217,
+    "w": 0.20993,
+    "h": 0.10207
+   },
+   "labelRect": {
+    "x": 0.32895,
+    "y": 0.21265,
+    "w": 0.33911,
+    "h": 0.28602
+   },
+   "artSlotRect": {
+    "x": 0.33603,
+    "y": 0.21922,
+    "w": 0.05421,
+    "h": 0.09637
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39675,
+     "baselineY": 0.24428,
+     "maxWidth": 0.26114,
+     "xHeight": 0.01799
+    },
+    {
+     "field": "album",
+     "x": 0.39675,
+     "baselineY": 0.27641,
+     "maxWidth": 0.26114,
+     "xHeight": 0.01319
+    },
+    {
+     "field": "song",
+     "x": 0.39675,
+     "baselineY": 0.30853,
+     "maxWidth": 0.26114,
+     "xHeight": 0.01319
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "basf_ce2_printed",
+   "brand": "BASF",
+   "sku": "Chrome Extra II 90",
+   "labelStyle": "printed",
+   "shell": "smoke",
+   "wear": "light",
+   "logoDir": "art-src/mixtape/logos/basf",
+   "files": {
+    "tape": "tapes/basf_ce2_printed/tape.png",
+    "hub": "tapes/basf_ce2_printed/hub.png",
+    "pack": "tapes/basf_ce2_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.29785,
+    "y": 0.17225,
+    "w": 0.39479,
+    "h": 0.44444
+   },
+   "hubL": {
+    "x": 0.41243,
+    "y": 0.37278
+   },
+   "hubR": {
+    "x": 0.58522,
+    "y": 0.37295
+   },
+   "hubRadius": 0.02333,
+   "packMinRadius": 0.02799,
+   "packMaxRadius": 0.02911,
+   "windowRect": {
+    "x": 0.37859,
+    "y": 0.32004,
+    "w": 0.24163,
+    "h": 0.11271
+   },
+   "labelRect": {
+    "x": 0.31459,
+    "y": 0.20308,
+    "w": 0.36962,
+    "h": 0.29452
+   },
+   "artSlotRect": {
+    "x": 0.32224,
+    "y": 0.2101,
+    "w": 0.05789,
+    "h": 0.10292
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.42208,
+     "baselineY": 0.23686,
+     "maxWidth": 0.25104,
+     "xHeight": 0.01921,
+     "captionX": 0.38708,
+     "captionBaselineY": 0.23686
+    },
+    {
+     "field": "album",
+     "x": 0.42208,
+     "baselineY": 0.27117,
+     "maxWidth": 0.25104,
+     "xHeight": 0.01409,
+     "captionX": 0.38708,
+     "captionBaselineY": 0.27117
+    },
+    {
+     "field": "song",
+     "x": 0.42208,
+     "baselineY": 0.30548,
+     "maxWidth": 0.25104,
+     "xHeight": 0.01409,
+     "captionX": 0.38708,
+     "captionBaselineY": 0.30548
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "basf_ce2_blank",
+   "brand": "BASF",
+   "sku": "Chrome Extra II 90",
+   "labelStyle": "blank",
+   "shell": "smoke",
+   "wear": "heavy",
+   "logoDir": "art-src/mixtape/logos/basf",
+   "files": {
+    "tape": "tapes/basf_ce2_blank/tape.png",
+    "hub": "tapes/basf_ce2_blank/hub.png",
+    "pack": "tapes/basf_ce2_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30622,
+    "y": 0.17331,
+    "w": 0.38333,
+    "h": 0.44352
+   },
+   "hubL": {
+    "x": 0.42036,
+    "y": 0.37107
+   },
+   "hubR": {
+    "x": 0.57788,
+    "y": 0.37514
+   },
+   "hubRadius": 0.02309,
+   "packMinRadius": 0.0277,
+   "packMaxRadius": 0.02996,
+   "windowRect": {
+    "x": 0.38935,
+    "y": 0.31792,
+    "w": 0.2195,
+    "h": 0.10952
+   },
+   "labelRect": {
+    "x": 0.32715,
+    "y": 0.21159,
+    "w": 0.33911,
+    "h": 0.27539
+   },
+   "artSlotRect": {
+    "x": 0.33413,
+    "y": 0.21797,
+    "w": 0.05263,
+    "h": 0.09357
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39308,
+     "baselineY": 0.2423,
+     "maxWidth": 0.26301,
+     "xHeight": 0.01747
+    },
+    {
+     "field": "album",
+     "x": 0.39308,
+     "baselineY": 0.27349,
+     "maxWidth": 0.26301,
+     "xHeight": 0.01281
+    },
+    {
+     "field": "song",
+     "x": 0.39308,
+     "baselineY": 0.30467,
+     "maxWidth": 0.26301,
+     "xHeight": 0.01281
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#7a1f1f",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "memorex_dbs_printed",
+   "brand": "Memorex",
+   "sku": "dBS 90",
+   "labelStyle": "printed",
+   "shell": "black",
+   "wear": "medium",
+   "logoDir": "art-src/mixtape/logos/memorex",
+   "files": {
+    "tape": "tapes/memorex_dbs_printed/tape.png",
+    "hub": "tapes/memorex_dbs_printed/hub.png",
+    "pack": "tapes/memorex_dbs_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.29665,
+    "y": 0.16055,
+    "w": 0.40443,
+    "h": 0.45741
+   },
+   "hubL": {
+    "x": 0.41572,
+    "y": 0.36945
+   },
+   "hubR": {
+    "x": 0.58249,
+    "y": 0.37033
+   },
+   "hubRadius": 0.02324,
+   "packMinRadius": 0.02788,
+   "packMaxRadius": 0.03356,
+   "windowRect": {
+    "x": 0.38218,
+    "y": 0.30622,
+    "w": 0.23565,
+    "h": 0.1244
+   },
+   "labelRect": {
+    "x": 0.31639,
+    "y": 0.20415,
+    "w": 0.36543,
+    "h": 0.29133
+   },
+   "artSlotRect": {
+    "x": 0.32349,
+    "y": 0.21027,
+    "w": 0.05053,
+    "h": 0.08982
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.41508,
+     "baselineY": 0.23363,
+     "maxWidth": 0.25578,
+     "xHeight": 0.01677,
+     "captionX": 0.38008,
+     "captionBaselineY": 0.23363
+    },
+    {
+     "field": "album",
+     "x": 0.41508,
+     "baselineY": 0.26357,
+     "maxWidth": 0.25578,
+     "xHeight": 0.0123,
+     "captionX": 0.38008,
+     "captionBaselineY": 0.26357
+    },
+    {
+     "field": "song",
+     "x": 0.41508,
+     "baselineY": 0.29351,
+     "maxWidth": 0.25578,
+     "xHeight": 0.0123,
+     "captionX": 0.38008,
+     "captionBaselineY": 0.29351
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#1b1b1f",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "memorex_dbs_blank",
+   "brand": "Memorex",
+   "sku": "dBS 90",
+   "labelStyle": "blank",
+   "shell": "black",
+   "wear": "light",
+   "logoDir": "art-src/mixtape/logos/memorex",
+   "files": {
+    "tape": "tapes/memorex_dbs_blank/tape.png",
+    "hub": "tapes/memorex_dbs_blank/hub.png",
+    "pack": "tapes/memorex_dbs_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.29486,
+    "y": 0.1563,
+    "w": 0.40911,
+    "h": 0.4625
+   },
+   "hubL": {
+    "x": 0.42099,
+    "y": 0.37904
+   },
+   "hubR": {
+    "x": 0.57612,
+    "y": 0.38358
+   },
+   "hubRadius": 0.0227,
+   "packMinRadius": 0.02724,
+   "packMaxRadius": 0.02968,
+   "windowRect": {
+    "x": 0.39234,
+    "y": 0.32749,
+    "w": 0.21471,
+    "h": 0.11058
+   },
+   "labelRect": {
+    "x": 0.33612,
+    "y": 0.22967,
+    "w": 0.32715,
+    "h": 0.27326
+   },
+   "artSlotRect": {
+    "x": 0.3427,
+    "y": 0.23553,
+    "w": 0.04842,
+    "h": 0.08608
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39693,
+     "baselineY": 0.25792,
+     "maxWidth": 0.25653,
+     "xHeight": 0.01607
+    },
+    {
+     "field": "album",
+     "x": 0.39693,
+     "baselineY": 0.28661,
+     "maxWidth": 0.25653,
+     "xHeight": 0.01178
+    },
+    {
+     "field": "song",
+     "x": 0.39693,
+     "baselineY": 0.3153,
+     "maxWidth": 0.25653,
+     "xHeight": 0.01178
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "fuji_dr_printed",
+   "brand": "Fuji",
+   "sku": "DR 90",
+   "labelStyle": "printed",
+   "shell": "smoke",
+   "wear": "heavy",
+   "logoDir": "art-src/mixtape/logos/fuji",
+   "files": {
+    "tape": "tapes/fuji_dr_printed/tape.png",
+    "hub": "tapes/fuji_dr_printed/hub.png",
+    "pack": "tapes/fuji_dr_printed/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30562,
+    "y": 0.17863,
+    "w": 0.3875,
+    "h": 0.44028
+   },
+   "hubL": {
+    "x": 0.41824,
+    "y": 0.38347
+   },
+   "hubR": {
+    "x": 0.57766,
+    "y": 0.38216
+   },
+   "hubRadius": 0.02309,
+   "packMinRadius": 0.0277,
+   "packMaxRadius": 0.03048,
+   "windowRect": {
+    "x": 0.38816,
+    "y": 0.32642,
+    "w": 0.2195,
+    "h": 0.11164
+   },
+   "labelRect": {
+    "x": 0.32536,
+    "y": 0.22435,
+    "w": 0.33911,
+    "h": 0.2807
+   },
+   "artSlotRect": {
+    "x": 0.33219,
+    "y": 0.23047,
+    "w": 0.05053,
+    "h": 0.08982
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.42378,
+     "baselineY": 0.25383,
+     "maxWidth": 0.23052,
+     "xHeight": 0.01677,
+     "captionX": 0.38878,
+     "captionBaselineY": 0.25383
+    },
+    {
+     "field": "album",
+     "x": 0.42378,
+     "baselineY": 0.28377,
+     "maxWidth": 0.23052,
+     "xHeight": 0.0123,
+     "captionX": 0.38878,
+     "captionBaselineY": 0.28377
+    },
+    {
+     "field": "song",
+     "x": 0.42378,
+     "baselineY": 0.31371,
+     "maxWidth": 0.23052,
+     "xHeight": 0.0123,
+     "captionX": 0.38878,
+     "captionBaselineY": 0.31371
+    }
+   ],
+   "printedFields": true,
+   "inkColor": "#1d2a6b",
+   "font": "Caveat-Regular"
+  },
+  {
+   "id": "fuji_dr_blank",
+   "brand": "Fuji",
+   "sku": "DR 90",
+   "labelStyle": "blank",
+   "shell": "white",
+   "wear": "medium",
+   "logoDir": "art-src/mixtape/logos/fuji",
+   "files": {
+    "tape": "tapes/fuji_dr_blank/tape.png",
+    "hub": "tapes/fuji_dr_blank/hub.png",
+    "pack": "tapes/fuji_dr_blank/pack.png"
+   },
+   "spriteRect": {
+    "x": 0.30383,
+    "y": 0.17119,
+    "w": 0.38984,
+    "h": 0.44676
+   },
+   "hubL": {
+    "x": 0.41932,
+    "y": 0.37572
+   },
+   "hubR": {
+    "x": 0.58046,
+    "y": 0.37347
+   },
+   "hubRadius": 0.0215,
+   "packMinRadius": 0.0258,
+   "packMaxRadius": 0.02793,
+   "windowRect": {
+    "x": 0.39055,
+    "y": 0.32323,
+    "w": 0.2189,
+    "h": 0.10207
+   },
+   "labelRect": {
+    "x": 0.32356,
+    "y": 0.2084,
+    "w": 0.35227,
+    "h": 0.28921
+   },
+   "artSlotRect": {
+    "x": 0.33096,
+    "y": 0.21529,
+    "w": 0.05684,
+    "h": 0.10105
+   },
+   "textLines": [
+    {
+     "field": "artist",
+     "x": 0.39463,
+     "baselineY": 0.24156,
+     "maxWidth": 0.27064,
+     "xHeight": 0.01886
+    },
+    {
+     "field": "album",
+     "x": 0.39463,
+     "baselineY": 0.27525,
+     "maxWidth": 0.27064,
+     "xHeight": 0.01383
+    },
+    {
+     "field": "song",
+     "x": 0.39463,
+     "baselineY": 0.30893,
+     "maxWidth": 0.27064,
+     "xHeight": 0.01383
+    }
+   ],
+   "printedFields": false,
+   "inkColor": "#4a4a50",
+   "font": "Caveat-Regular"
+  }
+ ]
+}

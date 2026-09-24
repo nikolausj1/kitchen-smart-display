@@ -2,7 +2,7 @@
 title: "Mixtape asset scripts"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.2
+version: 1.3
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [mixtape, blender, scripts, assets]
 ---
@@ -173,3 +173,83 @@ detail, in about 3 s. Real-ESRGAN smeared the metal; EDSR was 40x slower.
     /tmp/vtsr art-src/mixtape/reference/horizon_deck_reference.png out_4x.png
 
 Then resize to 3840x2160 with Lanczos (PIL) and crop the odd row.
+
+## Tape collection (2026-09-23)
+
+The 12 app tapes (6 brands x 2 label styles) plus the two package H test tapes,
+generated in place on the reference photo, screened, measured, cut and upscaled.
+From the project root:
+
+```sh
+set -a; source ~/.secrets/api-keys.env; set +a
+python3 scripts/mixtape/gen_tape_variants.py --collection          # 2 candidates each, auto-screened
+python3 scripts/mixtape/gen_tape_variants.py --collection --rescreen   # no API calls: re-screen, re-pick
+python3 scripts/mixtape/measure_tape_variants.py --dir art-src/mixtape/tapes/collection
+python3 scripts/mixtape/build_tape_assets.py --contact-sheet
+```
+
+| Script | What it does | Output |
+|--------|--------------|--------|
+| `gen_tape_variants.py --collection` | `COLLECTION` (ids, brand, SKU, shell per SKU, wear 4 light / 4 medium / 4 heavy, ink colour, `logoDir`) and one prompt per tape: period shell look, blank label, wear, no logo or text. Two candidates per tape in parallel (4 workers); each is screened; if both fail a third is made; the best (lowest score, passing first) goes in `keepers.json`, flagged when it failed. Stops before logged spend would pass $15. | `art-src/mixtape/tapes/collection/<id>_candidate<n>.png`, `prompts.json` (prompt, usage, cost), `screening.json`, `keepers.json` |
+| `measure_tape_variants.py` | `--screen <png>...` prints the screening verdict. `--dir <folder>` measures the keepers listed in that folder's `keepers.json` (paste back outside the mask, hubs, label, window, sprites, debug image). Label falls back to an edge search when the paper mask cannot separate label from shell (white or yellowed shells); window falls back to the dark slot between the hubs. | `<dir>/<id>.png` (pasted back keeper), `<dir>/measurements.json`, `<id>_hubs_debug.png` |
+| `build_tape_assets.py` | Cuts every measured tape (test + collection) into the app contract below and writes the manifest atomically (temp file, rename). `--only <ids>` rebuilds those images, `--manifest-only` skips image work, `--contact-sheet` renders the review sheet. | `tvos/Resources/Mixtape/tapes/<id>/{tape,hub,pack}.png`, `tvos/Resources/Mixtape/mixtape-manifest.json`, `art-src/mixtape/tapes/contact-sheet.{html,png}`, `art-src/mixtape/tapes/build-info.json` |
+
+### Screening (automatic rejection)
+
+A candidate fails when any of these hold (px at 1672 wide):
+
+- the slice shifted more than 1 px (phase correlation outside the edit mask);
+- a hub centre is more than 3 px off y = 353.5 (the height both package H keepers
+  measured; the model never seats hubs on the shell's geometric centre line 363.5);
+- the hub spacing is more than 6 px off 284.5;
+- no window found;
+- the label is not blank. No OCR, so a text-likeness heuristic: black-hat strokes
+  (> 50 levels) inside the label, minus the window and hubs; glyph-sized components
+  that chain along a shared baseline (4 or more) read as print, long thin horizontal
+  components read as ruled lines. Grime and scuffs are scattered and do not chain.
+  The keepers are also checked by eye on the contact sheet.
+
+### App contract (`mixtape-manifest.json`)
+
+All positions normalised 0..1 of the 3840x2160 frame, origin top-left, y down; x,
+widths, radii and `maxWidth` as fractions of frame width; y, heights, `baselineY` and
+`xHeight` as fractions of frame height. Source px map with the plate's uniform scale
+S = 3840/1672 and no top offset: `x_n = x / 1672`, `y_n = y * S / 2160`.
+
+- `frame`, `deck` (a verbatim copy of `plate-manifest.json`, already normalised),
+  `hashCheck` (FNV-1a 32 of `landslide|fleetwood mac|` = 190110897), `tapes[]`.
+- Per tape: `id`, `brand`, `sku`, `labelStyle` (printed / blank), `shell`, `wear`,
+  `logoDir` (the vector header folder for that brand, not applied to the art),
+  `files` (`tape`, `hub`, `pack`, relative to the manifest), `spriteRect`, `hubL`,
+  `hubR`, `hubRadius` (the visible toothed ring, fitted on its outer edge by `ring_fit`), `packMinRadius` (ring x 1.2) and
+  `packMaxRadius` (the largest pack centred on the hub that fits inside the window's
+  height), `windowRect`, `labelRect`, `artSlotRect`, `textLines` (artist, album, song:
+  `x`, `baselineY`, `maxWidth`, `xHeight`), `printedFields`, `inkColor`, `font`.
+- Label layout is derived, not measured (collection labels are blank), in the
+  reference ("Neon Avenue") proportions: the art slot square fills the label strip
+  above the window minus a 6% margin; the three lines to its right fill the same
+  height, evenly spaced (baselines at 26 / 59 / 93% of the art height), artist
+  x-height 0.56 of the line pitch and album / song 0.73 of that, capped at the
+  reference's 0.030 / 0.022 of frame height and so 22 characters still fit
+  `maxWidth` at the app's 60% shrink floor (Caveat: x-height 0.40 em, mean advance
+  0.93 x-height).
+- Ruled labels (the test tapes, `maxell_udxl2_blank`): dark horizontal lines 60 px
+  or longer right of the art slot are detected. With three or more, the baselines
+  sit ON the rules (y = the rule's top, x = its left end when the rule spans at
+  least half the line) and x-height is capped at 0.7 of the rule spacing (0.6 for
+  album and song). With one or two, the even layout stays, and a rule that would
+  cross a line's x-height band pulls that baseline onto itself.
+- `printedFields: true` lines also carry `captionX` / `captionBaselineY`: the
+  caption sits at the line's start on the same baseline and the value's `x` moves
+  right by 0.035 of frame width (`maxWidth` shrinks by the same).
+- Shell rect: strongest perpendicular edge within 10 px outside / 18 px inside the
+  nominal cassette rect, per side (the model sometimes draws the shell up to 19 px
+  inside it); nominal when no edge stands out.
+- `tape.png` = the shell rect cut from the pasted back keeper, 9 px (at 1672)
+  rounded corners masked to alpha, upscaled 4x with `upscale_vtsr.swift` and Lanczos
+  to exactly S x the crop (RGB and alpha through SR separately). The generated packs,
+  hubs and the door's smoke are baked in; the window is opaque.
+- `hub.png` = the left hub's visible ring, alpha outside the ring, upscaled the same way.
+- `pack.png` = 512 px tile, alpha outside the disc, always synthesised from
+  `art-src/mixtape/textures/tape_pack.png` tinted to the mean colour of the generated
+  pack (the generated pack only shows in the window slot, never as a whole disc).

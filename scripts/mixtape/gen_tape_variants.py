@@ -39,6 +39,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 REF = ROOT / "art-src" / "mixtape" / "reference" / "horizon_deck_reference.png"
 OUT = ROOT / "art-src" / "mixtape" / "tapes" / "test"
+COLL_OUT = ROOT / "art-src" / "mixtape" / "tapes" / "collection"
 API = "https://api.openai.com/v1/images/edits"
 MODEL = os.environ.get("MIXTAPE_IMAGE_MODEL", "gpt-image-1")
 
@@ -93,6 +94,91 @@ VARIANTS = [
         ),
     },
 ]
+
+
+# --------------------------------------------------------------------------- collection
+# The 12 app tapes: 6 brands x 2 label styles, shell colour per the real SKU, wear
+# spread 4 light / 4 medium / 4 heavy. Labels stay blank in both styles (the app
+# prints the ARTIST / ALBUM / SONG captions for "printed"); no logo or text is ever
+# asked of the model, the vector header in logoDir is applied later.
+
+SHELLS = {
+    "black": ("an opaque black injection-moulded plastic shell with a fine matte texture,"
+              " a clear window strip through the middle"),
+    "white": ("an opaque off-white / ivory injection-moulded plastic shell with a fine matte"
+              " texture, a clear window strip through the middle"),
+    "smoke": ("a translucent smoked grey tinted plastic shell, the tape path, small guide"
+              " rollers and screws faintly visible through it"),
+    "clear": ("a crystal-clear transparent plastic shell, the internal tape path, the small"
+              " white guide rollers, the pressure pad and the screws clearly visible through it"),
+}
+
+WEAR = {
+    "light": ("Lightly used: faint fingerprints and a few hairline scratches on the plastic,"
+              " the label paper very slightly aged and off-white."),
+    "medium": ("Well used: scuffed shell corners and edges, visible fingerprints and light"
+               " grime on the plastic, the label paper yellowed and slightly soiled at its edges."),
+    "heavy": ("Beat up: heavily scuffed and scratched shell with worn corners, greasy fingerprints"
+              " and grime, the label paper strongly yellowed, stained and slightly lifting at one"
+              " corner, a small tear at a label edge."),
+}
+
+BRANDS = [
+    # id prefix, brand, sku, shell, period look (no text), logo folder, [wear printed, wear blank]
+    ("tdk_sax", "TDK", "SA-X 90", "black",
+     "an early-1980s TDK SA-X chrome-position cassette look: dark charcoal black shell, the"
+     " label paper a cool pale silver-grey", "tdk", ["light", "medium"], ["#1d2a6b", "#1b1b1f"]),
+    ("maxell_udxl2", "Maxell", "UDXL II 90", "black",
+     "a 1980s Maxell UDXL II look: glossy black shell with a slightly smoky window, the label"
+     " paper warm cream", "maxell", ["medium", "heavy"], ["#1b1b1f", "#1d2a6b"]),
+    ("sony_hf", "Sony", "HF 90", "white",
+     "a late-1980s Sony HF look: ivory white shell, the label paper plain white with a faint"
+     " cool tint", "sony", ["heavy", "light"], ["#4a4a50", "#1d2a6b"]),
+    ("basf_ce2", "BASF", "Chrome Extra II 90", "smoke",
+     "a 1980s BASF Chrome Extra II look: smoked grey see-through shell, the label paper light"
+     " grey-white", "basf", ["light", "heavy"], ["#1d2a6b", "#7a1f1f"]),
+    ("memorex_dbs", "Memorex", "dBS 90", "black",
+     "a 1980s Memorex dBS look: satin black shell, the label paper bright white", "memorex",
+     ["medium", "light"], ["#1b1b1f", "#1d2a6b"]),
+    ("fuji_dr", "Fuji", "DR 90", "clear",
+     "a late-1980s Fuji DR look: crystal-clear shell showing the white guide rollers, the label"
+     " paper plain white", "fuji", ["heavy", "medium"], ["#1d2a6b", "#4a4a50"]),
+]
+
+LABEL_BLANK = (
+    " A full-face matte paper label covering the upper face of the cassette, completely blank:"
+    " no ruled lines, no boxes, no printing of any kind, just plain paper with its natural"
+    " grain, and the window cut through the middle of the label showing brown tape packs and"
+    " light grey plastic hubs with their teeth."
+)
+
+
+# Added after the first 22 collection candidates all failed screening, mostly on
+# hubs drawn too close together (spacing 255 to 278 px instead of 284.5).
+HUB_HINT = (
+    " The two hubs are far apart: their centres are 42.5 mm apart (about 42% of the"
+    " cassette's width), each hub centred about 29 mm in from its end of the shell, not"
+    " crowded toward the middle; the hub centres sit on a line about 1.5 mm above the"
+    " shell's horizontal centre line, exactly where the original's are."
+)
+
+
+def _collection():
+    out = []
+    for pre, brand, sku, shell, look, logo, wears, inks in BRANDS:
+        for style, wear, ink in zip(("printed", "blank"), wears, inks):
+            out.append({
+                "id": f"{pre}_{style}", "brand": brand, "sku": sku, "labelStyle": style,
+                "shell": shell, "wear": wear, "logoDir": f"art-src/mixtape/logos/{logo}",
+                "inkColor": ink,
+                "prompt": ("Replace the cassette with a compact audio cassette in " + look
+                           + ": " + SHELLS[shell] + "." + LABEL_BLANK + " " + WEAR[wear]
+                           + " No logo and no brand name anywhere. " + GEOMETRY + HUB_HINT),
+            })
+    return out
+
+
+COLLECTION = _collection()
 
 
 def build_inputs():
@@ -150,23 +236,23 @@ def to_frame(ref, b64):
     return frame.convert("RGB")
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--only", nargs="*")
-    ap.add_argument("--n", type=int, default=2, help="candidates per variant")
-    ap.add_argument("--force", action="store_true")
-    args = ap.parse_args()
+# gpt-image-1 list prices, USD per token
+PRICE = {"text_in": 5e-6, "image_in": 10e-6, "image_out": 40e-6}
+BUDGET_STOP = 15.0
 
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise SystemExit("OPENAI_API_KEY not set")
-    OUT.mkdir(parents=True, exist_ok=True)
+
+def cost_of(usage):
+    if not usage:
+        return 0.0
+    d = usage.get("input_tokens_details", {})
+    return (d.get("text_tokens", 0) * PRICE["text_in"] + d.get("image_tokens", 0) * PRICE["image_in"]
+            + usage.get("output_tokens", 0) * PRICE["image_out"])
+
+
+def run_test(args, key, ref, image_png, mask_png):
     log_path = OUT / "prompts.json"
     log = json.loads(log_path.read_text()) if log_path.exists() else {}
-
-    ref, image_png, mask_png = build_inputs()
     (OUT / "_mask_sent.png").write_bytes(mask_png)
-
     for spec in VARIANTS:
         if args.only and spec["id"] not in args.only:
             continue
@@ -187,6 +273,104 @@ def main():
             }
             print(f"  done in {log[dst.name]['seconds']} s, usage {res.get('usage')}")
             log_path.write_text(json.dumps(log, indent=2))
+
+
+def run_collection(args, key, ref, image_png, mask_png):
+    """Two candidates per tape in parallel, automatic screening
+    (measure_tape_variants.screen), one extra candidate when both fail, then the
+    best is recorded in keepers.json (flagged when it failed screening)."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    import cv2
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import measure_tape_variants as mt
+
+    out = COLL_OUT
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "_mask_sent.png").write_bytes(mask_png)
+    log_path, scr_path, keep_path = out / "prompts.json", out / "screening.json", out / "keepers.json"
+    log = json.loads(log_path.read_text()) if log_path.exists() else {}
+    scr = json.loads(scr_path.read_text()) if scr_path.exists() else {}
+    keep = json.loads(keep_path.read_text()) if keep_path.exists() else {}
+    ref_bgr = cv2.imread(str(REF))
+    lock = threading.Lock()
+    specs = [c for c in COLLECTION if not args.only or c["id"] in args.only]
+
+    def spent():
+        return sum(cost_of(v.get("usage")) for v in log.values())
+
+    def gen(spec, n):
+        dst = out / f"{spec['id']}_candidate{n}.png"
+        if args.rescreen and not dst.exists():
+            return None
+        if not dst.exists() or args.force:
+            with lock:
+                if spent() + 0.33 > BUDGET_STOP:
+                    print(f"budget stop before {dst.name} (spent ${spent():.2f})", flush=True)
+                    return None
+            t0 = time.time()
+            res = call_edit(key, image_png, mask_png, spec["prompt"])
+            to_frame(ref, res["data"][0]["b64_json"]).save(dst)
+            with lock:
+                log[dst.name] = {"variant": spec["id"], "model": MODEL, "size": data_size(),
+                                 "crop": [CROP_X0, CROP_Y0, CROP_W, CROP_H], "mask_pad": MASK_PAD,
+                                 "prompt": spec["prompt"], "usage": res.get("usage"),
+                                 "cost": round(cost_of(res.get("usage")), 4),
+                                 "seconds": round(time.time() - t0, 1)}
+                log_path.write_text(json.dumps(log, indent=2))
+        r = mt.screen(dst.stem, cv2.imread(str(dst)), ref_bgr)
+        with lock:
+            scr[dst.name] = r
+            scr_path.write_text(json.dumps(scr, indent=2))
+            print(f"{dst.name}: {'PASS' if r['pass'] else 'FAIL'} score {r['score']} {r['reasons']}",
+                  flush=True)
+        return n, r
+
+    def one_tape(spec):
+        res = [x for x in (gen(spec, n) for n in range(1, args.n + 1)) if x]
+        extra_path = out / f"{spec['id']}_candidate{args.n + 1}.png"
+        if res and (not any(r["pass"] for _, r in res) or extra_path.exists()):
+            extra = gen(spec, args.n + 1)
+            if extra:
+                res.append(extra)
+        if not res:
+            return
+        passing = [x for x in res if x[1]["pass"]]
+        n, r = min(passing or res, key=lambda x: x[1]["score"])
+        with lock:
+            keep[spec["id"]] = {"candidate": str(n), "pass": r["pass"], "flagged": not r["pass"],
+                                "score": r["score"], "reasons": r["reasons"],
+                                "rejected": {f"candidate{m}": rr["reasons"] for m, rr in res
+                                             if m != n and not rr["pass"]}}
+            keep_path.write_text(json.dumps(keep, indent=2))
+
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        list(ex.map(one_tape, specs))
+    print(f"total spent (logged usage): ${spent():.2f}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", nargs="*")
+    ap.add_argument("--n", type=int, default=2, help="candidates per variant")
+    ap.add_argument("--force", action="store_true")
+    ap.add_argument("--collection", action="store_true",
+                    help="the 12 app tapes into art-src/mixtape/tapes/collection/, auto-screened")
+    ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--rescreen", action="store_true",
+                    help="no API calls: re-screen existing candidates and rewrite keepers.json")
+    args = ap.parse_args()
+
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key and not args.rescreen:
+        raise SystemExit("OPENAI_API_KEY not set")
+    OUT.mkdir(parents=True, exist_ok=True)
+    ref, image_png, mask_png = build_inputs()
+    if args.collection:
+        run_collection(args, key, ref, image_png, mask_png)
+    else:
+        run_test(args, key, ref, image_png, mask_png)
 
 
 def data_size():
