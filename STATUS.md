@@ -2,8 +2,8 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-09-24
-version: 4.3
-author: Claude Opus 5.5 (claude-opus-5-5)
+version: 4.7
+author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
 
@@ -15,9 +15,11 @@ Kitchen Smart Display covers two surfaces for the family: a Raspberry Pi kitchen
 
 ## Stage
 
-Active Development (both screens are live and used daily; new features and fixes ship regularly, most recently 2026-09-04 on a branch awaiting Justin's review). The project grew a third component this week: FrameServer, a hub on the NUC that now serves photos and per-screen settings to every display in the house.
+Active Development. Five screens are registered: the kitchen Pi, the Living Room Apple TV, and (as of 2026-09-24, pending Justin's first tap on the device) three Echo Shows (the family-room Echo Show 10, an Echo Show 15 in landscape, and the office Echo Show 5) running the kitchen web app in Silk. All of them depend on one hub, FrameServer on the NUC, and nothing else on the LAN.
 
 ## Health
+
+**2026-09-24: the hub migration is finished and the Echo Show is the third screen.** Every screen now depends only on FrameServer on the NUC. Sonos (`node-sonos-http-api` as nssm service `SmartDisplaySonosAPI`), house state, lunch, the school calendar and the photo-flag queue all moved off the kitchen Pi, and FrameServer serves the web app itself so the Echo (Silk cannot resolve `nuc.local`) loads it by IP. The morning countdown is now one shared house countdown: screens share decisions through the hub and derive the timer with one shared module, and the hub computes the walk/drive default and the no-school flag so screens cannot disagree. The Pi's display endpoints refuse anything but loopback (before this, any LAN tab running the kitchen bundle could drive the kitchen backlight). Deployed to the NUC, the Pi and the Apple TV from `feature/echo-hub` (branched off `feature/mixtape`, so the TV keeps Mixtape); committed on the branch in five commits, not pushed, awaiting Justin's review. Verified end to end at 1280x800 from the Mac against the live hub (photos, Today, Now Playing, Settings, the shared countdown in both directions, the night clock, the tap-to-start gate, the seeded registry entry). What only the device can answer: whether Silk plays the keep-alive audio after one tap and stays on the page overnight. Found and fixed on the way: the live FrameServer died on any malformed URL (nssm restarted it each time); a keep-alive retry storm when the server is unreachable; a fresh browser profile jumped to Today after the morning window; the kitchen's wake tap opened the menu pill. Later the same day, at Justin's ask: the dashboard can now nudge any screen to Photos, Today or Now Playing (a one-shot command, not a pin), verified on the Echo page and installed on the TV. One security note for the NUC: its **Private firewall profile is off**, so the LAN is unfiltered today and the new Sonos rules only take effect if it is turned back on.
 
 🟡 At-risk, and close to green. The house display system is materially better than it was a week ago: **FrameServer now runs on the NUC** and serves photos plus per-screen settings to both screens, so the kitchen display is no longer a single point of failure for the house. Phases 1-3 of that migration and both phases of hardware backlight dimming all shipped and are **verified on real hardware in every direction** - including a NUC reboot with both screens reconnecting unattended, and a supervised touch test confirming the panel can be powered down over DDC without losing touch-to-wake. Windows Update is now governed (quality +7d, feature +90d, restarts confined to 01:00-07:00).
 
@@ -29,6 +31,10 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Waiting on Me
 
+- [ ] **Open the app on each Echo Show and tap once** - in Silk go to `http://192.168.4.61:8095/?kiosk=echo` on the Echo Show 10 `http://192.168.4.61:8095/?kiosk=echo&device=echo-show15` on the Echo Show 15 and `http://192.168.4.61:8095/?kiosk=echo&device=echo-show5-office` on the office Echo Show 5 (the IP, not `nuc.local`; the 15 stays in landscape), tap "Tap to start", then watch for: the chip bottom-left going away (audio on, fullscreen on), the page still there after 15 minutes idle, the faint clock after midnight, and photos advancing. While there, note the Silk version (whatismybrowser.com) and viewport (whatismyviewport.com) and try `http://nuc.local:8095/healthz` once to confirm it fails, and tell the agent (~10 min, then a look the next morning)
+      - unblocks: calling the Echos done; the dashboard already shows all three (`family-room-echo`, `echo-show15`, `echo-show5-office`), each seeded from the kitchen (same albums, 5-minute photos, dim 22:00, off midnight, clock night face, Sonos room Main; change the room on the dashboard if the 15 sits elsewhere)
+- [ ] **Review `feature/echo-hub`** - everything deployed today is committed on the branch as five commits (hub, kitchen app, Apple TV, Pi + deploy, docs), not pushed and not merged. Merging waits on the Mixtape label pick since the branch includes Mixtape (~20 min to read)
+      - unblocks: merging to main; the Pi lock-down step after the soak week
 - [ ] **Pick a Mixtape label layout** - open `_review/mockups/mixtape-label-concepts.html`, choose among six concepts (full-bleed art, blurred full-bleed, tall art column, wide banner, two-line hierarchy, sticker), Copy decisions, paste into chat (~10 min)
       - unblocks: the label rebuild, redeploy, and merging `feature/mixtape`
 - [ ] **Review the three Today layouts and deploy the kitchen bundle** - open `_review/today-layouts/README.md`, look at the shots, try them on your Mac (`cd code && npm run dev`, then `http://localhost:5173/?device=dev-mac&layout=board&demo=1`), then `cd code && npm run deploy:pi` outside the school-morning window (~20 min)
@@ -56,13 +62,15 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Next Up
 
-1. Review and deploy the Today layouts branch (see Waiting on Me); it also fixes kitchen settings silently reverting.
-2. Rotate the exposed `immich-go-import` API key - the only item left in Biggest Risk, and the oldest thing on the board (~10 min).
-3. Build the Google Calendar/agenda integration for the kitchen Today view, the one real remaining feature gap on that surface.
-4. Hang the ROADOM 10.1" screen. The hub work makes this cheap now: point a Pi at `http://nuc.local:8095` with `?device=living-room`, and it self-registers with its own albums and settings. Decide what it shows (photos is the baseline; Now Playing is the highest value-per-effort since a 10" touchscreen is a good Sonos remote).
+1. Echo Show first run on the device, then commit `feature/echo-hub` (see Waiting on Me).
+2. After a clean week (from 2026-10-01): lock the kitchen Pi to localhost and delete its legacy routes and Sonos service (BACKLOG, Shared / infrastructure). The agent can do this on its own once the Pi's log shows nothing but the Mac calling them.
+3. Rotate the exposed `immich-go-import` API key - the only item left in Biggest Risk, and the oldest thing on the board (~10 min).
+4. Build the Google Calendar/agenda integration for the kitchen Today view, the one real remaining feature gap on that surface.
+5. ROADOM 10.1" as the long-term family-room screen: a Pi pointed at `http://nuc.local:8095/?device=family-room` self-registers with its own albums and settings and needs none of the Silk keep-alive dance.
 
 ## Ideas Shelf
 
+- **Plex second-screen info on the family-room screen** (M) - when the living room is watching Plex, the Echo (or ROADOM later) shows the show, episode, cast and air date. A `/status/sessions` poll on the hub with the Plex token in its `.env`, plus a panel in the web app switched on per screen through the registry. Logged 2026-09-24 as a later phase.
 - **Per-photo display override** (S) - "never crop this one." The infrastructure is all there now: long-press already flags photos, the hub already stores per-device config, and the dashboard already edits it. Precedence would be per-photo+device > per-photo > device default. This is the "Barack Obama portrait shouldn't be cropped on the TV" case.
 - **Kitchen: display art fun facts** (S) - the TV shipped rotating facts 2026-06-10; the kitchen just needs a display slot, since the data already rides the manifest's `art.facts`
 - **Playback-reactive backdrop** (S, with an M upgrade behind it) - the Framed TV music backdrops would ease their motion speed with play/pause state; no beat sync needed, just a state-driven tweak. The upgrade found 2026-08-31: Theatrium locks its scenes to real tempo without listening to the room, by looking BPM up from artist plus title. We already poll both from Sonos, so the eight backdrops could run at true tempo, and `bars` would stop being noise-driven
@@ -184,6 +192,10 @@ Append-only, newest first. Locked product decisions also live in `PRD - Smart Di
 
 ## Recently Shipped
 
+- **2026-09-24 - Third Echo, `echo-show5-office`.** Echo Show 5 in the office, 960x480; same Echo mode, seeded from the kitchen, verified at that size.
+- **2026-09-24 - Second Echo, `echo-show15`.** Same Echo mode, no new code; registered from the kitchen's settings and verified at 1920x1080. Portrait is a later project.
+- **2026-09-24 - Dashboard "Show" nudge.** Show Photos / Today / Now Playing per screen on the admin page, for the kitchen, the Echo and the Apple TV. One-shot, like tapping the menu; the morning schedule still applies.
+- **2026-09-24 - Hub-only dependency and the Echo Show screen** (`feature/echo-hub`, deployed, committed, not merged). FrameServer serves the web app and every shared service (state, lunch, schoolcal, flags, Sonos proxy); `node-sonos-http-api` runs on the NUC under nssm; one hub resolver and one shared countdown derivation in the web app; Echo mode (`?kiosk=echo`: keep-alive audio, tap to start, fullscreen, night clock, reload on deploy); `display.nightFace`; dashboard night face, reload and last-seen; Pi display endpoints loopback-only; `AppConfig.piBase` gone from the TV. 40 photo flags migrated to the hub. Design: `docs/designs/echo-show-and-hub.md`.
 Newest first.
 
 - **2026-09-04 - Three selectable Today layouts on the kitchen (branch, not deployed).** Board, Briefing, Ambient; per-screen `display.todayLayout`; Framed untouched and default. Plus pixel shift (default off), a build stamp in Settings, data-age stamps, a daily forecast + sun/moon + what-to-wear data layer, and the hub CORS fix. Review: `_review/today-layouts/README.md`.
@@ -227,6 +239,13 @@ Newest first.
 - **Confirm the MealViewer "entree" field** - fetch one live payload and verify `get_lunch()` parses the right field for the lunch entree.
 
 ## Lessons
+
+- **One uncaught error in an async Node request handler kills the whole process (2026-09-24).** FrameServer's handler was `async` and threw on a malformed percent-escape in a URL (`decodeURIComponent`), which became an unhandled rejection, and Node's default for those is exit. nssm restarted it each time, so it looked like flakiness rather than a crash. Wrap the handler (`handle(req, res).catch(...)`) and answer 500 for that one request; the fix is three lines and the failure is invisible until someone types a bad URL.
+- **nssm 2.24's `AppRotateOnline=1` can wedge a service in Stop Pending (2026-09-24).** Rotating the log while the process runs left `SmartDisplaySonosAPI` unstoppable after node had already exited. Leave it at 0 (rotate on start only) unless the log is genuinely busy.
+- **Silk on Fire OS cannot resolve mDNS, and neither will the eero's DNS answer for `.local` (2026-09-24).** Anything a Fire OS device must reach needs an IP with a DHCP reservation, and the app should treat "whoever served this page" as its API origin (FrameServer injects a `<meta name="smart-display-hub" content="self">` marker into `index.html` at serve time) so the same bundle works from an IP, a name, or a dev server.
+- **Media retry loops need a backoff and a single pending timer (2026-09-24).** Every failed `<audio>` load fires `pause`; a resume scheduled per `pause` event stacks, and a page whose server went away hammered it several times a second, growing. Dedupe the pending resume and back off after `error`; let one watchdog own the retry.
+- **Browser caches belong to the origin, identities to the URL (2026-09-24).** A settings cache in `localStorage` outlived a `?device=` switch on the same origin and seeded the new device's registry entry with the old device's per-screen values. Tag the cache with the id that wrote it and keep only house-wide keys on a mismatch. Same family as the tvOS simulator lesson below.
+- **A hub-served page with no identity must not become the kitchen (2026-09-24).** The old default device id was `kitchen`; a laptop opening `http://nuc.local:8095/` would have adopted the kitchen's registry entry and any setting touched there would have changed the kitchen panel. Hub-served pages with no `?device=` or `?kiosk=` now register as `web-guest` (seeded from the kitchen, so it looks right).
 
 - **A poll that republishes identical data is not free (2026-08-24).** A 10s settings poll deep-merged its response every tick whether or not anything had changed, handing every consumer fresh object and array identities six times a minute. Anything keyed on those identities restarts - here a `setInterval` rebuilt on each poll, so a 5-minute photo duration could never elapse and the kitchen slideshow froze on one image. The bug is invisible until someone picks an interval longer than the poll period. Two habits fall out: compare before publishing in any polling store, and never let a timer's lifetime depend on a callback identity that churns. (promoted to Build Guide v10.0, 2026-08-27)
 

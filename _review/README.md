@@ -12,5 +12,7 @@ How it works:
 Current residents:
 - `mockups/` — HTML design prototypes (jukebox grid, nav bar, transport buttons,
   today school data, vinyl spin). Reference for past design decisions.
+- `echo/` — Echo Show verification screenshots at 1280x800 (2026-09-24), see
+  its README.
 - `settings-tweaker.html` — Mac-only scratchpad for iterating on Settings
   typography + spacing (not part of the kiosk build).

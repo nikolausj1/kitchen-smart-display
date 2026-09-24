@@ -1,8 +1,8 @@
 ---
 title: "Device Registry - Per-Screen Settings on FrameServer"
 created: 2026-08-17
-modified: 2026-08-18
-version: 1.1
+modified: 2026-09-24
+version: 1.2
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, frameserver, settings, multi-device, kitchen-display, apple-tv]
 ---
@@ -113,12 +113,16 @@ uses a compile-time `living-room-tv`.
 The hub assigns nothing - devices name themselves. The dashboard can re-point an
 existing config at a new device, so reflashing a Pi does not lose its settings.
 
-## Transition state
+## Transition state (closed 2026-09-24)
 
-`postSharedState()` still pushes to the Pi's `/api/state` alongside the hub
-write, because the tvOS app reads house-wide settings (location, school, timer)
-from there. Drop that call once tvOS reads shared config from the hub too; the
-per-device half already comes from the hub.
+`postSharedState()` used to push to the Pi's `/api/state` alongside the hub
+write because the tvOS app read house-wide settings from there. That is gone:
+the hub's own `GET /api/state` composes shared location and school from this
+registry plus the kitchen's slideshow, and the TV reads it from the hub. Two
+additions since: `POST /api/devices/register` takes `seedFrom` (a new entry
+copies another screen's slideshow, Sonos room and display schedule once; the
+Echo seeds from the kitchen), and the hub keeps an in-memory `lastSeenAt`
+per device for the dashboard. See `echo-show-and-hub.md`.
 
 ## The dashboard (Phase 3)
 

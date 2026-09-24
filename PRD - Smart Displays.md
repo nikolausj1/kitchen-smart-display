@@ -1,9 +1,9 @@
 ---
 title: "Smart Displays - Kitchen Display Project"
 created: 2026-03-01
-modified: 2026-06-16
-version: 17.2
-author: Claude Opus 4.7 (claude-opus-4-7)
+modified: 2026-09-24
+version: 17.3
+author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
 
@@ -252,12 +252,17 @@ https://www.thedigitalpictureframe.com/build-3-by-2-aspect-ratio-digital-picture
 - Photos: Immich (self-hosted, runs on the Synology NAS or the Windows NUC, accessed over the LAN via its REST API)
 - Calendar: Google Calendar API (direct, OAuth 2.0) - deferred to a future phase, not in Phase 1
 - Weather: Open-Meteo API (free, no API key, no sign-up)
-- Music: node-sonos-http-api (local REST API on the Pi, direct Sonos control)
+- Music: node-sonos-http-api (local REST API, direct Sonos control; on the NUC since 2026-09-24, proxied by FrameServer)
 - No Home Assistant in the loop. Four independent API integrations, all running locally or via direct cloud API calls. HA only becomes relevant if future enhancements (doorbell camera, presence-based dimming) are pursued.
+
+**Hub: FrameServer on the NUC (since 2026-08, completed 2026-09-24)**
+- A small Node service (`frameserver/server.mjs`, nssm service `SmartDisplayFrameServer`, `http://nuc.local:8095` = `192.168.4.61`) is the one thing every screen depends on. It serves the photo manifest and derivatives, the per-screen and house-wide settings registry with its dashboard (`/admin`), house state (`/api/state`: the shared morning-countdown decisions plus the derived timer, weather travel default and no-school flag), the lunch and school-calendar proxies, the photo-caption flag queue, a GET-only proxy to `node-sonos-http-api`, and the built web app itself for screens that are not a Pi.
+- The kitchen Pi keeps only what is physically its own: serving its kiosk bundle on localhost and driving its panel over DDC/CI (loopback callers only).
+- Screens: the kitchen Pi (Chromium, `localhost:8080`), the family-room Echo Show 10 (Silk, `http://192.168.4.61:8095/?kiosk=echo`, by IP because Silk cannot resolve mDNS), and the Apple TV (native app, hub only). Design: `docs/designs/echo-show-and-hub.md`, `docs/designs/device-registry.md`.
 
 **Music control: node-sonos-http-api (direct to Sonos)**
 - GitHub: github.com/jishi/node-sonos-http-api
-- Runs on the Pi as a Node.js service, auto-discovers Sonos speakers on the local network
+- Runs on the NUC as an nssm service (`SmartDisplaySonosAPI`, loopback port 5005, proxied at FrameServer `/api/sonos/*`); auto-discovers Sonos speakers on the local network. It ran on the Pi until 2026-09-24.
 - Exposes full Sonos control as a local REST API on port 5005
 - No cloud dependency, no Home Assistant dependency for music - controls keep working even if HA goes down
 - Key endpoints:
@@ -308,7 +313,7 @@ https://www.thedigitalpictureframe.com/build-3-by-2-aspect-ratio-digital-picture
 - Each API integration is a custom hook (useSonosState, useImmichPhotos, useWeather, and later useCalendarEvents)
 - Claude Code generates high-quality React, which matters for rapid design iteration
 - No Node.js server needed at runtime for the frontend - just static files served to Chromium
-- node-sonos-http-api is the only persistent Node process on the Pi
+- No persistent Node process on the Pi any more: node-sonos-http-api and FrameServer both run on the NUC
 
 **Why this stack:**
 - Component model matches the project perfectly: independent views, independent data sources
@@ -420,6 +425,9 @@ https://www.thedigitalpictureframe.com/build-3-by-2-aspect-ratio-digital-picture
 - **Photos:** Immich, self-hosted on the home network (Synology NAS via Container Manager preferred, NUC alongside Plex as the fallback). Decided 2026-05-21 after confirming the Google Photos Ambient API requires Partner Program acceptance (not realistic for a personal project), the Library API was restricted in April 2025 to app-uploaded media only, the Picker API is wrong UX for an ambient slideshow, and OAuth Testing-mode refresh tokens expire weekly. Immich also unlocks future photo frames in other rooms pointing at the same library.
 - **Settings page:** Accessible from menu pill. Full-screen overlay. Covers: photo management (Immich server URL + API key, album selection, slideshow timing, transitions), Sonos room selection, Today view config (departure time, weather thresholds; calendar config when added in a future phase), display settings (brightness, screen-off hours, screensaver behavior), design variant toggle, and system info. Also serves as onboarding flow on first boot.
 - **Hardware ordered:** 2026-03-25, arriving Friday 2026-03-27
+- **Hub-only dependency (2026-09-24):** every screen depends on FrameServer on the NUC and never on the kitchen Pi. Sonos, house state, lunch, the school calendar and the flag queue all moved to the hub; the NUC is required for music on every screen (accepted).
+- **Third screen: the family-room Echo Show 10 (2026-09-24):** runs the kitchen web app in Silk from the hub, device id `family-room-echo`, seeded once from the kitchen's settings then independent, Sonos room Main. Night shows a faint clock (new per-screen `display.nightFace`, `black` on the kitchen, `clock` on the Echo). One tap after an Echo restart re-arms the keep-alive audio and fullscreen. ROADOM is the probable long-term family-room screen; Plex second-screen info is a later phase.
+- **One shared house countdown (2026-09-24):** screens share only user decisions (dismissed today, travel override, manual target) through the hub, last writer wins; every screen derives the timer from the same code, and the hub computes the weather travel default and the no-school flag so screens cannot disagree.
 
 ---
 

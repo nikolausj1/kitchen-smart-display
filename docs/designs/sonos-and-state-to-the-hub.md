@@ -1,13 +1,24 @@
 ---
 title: "Sonos and /api/state to the Hub"
 created: 2026-09-22
-modified: 2026-09-22
-version: 1.1
+modified: 2026-09-24
+version: 1.3
 author: Claude Opus 5 (claude-opus-5)
 tags: [design, frameserver, sonos, apple-tv, hub, migration, single-point-of-failure]
 ---
 
 # Sonos and /api/state to the Hub
+
+**Status: built 2026-09-24.** Superseded in detail by
+`docs/designs/echo-show-and-hub.md`, which carries the final shape (the app
+served from the hub, the shared countdown decisions, lunch, schoolcal and the
+flag queue moving too). This document stays as the scoping record.
+
+Corrections from the build (2026-09-24): the service is `SmartDisplaySonosAPI`
+(not `SonosHTTPAPI`); discovery needs inbound UDP **1905** and TCP 3500-3509,
+not UDP 1900; the house has seven zones, not six; and the gate ran on the NUC
+against `127.0.0.1:5005` because the listener is loopback-only, so
+`nuc.local:5005` is refused by design.
 
 Scope for finishing the 2026-08 FrameServer migration. Photos moved to the NUC;
 Sonos and `/api/state` did not. Until they do, the kitchen Pi is still a single

@@ -17,13 +17,27 @@ This folder contains the Kitchen Smart Display project: a wall-mounted 15.6" tou
 
 ## Architecture Summary
 
-- Raspberry Pi 5 running Chromium in kiosk mode
-- Frontend: React + Vite (static build served locally)
-- Four direct API integrations, no Home Assistant:
-  - Google Photos Ambient API (photos)
-  - Google Calendar API (calendar)
-  - Open-Meteo API (weather forecasts, free, no API key)
-  - node-sonos-http-api (music, running locally on the Pi)
+- Three screens, one hub. FrameServer (`frameserver/server.mjs`, Node, nssm
+  service on the Windows NUC, `http://nuc.local:8095` = `192.168.4.61`) is the
+  only thing any screen depends on: photos + manifest, the per-screen settings
+  registry and dashboard (`/admin`), house state (`/api/state`: shared
+  countdown decisions, derived timer, travel default, no-school flag), lunch
+  and school-calendar proxies, the photo-flag queue, the `/api/sonos` proxy,
+  and the built web app for non-Pi screens.
+- Kitchen: Raspberry Pi 5, Chromium kiosk loading its own bundle from
+  `localhost:8080` (`pi/kiosk-server.py`), which also drives the panel over
+  DDC/CI for loopback callers only.
+- Family room: Echo Show 10 running the same web app in Silk from the hub
+  (`?kiosk=echo`, by IP; Silk cannot resolve mDNS).
+- Living room: native SwiftUI Apple TV app (`tvos/`), hub only.
+- Frontend: React + Vite (`code/`). `code/src/lib/hub.js` is the one place
+  that knows where the hub is; the shared countdown logic is
+  `frameserver/lib/countdown.mjs`, imported by both the hub and the app.
+- Direct integrations, no Home Assistant: Immich (photos, via the hub's
+  manifest build), Open-Meteo (weather), node-sonos-http-api (music, on the
+  NUC), Google Calendar (future).
+- Design references: `docs/designs/echo-show-and-hub.md`,
+  `docs/designs/device-registry.md`, `docs/designs/sonos-and-state-to-the-hub.md`.
 
 ## Folder Structure
 
@@ -37,8 +51,11 @@ This folder contains the Kitchen Smart Display project: a wall-mounted 15.6" tou
 - `_inbox/` - Drop zone, you to Claude. Currently holds `figma-exports/` (Figma PNG snapshots; the Figma file itself is the live source). Transient; gitignored except its README.
 - `_review/` - Claude to you: things to look at and react to (incl. verification screenshots). Currently holds `mockups/` (HTML design prototypes, e.g. `jukebox-grid-mockup.html`, `today-school-data-mockup.html`) and `settings-tweaker.html`. Transient; gitignored except its README.
 - `code/` - The React + Vite kitchen app (source of truth for kitchen UI)
+- `frameserver/` - FrameServer, the hub on the NUC (`server.mjs`, `admin.html`, `lib/` shared modules, `setup-sonos.ps1`)
 - `pi/` - Raspberry Pi kiosk server + restart scripts (`kiosk-server.py`)
 - `tvos/` - Native SwiftUI Apple TV app
+- `scripts/` - Asset pipelines (e.g. `scripts/mixtape/` Blender renders)
+- `deploy.sh` - `hub | pi | migrate | all`; hub first, then the kitchen
 - `samplePhotos/` - Stub photos for the manifest's sample mode (binaries gitignored)
 - `custom-places.json` - Geocoding overrides for photo captions (real coords; gitignored). `custom-places.example.json` is the sanitized committed sample. Must stay at project root - the build reads it there.
 - `frame mat.psd` - Photoshop design source for the physical frame (large; gitignored)

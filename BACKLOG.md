@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-24
-version: 6.3
+version: 6.8
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -126,7 +126,11 @@ the art. Concepts sheet: `_review/mockups/mixtape-label-concepts.html`
 (six concepts on real deck and tape pixels). Justin picks, then it is built
 and redeployed; merge after that.
 
-### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
+### Sonos and /api/state to the hub (BUILT 2026-09-24, see Recently Shipped)
+
+Built on `feature/echo-hub` together with the Echo Show screen; the final
+shape is in `docs/designs/echo-show-and-hub.md`. The scoping below is kept
+for the record.
 
 Finish the FrameServer migration. Photos moved to the NUC in August; **Sonos and
 `/api/state` did not**, so the kitchen Pi is still a single point of failure for
@@ -370,12 +374,26 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
-- **FrameServer admin: Music backdrop dropdown is stale** (TODO, small) - the
-  `framedBackdrop` select in `frameserver/admin.html` still lists the
-  pre-2026-06-11 order (Drift / Lava / Marble / Ink / Current) with the wrong
-  raw values; the TV enum is Still 0, Drift 1, Lava 2, Smoke 3, Caustics 4,
-  Ripple 5, Bars 6, Marble 7. Found 2026-09-23 while checking Mixtape's hub sync.
-  Fix together with adding Mixtape = 8.
+- **Lock the kitchen Pi to localhost after the soak** (TODO, from 2026-10-01) -
+  the Pi's legacy routes (`/api/state`, `/api/flags`, `/api/lunch`,
+  `/api/schoolcal`, `/api/sonos`) and its `node-sonos-http-api` service stayed
+  up for a rollback week after 2026-09-24. After a clean week: delete the
+  routes listed in the TODO at the top of `pi/kiosk-server.py`, flip `BIND`'s
+  default to `127.0.0.1` (and the fallback in `pi/kiosk-restart.sh`), disable
+  `sonos-http-api.service` on the Pi, redeploy with `./deploy.sh pi`. Check
+  `/tmp/kiosk-server.log` on the Pi first: nothing but the Mac should have
+  called those routes since the TV rebuild.
+- **Echo Shows: first run on each device** (VERIFY, Justin) - see STATUS
+  "Waiting on Me". Three now: `family-room-echo` (Echo Show 10, 1280x800),
+  `echo-show15` (Echo Show 15, 1920x1080, landscape) and `echo-show5-office`
+  (Echo Show 5, 960x480). Then: does the
+  one-minute audio reload keep Silk off the Alexa home screen overnight, does
+  the night clock drift, does the chip hide.
+- **Echo Show 15 in portrait** (TODO, later) - the panel rotates, but the app
+  assumes 1920x1080 landscape throughout (slideshow portrait pairing, the
+  Today layouts, the mat). Same project as the portrait front-door screen:
+  a real front-end layout, not a config flag. Landscape only for now
+  (decided 2026-09-24).
 - **Kitchen Pi is underpowered** (TODO, do this first) - the Pi 5 runs off a
   USB-A port built into a wall outlet. USB-A cannot negotiate USB-C PD and tops
   out near 5V/2.4A (12W); a Pi 5 wants 5V/5A (27W). Measured 2026-09-22, seven
@@ -429,6 +447,18 @@ progress bar). Remaining:
   no API key - which is the interesting part for us. On tvOS that is MapKit
   directly; the kitchen would need a different source. Data work, so the
   existing timer benefits immediately, ahead of any panel board.
+- **Plex second-screen info on the family-room screen** (TODO, later phase,
+  logged 2026-09-24) - when the living room is watching Plex, the family-room
+  screen (the Echo Show today, probably ROADOM long term) shows what is on:
+  show, episode, cast, air date. Needs a Plex session poll on the hub
+  (`/status/sessions`, token in the hub's `.env`) and a small view or panel in
+  the web app; the hub already has the per-screen registry to switch it on
+  per device.
+- **ROADOM as the long-term family-room screen** (DECISION, 2026-09-24) - the
+  Echo Show is the quick win; a ROADOM 10.1" on a Pi pointed at the hub
+  (`?device=family-room`) would drop the Silk keep-alive dance and the
+  one-tap re-arm. Software is ready for it: the same bundle, self-seeding
+  registration, and the night face.
 - **Lunch + per-kid activities on the Apple TV** (TODO) - kitchen-only today.
 - **No-school date *ranges* in the manual override UI** (TODO) - single dates ship
   today (covers snow days).
@@ -461,6 +491,31 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-24 - Every screen depends on the hub only; the Echo Show joins as
+  the third screen.** Justin's calls: finish moving shared services (Sonos,
+  `/api/state`, lunch, schoolcal, the flag queue) from the kitchen Pi to
+  FrameServer, accepting that the NUC becomes required for music everywhere;
+  the family-room Echo Show 10 runs the kitchen web app in Silk from the hub as
+  device `family-room-echo`, seeded once from the kitchen (slideshow,
+  `sonos.room`, display schedule) then independent, Sonos room Main; at night
+  the page stays alive and shows a faint clock (new per-screen
+  `display.nightFace`, `clock` on the Echo, `black` on the kitchen); one tap
+  to re-arm after an Echo restart is acceptable; ROADOM is probably the
+  long-term family-room screen, and Plex second-screen info is a later phase.
+  Findings that shaped it: Silk cannot resolve `nuc.local` (nor can the eero's
+  DNS), so the hub serves the app and injects a same-origin marker; the hub's
+  CORS already allowed PATCH on the live server, so the kitchen's registry
+  writes had not been failing (DELETE was the missing verb). Design:
+  `docs/designs/echo-show-and-hub.md`.
+- **2026-09-24 - One shared house countdown: share decisions, derive
+  everywhere.** `useTimer.js` was a per-screen state machine and the kitchen
+  posted a derived timer for the TV, so a second web screen would drift.
+  Decided: `/api/state` carries only the user's decisions (dismissed today,
+  travel override, manual target), last writer wins; one pure module
+  (`frameserver/lib/countdown.mjs`) derives the timer on the hub and on every
+  web screen; the hub computes the weather travel default and the no-school
+  flag so the inputs agree too; the hub still publishes the derived `timer` so
+  the Apple TV's decoder is unchanged. The picker-open state stays local.
 - **2026-09-23 - Mixtape: a cassette deck Now Playing style, which partly
   reverses the 2026-08-31 "no retro visualiser objects" call.** Justin wants a
   photoreal cassette in a tape deck as a music visualization. Why it is not the
@@ -666,6 +721,47 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-24 - Every screen depends on the hub only; the family-room Echo
+  Show is the third screen** (`feature/echo-hub`, deployed to the NUC, the
+  kitchen Pi and the Living Room Apple TV; committed, not merged).
+  FrameServer now serves the web app itself (`http://192.168.4.61:8095/?kiosk=echo`
+  for Silk, which cannot resolve mDNS) plus every shared service: `/api/state`
+  (the shared countdown decisions, the derived timer, the weather travel
+  default and the no-school flag), lunch, the school calendar, the photo-flag
+  queue (40 flags migrated off the Pi) and a GET-only Sonos proxy in front of
+  `node-sonos-http-api`, now an nssm service on the NUC (`SmartDisplaySonosAPI`,
+  loopback 5005, `frameserver/setup-sonos.ps1`). Web app: one hub resolver
+  (`code/src/lib/hub.js`), the timer derived on every screen from
+  `frameserver/lib/countdown.mjs`, Sonos through the hub with stale
+  `localhost:5005` bases healed, `/api/display/*` only on a Pi with a panel,
+  Echo mode (keep-alive audio, tap to start, fullscreen, night clock,
+  reload on deploy), `display.nightFace`, dashboard night face / reload /
+  last-seen. Pi: display endpoints loopback-only. TV: `AppConfig.piBase`
+  deleted. Verified end to end at 1280x800 against the live hub from the Mac;
+  the on-device Silk check is Justin's. Design:
+  `docs/designs/echo-show-and-hub.md`.
+- **2026-09-24 - Third Echo: `echo-show5-office`** (Echo Show 5, 960x480, a
+  2:1 panel). Same URL pattern, seeded from the kitchen, verified at 960x480
+  from the Mac: nothing overflows, the views scale with the viewport units
+  they were built in; text is small at that size, as expected on a 5.5"
+  screen.
+- **2026-09-24 - Second Echo: `echo-show15`** (Echo Show 15, landscape,
+  1920x1080). No new code: `http://192.168.4.61:8095/?kiosk=echo&device=echo-show15`
+  registers it seeded from the kitchen, and the settings cache tag kept the
+  family-room Echo's per-screen values out of it (the trap fixed earlier
+  today, now exercised for real). Verified at 1920x1080 from the Mac.
+- **2026-09-24 - Dashboard "Show" nudge for every screen.** The admin page's
+  Screen card has Show Photos / Today / Now Playing for the kitchen, the Echo
+  and the Apple TV: a one-shot `command {action: 'view', view, ts}` in the
+  registry, picked up by the web app's settings poll (about 10 s, and it wakes
+  a dark screen) and by the TV's hub poll (about 30 s,
+  `TVSettingsHubSync.handleCommand` posting `.hubShowView` to `RootView`).
+  A nudge, not a pin: the morning schedule and idle rules carry on afterwards.
+  Verified on the Echo page from the Mac (Now Playing to Today and back to
+  Photos); the TV path is built and installed but not watched.
+- **2026-09-24 - FrameServer admin: Music backdrop dropdown.** Already correct
+  since `07d851c` (Still 0 .. Marble 7, Mixtape 8); an unset value now shows
+  the TV's default (Lava) instead of Still.
 - **2026-09-24 - Mixtape: a photoreal cassette deck Now Playing style on the
   Apple TV** (`feature/mixtape`, installed on the Living Room TV, not merged).
   Justin's ChatGPT deck photo camera-projected onto proxies, an inpainted empty
@@ -830,10 +926,12 @@ Newest first.
 - **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
-- **Photo-flag triage queue** - 9 flags remain on the Pi
-  (`GET /api/flags?unresolved=1`): 7 have no GPS (can't anchor a `custom-places`
-  bubble - would need GPS added in Immich + re-import), 2 were skipped
-  (`Bridgehaven`, a 2nd `Cave Creek`). Run `flags-review.mjs` to label or clear.
+- **Photo-flag triage queue** - the queue lives on the hub since 2026-09-24
+  (`GET http://nuc.local:8095/api/flags?unresolved=1`, 25 unresolved after the
+  migration; `flags-review.mjs` and `flags-apply.mjs` point there). The older
+  notes still apply: 7 have no GPS (can't anchor a `custom-places` bubble -
+  would need GPS added in Immich + re-import), 2 were skipped (`Bridgehaven`,
+  a 2nd `Cave Creek`). Run `flags-review.mjs` to label or clear.
 - **Rotate/delete the `immich-go-import` API key** - it has all permissions and was
   pasted in chat during the import. The read-only `kitchen_display` key in
   `code/.env` remains for manifest builds.
