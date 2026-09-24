@@ -1,9 +1,9 @@
 import Foundation
 import Combine
 
-// AppModel - owns settings (polled from the Pi) and a 1Hz clock tick that
-// drives the Today countdown. Weather is fetched by WeatherService and cached
-// here. ObservableObject so SwiftUI views update reactively.
+// AppModel - owns settings (polled from the hub's /api/state) and a 1Hz clock
+// tick that drives the Today countdown. Weather is fetched by WeatherService
+// and cached here. ObservableObject so SwiftUI views update reactively.
 
 @MainActor
 final class AppModel: ObservableObject {

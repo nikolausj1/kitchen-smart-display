@@ -23,7 +23,7 @@ import SwiftUI
 //
 // Settings stays readable while adjusting: the overlay never dims below 0.85
 // when the Settings view is up. Phase 2 (backlog) swaps the schedule for a
-// Home Assistant lux sensor published through the Pi's /api/state.
+// Home Assistant lux sensor published through the hub's /api/state.
 
 @MainActor
 final class DimModel: ObservableObject {

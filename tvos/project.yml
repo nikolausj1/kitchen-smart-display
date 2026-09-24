@@ -52,6 +52,6 @@ targets:
         UIAppFonts:
           - Caveat-Regular.ttf
         NSAppTransportSecurity:
-          # The kiosk is served over plain HTTP on the LAN (smartdisplay.local).
+          # The hub (nuc.local:8095) is plain HTTP on the LAN.
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true

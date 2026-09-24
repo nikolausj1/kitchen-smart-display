@@ -2,7 +2,7 @@ import SwiftUI
 
 // PhotosView - native tvOS port of the kitchen Photo Slideshow.
 //
-// Loads photos from the Pi manifest, runs the same advance/portrait-pairing
+// Loads photos from the hub's manifest, runs the same advance/portrait-pairing
 // engine, and renders each item with face-aware smart cropping (fill) or a
 // fit-with-blur fallback. Crossfades between items. Overlays an EXIF caption
 // and a clock, matching the web slideshow overlays.

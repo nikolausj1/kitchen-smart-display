@@ -1,8 +1,9 @@
 import Foundation
 
-// PhotoService - loads the Immich manifest the Pi serves and exposes a photo
-// list. Mirrors useImmichPhotos.js: reads /stub-photos/manifest.json, filters
-// by selectedAlbumIds, and resolves relative src paths against the Pi base.
+// PhotoService - loads the Immich manifest FrameServer serves and exposes a
+// photo list. Mirrors useImmichPhotos.js: reads /stub-photos/manifest.json,
+// filters by selectedAlbumIds, and resolves relative src paths against the hub
+// base.
 
 struct PhotoFace: Decodable, Equatable {
     var cx: Double

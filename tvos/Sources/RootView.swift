@@ -172,6 +172,17 @@ struct RootView: View {
             .onReceive(morningTick) { _ in
                 router.autoShowTodayIfDue(settings: model.settings)
             }
+            // A dashboard nudge ("Show Photos" on the hub's admin page), one-shot,
+            // arriving through the 30 s hub settings poll. Same as a remote
+            // press: the morning auto-show and everything else carry on.
+            .onReceive(NotificationCenter.default.publisher(for: .hubShowView)) { note in
+                switch note.userInfo?["view"] as? String {
+                case "photos": router.view = .photos
+                case "today":  router.view = .today
+                case "music":  router.view = .music
+                default: break
+                }
+            }
     }
 
     // Each view owns its own mat decision. Photos composes its z-order (photo ->

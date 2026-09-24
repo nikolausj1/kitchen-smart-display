@@ -24,6 +24,17 @@ import Combine
 private let kHubDeviceID = "living-room-tv"
 private let kHubPollSeconds: UInt64 = 30
 private let kHubDebounceNanos: UInt64 = 600_000_000   // 0.6s
+// Dashboard commands (config.command) older than this are ignored, so a
+// relaunch does not replay last week's "Show Photos". Matches the web app.
+private let kHubCommandMaxAge: TimeInterval = 120
+private let kHubLastCommandKey = "hub.lastCommandTs"
+
+extension Notification.Name {
+    /// Posted (on the main actor) when the dashboard asks this TV to show a
+    /// view. userInfo["view"] is "photos" | "today" | "music". RootView
+    /// listens and switches, once, like a remote press; nothing is pinned.
+    static let hubShowView = Notification.Name("hubShowView")
+}
 
 private struct HubDevicePayload: Codable {
     struct Config: Codable {
@@ -39,8 +50,17 @@ private struct HubDevicePayload: Codable {
             var framedBackdrop: Int?
             var artDisplay: Int?
         }
+        // One-shot dashboard commands (Reload / Show ...). Read only: never
+        // part of what this TV writes back (see currentPayload), or the
+        // command would ride out again on the next PATCH.
+        struct Command: Codable {
+            var action: String?
+            var view: String?
+            var ts: Double?
+        }
         var slideshow: Slideshow?
         var tv: TV?
+        var command: Command?
     }
     var id: String?
     var name: String?
@@ -148,6 +168,7 @@ extension TVSettings {
 
     private func apply(_ payload: HubDevicePayload?) {
         guard let c = payload?.config else { return }
+        handleCommand(c.command)
         applyingFromHub = true
         defer { applyingFromHub = false }
 
@@ -165,5 +186,22 @@ extension TVSettings {
         if let v = t.artFacts, v != artFacts { artFacts = v }
         if let v = t.framedBackdrop, let b = FramedBackdrop(rawValue: v), b != framedBackdrop { framedBackdrop = b }
         if let v = t.artDisplay, let a = ArtDisplay(rawValue: v), a != artDisplay { artDisplay = a }
+    }
+
+    /// Dashboard commands, identified by their timestamp (ms since the epoch,
+    /// as the dashboard writes them). The last one handled is persisted so a
+    /// relaunch inside the freshness window does not run it twice. Only the
+    /// view nudge is meaningful on the TV: sleep/wake belong to the kitchen's
+    /// panel, and reload has no equivalent for a native app.
+    private func handleCommand(_ cmd: HubDevicePayload.Config.Command?) {
+        guard let cmd, let ts = cmd.ts, ts > 0 else { return }
+        let defaults = UserDefaults.standard
+        if defaults.double(forKey: kHubLastCommandKey) == ts { return }
+        let age = Date().timeIntervalSince1970 - ts / 1000
+        if age > kHubCommandMaxAge { return }   // stale; ignore
+        defaults.set(ts, forKey: kHubLastCommandKey)
+        guard cmd.action == "view", let view = cmd.view,
+              ["photos", "today", "music"].contains(view) else { return }
+        NotificationCenter.default.post(name: .hubShowView, object: nil, userInfo: ["view": view])
     }
 }

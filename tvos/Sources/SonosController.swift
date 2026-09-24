@@ -1,9 +1,10 @@
 import Foundation
 
-// SonosController - polls Sonos state through the Pi /api/sonos proxy and
-// exposes transport actions. Mirrors useSonosState.js: reads /zones, finds the
-// configured room's group coordinator, and parses its state. Room is "Main"
-// (the synced/hardcoded default per the PRD).
+// SonosController - polls Sonos state through the FrameServer /api/sonos proxy
+// (GET only, in front of node-sonos-http-api on the NUC) and exposes transport
+// actions. Mirrors useSonosState.js: reads /zones, finds the configured room's
+// group coordinator, and parses its state. Room is "Main" (the
+// synced/hardcoded default per the PRD).
 
 struct NowPlayingTrack: Equatable {
     var title: String
@@ -65,7 +66,7 @@ final class SonosController: ObservableObject {
     func volumeDown(){ send("/volume/-5") }
 
     private func send(_ path: String) {
-        let url = AppConfig.piBase
+        let url = AppConfig.photosBase
             .appendingPathComponent("api/sonos")
             .appendingPathComponent(room)
             .appendingPathComponent(String(path.dropFirst()))
@@ -81,7 +82,7 @@ final class SonosController: ObservableObject {
     // MARK: - Polling
 
     private func poll() async {
-        let zonesURL = AppConfig.piBase
+        let zonesURL = AppConfig.photosBase
             .appendingPathComponent("api/sonos")
             .appendingPathComponent("zones")
         guard let groups: [Zone] = await fetchJSON(zonesURL) else { return }
@@ -125,12 +126,12 @@ final class SonosController: ObservableObject {
     }
 
     // Prefer the absolute player URL (LAN-reachable from the Apple TV); else
-    // proxy a relative art path through the Pi.
+    // proxy a relative art path through the hub.
     private func resolveArt(_ t: TrackJSON) -> URL? {
         if let abs = t.absoluteAlbumArtUri, abs.hasPrefix("http") { return URL(string: abs) }
         guard let rel = t.albumArtUri, !rel.isEmpty else { return nil }
         if rel.hasPrefix("http") { return URL(string: rel) }
-        return URL(string: AppConfig.piBase.absoluteString + "/api/sonos/" + rel.drop(while: { $0 == "/" }))
+        return URL(string: AppConfig.photosBase.absoluteString + "/api/sonos/" + rel.drop(while: { $0 == "/" }))
     }
 
     private func cleanStation(_ name: String) -> String {

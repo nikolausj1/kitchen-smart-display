@@ -1,36 +1,37 @@
 import Foundation
 
-// Static config + defaults. The Pi host is where the kitchen kiosk server
-// runs; /api/state and /api/sonos are served from the same origin.
+// Static config + defaults. FrameServer on the NUC (the hub) is the app's only
+// LAN dependency: the photo manifest and derivatives, house state (/api/state)
+// and the Sonos proxy (/api/sonos/*) all live there. Until 2026-09-24 state and
+// Sonos came from the kitchen Pi through a second base URL, since removed; see
+// docs/designs/echo-show-and-hub.md.
 enum AppConfig {
     // The real Apple TV resolves .local names over mDNS fine. The iOS/tvOS
-    // SIMULATOR resolves .local unreliably, so simulator builds use LAN IPs
-    // directly. Both hosts now have DHCP reservations on the eero, so these
-    // stay put - but prefer the mDNS name anywhere it works, because a stale
-    // hard-coded IP here is exactly what broke the simulator when the Pi's
-    // lease moved from .4.127 to .7.131.
+    // SIMULATOR resolves .local unreliably, so simulator builds use the LAN IP
+    // directly. The NUC has a DHCP reservation on the eero, so it stays put -
+    // but prefer the mDNS name anywhere it works, because a stale hard-coded IP
+    // here is exactly what broke the simulator when the Pi's lease moved from
+    // .4.127 to .7.131.
     #if targetEnvironment(simulator)
-    static let piBase = URL(string: "http://192.168.7.131:8080")!
     static let photosBase = URL(string: "http://192.168.4.61:8095")!
     #else
-    static let piBase = URL(string: "http://smartdisplay.local:8080")!
     static let photosBase = URL(string: "http://nuc.local:8095")!
     #endif
-    // piBase      -> the kitchen Pi: /api/state and /api/sonos still live there.
-    // photosBase  -> FrameServer on the NUC: the manifest and every derivative.
-    // These were one host until the 2026-08 migration; keep them separate so a
-    // later move of state/Sonos to the hub is a one-line change here.
-    static var stateURL: URL { piBase.appendingPathComponent("api/state") }
+    // photosBase -> FrameServer on the NUC: the manifest, every derivative,
+    // /api/state and /api/sonos. The name predates state and Sonos moving to
+    // the hub; read it as "the hub's base URL".
+    static var stateURL: URL { photosBase.appendingPathComponent("api/state") }
     static func sonos(_ path: String) -> URL {
         // path like "/Main/playpause"
-        piBase.appendingPathComponent("api/sonos").appendingPathComponent(path)
+        photosBase.appendingPathComponent("api/sonos").appendingPathComponent(path)
     }
 }
 
 // MARK: - Settings model
 //
-// Mirrors the synced subset the kitchen POSTs to /api/state
-// (location, school, slideshow). Fields not in the synced subset
+// Mirrors the subset of the hub's /api/state the TV uses (location, school,
+// slideshow). The hub composes it: shared location + school from its settings
+// registry, plus the kitchen's slideshow. Fields not in /api/state
 // (timerThresholds, weatherSlots) use built-in defaults that match the
 // kitchen's settings.js DEFAULTS, since they rarely change and are not synced.
 
@@ -94,8 +95,8 @@ struct SlideshowSettings: Codable, Equatable {
     )
 }
 
-// The kitchen's live Today-timer, mirrored via /api/state. nil = no kitchen
-// timer state available (idle fallback).
+// The house countdown as the hub derives it (/api/state.timer), the same one
+// every screen shows. nil = no timer state available (idle fallback).
 struct KitchenTimer: Equatable {
     var active: Bool
     var travelMode: String     // "driving" | "walking"
@@ -110,8 +111,9 @@ struct AppSettings: Equatable {
     var weatherSlots: [Int]
     var slideshow: SlideshowSettings
     var kitchenTimer: KitchenTimer?    // nil = idle / not posted
-    // Mirrored from the kitchen: true on holidays/breaks/summer so the TV skips
-    // the Today auto-boot (the kitchen owns the no-school decision).
+    // From the hub's /api/state: true on holidays/breaks/summer so the TV skips
+    // the Today auto-boot. The hub derives it from the shared school settings
+    // and the school calendar, so every screen agrees.
     var noSchoolToday: Bool
 
     static let defaults = AppSettings(
@@ -125,7 +127,8 @@ struct AppSettings: Equatable {
     )
 }
 
-// Decoding helper: /api/state returns only the synced keys, each possibly
+// Decoding helper: the TV reads only these keys of /api/state (the hub also
+// sends countdown and travelDefault, already folded into timer), each possibly
 // absent. Decode leniently, falling back to defaults per field.
 struct SharedStatePayload: Decodable {
     var location: LocationSettings?

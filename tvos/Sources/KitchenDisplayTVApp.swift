@@ -5,9 +5,9 @@ import UIKit
 //
 // tvOS ships no WebKit (no UIWebView / WKWebView), so the dashboard is
 // reimplemented natively in SwiftUI rather than wrapping the React web app.
-// It reads the kitchen-synced settings from the Pi (/api/state) and talks to
-// Sonos through the Pi proxy (/api/sonos), reusing the same backend endpoints
-// the kitchen uses. See ../Apple-TV-Display-PRD.md.
+// It reads house state and shared settings from the hub (FrameServer
+// /api/state) and talks to Sonos through the hub proxy (/api/sonos), reusing
+// the same backend endpoints the kitchen uses. See ../Apple-TV-Display-PRD.md.
 //
 // Phase 1 build order: Today (done) -> Photos -> Now Playing.
 
