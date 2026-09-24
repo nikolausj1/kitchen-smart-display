@@ -1,9 +1,9 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-22
-version: 5.6
-author: Claude Opus 5 (claude-opus-5)
+modified: 2026-09-23
+version: 5.8
+author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
 
@@ -90,6 +90,24 @@ refresh, resolve the flags. Full flow:
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
 decision live here once settled.
+
+### Mixtape: cassette deck Now Playing (DESIGN, decided 2026-09-23)
+
+A new Now Playing style for the Apple TV first, the kitchen Pi later: a photoreal
+cassette seen straight on inside a tape deck, full-bleed (it replaces the mat).
+Reels turn with real-deck physics and the tape packs track song progress; the
+label carries album art plus handwritten artist / album / song. A collection of
+tapes with real brand logos (TDK, Maxell, Sony, BASF, Memorex, Fuji), mixed label
+styles, lightly used to beat up; first batch 12. **One tape per song**: every song
+change is an eject-and-insert, and a stop ejects to an empty well (decided in the
+2026-09-23 review; the album-keyed hybrid is the fallback if that wears thin).
+The tape packs deliberately double as a progress bar. Reached as the 9th stop in
+the Framed backdrop cycle. Full design, states, physics, manifest contract, asset
+pipeline and phases: `docs/designs/mixtape.md` (v1.1, reviewed).
+
+Next: **look development**, an options sheet (`_review/mockups/mixtape-options.html`)
+of deck styles by era, each with and without the smoked door, and panel extras
+(tape counter, transport keys, VU meters). Justin picks before any app code.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 
@@ -235,6 +253,14 @@ Remaining:
   (rotating fact bottom-center on the mat, "Art Facts" toggle); the facts
   already ride the manifest's `art.facts`, so the kitchen needs only a
   display slot (caption pill extension or a separate lower line).
+- **Mixtape on the Pi: physical controls** (DESIGN, after the TV ships) - port
+  the Mixtape cassette deck (see Active design topics) to the kitchen as its own,
+  touch-first experience, not a copy of the TV. Ideas from 2026-09-23, not yet
+  decisions: **eject opens the station picker** (a shelf of tapes, one per
+  Jukebox station; picking one inserts it), **fast-forward / rewind keys skip
+  tracks** (hold to seek?), play / pause / stop keys are the real transport,
+  maybe a volume knob. Same assets and `mixtape-manifest.json` as the TV; a
+  React renderer. Design: `docs/designs/mixtape.md`, "Phase 2: the kitchen Pi".
 
 ### Apple TV / Frame TV app
 
@@ -320,6 +346,12 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
+- **FrameServer admin: Music backdrop dropdown is stale** (TODO, small) - the
+  `framedBackdrop` select in `frameserver/admin.html` still lists the
+  pre-2026-06-11 order (Drift / Lava / Marble / Ink / Current) with the wrong
+  raw values; the TV enum is Still 0, Drift 1, Lava 2, Smoke 3, Caustics 4,
+  Ripple 5, Bars 6, Marble 7. Found 2026-09-23 while checking Mixtape's hub sync.
+  Fix together with adding Mixtape = 8.
 - **Kitchen Pi is underpowered** (TODO, do this first) - the Pi 5 runs off a
   USB-A port built into a wall outlet. USB-A cannot negotiate USB-C PD and tops
   out near 5V/2.4A (12W); a Pi 5 wants 5V/5A (27W). Measured 2026-09-22, seven
@@ -405,6 +437,29 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-23 - Mixtape: a cassette deck Now Playing style, which partly
+  reverses the 2026-08-31 "no retro visualiser objects" call.** Justin wants a
+  photoreal cassette in a tape deck as a music visualization. Why it is not the
+  rejected iPod / mirrorball: those were novelty props floating over the framed
+  art, while Mixtape is a photographed still life that replaces the frame
+  entirely and is opt-in from the backdrop cycle. Decided: Apple TV first, Pi
+  later as a touch-first control surface; full-bleed, straight-on camera; real
+  brand logos (private in-home use only); album-keyed tape choice with eject on
+  album change and a rewind whir on song change; 12 tapes to start; no sound.
+  Assets are built reproducibly in Blender with a shared geometry manifest so
+  the Pi port reuses them; logos are hand-made vectors because AI image tools
+  garble lettering. Deck style, door and panel extras are chosen from an
+  options sheet first. Design: `docs/designs/mixtape.md`.
+- **2026-09-23 - Mixtape review: one tape per song, empty well on stop, packs as a
+  progress bar.** The design review dropped the album-keyed hybrid (eject on album
+  change, rewind whir between songs) for a plain per-song eject: Justin wants to
+  see the mechanism often, and the hybrid would have made radio and compilations
+  eject per song anyway. A stop ejects to an empty well after a 5 s grace. The
+  wind fraction sweeping 70% of the reel in one song is a knowing exaggeration,
+  kept because it reads as progress from the couch. Also fixed in review: the
+  tape choice hash must be FNV-1a (Swift's `hashValue` is per-process random),
+  the manifest is normalised not pixel-based, and the scene is flattened to three
+  plates plus sprites rather than ten runtime layers.
 - **2026-09-22 - The kitchen Pi was never powered adequately, and it took the
   Apple TV's music and countdown down with it.** The Pi 5 runs from a wall-outlet
   USB-A port: no USB-C PD negotiation and roughly 12W against the 27W a Pi 5

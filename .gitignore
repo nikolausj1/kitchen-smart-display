@@ -82,3 +82,7 @@ __pycache__/
 
 # Photoshop design files (large binaries; kept on disk, not in git)
 *.psd
+
+# Mixtape source files (.blend, raw textures): large binaries kept on disk.
+# Rendered plates and mixtape-manifest.json are committed.
+art-src/

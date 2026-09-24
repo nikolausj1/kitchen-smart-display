@@ -1,9 +1,9 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-09-22
-version: 3.7
-author: Claude Opus 5 (claude-opus-5)
+modified: 2026-09-23
+version: 3.8
+author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
 
@@ -99,6 +99,8 @@ Wrong captions get long-press-flagged on the kitchen display and queue up on the
 ## Active design topics (in discussion)
 
 Topics we are actively talking through. Each gets its detail captured per-topic (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary + decision live here once settled.
+
+**Mixtape: cassette deck Now Playing** (opened and decided 2026-09-23, nothing built). A photoreal cassette in a tape deck as a new TV music style, full-bleed, reels turning with real-deck physics, album art and handwritten metadata on the label, a collection of 12 real-brand tapes, eject-and-insert when the album changes. Apple TV first; the kitchen Pi later as a touch-first version where eject is the station picker. Next: an options sheet of deck styles, door on/off and panel extras for Justin to choose from, likely led by Fable with Opus workers. Design: `docs/designs/mixtape.md`.
 
 **Today, second layout** (opened 2026-08-31, BUILT 2026-09-04 as three layouts, in review). Board, Briefing and Ambient are on `feature/today-layouts`; see `docs/designs/today-layouts.md` and `_review/today-layouts/`. Remaining from the original topic: the TV port, auto-select by time of day, the house name as a setting. The original note follows for history. Sourced from a review of Theatrium, a commercial tvOS home-dashboard app. Leave Framed Today as it is and add a second selectable Today layout, a calm board of six to eight panels, chosen per screen through the hub's existing per-device settings. Framed Today stays the 6-8am departure instrument; the board is the rest of the day. This is also what unblocks the long-deferred "Configurable Today panels" idea, since the ROADOM living-room screen is finally a screen that wants a different composition. Open: which surfaces get it, auto-select vs manual, whether panels are focusable, and a name. Pixel shift is a prerequisite, since a static grid would be the first thing on our screens that does not drift. Full detail and the borrowed conventions are in BACKLOG. Next step is an HTML mockup in `_review/mockups/` before any SwiftUI.
 
