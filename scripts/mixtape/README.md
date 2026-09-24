@@ -160,3 +160,16 @@ times are also written to `renders/phase0/render-times.json`.
   which is physically right but means the plate is not opaque at its border.
 - Transparent materials use Eevee's Blended mode; overlapping smoked parts are sorted
   per object, fine straight on but worth checking once the door and deck arrive.
+
+## Upscaling the reference plate (2026-09-23)
+
+`upscale_vtsr.swift` upscales an image 4x with Apple's VideoToolbox
+super-resolution (macOS 26; the model downloads itself on first use). Chosen
+after a bake-off against Lanczos, sips, OpenCV FSRCNN / EDSR and Real-ESRGAN:
+it keeps the brushed-metal grain and sharpens lettering without inventing
+detail, in about 3 s. Real-ESRGAN smeared the metal; EDSR was 40x slower.
+
+    swiftc -O scripts/mixtape/upscale_vtsr.swift -o /tmp/vtsr
+    /tmp/vtsr art-src/mixtape/reference/horizon_deck_reference.png out_4x.png
+
+Then resize to 3840x2160 with Lanczos (PIL) and crop the odd row.
