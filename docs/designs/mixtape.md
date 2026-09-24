@@ -2,7 +2,7 @@
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
 modified: 2026-09-23
-version: 1.4
+version: 1.5
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -18,7 +18,7 @@ it looks like somebody ejected one tape and put in another. There is a collectio
 tapes (real vintage brands, different label styles, different amounts of wear), so it
 is not the same cassette for every song.
 
-Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 done and the look picked 2026-09-23 (see "The chosen look"); pipeline pivot to camera projection under proof of concept.**
+Status: **DESIGN, decided 2026-09-23, reviewed (v1.1). Phase 0 done and the look picked 2026-09-23 (see "The chosen look"); camera-projection pipeline proven end to end 2026-09-23; Phase 1 (SwiftUI hero tape) ready to plan.**
 Apple TV first; the kitchen Pi follows as its own, more interactive, experience (see
 "Phase 2: the kitchen Pi").
 
@@ -84,6 +84,31 @@ variants: Blender geometry plus a masked image-edit pass styled on the reference
 with the label and hubs left blank for the vector header, art, handwriting and the
 code-driven reels. The 1672 px source needs an upscale to 3840 (bake-off in
 progress). Only valid from this one viewpoint, which is the decision anyway.
+
+### Proven 2026-09-23 (packages POC, G, H)
+
+- **Projection holds.** Still matches the photo to 0.95 levels; cassette, door frame
+  and key pixels travel with the proxies. Orthographic camera, UVs baked once from
+  the camera (a per-frame UV Project modifier makes pixels slide). Remaining
+  polish: fake a keystone on the door so it reads as a tilt not a slide; the key
+  press needs a shading change to be visible straight on.
+- **Deck plate**: empty well inpainted (crop-based edit, pasted back so every
+  pixel outside the mask is byte-identical), door split into `door_frame` and
+  `door_glass` layers, all at 3840x2160 via Apple VideoToolbox super-resolution.
+  Known flaw: the inpainted spindles sit about 30 px high of the tape's hubs;
+  hidden by a seated tape, only visible mid-eject. `plate-manifest.json` holds
+  keys, meter faces, needle pivots and the well.
+- **Tape variants**: masked edits (`gpt-image-1`, `input_fidelity=high`, a 3:2
+  slice around the cassette scaled to 1536x1024 and back) place a new shell in
+  the same well convincingly. **Geometry drifts per variant** (hub x by up to
+  10 px, spacing by 2.6 mm, label edges by up to 19 px at 1672 wide), so the
+  manifest carries hub centres, hub radius, window and label rects **per
+  variant**, measured automatically by `measure_tape_variants.py`. Reject
+  candidates whose slice shifted more than 1 px or whose hubs are more than
+  3 px off height or 6 px off spacing. The visible toothed hub ring is about
+  5.8 mm, not the 11 mm core; the reel code takes r0 from the measurement.
+- Costs this round: about $0.95 (deck) + $1.26 (two tapes); 12 variants at two
+  candidates each will be roughly $7.50.
 
 ## What the viewer sees
 
@@ -335,9 +360,9 @@ Justin picks. Nothing downstream starts until he does.
 | Phase | Output | Checkpoint |
 |-------|--------|------------|
 | 0. Look development | Base cassette model, deck options, options sheet | **Justin chooses** deck style, door, extras, tape scale |
-| 1. Hero tape | One variant end to end in `MixtapeView`: plates, reel physics, label, key press, pause, states | **Justin reviews** simulator video and screenshots |
+| 1. Hero tape | One variant end to end in `MixtapeView`: the 4K deck plate, door layers, one generated tape with its measured manifest, reel physics on the cut hub sprites, label printing, key press, pause, states | **Justin reviews** simulator video and screenshots |
 | 2. Transitions | Eject / insert, stop to empty, coalescing, variant selection | Review |
-| 3. Collection | All 12 variants rendered, manifest complete | **Justin reviews** a contact sheet of all 12 |
+| 3. Collection | All 12 variants generated in place (6 brands x 2 label styles, shell colours per SKU), measured, manifest complete | **Justin reviews** a contact sheet of all 12 |
 | 4. Integration | Settings cycle, admin dropdown, dimming, polish | On-device test on the real TV |
 
 ## Phase 2: the kitchen Pi (future topic, not designed yet)

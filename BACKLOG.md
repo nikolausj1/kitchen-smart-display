@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-23
-version: 6.0
+version: 6.1
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -110,9 +110,12 @@ plus six Opus workers: headless-Blender cassette and three deck styles, 36 optio
 renders, hand-made logos for six brands, 17 OpenAI textures, two Runway eject
 references, and the options sheet `_review/mockups/mixtape-options.html`.
 **Look chosen the same evening** from a ChatGPT reference image (silver 70s,
-door on, VU + keys, about 50%, warm). Pipeline pivots to camera projection of the
-photo onto Blender proxies; proof of concept and upscaler bake-off in progress,
-then Phase 1 is re-planned around it.
+door on, VU + keys, about 50%, warm). Pipeline pivoted to camera projection of the
+photo onto Blender proxies and **proven end to end the same night**: still match
+0.95 levels, empty-well deck plate and door layers at 4K (Apple VT upscale),
+two generated tape variants seated in the same well with per-variant measured
+geometry. **Next: Phase 1**, the hero tape in SwiftUI, plus the 12-variant batch
+(about $7.50). Both wait on Justin's go.
 
 ### Sonos and /api/state to the hub (DESIGN, scoped 2026-09-22)
 
