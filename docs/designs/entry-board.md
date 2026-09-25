@@ -1,18 +1,22 @@
 ---
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
-modified: 2026-09-24
-version: 1.2
+modified: 2026-09-25
+version: 1.3
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, headline, weather, nws, frameserver]
+tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, headline, weather, nws, legibility, scrims, frameserver]
 ---
 
 # Entry board
 
 **Status: phase 1 built and deployed 2026-09-24**, live on the Echo Show 15 as
 its home view. Justin's calendar is connected; Sheena's waits on her sharing
-it. **Headline weather rules (phase 1.5) built 2026-09-24, not yet deployed**
-(see "Headline rules" below). Review shots: `_review/entry/`.
+it. **Phase 1.5 deployed to the hub 2026-09-25 08:24**: the headline's
+weather rules and National Weather Service alerts (see "Headline rules"; the
+first real weather line, "Rain from 10 am", went up at 08:25) and backdrop
+legibility (adaptive darkness, per-panel scrims, optional blur; see "Phase
+1.5: backdrop legibility"). The Echo Shows load the app from the hub; the
+kitchen Pi got the same bundle at 08:41. Review shots: `_review/entry/`.
 
 The Echo Show 15 by the front door replaces the DAKboard screen the family
 used to glance at: time, weather, agenda, countdowns, a message line. Rebuilt
@@ -33,18 +37,24 @@ the same screen can later run on the kitchen or a ROADOM.
   and the asset's description in Immich; explicit `image:` wins.
 - **Headline**: one dynamic line, rules over live data, phase 1 = next timed
   event today, else an all-day event today, else (evenings) tomorrow's first
-  thing, else a day-part greeting. Phase 1.5 (built 2026-09-24) adds the
-  weather: National Weather Service warnings above everything, advisories and
-  forecast lines (rain, frost, wind, heat, cold) above everything but an event
-  that is running or inside the hour. See "Headline rules" below.
+  thing, else a day-part greeting. Phase 1.5 (built 2026-09-24, deployed
+  2026-09-25) adds the weather: National Weather Service warnings above
+  everything, advisories and forecast lines (rain, frost, wind, heat, cold)
+  above everything but an event that is running or inside the hour. See
+  "Headline rules" below.
 - **Photos behind the board**, with a per-screen toggle and a darkness
-  slider. Phase 1 is a flat wash; 1.5 adds scrims, cards and per-photo
-  brightness.
+  slider. Phase 1 is a flat wash; phase 1.5 (built 2026-09-25) adapts the
+  wash to each photo, adds a scrim per panel and an optional blur (see
+  "Phase 1.5: backdrop legibility").
 - **Phase 1** = the DAKboard equivalent plus the departure countdown and
   what-to-wear during the school-morning window. **Phase 2** = the layout
   adapts to the day part (evening shows tomorrow, weekends widen the agenda,
-  night hands over to the clock).
-- Agenda: three day columns (today, tomorrow, the day after).
+  night hands over to the clock). The mechanism shipped with the layout
+  editor on 2026-09-24 (day-part variants: Morning, Evening, Weekend,
+  `layout-editor.md`); the default board carries none yet.
+- Agenda: three day columns (today, tomorrow, the day after). The layout
+  editor's agenda knobs allow 1 to 5 days from today or tomorrow; the
+  default stays three.
 - The Echo 15 rests on this view all day: a per-screen home view.
 
 ## Hub
@@ -59,7 +69,9 @@ build script already uses it via `--env-file`). Keys used: `IMMICH_URL`,
 calling Google). `secrets/` is created on deploy and never committed. The
 weather needs no key (Open-Meteo, the NWS); `NWS_ALERTS_FIXTURE` (a saved
 alerts response, relative to the service root) replaces the NWS for tests and
-scratch previews and is never set on the NUC.
+scratch previews and is never set on the NUC. The saved responses the hub's
+tests use are in `frameserver/test/fixtures/` (`nws-active.json`,
+`nws-winter-storm.json`, `open-meteo-forecast.json`).
 
 Registry, house-wide (`shared.calendar`, editable on the dashboard):
 
@@ -72,7 +84,10 @@ calendar: {
 }
 ```
 
-### `GET /api/calendar?days=3`
+### `GET /api/calendar?days=N`
+
+The app asks for `days=6` (hooks/useCalendar.js): the agenda's widest
+setting, five columns starting tomorrow, needs six days.
 
 ```
 {
@@ -228,12 +243,15 @@ Where the weather comes from (the hub, beside the air quality, for the same
 
 Settings (DEVICE scope, `display.*`): `homeView: 'photos' | 'today'` (default
 `photos`), `entryBackdrop: 'photos' | 'black'` (default `photos`), `entryDim:
-0..0.9` (default `0.5`). Layout id `entry`, label "Entry board", in
-`registry.js`, `kioskMode.js` VALID_LAYOUTS and `TodayLayoutSwitch.jsx`.
+0..0.9` (default `0.5`), `entryAdaptive: true | false` (default `true`, phase
+1.5) and `entryBlur: 0..20` px (default `0`, phase 1.5). Layout id `entry`,
+label "Entry board", in `registry.js`, `kioskMode.js` VALID_LAYOUTS and
+`TodayLayoutSwitch.jsx`.
 
-- `hooks/useCalendar.js`: a module store polling `hubUrl('/api/calendar?days=3')`
-  every 60 s, localStorage cache, exposes `{ events, countdowns, calendars,
-  connected, fetchedAt, error, stale }`.
+- `hooks/useCalendar.js`: a module store polling `hubUrl('/api/calendar?days=6')`
+  every 60 s (six days since the layout editor's agenda knobs, 2026-09-24;
+  it was three), localStorage cache, exposes `{ events, countdowns,
+  calendars, connected, fetchedAt, error, stale }`.
 - `lib/houseState.js` accepts `headline` and `airQuality` from `/api/state`.
 - `useTodayData()` adds `calendar` (the store above), `headline`, `airQuality`,
   with `?demo=1` fixtures (a few events across three days, two countdowns,
@@ -257,9 +275,18 @@ Settings (DEVICE scope, `display.*`): `homeView: 'photos' | 'today'` (default
   wear and the air quality chip top-right; the headline across the middle
   left; the agenda's three columns bottom-left; the countdown tiles
   bottom-right. During the school-morning window on a school day the
-  countdown slot shows `DeparturePanel` instead. `entryBackdrop === 'photos'`
-  puts a full-bleed `PhotoPanel` under everything with a black layer at
-  `entryDim` opacity and the Ambient scrims; `black` is the DAKboard look.
+  countdown slot shows `DeparturePanel` instead. Since the layout editor
+  (2026-09-24) that arrangement is `DEFAULT_ENTRY_SPEC`, drawn by
+  `Entry/SpecBoard.jsx` from the screen's own spec when it has one
+  (`layout-editor.md`). `entryBackdrop === 'photos'` puts a full-bleed
+  `PhotoPanel` under everything with a black layer at `entryDim` opacity and
+  the Ambient scrims (`Entry/EntryBackdrop.jsx`); `black` is the DAKboard
+  look.
+- Phase 1.5 files: `views/TodayLayouts/lib/lumaSampler.js` and
+  `views/TodayLayouts/lib/backdropLuma.js` (with `backdropLuma.test.mjs`),
+  `PhotoPanel`'s `onLuma`, `Entry/EntryBackdrop.jsx` (the adaptive wash and
+  the blur), `SpecScrims` in `Entry/SpecPanel.jsx` and the universal `scrim`
+  in `layoutSpec.js`.
 - `AppShell.jsx`: every "return to Photos" (boot outside the school morning,
   the morning-end watcher, any idle return) goes to `display.homeView`.
 
@@ -267,14 +294,97 @@ Settings (DEVICE scope, `display.*`): `homeView: 'photos' | 'today'` (default
 
 - Today layout select gains "Entry board".
 - Per web screen, an "Entry board" card: Photos behind the board (toggle),
-  Darken photos (0 to 90%), Home view (Photos / Today).
+  Darken photos (0 to 90%), Adapt darkness to each photo (On / Off, phase
+  1.5), Blur photos (0 to 20 px, phase 1.5), Home view (Photos / Today).
 - House-wide: a "Calendars and countdowns" card: the calendar list (id,
   label, colour; add and remove), countdown lead days, max tiles; a status
-  line from `/api/calendar` (connected, last fetch, event count, error);
-  "Headline now" from `/api/state`.
+  line from `/api/calendar` (connected, last fetch, event count, error) and
+  one line per calendar; "Headline now" from `/api/state`, with its kind
+  glossed ("weather (forecast line)", "alert (National Weather Service
+  alert)", "soon (starts within the hour)" and so on).
 - A "Countdown art" card: the library from `/api/countdown-art` with each
   image and its keywords, a Refresh button, and the current countdowns with
   the art each one matched.
+
+## Phase 1.5: backdrop legibility (as built, 2026-09-25)
+
+The board stays readable over any photo without one flat wash getting darker
+for everyone. The defaults change today's look only where text sits on the
+photo.
+
+### Adaptive darkness
+
+- `display.entryAdaptive` (default true; dashboard "Adapt darkness to each
+  photo"). Off, the wash is `entryDim` exactly as in phase 1.
+- As a photo becomes the shown one, `PhotoPanel` (its `onLuma` prop, off by
+  default, so the Board's tile measures nothing) reports a luma grid of what
+  the screen shows of it. `lib/lumaSampler.js` re-reads the photo as a CORS
+  fetch (normally from the HTTP cache), decodes it 192 px wide with
+  `createImageBitmap` off the main thread, draws the visible part (cover,
+  centred) into 48 x 27 (48 x 30 at 16:10) and converts it to WCAG relative
+  luminance. About 0.5 ms of main thread per photo (1 to 4.5 ms at 6x CPU),
+  plus a one-off 26 ms for the first canvas of a page load. The next photo is
+  measured after the crossfade; the last 48 results are cached.
+- `lib/backdropLuma.js` (pure; `backdropLuma.test.mjs` beside it) averages
+  the grid behind the layout's two text columns: every visible panel except
+  photo tiles and image blocks, split by its box centre left and right of the
+  middle, each cell weighted by how much the boxes cover it. The text luma is
+  the brighter column; with no text panels, the whole frame.
+- `dim = clamp(entryDim + GAIN * (luma - L_AVG), entryDim - 0.2, entryDim + 0.25)`,
+  then 0 to 0.9. `L_AVG = 0.284`, the mean over 240 random photos from the
+  Echo Show 15's albums sampled as the app does (median 0.279, 10th / 90th
+  percentile 0.176 / 0.385, range 0.063 to 0.577; snow reaches 0.64), so an
+  average photo keeps `entryDim`. `GAIN = 0.8`, the slope that holds the
+  perceived backdrop steady at an average photo under the default 50% wash.
+  At 50%: snow 0.75 (clamped), sky 0.68, average 0.50, night 0.34.
+- The wash eases over the crossfade's own 1.2 s ease-in-out, one frame behind
+  the photo fade.
+- Any failure (no CORS header, tainted canvas, fetch or decode error) keeps
+  `entryDim`, silently. The hub sends `Access-Control-Allow-Origin: *` on
+  photo GETs, so the kitchen Pi (app from the Pi, photos from the hub)
+  samples too; the photo img itself is not a CORS request.
+- While adaptive, the wash carries `data-dim` and
+  `data-luma(-left/-right/-whole)`.
+
+### Per-panel scrim
+
+- Universal prop `scrim: 'none' | 'soft' | 'strong'` (default none; `SCRIMS`
+  in `layoutSpec.js`). Only on a box with background none: a shade under the
+  box, feathered past its edges, plus a close text shadow (soft: a faint edge
+  added to the HUD glow; strong: a stronger pair).
+- Drawn by `SpecScrims` (`Entry/SpecPanel.jsx`, placed by `SpecBoard` under
+  all boxes): one layer per strength (opacity 0.32 soft, 0.5 strong), each
+  shade opaque and feathered by its own box-shadow (spread = blur = 1.5 x
+  `--tl-pad` soft, 2 x strong), so neighbouring shades merge. No filter, no
+  backdrop-filter.
+- Default Entry board: soft on the clock and the headline, none elsewhere. A
+  missing scrim reads the layout default, so older saved specs get the same.
+- Editor: a Scrim segmented field in Appearance, disabled under a card.
+
+### Blur
+
+- `display.entryBlur`, 0 to 20 px (default 0; dashboard "Blur photos"):
+  `filter: blur()` on the photo layer, overscanned by `scale(1.03)` plus 1.5
+  blur radii each side so no rim shows. 0 adds no filter.
+- 1920x1080 crossfade: no long tasks at 0, 8 or 20 px; blur 8 paced like
+  none, blur 20 dropped one frame (windowed Chrome, Mac). Not yet measured on
+  Silk.
+
+### Verified (scratch hub, dev-mac, 1920x1080, entryDim 0.5)
+
+Contrast of `#f2f2f0` against the mean backdrop behind the text, before to
+after: snow 5.2 to 14.2 (clock) and 6.0 to 14.9 (headline); sky 5.2 to 12.5
+and 6.0 to 13.3; average 9.5 to 12.8 and 9.9 to 13.1; night 15.5 to 16.0 and
+12.3 to 13.2. With adaptive off and both scrims set to none the board is
+pixel-identical to phase 1 (0 of 2,073,600 px). Review shots:
+`_review/entry/legibility-*.png`.
+
+### Not done
+
+On-screen Settings rows for the two settings, and the editor's Backdrop
+section (its draft carries only entryBackdrop and entryDim). The Echo Show 15
+runs darkness 0.8, so bright photos hit the 0.9 cap; 0.5 to 0.6 now reads
+well with scrims and adaptive darkness.
 
 ## Rollout
 
@@ -288,8 +398,10 @@ Settings (DEVICE scope, `display.*`): `homeView: 'photos' | 'today'` (default
 
 ## Phase 1.5 and 2 (not built)
 
-- Backdrop legibility: gradient scrims where the text sits, translucent
-  cards, per-photo brightness sampling, optional blur.
 - A "suggested countdowns" list on the dashboard.
-- Day-part adaptive slots (evening: tomorrow; weekend: wider agenda; night:
-  the clock).
+- Multi-day timed events in the headline.
+- Day-part content (evening: tomorrow; weekend: wider agenda; night: the
+  clock). The mechanism is built (the layout editor's day-part variants);
+  what each part shows is Justin's to lay out in the editor.
+- The legibility leftovers under "Phase 1.5: backdrop legibility", "Not
+  done".

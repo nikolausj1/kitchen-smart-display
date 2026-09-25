@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-24
-version: 7.1
+modified: 2026-09-25
+version: 7.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,23 +87,22 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Layout editor (STEPS 1 AND 2 BUILT 2026-09-24; steps 3 and 4 open)
+Topics we are actively talking through. Each gets its detail captured per-topic
+(inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
+decision live here once settled.
+
+### Layout editor (BUILT 2026-09-24/25, see Recently Shipped)
 
 A what-you-see-is-what-you-get editor for the boards, used from the MacBook,
 reached from each screen's card on the admin page (`/editor/?device=<id>`).
 The real app renders in an iframe at the screen's exact resolution; handles
-and an inspector sit over it; Save writes a per-screen layout (percent
-positions, universal properties, text and image blocks) into the registry.
-Built: the spec and data-driven Entry renderer, edit mode, the editor with
-move, resize, snap, nudge, layers, undo and redo, save, revert, reset, the
-backdrop section, sample data. Open (step 3): per-panel schemas and the full
-inspector, sub-element selection, smart guides, save history, copy layout to
-another screen. Open (step 4): day-part tabs (Entry phase 2), the Board
-layout. Design: `docs/designs/layout-editor.md`.
-
-Topics we are actively talking through. Each gets its detail captured per-topic
-(inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
-decision live here once settled.
+and an inspector sit over it; Save writes a per-screen layout into the
+registry. All four steps are built and deployed: steps 1 and 2 on
+2026-09-24, steps 3 and 4 (panel knobs, spec v2, sub-elements, smart guides,
+day-part tabs, the Board as a spec layout, history, copy to another screen)
+overnight 2026-09-24/25. What is left is polish: "Layout editor nits" under
+Shared / infrastructure. Design and as-built record:
+`docs/designs/layout-editor.md`.
 
 ### Mixtape: cassette deck Now Playing (BUILT 2026-09-24, on the TV, in review)
 
@@ -183,8 +182,11 @@ grid), **Briefing** (cream paper, serif) and **Ambient** (photo-forward with a
 quiet HUD), on the kitchen React app, chosen per screen with
 `display.todayLayout` (default `framed`, the untouched original). Design and
 architecture: `docs/designs/today-layouts.md`. Review shots and the morning
-checklist: `_review/today-layouts/README.md`. On branch `feature/today-layouts`,
-not deployed, not merged.
+checklist: `_review/today-layouts/README.md`. Merged into `feature/echo-hub`
+and deployed with it on 2026-09-24, so every web screen can pick them (not
+merged to `main`). Since then the Board is drawn from a layout spec and can be
+tuned in the layout editor, and two more layouts joined: the Entry board and
+the Flip clock (`today-layouts.md`).
 
 Still open from the original topic: which layout (if any) gets the Apple TV
 port; auto-select by time of day (Framed inside the school window, a layout
@@ -253,10 +255,16 @@ Remaining:
   "City, ST" suffix to custom labels too, so out-of-metro custom places (e.g.
   "Mark & Kim's - AZ") get it automatically. Today only POIs + the geographic
   fallback get the suffix; custom labels are typed by hand.
-- **Google Calendar / agenda** (TODO) - the one real feature gap. Direct OAuth
-  via a `useCalendarEvents` hook, agenda on the Today view.
-- **Today "what to wear"** (TODO) - jacket weight, shorts vs. pants from weather
-  thresholds.
+- **Google Calendar / agenda** (SHIPPED 2026-09-24 in the Entry board) -
+  Google Calendar through a service account on the hub (`GET /api/calendar`,
+  no OAuth), with the agenda and the countdown tiles on the Entry board. The
+  kitchen gets it by choosing the Entry board as its Today layout; the TV
+  mirror stays under Cross-cutting themes. Design:
+  `docs/designs/entry-board.md`.
+- **Today "what to wear"** (SHIPPED 2026-09-24 in the Entry board) - the rule
+  (`views/TodayLayouts/lib/wear.js`) came with the Today layouts on
+  2026-09-04 and sits on the Entry board and the Board; Framed Today does not
+  show it.
 - **Music auto-interrupt** (DECISION) - Sonos playback auto-switches to Now
   Playing (from Photos, not Today). Open: from which views, and what happens when
   music stops. Shared with the TV "auto-show Now Playing" item.
@@ -309,6 +317,11 @@ Remaining:
 Phase 1 shipped (per-view mats, Framed Now Playing, Today mat, linear nav, smooth
 progress bar). Remaining:
 
+- **TV catch-ups** (TODO, listed 2026-09-25) - the Apple TV has fallen behind
+  the web screens: no build stamp, no data freshness stamps, no pixel shift
+  (each "TV TODO" under Shared / infrastructure), no "Display server
+  unreachable" hint (below), and it sends no heartbeat to the hub's health
+  module. One pass to bring it level.
 - **Port a Today layout to tvOS** (TODO, after Justin picks one) - React
   first was the plan; port the winner, not all three. `tvos/Sources/TodayView.swift`
   is the current Framed Today; the panel/composition split in
@@ -400,7 +413,10 @@ progress bar). Remaining:
 - **Echo Shows: first run on each device** (VERIFY, Justin) - see STATUS
   "Waiting on Me". Three now: `family-room-echo` (Echo Show 10, 1280x800),
   `echo-show15` (Echo Show 15, 1920x1080, landscape) and `echo-show5-office`
-  (Echo Show 5, 960x480). Then: does the
+  (Echo Show 5, 960x480). All three poll the hub (seen 2026-09-25), but each
+  reports a viewport 100 px shorter than its panel (1280x700, 1920x980,
+  960x380), which reads as Silk's toolbar still showing (fullscreen not on).
+  Still to confirm on the devices: fullscreen after a tap, does the
   one-minute audio reload keep Silk off the Alexa home screen overnight, does
   the night clock drift, does the chip hide.
 - **Echo Show 15 in portrait** (TODO, later) - the panel rotates, but the app
@@ -408,14 +424,20 @@ progress bar). Remaining:
   Today layouts, the mat). Same project as the portrait front-door screen:
   a real front-end layout, not a config flag. Landscape only for now
   (decided 2026-09-24).
-- **Kitchen Pi is underpowered** (TODO, do this first) - the Pi 5 runs off a
-  USB-A port built into a wall outlet. USB-A cannot negotiate USB-C PD and tops
-  out near 5V/2.4A (12W); a Pi 5 wants 5V/5A (27W). Measured 2026-09-22, seven
-  minutes after a reset: `throttled=0x50000` (bit 16 undervoltage has occurred,
-  bit 18 throttling has occurred) with four `Undervoltage detected!` kernel
-  events in the first 50 seconds of boot, all during inrush. `EXT5V_V` reads
-  5.03V once idle, so the supply is marginal rather than dead, which is exactly
-  the profile that hangs a screen unattended and reads as a software fault. The
+- **Kitchen Pi is underpowered** (TODO, URGENT, do this first) - the Pi 5 runs
+  off a USB-A port built into a wall outlet. USB-A cannot negotiate USB-C PD and
+  tops out near 5V/2.4A (12W); a Pi 5 wants 5V/5A (27W). Measured 2026-09-22,
+  seven minutes after a reset: `throttled=0x50000` (bit 16 undervoltage has
+  occurred, bit 18 throttling has occurred) with four `Undervoltage detected!`
+  kernel events in the first 50 seconds of boot. **Corrected 2026-09-25: the
+  dips are not only inrush.** The kernel's `Undervoltage detected!` count for
+  this boot (up since 2026-09-22) read 153 at 23:50 on 2026-09-24 and 201 at
+  08:42 on 2026-09-25: dips of about 2 s, 5 to 11 an hour during the day and
+  roughly 6 an hour overnight. The supply sags under normal load, all the
+  time. The dashboard's Power line shows it live
+  since 2026-09-25 (amber, "Undervoltage since boot"). `EXT5V_V` reads 5.03V
+  once idle, so the supply is marginal rather than dead, which is exactly the
+  profile that hangs a screen unattended and reads as a software fault. The
   likely cause of the 2026-09-22 outage. Fix: the official Raspberry Pi 27W
   USB-C PD supply into a real AC socket. Nothing is wrong with the SD card (no
   I/O errors, no ext4 journal replay) or the Pi itself. **Check the total budget
@@ -424,13 +446,22 @@ progress bar). Remaining:
   2.4A budget across both ports. A Pi 5 alone wants more than the whole outlet
   can give, so the panel should keep the USB port and the Pi should get its own
   27W charger, not the other way round.
-- **No logs survived the outage** (TODO) - `journalctl --list-boots` shows only
-  the current boot and `last -x reboot` is empty, so the moment of the crash is
-  unrecoverable. `/var/log/journal` exists but is empty, meaning journald is
-  running volatile regardless; check `Storage=` in
-  `/etc/systemd/journald.conf` and restart journald so the next incident leaves
-  evidence. Pairs with the heartbeat and throttle-readout ideas in
-  `docs/designs/sonos-and-state-to-the-hub.md` section E.
+- **No logs survived the outage** (DONE 2026-09-25, VERIFY at the next reboot) -
+  `journalctl --list-boots` showed only the current boot because Raspberry Pi
+  OS ships `/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf`,
+  which keeps the journal in RAM whatever `journald.conf` says. Now
+  `/etc/systemd/journald.conf.d/60-persistent.conf` (`Storage=persistent`,
+  `SystemMaxUse=200M`, `Compress=yes`) wins, applied live overnight
+  2026-09-24/25 without a reboot. Proof waits for the next reboot:
+  `journalctl --list-boots` should then list two boots. The heartbeat and
+  throttle readout from `docs/designs/sonos-and-state-to-the-hub.md` section E
+  shipped the same night (Recently Shipped).
+- **Kitchen Pi health follow-ups** (TODO, from 2026-09-25) - (1) the kiosk
+  server's own log is `/tmp/kiosk-server.log`, lost at every boot: route it to
+  the journal from `pi/kiosk-restart.sh`; (2) the hub keeps each screen's
+  latest health report in memory only (a hub restart forgets it until the
+  next beat, within a minute; the power events are on disk); (3) the journald
+  proof above after the next reboot.
 
 - **Data freshness stamps** (SHIPPED 2026-09-04 on the kitchen, TV still TODO) -
   never render a value without its age.
@@ -461,13 +492,14 @@ progress bar). Remaining:
   no API key - which is the interesting part for us. On tvOS that is MapKit
   directly; the kitchen would need a different source. Data work, so the
   existing timer benefits immediately, ahead of any panel board.
-- **Plex second-screen info on the family-room screen** (TODO, later phase,
-  logged 2026-09-24) - when the living room is watching Plex, the family-room
-  screen (the Echo Show today, probably ROADOM long term) shows what is on:
-  show, episode, cast, air date. Needs a Plex session poll on the hub
-  (`/status/sessions`, token in the hub's `.env`) and a small view or panel in
-  the web app; the hub already has the per-screen registry to switch it on
-  per device.
+- **Plex second screen follow-ups** (TODO; the view SHIPPED 2026-09-25, see
+  Recently Shipped) - (1) test transport control (play, pause, stop, skips,
+  captions) once the Apple TV's Plex app advertises as a player (Justin's
+  switch, STATUS "Waiting on Me"); (2) a Plex button in the menu pill, to open
+  the view by hand; (3) a "New on Plex" panel (recently added to the library)
+  for the spec layouts; (4) unit tests for `frameserver/lib/plex.mjs` and
+  `tmdb.mjs`, which the hub suite does not cover yet. Design:
+  `docs/designs/plex-second-screen.md`.
 - **ROADOM as the long-term family-room screen** (DECISION, 2026-09-24) - the
   Echo Show is the quick win; a ROADOM 10.1" on a Pi pointed at the hub
   (`?device=family-room`) would drop the Silk keep-alive dance and the
@@ -484,21 +516,65 @@ progress bar). Remaining:
   extend the kitchen press-and-hold flag flow to cover "no location" photos
   (flag exists, but the triage page needs coords to anchor a bubble).
 
-- **Entry board phase 1.5 and 2** (TODO, after Justin has lived with phase 1) -
-  1.5: backdrop legibility (gradient scrims where the text sits, translucent
-  cards, per-photo brightness sampling, optional blur), headline weather rules
-  (rain from 3 pm, frost tonight), a "suggested countdowns" list on the
-  dashboard, per-calendar status on the dashboard, and multi-day timed events
-  in the headline. 2: day-part adaptive slots (evening shows tomorrow, weekends
-  widen the agenda, night hands over to the clock). Design:
-  `docs/designs/entry-board.md`.
+- **Entry board: what is left of phases 1.5 and 2** (TODO) - shipped: the
+  headline's weather rules and National Weather Service alerts, backdrop
+  legibility (adaptive darkness, per-panel scrims, blur; both 2026-09-25), and
+  per-calendar status on the dashboard (with phase 1). Left: a "suggested
+  countdowns" list on the dashboard; multi-day timed events in the headline;
+  on-screen Settings rows for `display.entryAdaptive` and `entryBlur` (the
+  dashboard has them); the two in the layout editor's Backdrop section (its
+  draft carries only `entryBackdrop` and `entryDim`); blur measured on Silk;
+  and phase 2's content: the day-part mechanism shipped with the layout
+  editor, what morning, evening and weekend show is Justin's to lay out.
+  Design: `docs/designs/entry-board.md`.
+- **Layout editor nits** (POLISH, from the 2026-09-24/25 build) - a centred
+  multi-line headline stays left-aligned inside its block
+  (`Entry/SpecPanel.css`); Board saves carry `eveningFrom` (harmless, the
+  Board has no day parts); the editor rounds positions to two decimals when it
+  loads a spec, so a Board tuned in the editor loses the default's third
+  decimal on every box (edges can move by up to 4/64 px at 1280x800). Also
+  not built from the design: the right-click menu, safe margins, "freeze
+  data". Detail: `docs/designs/layout-editor.md`, "As built (steps 3 and 4)".
+- **Home Assistant indicators and buttons on the Entry board** (DESIGN,
+  discussed 2026-09-25) - Home Assistant states at a glance by the front door,
+  and a few actions. Shape discussed: a hub-side HA module
+  (`frameserver/lib/`) with a long-lived token in the hub's `secrets/`, a
+  whitelist of entities it may read and actions it may call (nothing else
+  passes through), and two panel types for the spec layouts, `hastatus`
+  (indicators) and `habutton` (an action), with hold-to-confirm on anything
+  that opens the house (garage, lock). Needs from Justin: HA's LAN URL, a
+  long-lived token from a dedicated non-admin HA user, and the entity list.
+  Pair it with the dashboard PIN below, since the hub has no login. The same
+  module would be the way in for the items blocked on Home Assistant (the
+  doorbell, presence dimming).
+- **Dashboard PIN** (DECISION) - the hub has no login (LAN-only by design), so
+  anyone on the network can change every screen from `/admin` and the editor.
+  A PIN in front of the dashboard, and in front of any Home Assistant action
+  once those exist. Needs Justin's call on the PIN and what it covers.
+- **Countdown helpers** (SKIPPED 2026-09-25, kept as an option) - helpers
+  around the countdown tiles, which today come only from the `countdown`
+  marker typed into an event's description (`entry-board.md`). Not built in
+  this round; the "suggested countdowns" list in the Entry board item above
+  is the related idea.
+- **"On this day" photos** (TODO, idea from 2026-09-25) - photos taken on
+  today's date in past years, as a slideshow bias or a panel. The manifest
+  already carries each photo's capture date (the slideshow can sort by it).
+- **Screen health strip** (TODO, idea from 2026-09-25) - every screen's state
+  at a glance (last seen, build, power) in one strip, so a sick screen shows
+  without opening its card; the hub has all of it since the health module.
+- **Per-photo display override** (TODO, idea, moved from the STATUS Ideas
+  Shelf) - "never crop this one." Long-press already flags photos, the hub
+  already stores per-device config and the dashboard edits it. Precedence:
+  per-photo and device, then per-photo, then the device default. The "Barack
+  Obama portrait should not be cropped on the TV" case.
 
 ### Cross-cutting themes (design once, use on both surfaces)
 
-- **Google Calendar** - kitchen agenda first; TV mirrors later.
+- **Google Calendar** - on the web screens since 2026-09-24 (the Entry board);
+  TV mirrors later.
 - **Multi-room Sonos** - affects kitchen controller and TV.
 - **Home Assistant** - auto-launch, doorbell camera, presence dimming all depend on
-  it.
+  it; so would the Entry board's indicators and buttons (discussed 2026-09-25).
 - **Auto-show Now Playing** - one rule set should govern kitchen and TV.
 - **Today layouts** - Framed vs the panel board, chosen per screen through the
   hub's existing per-device settings. Subsumes the deferred "Configurable Today
@@ -514,6 +590,50 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-25 - Countdown helpers skipped for now.** Not built in this
+  round; kept in the backlog as an option (Shared / infrastructure).
+- **2026-09-25 - Every deploy runs the hub's tests first.** `deploy.sh` runs
+  `node --test` over `frameserver/test/` (345 tests: 242 core, 89 headline
+  and weather rules, 14 health; no network, no writes outside the OS temp
+  dir) before `hub`, `pi` and `migrate`, and a red run stops the deploy before
+  anything is touched. `SKIP_TESTS=1` bypasses it, with a warning. The suite
+  found no bugs on its first run; it is there for the next change.
+- **2026-09-25 - The kitchen Pi's journal is persistent.** Raspberry Pi OS
+  keeps the journal in RAM through a vendor drop-in; a drop-in of our own that
+  sorts later (`60-persistent.conf`) overrides it, so the next outage leaves
+  evidence. 200 MB cap, compressed. Applied live overnight 2026-09-24/25.
+- **2026-09-25 - Entry board legibility: soft scrims on the clock and the
+  headline by default, adaptive darkness on by default.** The two boxes that
+  sit straight on the photo get a soft shade and text shadow; everything else
+  is on a card and gets none. The wash follows each photo around the screen's
+  own darkness, so an average photo looks as before and only bright or dark
+  ones move. Both can be turned off per screen or per box, and off they give
+  back the phase 1 board pixel for pixel. Design: `docs/designs/entry-board.md`.
+- **2026-09-24 - Plex second screen: scope.** The family-room screen follows
+  the living-room Apple TV and shows what is on. Cast and person cards come
+  from TMDB, looked up by the ids Plex holds (never by title). Skipped:
+  on-screen face matching, song detection, and trailers, music and photos.
+  Transport buttons only for a player that advertises itself to Plex. Design:
+  `docs/designs/plex-second-screen.md`.
+- **2026-09-24 - Weather alerts come from the National Weather Service,
+  through the hub.** The hub fetches the alerts for `shared.location` every
+  10 minutes, beside its own Open-Meteo forecast, and folds both into the one
+  headline every screen shows (`weatherAlerts` and `headline` in
+  `/api/state`); no screen talks to the NWS. Warnings (and anything Extreme
+  or Severe) outrank even a running event; advisories and the forecast lines
+  sit below an event inside the hour. Design: `docs/designs/entry-board.md`,
+  "Headline rules".
+- **2026-09-24 - The Board becomes a spec layout.** Rather than keep a second,
+  fixed grid beside the editable Entry board, the Board is drawn by the same
+  machinery from `DEFAULT_BOARD_SPEC` (its old 12 x 6 grid measured into
+  percent boxes at 1280x800, the Echo Show 10) and each screen can tune it in
+  the editor (`config.layouts.board`). Pixel-identical at 1280x800; up to
+  about 3 px off at 1920x1080.
+- **2026-09-24 - Layout positions keep three decimals.** Chrome rounds a
+  percentage length down to 1/64 px; with two decimals the Board's edges
+  missed their old grid lines by up to 4/64 px, enough to move text by a
+  subpixel. The spec normaliser keeps three (the editor's own edits still
+  write two). Design: `docs/designs/layout-editor.md`.
 - **2026-09-24 - A layout editor, on the MacBook, from the admin page.** Justin
   wants to move and size the board's elements himself instead of describing
   pixel changes. Decided: edited only on the MacBook, reached from each
@@ -752,6 +872,67 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-25 - Pi outage evidence: a persistent journal, a heartbeat, a
+  Power line** (hub deployed 08:24, kitchen Pi 08:41, build `812242f`). The
+  kitchen Pi's journal survives reboots (`60-persistent.conf`, applied live).
+  `pi/kiosk-server.py` posts a heartbeat every 60 s to
+  `/api/devices/kitchen/health` on the hub (by name, falling back to the IP):
+  the decoded `get_throttled` flags, temperature, uptime, load, memory, disk,
+  kernel, model, build, and the kernel's undervoltage dip count and the age of
+  the last dip; it also serves `GET /api/health` (17 Python tests). Hub:
+  `lib/health.mjs` keeps the latest report per screen, writes power events
+  (one per flag per boot, the newest 200) to `health-events.json`, counts a
+  screen stale after 180 s, and adds `health` to `/api/devices` and `/healthz`
+  (14 tests). Dashboard: a Power line on the Screen card (green OK, amber
+  since boot with the dip count, red now, grey stale or no reading) and a
+  Power events list. The first heartbeat landed at 08:41 (204); the kitchen
+  reads amber, 201 dips this boot. Shots: `_review/hub/`.
+- **2026-09-25 - Hub test suite and a deploy gate.** `frameserver/test/*.test.mjs`,
+  345 tests on `node:test` (242 core, 89 headline and weather rules, 14
+  health), fixtures in `frameserver/test/fixtures/`. Run with
+  `node --test 'frameserver/test/**/*.test.mjs'` (Node 22 needs the glob; a
+  bare directory fails). `deploy.sh` runs it before `hub`, `pi` and
+  `migrate`; `SKIP_TESTS=1` skips it. No bugs found.
+- **2026-09-25 - Entry board legibility (phase 1.5)** (hub deployed 08:24).
+  Adaptive darkness (`display.entryAdaptive`, on by default: the wash follows
+  each photo's brightness behind the text), a per-panel `scrim` (soft on the
+  clock and the headline by default), and optional blur (`display.entryBlur`,
+  0 to 20 px). Contrast behind the clock over a snow photo went from 5.2 to
+  14.2; with both off the board is pixel-identical to phase 1. Dashboard rows
+  for both; on-screen Settings rows not yet. Design:
+  `docs/designs/entry-board.md`. Shots: `_review/entry/legibility-*.png`.
+- **2026-09-25 - Plex second screen** (hub deployed 08:24). The hub polls
+  Plex every 5 s and serves what is playing with TMDB cast (`/api/plex/now`,
+  `/players`, `/command`, `/person`, `/image`); a screen whose
+  `display.plexFollow` names a player switches to a Plex view after 10 s of
+  playback (poster, show and episode, air date, progress, summary, six cast
+  headshots with person cards, transport when the player advertises) and goes
+  home when it stops. `family-room-echo` follows the Apple TV. Transport is
+  untested until the Apple TV's Plex app advertises as a player. Design:
+  `docs/designs/plex-second-screen.md`. Shots: `_review/plex/`.
+- **2026-09-25 - Headline weather rules and National Weather Service alerts**
+  (built 2026-09-24, hub deployed 2026-09-25 08:24). NWS warnings above
+  everything; advisories and forecast lines (rain, frost, wind, heat, cold)
+  above everything but an event that is running or inside the hour;
+  `weatherAlerts` in `/api/state`, `weather` and `alerts` in `/healthz`, the
+  dashboard glossing the new kinds. The first real one: "Rain from 10 am" at
+  08:25. Design: `docs/designs/entry-board.md`, "Headline rules". Shots:
+  `_review/entry/headline-*.png`.
+- **2026-09-24 - Layout editor, steps 3 and 4** (hub deployed 23:45, build
+  `309eb66`). Every panel has knobs from a schema (sizes, weights, days,
+  tile styles; the countdown tiles' border, background and radius among them),
+  global font, colours, card opacity and radius, spec v2 with day-part
+  variants (Morning, Evening, Weekend), the Board as a spec layout, and in the
+  editor: a schema-driven inspector, click-into sub-elements, smart guides
+  with distances, Add panel, day-part tabs, History from the hub, Copy layout
+  to another screen, undo per document. Defaults pixel-identical to before.
+  Design and as-built: `docs/designs/layout-editor.md`. Shots:
+  `_review/layout-editor/editor3-*`, `panels-*`, `spec2-*`.
+- **2026-09-24 - Flip clock Today layout** (hub deployed 23:45). A split-flap
+  clock and the date on near-black (`clock`, "Flip clock"), sized from one
+  variable so it holds from the Echo Show 5 to 1920x1080, with no data hooks
+  at all. It is the office Echo Show 5's Today layout. Design:
+  `docs/designs/today-layouts.md`. Shots: `_review/layout-editor/clock-*.png`.
 - **2026-09-24 - Every screen depends on the hub only; the family-room Echo
   Show is the third screen** (`feature/echo-hub`, deployed to the NUC, the
   kitchen Pi and the Living Room Apple TV; committed, not merged).
@@ -984,12 +1165,22 @@ Newest first.
 - **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
+- **Branches not on GitHub (2026-09-25)** - `main` matches `origin/main`
+  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (65
+  commits over `main`, with Mixtape and the Today layouts inside it) exist
+  only locally. Merging waits on the Mixtape label pick; pushing does not
+  have to.
+- **Secrets on the Mac and the hub** - `~/.config/smart-display/` holds
+  `google-calendar.json`, `plex-token.txt` and `tmdb-key.txt` (mode 600); the
+  hub keeps its copies in `C:\Services\FrameServer\secrets\`. Never in git,
+  never in `_inbox/` (it syncs to Dropbox).
 - **Photo-flag triage queue** - the queue lives on the hub since 2026-09-24
   (`GET http://nuc.local:8095/api/flags?unresolved=1`, 25 unresolved after the
-  migration; `flags-review.mjs` and `flags-apply.mjs` point there). The older
-  notes still apply: 7 have no GPS (can't anchor a `custom-places` bubble -
-  would need GPS added in Immich + re-import), 2 were skipped (`Bridgehaven`,
-  a 2nd `Cave Creek`). Run `flags-review.mjs` to label or clear.
+  migration, 26 on 2026-09-25; `flags-review.mjs` and `flags-apply.mjs` point
+  there). The older notes still apply: 7 have no GPS (can't anchor a
+  `custom-places` bubble - would need GPS added in Immich + re-import), 2 were
+  skipped (`Bridgehaven`, a 2nd `Cave Creek`). Run `flags-review.mjs` to label
+  or clear.
 - **Rotate/delete the `immich-go-import` API key** - it has all permissions and was
   pasted in chat during the import. The read-only `kitchen_display` key in
   `code/.env` remains for manifest builds.

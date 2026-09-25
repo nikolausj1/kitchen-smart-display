@@ -2,20 +2,27 @@
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
 modified: 2026-09-25
-version: 1.5
+version: 1.6
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show]
 ---
 
 # Layout editor
 
-**Status: steps 1 and 2 built and deployed 2026-09-24; steps 3 and 4 in build (2026-09-25).** Open a screen's card on the dashboard and press Edit layout, or go to `http://nuc.local:8095/editor/?device=echo-show15`. Steps 3 and 4 (per-panel schemas, sub-element selection, smart guides, history, day parts, Board) are open. Review shots: `_review/layout-editor/`.
+**Status: all four steps built. Steps 1 and 2 deployed 2026-09-24; steps 3
+and 4 (panel knobs, spec v2, sub-elements, smart guides, day parts, the
+Board, history, copy) deployed to the hub 2026-09-24 23:45 (build
+`309eb66`).** Open a screen's card on the dashboard and press Edit layout (it
+opens the Today layout that screen is on), or go to
+`http://nuc.local:8095/editor/?device=echo-show15`. What was built, and where
+it differs from the contracts: "As built" under each contract below. Review
+shots: `_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
-stops being a conversation and becomes a drag. Starts with the Entry board
-(`entry-board.md`); the same mechanism later covers Board and the day-part
-layouts of Entry phase 2.
+stops being a conversation and becomes a drag. It edits the Entry board
+(`entry-board.md`), its day-part variants (Entry phase 2) and the Board
+(`today-layouts.md`).
 
 ## Decisions (Justin, 2026-09-24)
 
@@ -48,11 +55,12 @@ layouts of Entry phase 2.
 
 ## What is stored
 
-One object per screen per layout, `config.layouts.entry` in the device
-registry: the canvas it was drawn on, a global text scale, and the list of
+One object per screen per layout, `config.layouts.entry` or
+`config.layouts.board` in the device registry: the canvas it was drawn on, a global text scale, and the list of
 panels, each with its position and size in percent of the canvas, stacking
 order, visibility, lock, and its props (universal ones on every panel; text
-and image blocks carry their own). The exact shape is in Contract v1 below.
+and image blocks carry their own). The exact shape is in Contract v1 below,
+extended by Contract v2, which is what is stored since 2026-09-24.
 The backdrop (photos behind the board, the wash) stays on the existing
 per-screen display settings, so the dashboard card and the editor edit the
 same thing. The built-in board is the default layout; Reset returns to it,
@@ -106,6 +114,8 @@ screen. Keyboard: Cmd-Z, Shift-Cmd-Z, Cmd-S, Delete hides, Esc deselects.
    guides, layers, undo and redo, history: 1.5.
 4. Day-part tabs (Entry phase 2), the Board layout, copy to screen,
    verification on the Echo 15, docs: 1.
+
+All four were built between 2026-09-24 and 2026-09-25.
 
 ## Not in scope
 
@@ -283,7 +293,7 @@ dirty drafts. What is in place now:
   ten deep, in `layout-history.json`: `GET /api/devices/<id>/layout-history`
   (newest first); restore with `PATCH /api/devices/<id>/config` and
   `{ "layouts": <entry.layouts> }`, or `{ "layouts": { "entry": null } }` for
-  the default. The editor's history menu (step 3) will sit on this.
+  the default. The editor's History menu (step 3) sits on this.
 - The editor logs every action that changed the draft to
   `window.__sdEditorLog` (last 200, with each panel's geometry before and
   after) and warns on the console when one action moves more than one
@@ -411,3 +421,151 @@ Evening, Weekend) with create / remove and the preview message; History
 (from `GET /api/devices/<id>/layout-history`, load an entry as the draft);
 Copy layout to another screen (PATCH that screen's `layouts.<id>`, with a
 confirm naming both screens); Global section from `GLOBAL_SCHEMA`.
+
+### As built (steps 3 and 4, 2026-09-24/25)
+
+Built overnight on `feature/echo-hub` (commit `309eb66`, with the flip clock
+`adbf1d9` before it) and deployed to the hub 2026-09-24 23:45 (build
+`309eb66`). The Entry board's per-panel scrim, a new universal prop, followed
+on 2026-09-25 (`entry-board.md`, phase 1.5). Contract v2 above stays the
+reference; this is where the build differs from it or adds to it.
+
+**The spec** (`views/TodayLayouts/layoutSpec.js`): `{ version: 2, canvas,
+global: { textScale, font, accent, text, surfaceOpacity, radius }, panels,
+eveningFrom, variants?: { morning?, evening?, weekend? } }`.
+
+- Positions keep three decimals (`POSITION_PLACES`), not two. Chrome rounds
+  a percentage length down to 1/64 px, and two decimals of a percent are
+  0.128 px steps across 1280 px, so a Board edge could miss its old grid line
+  by up to 4/64 px, enough to move text by a subpixel. Three decimals reach
+  every 1/64 px on screens up to 1920 px. The editor's own edits still write
+  two (they go through whole canvas pixels first); see Known nits.
+- An explicit `null` reads as absent everywhere: a variant, a variant's
+  global, a knob. The hub's config PATCH deep-merges, so a key simply left
+  out of a save would survive from the stored copy; the editor sends `null`
+  for every key the stored copy has and the draft dropped (`withRemovals` in
+  `editor/spec.js`), and the hub stores the null.
+- `eveningFrom`: a whole hour, 12 to 23, default 18, on every saved spec,
+  the Board's included (it has no variants; harmless).
+- `normalizeSpec(raw, { layoutId, defaultSpec })` fills from that layout's
+  defaults; a v1 spec reads unchanged and is written back as v2. A missing
+  prop is filled from the layout's default board, which is how a spec saved
+  before `scrim` existed gets the Entry board's soft scrims on the clock and
+  the headline.
+- Helpers: `resolveDaypart({ now, school, noSchoolToday, spec })`,
+  `variantPanels(spec, daypart)` (a variant's `global` merged over the
+  base's), `withVariant`, `withoutVariant`, `newPanel(type, overrides, {
+  layoutId })` (that layout's default box and props for the type, else the
+  type's own starting box above the built-in panels, as a card), `knobsOf`,
+  `visiblePanels`, `cardJoins`.
+
+**Knobs** (`views/TodayLayouts/panels/schemas.js`): `PANEL_SCHEMAS` for
+clock, weather, forecast, sunmoon, wear, airquality, headline, agenda,
+countdowns, departure, nowplaying, photo and school; `PANEL_ELEMENTS` (each
+panel's `data-edit` sub-elements and their labels); `GLOBAL_SCHEMA`;
+`knobDefaults`; `panelKnobs`. The fields are as listed under "Panel knobs and
+schemas", with these differences:
+
+- Clock `dateStyle` has a third option, `day` ("Thursday").
+- Countdowns: `tileStyle` card, bare or imageOnly; `tileBorder` color (the
+  calendar's colour) or none; `tileBackground` card (translucent), solid or
+  none; `tileRadius` 0 to 3; `imageSize` 0.25 to 1 (the art already fills
+  what the text leaves, so it can only shrink). This closed Justin's report
+  that the tile border and background could not be changed.
+- Photo `intervalMs` is a select, not a range: "Screen setting" (0, the
+  default: the screen's own slideshow interval, bounded to 15 s..10 min as
+  the Board's tile always was), then 15 s to 10 min.
+- Global: `font` inter or fraunces (the display sizes), `accent` default
+  `#d9a066`, `text` default `#f2f2f0`, `surfaceOpacity` 0.1 to 1 default
+  0.5, `radius` 0 to 3 default 1, applied on the layout root as
+  `--tl-font-display`, `--tl-accent`, `--tl-fg` (and `--tl-fg-rgb`),
+  `--tl-surface-alpha` and `--tl-radius-scale`. Grid spacing is an editor
+  preference (10, 20 or 40 canvas px), not part of the spec.
+- Every panel takes a `knobs` prop, applied through CSS variables and, for a
+  per-element size, a redefinition of `--tl-text-scale` on that element. A
+  panel handed no knobs (Briefing, Ambient) renders exactly as before. With
+  every knob at its default both boards are pixel-identical to before: 0 of
+  2,073,600 px differ at 1920x1080 for the Entry board (afternoon and school
+  morning) and the Board (`_review/layout-editor/panels-diff-results.json`).
+
+**The Board is a spec layout.** `config.layouts.board`, with
+`DEFAULT_BOARD_SPEC` measured from its 12 x 6 grid at 1280x800 (the Echo
+Show 10) and the knobs it sets against the schema defaults: clock weight 600
+with the greeting, weather stacked, forecast 4 days. Both boards draw through
+`Entry/SpecBoard.jsx`. The Board is pixel-identical at 1280x800; at
+1920x1080 every x edge is within 0.02 px and some rows sit up to about 3 px
+off (the old grid's gaps were in `vw`, so no one percentage fits both
+sizes).
+
+**The departure countdown borrows a box.** A layout with its own `departure`
+panel shows it there, always. Without one it takes the `countdowns` box
+during a school morning on a school day, or while a manual timer runs at any
+hour (the Entry board's rule), else the `nowplaying` box while a countdown
+actually runs (the Board's rule). One box at most.
+
+**Data limits handled.** The calendar hook asks the hub for 6 days and the
+daily forecast for 7, so the agenda's knobs (1 to 5 days, from today or
+tomorrow) and the forecast's (3 to 7 days) have data. Four countdown tiles
+also need `countdownMax` 4 on the dashboard's Calendars card (the hub caps
+the list; default 3).
+
+**The bridge** (`views/TodayLayouts/editBridge.js`):
+
+| direction | message |
+|---|---|
+| app -> editor | `sd-edit:ready { layoutId, canvas, savedSpec, defaultSpec, panelTypes, schemas, globalSchema, dayparts, specVersion }` |
+| app -> editor | `sd-edit:rects { layoutId, daypart, canvas, panels: [{ id, type, x, y, w, h }], elements: [{ panelId, key, label, x, y, w, h }] }`, sub-elements capped at 60 per panel and 400 in all |
+| editor -> app | `sd-edit:spec { spec, layoutId }` (a `layoutId` that is not the layout on screen is ignored) |
+| editor -> app | `sd-edit:hover { id, element }`: that box, and inside it every element whose `data-edit` is `element` |
+| editor -> app | `sd-edit:daypart { daypart }` (`null` follows the clock again) |
+
+`sd-edit:sample`, `sd-edit:ping` and `sd-edit:display` are as in v1.
+
+**The editor** (`code/src/editor/`):
+
+- The inspector is drawn from the schemas: a select is a segmented control
+  when its options fit (up to four short labels), else a dropdown. Hovering a
+  field outlines the element it tunes on the stage.
+- Click into a panel's sub-elements (breadcrumb "Countdowns > Tile"), with
+  hover outlines on the stage; a key that repeats (every tile, every agenda
+  row) outlines every instance. Esc goes up one level.
+- Smart guides to the other panels' edges and centres and the canvas's, with
+  distance labels, within 6 canvas px; a guide wins over the grid. A resize
+  snaps only the edges that move.
+- Add panel lists the functional types the layout lacks and places them with
+  `newPanel`; taking a functional panel off the layout is undone by Add
+  panel.
+- Day-part tabs (Day, Morning, Evening, Weekend; Entry board only): "Create
+  Morning from Day" copies the base, Remove drops the variant, and on a
+  variant's tab "Follow Day" drops its own global so it follows Day's again.
+- History, from the hub's layout history: the stored copy before each save,
+  newest first; loading one makes it the draft (Save puts it back, Undo drops
+  it).
+- Copy layout to another screen writes that screen's `layouts.<id>` with
+  this screen's saved layout (not the draft), after a confirm naming both
+  screens; the backdrop stays each screen's own.
+- Undo and redo: 100 steps each way per document, not per tab; undoing a
+  change made on another tab jumps to that tab. A drag, a slider run or a
+  burst of typing is one step. `window.__sdEditorLog` records each action
+  once.
+- The dashboard's Edit layout opens the Today layout the screen is on
+  (`&layout=entry` or `&layout=board`).
+
+**Not built from the design** (and not asked for since): the right-click
+menu (forward, back, hide, lock, reset panel, duplicate), the safe-margins
+overlay and the "freeze data" toggle. Stacking, hiding and locking live in
+the layers list.
+
+**Known nits** (in BACKLOG):
+
+- A centred multi-line headline stays left-aligned inside its block
+  (`Entry/SpecPanel.css`).
+- Board saves carry `eveningFrom` (harmless).
+- The editor rounds positions to two decimals when it loads a spec, so a
+  Board saved from the editor loses the default's third decimal on every box
+  (edges can move by up to 4/64 px at 1280x800).
+
+Review shots: `_review/layout-editor/editor3-*.png` (the editor),
+`panels-*.png` (the knobs), `spec2-*.png` (the v2 renderer, the Board as a
+spec layout, day parts) and `clock-*.png` (the flip clock,
+`today-layouts.md`). The index is that folder's README.
