@@ -18,18 +18,25 @@ import { adaptiveDim, backdropLuma } from '../lib/backdropLuma.js'
 // Adaptive off, or a photo that could not be measured: the screen's darkness,
 // exactly as in phase 1.
 //
+// Blur (display.entryBlur, 0..20 px): a CSS blur on the photo layer, pushed
+// past the screen's edges so the blur's soft rim stays off screen
+// (EntryLayout.css). 0 draws no filter at all.
+//
 // While adaptive, the wash carries what it measured and chose (data-dim,
 // data-luma: the text columns' luma, and data-luma-left / -right / -whole), for
 // a look from the console or the verification harness.
 
-export default function EntryBackdrop({ photos, intervalMs, count, dim, adaptive, panels }) {
+export default function EntryBackdrop({ photos, intervalMs, count, dim, adaptive, blur, panels }) {
   const [sample, setSample] = useState(null)
   const luma = useMemo(() => (adaptive ? backdropLuma(sample, panels) : null), [adaptive, sample, panels])
   const shownDim = luma ? adaptiveDim(dim, luma.text) : dim
 
   return (
     <>
-      <div className="tl-entry__photo">
+      <div
+        className={`tl-entry__photo${blur > 0 ? ' tl-entry__photo--blur' : ''}`}
+        style={blur > 0 ? { '--tl-entry-blur': `${blur}px` } : undefined}
+      >
         {/* photos keeps its identity between ticks, which is what lets
           * PhotoPanel's memo hold through the 1 Hz re-render; setSample is
           * stable too. */}

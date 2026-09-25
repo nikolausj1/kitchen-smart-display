@@ -26,10 +26,11 @@ import './EntryLayout.css'
 // Behind it, per screen (display.entryBackdrop): the slideshow under a black
 // wash plus Ambient's bottom scrim (EntryBackdrop), or plain black. The wash
 // is display.entryDim, adapted to each photo unless display.entryAdaptive is
-// false. The backdrop is a screen setting, not part of the spec; in the layout
-// editor its draft backdrop and darkness win until saved. Bare text on the
-// photo (the clock and the headline by default) also gets a scrim of its own:
-// the spec's universal `scrim`, drawn by SpecBoard.
+// false; display.entryBlur blurs the photos. The backdrop is a screen setting,
+// not part of the spec; in the layout editor its draft backdrop and darkness
+// win until saved. Bare text on the photo (the clock and the headline by
+// default) also gets a scrim of its own: the spec's universal `scrim`, drawn by
+// SpecBoard.
 //
 // Like every layout here, the only data access is the one useTodayData() call.
 
@@ -37,9 +38,18 @@ const SLIDESHOW_MIN_MS = 15_000
 const SLIDESHOW_MAX_MS = 10 * 60_000
 const PHOTO_COUNT = 24
 
+const BLUR_MAX = 20
+
 // display.entryAdaptive: on unless the screen says false.
 function entryAdaptive(v) {
   return v !== false
+}
+
+// display.entryBlur: 0..20 px, clamped here like entryDim (baseDim), so a
+// hand-edited 200 cannot smear the screen; anything but a number is 0.
+function entryBlur(v) {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 0
+  return Math.min(BLUR_MAX, Math.max(0, n))
 }
 
 // The screen's own slideshow cadence, bounded as in Ambient: under 15 s a
@@ -61,6 +71,7 @@ export default function EntryLayout() {
   const backdrop = backdropSetting === 'black' ? 'black' : 'photos'
   const dim = baseDim(displayDraft?.entryDim ?? display?.entryDim)
   const adaptive = entryAdaptive(display?.entryAdaptive)
+  const blur = entryBlur(display?.entryBlur)
   const intervalMs = slideshowIntervalMs(d.settings?.slideshow)
 
   return (
@@ -73,6 +84,7 @@ export default function EntryLayout() {
             count={PHOTO_COUNT}
             dim={dim}
             adaptive={adaptive}
+            blur={blur}
             panels={panels}
           />
         ))}

@@ -564,6 +564,9 @@ export const DEFAULTS = {
     // (views/TodayLayouts/lib/backdropLuma.js). false keeps it flat at
     // entryDim, the phase 1 look.
     entryAdaptive: true,
+    // Entry board only. Blur the photos behind the board, 0..20 px (clamped by
+    // the layout, like entryDim). 0 = sharp.
+    entryBlur: 0,
   },
   slideshow: {
     intervalMs: 6000,
