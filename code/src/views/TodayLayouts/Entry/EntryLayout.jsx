@@ -1,7 +1,8 @@
 import useTodayData from '../data/useTodayData.js'
-import PhotoPanel from '../panels/PhotoPanel.jsx'
 import SpecBoard from './SpecBoard.jsx'
+import EntryBackdrop from './EntryBackdrop.jsx'
 import { ENTRY_LAYOUT_ID } from '../layoutSpec.js'
+import { baseDim } from '../lib/backdropLuma.js'
 import { useEditDisplay } from '../editBridge.js'
 import './EntryLayout.css'
 
@@ -22,10 +23,14 @@ import './EntryLayout.css'
 // A spec may carry day-part variants (morning, evening, weekend); SpecBoard
 // draws the one the clock picks, or the one the layout editor previews.
 //
-// Behind it, per screen (display.entryBackdrop): the slideshow darkened by a
-// flat black wash at display.entryDim plus Ambient's bottom scrim, or plain
-// black. The backdrop is a screen setting, not part of the spec; in the
-// layout editor its draft backdrop wins until saved.
+// Behind it, per screen (display.entryBackdrop): the slideshow under a black
+// wash plus Ambient's bottom scrim (EntryBackdrop), or plain black. The wash
+// is display.entryDim, adapted to each photo unless display.entryAdaptive is
+// false; display.entryBlur blurs the photos. The backdrop is a screen setting,
+// not part of the spec; in the layout editor its draft backdrop and darkness
+// win until saved. Bare text on the photo (the clock and the headline by
+// default) also gets a scrim of its own: the spec's universal `scrim`, drawn by
+// SpecBoard.
 //
 // Like every layout here, the only data access is the one useTodayData() call.
 
@@ -33,12 +38,18 @@ const SLIDESHOW_MIN_MS = 15_000
 const SLIDESHOW_MAX_MS = 10 * 60_000
 const PHOTO_COUNT = 24
 
-const DIM_MAX = 0.9
-const DIM_DEFAULT = 0.5
+const BLUR_MAX = 20
 
-function entryDim(v) {
-  const n = typeof v === 'number' && Number.isFinite(v) ? v : DIM_DEFAULT
-  return Math.min(DIM_MAX, Math.max(0, n))
+// display.entryAdaptive: on unless the screen says false.
+function entryAdaptive(v) {
+  return v !== false
+}
+
+// display.entryBlur: 0..20 px, clamped here like entryDim (baseDim), so a
+// hand-edited 200 cannot smear the screen; anything but a number is 0.
+function entryBlur(v) {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 0
+  return Math.min(BLUR_MAX, Math.max(0, n))
 }
 
 // The screen's own slideshow cadence, bounded as in Ambient: under 15 s a
@@ -58,29 +69,25 @@ export default function EntryLayout() {
   const displayDraft = useEditDisplay()
   const backdropSetting = displayDraft?.entryBackdrop ?? display?.entryBackdrop
   const backdrop = backdropSetting === 'black' ? 'black' : 'photos'
-  const dim = entryDim(displayDraft?.entryDim ?? display?.entryDim)
+  const dim = baseDim(displayDraft?.entryDim ?? display?.entryDim)
+  const adaptive = entryAdaptive(display?.entryAdaptive)
+  const blur = entryBlur(display?.entryBlur)
   const intervalMs = slideshowIntervalMs(d.settings?.slideshow)
 
   return (
     <SpecBoard d={d} layoutId={ENTRY_LAYOUT_ID} className={`tl-root tl-entry tl-entry--${backdrop}`}>
-      {backdrop === 'photos' && (
-        <>
-          {/* d.photos.photos keeps its identity between ticks, which is what
-            * lets PhotoPanel's memo hold through the 1 Hz re-render. */}
-          <div className="tl-entry__photo">
-            <PhotoPanel
-              photos={d.photos.photos}
-              intervalMs={intervalMs}
-              count={PHOTO_COUNT}
-              fit="cover"
-              showCounter={false}
-              showCaption={false}
-            />
-          </div>
-          <div className="tl-entry__dim" style={{ opacity: dim }} aria-hidden="true" />
-          <div className="tl-entry__scrim" aria-hidden="true" />
-        </>
-      )}
+      {backdrop === 'photos' &&
+        (({ panels }) => (
+          <EntryBackdrop
+            photos={d.photos.photos}
+            intervalMs={intervalMs}
+            count={PHOTO_COUNT}
+            dim={dim}
+            adaptive={adaptive}
+            blur={blur}
+            panels={panels}
+          />
+        ))}
     </SpecBoard>
   )
 }

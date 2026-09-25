@@ -1,9 +1,11 @@
 /* EntryLayout - the front-door board.
  *
- * Stacked layers, bottom to top: the full-bleed PhotoPanel, a flat black wash
- * at display.entryDim, Ambient's scrim across the lower third, then the canvas
- * the layout spec's boxes are placed on. With entryBackdrop 'black' only the
- * canvas is drawn, on black.
+ * Stacked layers, bottom to top (Entry/EntryBackdrop.jsx): the full-bleed
+ * PhotoPanel (blurred by display.entryBlur), a black wash at display.entryDim
+ * (adapted to each photo unless display.entryAdaptive is off), Ambient's
+ * scrim across the lower third, then the canvas the layout spec's boxes are
+ * placed on, with the scrims of its bare boxes under them (SpecPanel.css).
+ * With entryBackdrop 'black' only the canvas is drawn, on black.
  *
  * THE BOXES. Where each panel sits, how big, and whether it is a card come
  * from the layout spec (layoutSpec.js; DEFAULT_ENTRY_SPEC is the phase 1
@@ -83,11 +85,28 @@
   display: none;
 }
 
+/* Blur (display.entryBlur, set as --tl-entry-blur): the photo layer blurred,
+ * and pushed past the screen's edges so the blur's soft rim (it fades to
+ * transparent over about two radii) stays off screen: the usual scale(1.03),
+ * plus 1.5 radii each side for a heavy blur on a small screen. The root clips
+ * the overhang. No class, no filter: 0 draws exactly as before. */
+.tl-entry__photo--blur {
+  inset: calc(var(--tl-entry-blur) * -1.5);
+  filter: blur(var(--tl-entry-blur));
+  transform: scale(1.03);
+}
+
 .tl-entry__dim {
   position: absolute;
   inset: 0;
   background: #000;
   pointer-events: none;
+}
+
+/* Adaptive darkness: each photo's wash eases in over the photo crossfade's
+ * own 1.2 s and curve (PhotoPanel.css), so the two move together. */
+.tl-entry__dim--adaptive {
+  transition: opacity 1200ms ease-in-out;
 }
 
 .tl-entry__scrim {

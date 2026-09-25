@@ -30,9 +30,58 @@ import './SpecPanel.css'
 // data-panel-id / data-panel-type mark the box for the layout editor, which
 // reads each box's rectangle (editBridge.js). data-hover is the editor's
 // hover highlight: a 1 px inset outline and nothing else.
+//
+// The scrim (the universal `scrim`, 'soft' or 'strong', on a box with no
+// background): the box gains a close text shadow on its text
+// (tl-spec--scrim-<level>), and SpecScrims below draws the shade behind it.
+// The shade is not inside the box: the box clips its content, and the shade
+// has to bleed past the box's edges.
 
 function r3(n) {
   return Math.round(n * 1000) / 1000
+}
+
+// 'soft' | 'strong' when the panel draws a scrim, else null: only a box with
+// no background has one (a card is its own shade).
+function scrimOf(panel) {
+  const p = panel && panel.props
+  if (!p || p.background !== 'none') return null
+  return p.scrim === 'soft' || p.scrim === 'strong' ? p.scrim : null
+}
+
+const SCRIM_LEVELS = ['soft', 'strong']
+
+// SpecScrims - the shade behind every scrimmed box, drawn by SpecBoard under
+// all the boxes (SpecPanel.css "Scrims"). One layer per strength: in it each
+// box's shade is opaque, feathered by its own box-shadow, and the layer's
+// opacity is the strength, so shades that meet (the clock's and the
+// headline's, across the gap between them) merge into one instead of
+// doubling up into a darker band. Nothing at all is drawn when no box has a
+// scrim.
+export function SpecScrims({ panels }) {
+  const groups = { soft: [], strong: [] }
+  ;(Array.isArray(panels) ? panels : []).forEach((p) => {
+    const level = scrimOf(p)
+    if (level) groups[level].push(p)
+  })
+  return SCRIM_LEVELS.filter((level) => groups[level].length > 0).map((level) => (
+    <div key={level} className={`tl-spec-scrims tl-spec-scrims--${level}`} aria-hidden="true">
+      {groups[level].map((p) => (
+        <div
+          key={p.id}
+          className="tl-spec-scrim"
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: `${p.w}%`,
+            height: `${p.h}%`,
+            // A faded panel gets a faded shade.
+            opacity: p.props.opacity < 1 ? p.props.opacity : undefined,
+          }}
+        />
+      ))}
+    </div>
+  ))
 }
 
 export default function SpecPanel({ panel, textScale = 1, join = null, hover = false, borrowed = false, children }) {
@@ -43,6 +92,7 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
   const padY = r3(shape[0] * pad)
   const padX = r3(shape[1] * pad)
   const background = props.background
+  const scrim = scrimOf(panel)
   // Corners are drawn where there is something to round: a background, or an
   // image. Bare text keeps square corners so a big clock numeral sitting in
   // the box's corner is never clipped by an invisible radius.
@@ -71,6 +121,7 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
     `tl-spec--${type}`,
     `tl-spec--bg-${background}`,
     `tl-spec--align-${props.align}`,
+    scrim ? `tl-spec--scrim-${scrim}` : '',
     join && join.top ? 'tl-spec--join-top' : '',
     join && join.bottom ? 'tl-spec--join-bottom' : '',
     borrowed ? 'tl-spec--departure-host' : '',

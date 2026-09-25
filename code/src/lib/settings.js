@@ -565,6 +565,14 @@ export const DEFAULTS = {
     // cast); it goes home 30 s after the session ends or after 10 minutes
     // paused (shell/AppShell.jsx PlexFollow, frameserver/lib/plex.mjs).
     plexFollow: 'off',
+    // Entry board only. Move the wash with each photo, around entryDim: darker
+    // behind a bright one, lighter behind a night one
+    // (views/TodayLayouts/lib/backdropLuma.js). false keeps it flat at
+    // entryDim, the phase 1 look.
+    entryAdaptive: true,
+    // Entry board only. Blur the photos behind the board, 0..20 px (clamped by
+    // the layout, like entryDim). 0 = sharp.
+    entryBlur: 0,
   },
   slideshow: {
     intervalMs: 6000,

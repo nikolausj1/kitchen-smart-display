@@ -30,7 +30,7 @@ import {
 import { clamp, decimalsOf, humanize, isDict, normalizeColor, roundTo, toNum } from './util.js'
 
 export const FIELD_TYPES = ['number', 'select', 'toggle', 'color', 'text']
-export const UNIVERSAL_KEYS = ['textScale', 'opacity', 'padding', 'background', 'radius', 'align']
+export const UNIVERSAL_KEYS = ['textScale', 'opacity', 'padding', 'background', 'radius', 'align', 'scrim']
 const TEXT_MAX = 2000
 
 const ALIGN_FIELD_OPTIONS = [

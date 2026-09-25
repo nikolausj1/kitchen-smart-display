@@ -795,6 +795,40 @@ function renderDevice(dev) {
       row(e, 'Darken photos', 'A black wash over the photos so the board reads. Used only with photos behind it.',
         percentControl(disp.entryDim ?? 0.5,
           (v) => patchDevice(dev.id, { display: { entryDim: v } }), { min: 0, max: 90, debounceMs: 300 }))
+      // Phase 1.5 (docs/designs/entry-board.md). Unset: adaptive on, no blur.
+      row(e, 'Adapt darkness to each photo', 'Darker behind a bright photo, lighter behind a night one, around the darkness above',
+        select([[true, 'On'], [false, 'Off']], disp.entryAdaptive !== false,
+          (v) => patchDevice(dev.id, { display: { entryAdaptive: v === 'true' } })))
+      // A pixel slider, built here rather than with percentControl (which is
+      // for fractions), with the same debounce: saves once the thumb rests.
+      const blurWrap = document.createElement('div')
+      blurWrap.className = 'pct'
+      const blur = document.createElement('input')
+      blur.type = 'range'
+      blur.min = 0
+      blur.max = 20
+      blur.step = 1
+      blur.value = Math.round(Math.min(20, Math.max(0, Number(disp.entryBlur) || 0)))
+      const blurOut = document.createElement('span')
+      blurOut.className = 'pct-val'
+      const blurText = () => (blur.value === '0' ? 'Off' : `${blur.value} px`)
+      blurOut.textContent = blurText()
+      let blurTimer = null
+      let blurSent = blur.value
+      const blurSoon = () => {
+        blurOut.textContent = blurText()
+        clearTimeout(blurTimer)
+        blurTimer = setTimeout(() => {
+          if (blur.value === blurSent) return
+          blurSent = blur.value
+          patchDevice(dev.id, { display: { entryBlur: Number(blur.value) } })
+        }, 300)
+      }
+      blur.addEventListener('input', blurSoon)
+      blur.onchange = blurSoon
+      blur.onpointerdown = () => blur.focus()
+      blurWrap.append(blur, blurOut)
+      row(e, 'Blur photos', 'Soften the photos behind the board. Off keeps them sharp.', blurWrap)
       row(e, 'Home view', 'Where this screen rests outside the school morning. The front-door board wants Today.',
         select([['photos', 'Photos'], ['today', 'Today']], disp.homeView || 'photos',
           (v) => patchDevice(dev.id, { display: { homeView: v } })))
@@ -1370,6 +1404,7 @@ const daysLeftText = (n) => (typeof n !== 'number' ? ''
 const HEADLINE_KINDS = {
   now: 'an event is on now', soon: 'starts within the hour', next: 'next event today',
   today: 'all-day event today', tomorrow: 'first thing tomorrow', daypart: 'nothing on, time-of-day line',
+  alert: 'National Weather Service alert', weather: 'forecast line',
 }
 function headlineLine(hl) {
   const e = make('span', null, hl.text)

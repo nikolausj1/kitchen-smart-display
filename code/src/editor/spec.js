@@ -114,6 +114,7 @@ export const RANGES = {
 }
 export const BACKGROUNDS = ['none', 'card', 'solid']
 export const ALIGNS = ['start', 'center', 'end']
+export const SCRIMS = ['none', 'soft', 'strong']
 export const FITS = ['contain', 'cover']
 export const MAX_PANELS = 100
 
@@ -202,6 +203,11 @@ function normalizeProps(type, raw) {
     radius: round2(num(p.radius, ...RANGES.radius, d.radius)),
     align: oneOf(p.align, ALIGNS, d.align),
   }
+  // scrim (Entry phase 1.5) is kept when valid and otherwise left out, never
+  // filled here: the app's normaliser (appSpec.js readSpec) fills it from the
+  // layout's own board, so a layout saved before scrims existed shows the
+  // Entry board's 'soft' clock and headline, as the screen draws it.
+  if (SCRIMS.includes(p.scrim)) out.scrim = p.scrim
   if (type === 'text') {
     out.text =
       typeof p.text === 'string'

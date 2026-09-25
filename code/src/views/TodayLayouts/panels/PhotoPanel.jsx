@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PanelFrame from './PanelFrame.jsx'
 import { panelKnobs } from './schemas.js'
+import { sampleLuma } from '../lib/lumaSampler.js'
 import './PhotoPanel.css'
 
 // PhotoPanel - the slideshow, as a tile on the Board and full-bleed in Ambient.
@@ -25,6 +26,15 @@ import './PhotoPanel.css'
 // knobs.intervalMs 0 ("Screen setting"): then the intervalMs prop rules, and
 // the layout passes the screen's own slideshow interval there (bounded to
 // 15 s..10 min, as the Board always did).
+//
+// onLuma (optional, off by default): how bright the photo on show is, for the
+// Entry board's backdrop (Entry/EntryBackdrop.jsx, adaptive darkness). Called
+// with lumaSampler's { src, cols, rows, grid } (or null when it could not be
+// measured) each time a photo becomes the shown one, which is the moment its
+// crossfade starts, so the caller can ease along with the fade. The photo after
+// it is measured once that fade is over, off the fade, so its number is ready
+// the moment it is shown. The Board's photo tile passes nothing and measures
+// nothing. Must be a stable function (the panel is memoised on it).
 
 const FADE_MS = 1200 // keep in step with the transition in PhotoPanel.css
 // "Screen setting" with no screen interval handed in: the Board's fallback.
@@ -79,6 +89,7 @@ function PhotoPanel({
   showCaption: captionProp = true,
   className = '',
   knobs,
+  onLuma,
 }) {
   // The knobs stand in for the props of the same name. An interval knob of 0
   // is the screen's setting, the prop; a layout that hands no usable prop gets
@@ -214,6 +225,26 @@ function PhotoPanel({
   const slot1 = pos.frames[1] || (pos.active === 1 ? run[idx] : null) || null
   const shown = pos.active === 0 ? slot0 : slot1
 
+  // Brightness reporting (onLuma above).
+  const shownSrc = shown?.src || null
+  const nextSrc = run.length > 1 ? run[(idx + 1) % run.length]?.src || null : null
+  useEffect(() => {
+    if (!onLuma || !(cell.w > 0) || !(cell.h > 0)) return
+    let live = true
+    const sample = shownSrc ? sampleLuma(shownSrc, { w: cell.w, h: cell.h, fit }) : Promise.resolve(null)
+    sample.then((s) => {
+      if (live) onLuma(s)
+    })
+    return () => {
+      live = false
+    }
+  }, [onLuma, shownSrc, cell.w, cell.h, fit])
+  useEffect(() => {
+    if (!onLuma || !nextSrc || nextSrc === shownSrc || !(cell.w > 0) || !(cell.h > 0)) return
+    const id = setTimeout(() => sampleLuma(nextSrc, { w: cell.w, h: cell.h, fit }), FADE_MS + 300)
+    return () => clearTimeout(id)
+  }, [onLuma, nextSrc, shownSrc, cell.w, cell.h, fit])
+
   const location = shown?.exif?.location || ''
   const date = shown?.exif?.date || ''
   const facts = Array.isArray(shown?.art?.facts) ? shown.art.facts : []
@@ -277,6 +308,7 @@ function propsEqual(prev, next) {
     prev.showCounter === next.showCounter &&
     prev.showCaption === next.showCaption &&
     prev.className === next.className &&
+    prev.onLuma === next.onLuma &&
     knobsEqual(prev.knobs, next.knobs)
   )
 }

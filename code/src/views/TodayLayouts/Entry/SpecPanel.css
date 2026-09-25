@@ -3,8 +3,8 @@
  *
  * Position, size, z, opacity, padding and radius arrive inline from the spec.
  * This file owns what the options mean: the canvas, the backgrounds, joined
- * cards, the panel inside giving up its own chrome, alignment, the editor's
- * hover outline, and the "Too small" state.
+ * cards, the scrims, the panel inside giving up its own chrome, alignment,
+ * the editor's hover outline, and the "Too small" state.
  *
  * Colours come from the layout's root:
  *   --tl-spec-card   the 'card' background (Entry: its translucent card over a
@@ -95,6 +95,63 @@
   height: 1px;
   background: var(--tl-rule);
   pointer-events: none;
+}
+
+/* --- Scrims (the universal `scrim`; SpecScrims in SpecPanel.jsx) ----------- */
+
+/* A soft shade behind a box with no background, so bare text reads over a
+ * photo. One layer per strength, under every box: z-index -1 in the canvas's
+ * own stacking context (the canvas is isolated), so a shade never covers a
+ * neighbour's text and never reaches under the backdrop. In a layer each
+ * box's shade is opaque and the layer's opacity is the strength, so shades
+ * that meet merge instead of stacking into a darker band. */
+.tl-spec-scrims {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.tl-spec-scrims--soft {
+  opacity: 0.32;
+}
+
+.tl-spec-scrims--strong {
+  opacity: 0.5;
+}
+
+/* One box's shade: the box itself, feathered outwards by its own shadow. The
+ * spread equals the blur, so the shade is still at full strength where the
+ * box ends (no seam at the edge), half strength one feather out, and gone at
+ * two. Painted once like a card's shadow: no filter, no backdrop-filter,
+ * which the Echo's Chrome 80 draws as cheaply as anything here. */
+.tl-spec-scrim {
+  position: absolute;
+  background: #000;
+  border-radius: calc(var(--tl-radius) * 2);
+  box-shadow: 0 0 var(--tl-scrim-feather) var(--tl-scrim-feather) #000;
+}
+
+.tl-spec-scrims--soft .tl-spec-scrim {
+  --tl-scrim-feather: calc(var(--tl-pad) * 1.5);
+}
+
+.tl-spec-scrims--strong .tl-spec-scrim {
+  --tl-scrim-feather: calc(var(--tl-pad) * 2);
+}
+
+/* The scrimmed box's text: a close shadow that edges every glyph against what
+ * is left of the photo behind it, faint at soft, a stronger pair at strong.
+ * Text that wears the Entry board's wide HUD glow (the clock, the headline,
+ * bare text blocks: EntryLayout.css) keeps the glow and gains the edge. */
+.tl-spec--scrim-soft {
+  --tl-hud-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 12px rgba(0, 0, 0, 0.45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.tl-spec--scrim-strong {
+  --tl-hud-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 2px 18px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 /* --- The panel inside ------------------------------------------------------ */
