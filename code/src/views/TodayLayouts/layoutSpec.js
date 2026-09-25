@@ -260,6 +260,9 @@ export const MAX_PANELS = 100
 export const BACKGROUNDS = ['none', 'card', 'solid']
 export const ALIGNS = ['start', 'center', 'end']
 export const FITS = ['contain', 'cover']
+// The universal `scrim`, weakest first. An enum, so it sits here with the
+// other option lists rather than in PROP_RANGES (numbers only).
+export const SCRIMS = ['none', 'soft', 'strong']
 
 // Ranges the normalizer clamps to, and the editor's controls can offer.
 export const PROP_RANGES = deepFreeze({
@@ -288,6 +291,11 @@ export const SRC_MAX_LENGTH = 2048
 //              and always on an image block); times global.radius
 //   align      'start' | 'center' | 'end': text alignment (the clock, the
 //              headline and text blocks honour it)
+//   scrim      'none' | 'soft' | 'strong': a shade behind a box with no
+//              background, bleeding past its edges, and a close text shadow
+//              on its text, so bare text reads over a photo (Entry/SpecPanel,
+//              docs/designs/entry-board.md phase 1.5). Ignored under a card.
+//              The Entry board's clock and headline are 'soft' by default.
 export const UNIVERSAL_DEFAULTS = deepFreeze({
   textScale: 1,
   opacity: 1,
@@ -295,6 +303,7 @@ export const UNIVERSAL_DEFAULTS = deepFreeze({
   background: 'none',
   radius: 1,
   align: 'start',
+  scrim: 'none',
 })
 
 const UNIVERSAL_KEYS = Object.keys(UNIVERSAL_DEFAULTS)
@@ -349,14 +358,20 @@ export const IMAGE_DEFAULTS = deepFreeze({
 // joins flush cards into one (cardJoins below, Entry/SpecPanel), which is the
 // phase 1 look of a single card divided by hairlines. Every knob is its
 // schema default (panels/schemas.js: the defaults are this board).
+//
+// The clock and the headline sit straight on the photo (no card), so they
+// carry a soft scrim (phase 1.5); everything else is on a card and has none.
+// A saved spec with no scrim on its clock or headline gets the same 'soft'
+// (normProps fills a missing prop from this board), which is what gives the
+// Echo Show 15 its two scrims with the deploy.
 const ENTRY_PANELS = [
   {
     id: 'clock', type: 'clock', x: 2.4, y: 3, w: 54.58, h: 30.63, z: 1,
-    props: { background: 'none', padding: 0 },
+    props: { background: 'none', padding: 0, scrim: 'soft' },
   },
   {
     id: 'headline', type: 'headline', x: 2.4, y: 35.59, w: 54.58, h: 9.91, z: 2,
-    props: { background: 'none', padding: 0 },
+    props: { background: 'none', padding: 0, scrim: 'soft' },
   },
   {
     id: 'weather', type: 'weather', x: 58.08, y: 3, w: 39.52, h: 20.4, z: 3,
@@ -687,6 +702,7 @@ function normProps(raw, type, layoutId) {
     background: oneOf(r.background, BACKGROUNDS, d.background),
     radius: num(r.radius, PROP_RANGES.radius.min, PROP_RANGES.radius.max, d.radius),
     align: oneOf(r.align, ALIGNS, d.align),
+    scrim: oneOf(r.scrim, SCRIMS, d.scrim),
   }
   if (type === 'text') {
     out.text = r.text === undefined ? d.text : text(r.text)
@@ -822,8 +838,10 @@ function normVariants(raw, layoutId, baseGlobal) {
 //   - every number clamped to the contract's range and rounded (positions to
 //     POSITION_PLACES decimals), each box kept on the canvas at no less than its type's
 //     minimum size; missing props filled from the type's defaults in that
-//     layout; a functional panel's props gain every knob of its schema,
-//     clamped to the schema's range; unknown keys dropped
+//     layout (a spec saved before `scrim` existed gets the layout's: 'soft'
+//     on the Entry board's clock and headline); a functional panel's props
+//     gain every knob of its schema, clamped to the schema's range; unknown
+//     keys dropped
 //   - eveningFrom: a whole hour 12..23, default 18
 //   - variants (morning, evening, weekend): each kept when it has a panels
 //     array, its panels normalised like the base's, its global (when given)

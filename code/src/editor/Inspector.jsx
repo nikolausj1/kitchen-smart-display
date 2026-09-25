@@ -48,6 +48,13 @@ const BG_OPTIONS = [
   ['card', 'Card', 'Translucent card'],
   ['solid', 'Solid', 'Solid card'],
 ]
+// The universal scrim: a shade behind a box with no background, bleeding past
+// its edges, plus a close text shadow (Entry/SpecPanel.css).
+const SCRIM_OPTIONS = [
+  ['none', 'None', 'No shade behind the text'],
+  ['soft', 'Soft', 'A soft shade behind the box and past its edges, and a faint text shadow'],
+  ['strong', 'Strong', 'A stronger shade and text shadow'],
+]
 
 export default function Inspector(props) {
   const { draft, panel, hasVariant, onFieldHover } = props
@@ -232,6 +239,15 @@ function PanelInspector({
           />
           <Row label="Background">
             <Segmented ariaLabel="Background" options={BG_OPTIONS} value={pr.background} onChange={(v) => set({ background: v })} />
+          </Row>
+          <Row label="Scrim" hint={pr.background === 'none' ? 'Shade behind bare text' : 'Only with no background'}>
+            <Segmented
+              ariaLabel="Scrim"
+              options={SCRIM_OPTIONS}
+              value={pr.scrim ?? 'none'}
+              disabled={pr.background !== 'none'}
+              onChange={(v) => set({ scrim: v })}
+            />
           </Row>
           <SliderField
             label="Corner radius"
