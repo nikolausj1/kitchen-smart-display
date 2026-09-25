@@ -1,0 +1,21 @@
+/* ClockLayout - the flip clock, centred on near-black with a faint vignette.
+ *
+ * Selectors are .tl-root.tl-clock, never a bare .tl-clock: ClockPanel's panel
+ * root (panels/ClockPanel.jsx) carries the class tl-clock too, and a bare
+ * rule here would restyle every clock panel on every other layout.
+ *
+ * Two radial washes over #0b0b0b: a warm lift behind the clock, barely there,
+ * and the vignette darkening the corners. The clock's own case shadow does
+ * the rest of the separation (FlipClock.css). */
+
+.tl-root.tl-clock {
+  --tl-bg: #0b0b0b;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 46%, rgba(255, 244, 222, 0.03) 0%, rgba(255, 244, 222, 0) 70%),
+    radial-gradient(ellipse 125% 110% at 50% 48%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 100%),
+    var(--tl-bg);
+}

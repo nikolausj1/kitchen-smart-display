@@ -16,10 +16,11 @@
 // NOTE: settings.js and hub.js intentionally do NOT import this module (they
 // parse the kiosk flag themselves) so there is no import cycle.
 
-const VALID_VIEWS = ['today', 'photos', 'music', 'settings']
+// 'plex' is the Plex second screen (views/Plex/PlexView.jsx).
+const VALID_VIEWS = ['today', 'photos', 'music', 'settings', 'plex']
 // Mirrors views/TodayLayouts/registry.js (not imported: keep this module
 // dependency-free so it can run before the tree mounts).
-const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient', 'entry']
+const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient', 'entry', 'clock']
 
 function parseParams() {
   if (typeof window === 'undefined') {
@@ -40,7 +41,7 @@ function parseParams() {
 
 const parsed = parseParams()
 
-// An explicitly requested concrete view (today/photos/music/settings), or null.
+// An explicitly requested concrete view (today/photos/music/settings/plex), or null.
 export const REQUESTED_VIEW = parsed.view
 // True when the URL asked for ?view=auto, or carried no view param (kitchen).
 export const AUTO_MODE = parsed.rawView === 'auto' || parsed.rawView == null

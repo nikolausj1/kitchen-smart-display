@@ -1,0 +1,511 @@
+/* FlipClock - a split-flap clock after the 2026-09-24 reference
+ * (_inbox/clocks/): black grained cards with a split line and hinge pins, an
+ * AM / PM tab on the hour card, cream numerals, a Fraunces date line.
+ *
+ * One measurement drives everything: --tl-flip-u, the height of a card. Every
+ * width, radius, font size and offset below is a multiple of it, so the clock
+ * keeps its proportions from a 960x480 Echo Show 5 to a 1920x1080 panel. The
+ * default is viewport-based (the Clock layout is the whole screen); a host
+ * that puts the clock in a box overrides this one variable, e.g. with
+ * container units, and nothing else has to change.
+ *
+ *   46vh  the card row; with the date line under it the clock is ~55% of the
+ *         screen height at 16:9 and 2:1
+ *   26vw  the width cap: the row is ~3.36u wide (tab, hour, colon, two
+ *         minutes), so this keeps ~6% air each side at 16:10, where the
+ *         height alone would run it to the edges
+ *
+ * Motion: only transform (the leaf) and opacity (the shading) animate, and
+ * only while a card flips. See FlipClock.jsx for the two-halves-plus-leaf
+ * structure. Flex gap, `inset` and aspect-ratio are avoided on purpose: Silk
+ * on the Echo Shows is an older Chromium (vite.config.js targets chrome80).
+ */
+
+.tl-flip {
+  --tl-flip-u: min(46vh, 26vw);
+  --tl-flip-ink: #efe3cb;
+  --tl-flip-ms: 600ms;
+  --tl-flip-radius: calc(var(--tl-flip-u) * 0.036);
+  /* The split line is a real gap between the two halves; the card's own dark
+   * base shows through it. Never thinner than a device pixel. */
+  --tl-flip-gap: max(1px, calc(var(--tl-flip-u) * 0.007));
+  --tl-flip-seam: calc(var(--tl-flip-u) * 0.018);
+  /* Grain: fractal noise, visible only where it runs high, so the card picks
+   * up sparse warm specks rather than a grey veil. A 200px tile at its native
+   * size: scaling it with the card would blur it to nothing on the small
+   * screens. Under 1 KB, no external asset. */
+  --tl-flip-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .86 0 0 0 0 .84 0 0 0 0 .8 .75 0 0 0 -.44'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)'/%3E%3C/svg%3E");
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--tl-flip-ink);
+  /* tokens.css turns on Inter's cv11/ss01 for the whole root; neither face
+   * here wants a stylistic set (Fraunces has its own), so start clean. */
+  font-feature-settings: normal;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* --- The row ---------------------------------------------------------------- */
+
+.tl-flip__row {
+  display: flex;
+  align-items: flex-start;
+}
+
+.tl-flip__unit {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* A group of cards on its housing. isolation makes the group a stacking
+ * context, so the housing (z-index -1) sits under its own cards and nothing
+ * else, and the pins (z-index 1) sit over its cards and nothing else. */
+.tl-flip__cards {
+  position: relative;
+  display: flex;
+  isolation: isolate;
+}
+
+/* The case the cards hang in: a shade darker than the page, a hairline rim,
+ * deeper at the foot, and the one big soft shadow that lifts the clock off
+ * the wall. Static paint; it never animates. */
+.tl-flip__cards::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--tl-flip-u) * -0.016);
+  right: calc(var(--tl-flip-u) * -0.018);
+  bottom: calc(var(--tl-flip-u) * -0.032);
+  left: calc(var(--tl-flip-u) * -0.016);
+  z-index: -1;
+  border-radius: calc(var(--tl-flip-radius) + var(--tl-flip-u) * 0.02);
+  background: linear-gradient(180deg, #0f0f0f 0%, #080808 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 calc(var(--tl-flip-u) * 0.03) calc(var(--tl-flip-u) * 0.09) rgba(0, 0, 0, 0.7);
+}
+
+/* With the tab alongside, the tab's own strip is the case's left side. */
+.tl-flip__tab + .tl-flip__cards::before {
+  left: 0;
+}
+
+/* --- A card ----------------------------------------------------------------- */
+
+.tl-flip__card {
+  position: relative;
+  flex: 0 0 auto;
+  height: var(--tl-flip-u);
+  border-radius: var(--tl-flip-radius);
+  /* The slot behind the flaps, seen only through the split line. */
+  background: #030303;
+  box-shadow: 0 calc(var(--tl-flip-u) * 0.014) calc(var(--tl-flip-u) * 0.035) rgba(0, 0, 0, 0.75);
+  /* Distance to the eye for the turning leaf: far enough that the flap stays
+   * a flap at its closest (about 12% larger when edge-on), near enough to
+   * read as depth. */
+  perspective: calc(var(--tl-flip-u) * 4.5);
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--tl-flip-ink);
+}
+
+/* Inter's digits are wider than the reference's condensed face, so the cards
+ * are a little wider than the reference's to keep the numerals as tall: cap
+ * height 0.68u (the reference's are ~0.78u in narrower cards). */
+.tl-flip__card--hour {
+  width: calc(var(--tl-flip-u) * 1.38);
+  font-size: calc(var(--tl-flip-u) * 0.94);
+  letter-spacing: -0.02em;
+}
+
+.tl-flip__card--digit {
+  width: calc(var(--tl-flip-u) * 0.75);
+  font-size: calc(var(--tl-flip-u) * 0.94);
+}
+
+/* The seam between the minute cards. */
+.tl-flip__card--digit + .tl-flip__card--digit {
+  margin-left: var(--tl-flip-seam);
+}
+
+/* One half of a face: a clipping box a shade under half the card, so the
+ * two halves leave the split line between them. */
+.tl-flip__half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(50% - var(--tl-flip-gap) / 2);
+  overflow: hidden;
+  background-color: #151514;
+}
+
+/* Lit from above: the upper flap is brightest at its top edge and falls off
+ * toward the hinge; the lower flap is a touch darker just under the hinge. */
+.tl-flip__half--top {
+  top: 0;
+  border-radius: var(--tl-flip-radius) var(--tl-flip-radius) 0 0;
+  background-image:
+    var(--tl-flip-grain),
+    linear-gradient(180deg, #1d1c1a 0%, #151513 60%, #0f0f0e 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 248, 235, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.tl-flip__half--bottom {
+  bottom: 0;
+  border-radius: 0 0 var(--tl-flip-radius) var(--tl-flip-radius);
+  background-image:
+    var(--tl-flip-grain),
+    linear-gradient(180deg, #121211 0%, #181816 30%, #1b1a18 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 248, 235, 0.1);
+}
+
+/* The glyph box is the whole card tall (the half is (card - gap) / 2, so
+ * 200% + gap), pinned to the half's outer edge: each half shows its half of
+ * the same centred glyph. Inter's ascent and descent put the digits' ink dead
+ * centre in a line-height 1 box, so the split cuts every numeral at its
+ * middle. */
+.tl-flip__glyph {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: calc(200% + var(--tl-flip-gap));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.tl-flip__half--top .tl-flip__glyph {
+  top: 0;
+}
+
+.tl-flip__half--bottom .tl-flip__glyph {
+  bottom: 0;
+}
+
+/* --- The flip ----------------------------------------------------------------- */
+
+/* The leaf: covers the top half and turns 180 degrees about the split line
+ * (the transform origin sits half a gap below its own bottom edge), toward
+ * the viewer and down. preserve-3d lets its two faces hide their backs; it
+ * must not carry overflow, opacity or a filter, any of which would flatten
+ * it. */
+.tl-flip__leaf {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: calc(50% - var(--tl-flip-gap) / 2);
+  transform-origin: 50% calc(100% + var(--tl-flip-gap) / 2);
+  transform-style: preserve-3d;
+  animation: tl-flip-turn var(--tl-flip-ms) linear var(--tl-flip-delay, 0ms) both;
+}
+
+.tl-flip__face {
+  top: 0;
+  bottom: 0;
+  height: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* The back face is laid out as a bottom half and pre-turned, so the leaf's
+ * own half turn brings it down upright, exactly over the static bottom. */
+.tl-flip__face.tl-flip__half--bottom {
+  transform: rotateX(180deg);
+}
+
+/* Shading on the leaf: the front darkens as it tips away from the light, the
+ * back comes out of shadow as it lands. */
+.tl-flip__face::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.tl-flip__face.tl-flip__half--top::after {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.4) 100%);
+  animation: tl-flip-dim var(--tl-flip-ms) linear var(--tl-flip-delay, 0ms) both;
+}
+
+.tl-flip__face.tl-flip__half--bottom::after {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.3) 100%);
+  animation: tl-flip-undim var(--tl-flip-ms) linear var(--tl-flip-delay, 0ms) both;
+}
+
+/* The shadow sweep on the static halves: the newly revealed top starts in
+ * the leaf's shadow and clears as it lifts away; the old bottom darkens as
+ * the leaf comes down over it. */
+.tl-flip__shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: calc(50% - var(--tl-flip-gap) / 2);
+  pointer-events: none;
+}
+
+.tl-flip__shade--top {
+  top: 0;
+  border-radius: var(--tl-flip-radius) var(--tl-flip-radius) 0 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.12) 100%);
+  animation: tl-flip-shade-top var(--tl-flip-ms) linear var(--tl-flip-delay, 0ms) both;
+}
+
+.tl-flip__shade--bottom {
+  bottom: 0;
+  border-radius: 0 0 var(--tl-flip-radius) var(--tl-flip-radius);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.14) 100%);
+  animation: tl-flip-shade-bottom var(--tl-flip-ms) linear var(--tl-flip-delay, 0ms) both;
+}
+
+/* 600 ms: an ease-in fall to edge-on, an ease-out landing. The per-keyframe
+ * timing functions do the easing, so the element's own is linear. */
+@keyframes tl-flip-turn {
+  0% {
+    transform: rotateX(0deg);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+  50% {
+    transform: rotateX(-90deg);
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  100% {
+    transform: rotateX(-180deg);
+  }
+}
+
+@keyframes tl-flip-dim {
+  0% {
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes tl-flip-undim {
+  0%,
+  50% {
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tl-flip-shade-top {
+  0% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tl-flip-shade-bottom {
+  0%,
+  45% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* --- Hinge pins --------------------------------------------------------------- */
+
+/* A notch cut into the card's outer edge at the split line, and in it the
+ * dark cylinder the flaps turn on, seen end-on as a capsule with a highlight
+ * down each side. Drawn over the flaps (the group's z-index 1) because every
+ * flap has the same notch. */
+.tl-flip__pin {
+  position: absolute;
+  top: calc(50% - var(--tl-flip-u) * 0.135);
+  z-index: 1;
+  width: calc(var(--tl-flip-u) * 0.066);
+  height: calc(var(--tl-flip-u) * 0.27);
+  background: #050505;
+  box-shadow: inset 0 0 calc(var(--tl-flip-u) * 0.012) #000;
+}
+
+.tl-flip__pin--l {
+  left: 0;
+  border-radius: 0 calc(var(--tl-flip-u) * 0.012) calc(var(--tl-flip-u) * 0.012) 0;
+}
+
+.tl-flip__pin--r {
+  right: 0;
+  border-radius: calc(var(--tl-flip-u) * 0.012) 0 0 calc(var(--tl-flip-u) * 0.012);
+}
+
+.tl-flip__pin::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--tl-flip-u) * 0.012);
+  right: calc(var(--tl-flip-u) * 0.007);
+  bottom: calc(var(--tl-flip-u) * 0.012);
+  left: calc(var(--tl-flip-u) * 0.007);
+  border-radius: calc(var(--tl-flip-u) * 0.018);
+  background: linear-gradient(
+    90deg,
+    #090909 0%,
+    #3b3b39 9%,
+    #6d6c68 15%,
+    #2b2b29 25%,
+    #141413 48%,
+    #1e1e1d 68%,
+    #504f4b 83%,
+    #1a1a19 91%,
+    #080808 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 calc(var(--tl-flip-u) * 0.008) rgba(0, 0, 0, 0.9);
+}
+
+/* --- The colon ------------------------------------------------------------------ */
+
+.tl-flip__colon {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(var(--tl-flip-u) * 0.26);
+  height: var(--tl-flip-u);
+}
+
+/* Centres at 37% and 63% of the card: symmetric about the split line. */
+.tl-flip__dot {
+  position: absolute;
+  top: calc(var(--tl-flip-u) * 0.32);
+  left: calc(50% - var(--tl-flip-u) * 0.05);
+  width: calc(var(--tl-flip-u) * 0.1);
+  height: calc(var(--tl-flip-u) * 0.1);
+  border-radius: 50%;
+  background: var(--tl-flip-ink);
+  box-shadow: 0 calc(var(--tl-flip-u) * 0.006) calc(var(--tl-flip-u) * 0.018) rgba(0, 0, 0, 0.6);
+}
+
+.tl-flip__dot--low {
+  top: calc(var(--tl-flip-u) * 0.58);
+}
+
+/* --- The AM / PM tab -------------------------------------------------------------- */
+
+/* A strip of case on the hour card's left, tucked under the card, carrying a
+ * small flip plate in its upper half. The strip is the hour group's housing on
+ * that side (see .tl-flip__tab + .tl-flip__cards::before). */
+.tl-flip__tab {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(var(--tl-flip-u) * 0.235);
+  height: calc(var(--tl-flip-u) * 0.965);
+  margin-top: calc(var(--tl-flip-u) * 0.0175);
+  margin-right: calc(var(--tl-flip-u) * -0.035);
+  border-radius: calc(var(--tl-flip-u) * 0.05) 0 0 calc(var(--tl-flip-u) * 0.05);
+  background: linear-gradient(180deg, #181817 0%, #121211 24%, #0e0e0d 100%);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 calc(var(--tl-flip-u) * 0.014) calc(var(--tl-flip-u) * 0.035) rgba(0, 0, 0, 0.7);
+}
+
+.tl-flip__card--tab {
+  --tl-flip-radius: calc(var(--tl-flip-u) * 0.028);
+  --tl-flip-gap: 1px;
+  position: absolute;
+  top: calc(var(--tl-flip-u) * 0.085);
+  left: 0;
+  width: 100%;
+  height: calc(var(--tl-flip-u) * 0.235);
+  /* A plate this small splits on a hairline, and the slot behind it is only a
+   * shade darker than the plate, so the split reads as a seam and not as a
+   * bar through the letters. */
+  background: #0b0b0a;
+  perspective: calc(var(--tl-flip-u) * 1.2);
+  font-size: calc(var(--tl-flip-u) * 0.078);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 calc(var(--tl-flip-u) * 0.008) calc(var(--tl-flip-u) * 0.02) rgba(0, 0, 0, 0.7);
+}
+
+/* The plate runs on under the hour card; centre its text on the part that
+ * shows. */
+.tl-flip__card--tab .tl-flip__glyph {
+  right: calc(var(--tl-flip-u) * 0.035);
+}
+
+/* --- The date line --------------------------------------------------------------- */
+
+.tl-flip__date {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: calc(var(--tl-flip-u) * 0.13);
+  font-family: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  /* The floor keeps the date readable on the 960x480 Echo Show 5. */
+  font-size: max(12px, calc(var(--tl-flip-u) * 0.062));
+  font-weight: 360;
+  /* opsz follows the size (sturdier at the Echo Show 5's 14px, finer at
+   * 1080p); SOFT and WONK off for the plain engraved capitals of the
+   * reference. */
+  font-optical-sizing: auto;
+  font-variation-settings: 'SOFT' 0, 'WONK' 0;
+  font-variant-numeric: lining-nums proportional-nums;
+  letter-spacing: 0.34em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--tl-flip-ink);
+}
+
+/* Tracking trails the last letter too; the matching indent keeps the text
+ * centred between its rules. */
+.tl-flip__date-text {
+  margin: 0 calc(var(--tl-flip-u) * 0.085);
+  padding-left: 0.34em;
+}
+
+/* Hairlines either side, fading out toward the screen edges. */
+.tl-flip__rule {
+  flex: 0 0 auto;
+  width: calc(var(--tl-flip-u) * 0.24);
+  height: max(1px, calc(var(--tl-flip-u) * 0.0024));
+}
+
+.tl-flip__rule--l {
+  background: linear-gradient(90deg, rgba(239, 227, 203, 0) 0%, rgba(239, 227, 203, 0.62) 55%);
+}
+
+.tl-flip__rule--r {
+  background: linear-gradient(90deg, rgba(239, 227, 203, 0.62) 45%, rgba(239, 227, 203, 0) 100%);
+}
+
+/* --- Reduced motion ---------------------------------------------------------------- */
+
+/* The cards still change, in one frame. A 1 ms animation rather than none,
+ * so animationend still fires and the card settles through the same path. */
+@media (prefers-reduced-motion: reduce) {
+  .tl-flip .tl-flip__leaf,
+  .tl-flip .tl-flip__shade,
+  .tl-flip .tl-flip__face.tl-flip__half--top::after,
+  .tl-flip .tl-flip__face.tl-flip__half--bottom::after {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
