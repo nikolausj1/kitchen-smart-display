@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-25
-version: 7.2
+version: 7.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -590,6 +590,11 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-25 - The office flip clock goes full width: no AM/PM, the date on
+  the bottom edge.** Justin wants the time to fill the Echo Show 5. The
+  numerals stay Inter 800, so the screen's width is now the limit (cards at
+  60% of the height). Condensed digits, like the reference's, would fill the
+  height too but need a new font; open if Justin sends a reference for them.
 - **2026-09-25 - Countdown helpers skipped for now.** Not built in this
   round; kept in the backlog as an option (Shared / infrastructure).
 - **2026-09-25 - Every deploy runs the hub's tests first.** `deploy.sh` runs
@@ -872,6 +877,15 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-25 - Flip clock, full width** (hub deployed 09:43). For the
+  office Echo Show 5, at Justin's request: the cards run across about 96% of
+  the width (`--tl-flip-u: min(30vw, 76vh)`; a 288px card, numerals about
+  203px tall, up from about 155px), the AM/PM tab is off (FlipClock's new
+  `showMeridiem`; the aria label keeps it), and the date is a size up (24px,
+  was 14px) on the bottom edge with its hairlines dropped. Tests 345/345; the
+  hub-served bundle checked at 960x480. Design:
+  `docs/designs/today-layouts.md`. Shot:
+  `_review/layout-editor/clock-960-before-after.png`.
 - **2026-09-25 - Pi outage evidence: a persistent journal, a heartbeat, a
   Power line** (hub deployed 08:24, kitchen Pi 08:41, build `812242f`). The
   kitchen Pi's journal survives reboots (`60-persistent.conf`, applied live).

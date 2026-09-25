@@ -1,4 +1,5 @@
-/* ClockLayout - the flip clock, centred on near-black with a faint vignette.
+/* ClockLayout - the flip clock as big as the screen allows, on near-black
+ * with a faint vignette, and the date along the bottom edge.
  *
  * Selectors are .tl-root.tl-clock, never a bare .tl-clock: ClockPanel's panel
  * root (panels/ClockPanel.jsx) carries the class tl-clock too, and a bare
@@ -6,7 +7,18 @@
  *
  * Two radial washes over #0b0b0b: a warm lift behind the clock, barely there,
  * and the vignette darkening the corners. The clock's own case shadow does
- * the rest of the separation (FlipClock.css). */
+ * the rest of the separation (FlipClock.css).
+ *
+ * Size: this layout sets FlipClock's one variable, --tl-flip-u (the card
+ * height); FlipClock's own default is for a centred clock with its AM / PM
+ * tab. With no tab the row is 3.16u wide (hour 1.38, colon 0.26, two minute
+ * cards and the seam between), about 3.19u with the case's lip, so at 2:1 and
+ * 16:9 the width runs out long before the height:
+ *
+ *   30vw  the row across ~96% of the width: about 20px of air each side on
+ *         the Echo Show 5, where a card is 288px, 60% of the screen height
+ *   76vh  the cap on a screen wider than ~2.5:1, where the height would run
+ *         out first, still leaving the date its band */
 
 .tl-root.tl-clock {
   --tl-bg: #0b0b0b;
@@ -18,4 +30,24 @@
     radial-gradient(ellipse 70% 60% at 50% 46%, rgba(255, 244, 222, 0.03) 0%, rgba(255, 244, 222, 0) 70%),
     radial-gradient(ellipse 125% 110% at 50% 48%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.6) 100%),
     var(--tl-bg);
+}
+
+/* The clock runs the full height of the screen, so the date can sit on the
+ * bottom edge. */
+.tl-root.tl-clock .tl-flip {
+  --tl-flip-u: min(30vw, 76vh);
+  height: 100%;
+}
+
+/* The cards centred in the space the date leaves above it. */
+.tl-root.tl-clock .tl-flip__row {
+  margin: auto 0;
+}
+
+/* Well up from FlipClock's date (24px on the Echo Show 5, was 14px). The
+ * top margin is only the least gap under the cards; the auto margins above
+ * make the real one. */
+.tl-root.tl-clock .tl-flip__date {
+  margin: calc(var(--tl-flip-u) * 0.06) 0 calc(var(--tl-flip-u) * 0.045);
+  font-size: max(14px, calc(var(--tl-flip-u) * 0.085));
 }

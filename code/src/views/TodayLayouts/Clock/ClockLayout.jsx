@@ -3,8 +3,9 @@ import FlipClock from './FlipClock.jsx'
 import '../tokens.css'
 import './ClockLayout.css'
 
-// ClockLayout - the flip clock Today: a split-flap clock and the date, centred
-// on near-black, and nothing else. Built for the office Echo Show 5 (960x480)
+// ClockLayout - the flip clock Today: a split-flap clock as wide as the screen
+// allows, with no AM / PM tab, and the date along the bottom edge, on
+// near-black, and nothing else. Built for the office Echo Show 5 (960x480)
 // and good at 1280x800 and 1920x1080. A bright daytime view: no seconds, no
 // drift (the night face is a different screen).
 //
@@ -62,7 +63,7 @@ export default function ClockLayout() {
 
   return (
     <div className="tl-root tl-clock">
-      <FlipClock now={now} />
+      <FlipClock now={now} showMeridiem={false} />
     </div>
   )
 }

@@ -2,7 +2,7 @@
 title: "Today layouts - Board, Briefing, Ambient, Entry board, Flip clock"
 created: 2026-09-04
 modified: 2026-09-25
-version: 1.1
+version: 1.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec]
 ---
@@ -148,24 +148,35 @@ layout has a departure panel of its own. The layout component still calls
 adds its backdrop (`EntryBackdrop`) as SpecBoard's child. The spec, the knobs
 and the editor: `layout-editor.md`.
 
-## Flip clock (built 2026-09-24)
+## Flip clock (built 2026-09-24, full width 2026-09-25)
 
-A split-flap clock and the date, centred on near-black with a faint warm lift
-and a vignette. Built for the office Echo Show 5 (960x480; its Today layout
-as of 2026-09-25) and good at 1280x800 and 1920x1080. Drawn after Justin's
-reference image of 2026-09-24 (`_inbox/clocks/`).
+A split-flap clock as wide as the screen allows, with the date along the
+bottom edge, on near-black with a faint warm lift and a vignette. Built for
+the office Echo Show 5 (960x480; its Today layout as of 2026-09-25) and good
+at 1280x800 and 1920x1080. Drawn after Justin's reference image of 2026-09-24
+(`_inbox/clocks/`). On 2026-09-25, at Justin's request, the clock went full
+width, the AM/PM tab came off, and the date went a size up onto the bottom
+edge with its hairlines dropped.
 
 - `Clock/FlipClock.jsx` + `.css`, reusable. Props: `now` (a Date, the only
-  clock it reads), `hour24` (00 to 23 and no AM/PM tab; default off) and
-  `showDate` (default on). One wide hour card, a colon, two minute cards, an
-  AM/PM tab on the hour card's left edge, the date underneath between two
-  hairlines. No time shows dashes, never a made-up hour.
+  clock it reads), `hour24` (00 to 23 and no AM/PM tab; default off),
+  `showMeridiem` (the AM/PM tab on a 12-hour clock; default on; the aria
+  label keeps AM/PM either way) and `showDate` (default on). One wide hour
+  card, a colon, two minute cards, an AM/PM tab on the hour card's left edge,
+  the date underneath. No time shows dashes, never a made-up hour.
 - Sizing: every width, radius, font size and offset is a multiple of one
-  variable, `--tl-flip-u`, the card height: `min(46vh, 26vw)`. 46vh puts the
-  clock at about 55% of the screen height at 16:9 and 2:1; 26vw keeps about 6%
-  of air each side at 16:10, where the height alone would run it to the
-  edges. A host that puts the clock in a box overrides that one variable (with
-  container units) and nothing else changes.
+  variable, `--tl-flip-u`, the card height. FlipClock's default,
+  `min(46vh, 26vw)`, is a centred clock with its tab: 46vh puts the clock at
+  about 55% of the screen height at 16:9 and 2:1; 26vw keeps about 6% of air
+  each side at 16:10, where the height alone would run it to the edges. A
+  host overrides that one variable (a box would use container units) and
+  nothing else changes.
+- The Clock layout's size, `min(30vw, 76vh)`: with no tab the card row is
+  3.16u wide (about 3.19u with the case's lip), so at 2:1 and 16:9 the width
+  runs out long before the height. 30vw puts the row across about 96% of the
+  width: on the Echo Show 5 a 288px card (60% of the screen height) and
+  numerals about 203px tall, up from about 155px. 76vh caps it on a screen
+  wider than about 2.5:1 and still leaves the date its band.
 - The flip: each card is two static halves plus, only while it flips, one
   leaf (the old top on its front, the new bottom on its back) that turns down
   about the split line in 600 ms. Only transform and opacity animate and
@@ -178,7 +189,10 @@ reference image of 2026-09-24 (`_inbox/clocks/`).
   minute boundary and again when the page becomes visible, and calls no
   `useTodayData()`: a clock needs none of the data sources, which on an Echo
   Show 5 would be real polling for nothing. No seconds and no drift (the night
-  face is a different screen).
+  face is a different screen). It passes `showMeridiem={false}`, runs the
+  clock the full screen height, centres the cards in the space above the date
+  (auto margins) and sets the date at 0.085u (24px on the Echo Show 5, was
+  14px), 0.045u off the bottom edge.
 - Wired in `registry.js` (`clock`, "Flip clock"), `TodayLayoutSwitch.jsx` (a
   static import), `lib/kioskMode.js` `VALID_LAYOUTS` and the dashboard's Today
   layout select; Settings lists it from the registry.
@@ -189,9 +203,13 @@ reference image of 2026-09-24 (`_inbox/clocks/`).
   a hairline; the date line in Fraunces, tracked capitals with lining
   figures; grain on the cards only; no flex `gap`, `inset` or `aspect-ratio`,
   because Silk on the Echo Shows is an older Chromium (the build targets
-  Chrome 80).
+  Chrome 80). On the Clock layout, no AM/PM and numerals as big as the width
+  allows (2026-09-25). Filling the height too would take narrower, condensed
+  digits, like the reference's, which means a new font; not taken up.
 - Review shots: `_review/layout-editor/clock-*.png` (960, 1280 and 1920 wide,
-  mid-flip frames, and the reference's 10:08 for comparison).
+  mid-flip frames, and the reference's 10:08 for comparison);
+  `clock-960-fullwidth.png` and `clock-960-before-after.png` for the
+  2026-09-25 change.
 
 ## Adding a layout or a panel
 

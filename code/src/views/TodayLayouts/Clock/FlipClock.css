@@ -5,9 +5,10 @@
  * One measurement drives everything: --tl-flip-u, the height of a card. Every
  * width, radius, font size and offset below is a multiple of it, so the clock
  * keeps its proportions from a 960x480 Echo Show 5 to a 1920x1080 panel. The
- * default is viewport-based (the Clock layout is the whole screen); a host
- * that puts the clock in a box overrides this one variable, e.g. with
- * container units, and nothing else has to change.
+ * default is viewport-based, a centred clock with its tab and the date under
+ * it. A host overrides this one variable and nothing else has to change: the
+ * Clock layout runs the clock the full width with no tab (ClockLayout.css);
+ * a host that puts the clock in a box would use container units.
  *
  *   46vh  the card row; with the date line under it the clock is ~55% of the
  *         screen height at 16:9 and 2:1
@@ -453,15 +454,16 @@
 /* --- The date line --------------------------------------------------------------- */
 
 .tl-flip__date {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   margin-top: calc(var(--tl-flip-u) * 0.13);
+  /* Tracking trails the last letter too; the matching indent keeps the text
+   * centred under the clock. */
+  padding-left: 0.34em;
   font-family: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
-  /* The floor keeps the date readable on the 960x480 Echo Show 5. */
+  /* The floor keeps the date readable on a small screen. The Clock layout
+   * sets its own, a size up (ClockLayout.css). */
   font-size: max(12px, calc(var(--tl-flip-u) * 0.062));
   font-weight: 360;
-  /* opsz follows the size (sturdier at the Echo Show 5's 14px, finer at
+  /* opsz follows the size (sturdier at the Echo Show 5's 24px, finer at
    * 1080p); SOFT and WONK off for the plain engraved capitals of the
    * reference. */
   font-optical-sizing: auto;
@@ -472,28 +474,6 @@
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--tl-flip-ink);
-}
-
-/* Tracking trails the last letter too; the matching indent keeps the text
- * centred between its rules. */
-.tl-flip__date-text {
-  margin: 0 calc(var(--tl-flip-u) * 0.085);
-  padding-left: 0.34em;
-}
-
-/* Hairlines either side, fading out toward the screen edges. */
-.tl-flip__rule {
-  flex: 0 0 auto;
-  width: calc(var(--tl-flip-u) * 0.24);
-  height: max(1px, calc(var(--tl-flip-u) * 0.0024));
-}
-
-.tl-flip__rule--l {
-  background: linear-gradient(90deg, rgba(239, 227, 203, 0) 0%, rgba(239, 227, 203, 0.62) 55%);
-}
-
-.tl-flip__rule--r {
-  background: linear-gradient(90deg, rgba(239, 227, 203, 0.62) 45%, rgba(239, 227, 203, 0) 100%);
 }
 
 /* --- Reduced motion ---------------------------------------------------------------- */

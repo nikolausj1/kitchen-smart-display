@@ -15,6 +15,7 @@ import './FlipClock.css'
 // cards, an AM / PM tab on the hour card's left edge, and the date underneath.
 //
 // Props: now (a Date; the only clock it reads), hour24 (00..23 and no tab),
+// showMeridiem (the AM / PM tab on a 12-hour clock; off leaves a bare 1..12),
 // showDate. Everything is sized from one variable, --tl-flip-u (the card
 // height), which FlipClock.css derives from the viewport; a host that wants the
 // clock in a box (a layout editor panel) overrides that one variable with
@@ -143,15 +144,17 @@ function Pins() {
   )
 }
 
-export default function FlipClock({ now, hour24 = false, showDate = true }) {
+export default function FlipClock({ now, hour24 = false, showMeridiem = true, showDate = true }) {
   const t = readTime(now, hour24)
   const date = showDate ? dateLine(now) : ''
+  // The label keeps AM / PM either way: a screen reader still wants it.
+  const tab = showMeridiem && t.meridiem !== null
 
   return (
     <div className={`tl-flip${t.meridiem === null ? ' tl-flip--24h' : ''}`}>
       <div className="tl-flip__row" role="img" aria-label={t.label}>
         <div className="tl-flip__unit tl-flip__unit--hour">
-          {t.meridiem !== null && (
+          {tab && (
             <div className="tl-flip__tab">
               <FlipCard kind="tab" value={t.meridiem} mountDelayMs={MOUNT_DELAY_MS.tab} />
             </div>
@@ -176,13 +179,7 @@ export default function FlipClock({ now, hour24 = false, showDate = true }) {
         </div>
       </div>
 
-      {date && (
-        <div className="tl-flip__date">
-          <span className="tl-flip__rule tl-flip__rule--l" aria-hidden="true" />
-          <span className="tl-flip__date-text">{date}</span>
-          <span className="tl-flip__rule tl-flip__rule--r" aria-hidden="true" />
-        </div>
-      )}
+      {date && <div className="tl-flip__date">{date}</div>}
     </div>
   )
 }
