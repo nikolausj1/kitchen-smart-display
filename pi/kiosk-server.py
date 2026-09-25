@@ -36,20 +36,29 @@
 # The output name is auto-detected from wlr-randr at request time (so the
 # server stays correct even if the cable is plugged into a different HDMI
 # port between reboots).
+#
+# And it reports on the Pi itself (see "Heartbeat to the hub" below):
+#
+#   GET  /api/health       -> throttle flags, temperature, uptime, load, memory,
+#                             disk, kernel, model, build (read-only, LAN too);
+#                             the same report is POSTed to the hub every minute
 
 import datetime
 import json
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
+import syslog
 import threading
 import time
 import urllib.error
 import urllib.request
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 KIOSK_DIR = '/home/pi/kiosk'
 # LEGACY, rollback week only (see the TODO at the top). Shared state the
@@ -547,6 +556,348 @@ def start_refresh(trigger):
     return True, None
 
 
+# --- Heartbeat to the hub ----------------------------------------------------
+# Every minute this server tells the hub how the Pi itself is doing, so a power
+# problem shows on the dashboard's Screen card instead of reading as a software
+# fault. On 2026-09-22 the kitchen hung unattended with throttled=0x50000
+# (undervoltage and throttling since boot): it runs off an outlet's USB-A port,
+# which cannot deliver the 27 W a Pi 5 wants, and nothing on any screen said
+# so. The hub keeps the latest report per screen and logs power events
+# (frameserver/lib/health.mjs).
+#
+#   POST <hub>/api/devices/<DEVICE_ID>/health   every 60 s, first 10 s after start
+#   GET  /api/health                            the same report, here, no SSH
+#
+#   { id, at, uptimeS, throttled: { raw, underVoltageNow, armFreqCappedNow,
+#     throttledNow, softTempLimitNow, underVoltageOccurred, ...Occurred },
+#     tempC, load1, memFreeMb, diskFreeGb, kernel, model, build,
+#     underVoltageDips, lastDipAgoS }
+#
+# Whatever this machine cannot read is null (a Mac has no vcgencmd), and
+# nothing here may take the server down. HUB_URL overrides the hub; otherwise
+# nuc.local, as the kitchen's Chromium reaches it (code/src/lib/hub.js), then
+# the NUC's address, so a broken mDNS cannot silence the heartbeat. A change of
+# outcome (delivered, hub unreachable, hub answered an error) and a change of
+# the throttle register are logged once each, to stderr and to the journal
+# (persistent on the Pi since 2026-09-24), never once a minute.
+DEVICE_ID = os.environ.get('DEVICE_ID', 'kitchen')
+HUB_URLS = ([os.environ['HUB_URL'].strip().rstrip('/')] if os.environ.get('HUB_URL', '').strip()
+            else ['http://nuc.local:8095', 'http://192.168.4.61:8095'])
+HEARTBEAT_FIRST_S = 10
+HEARTBEAT_EVERY_S = 60
+HEARTBEAT_TIMEOUT_S = 5
+
+# `vcgencmd get_throttled`: bits 0-3 are the state now, bits 16-19 the same four
+# conditions "has occurred since boot" (sticky until the next boot).
+THROTTLE_BITS = (
+    (0, 'underVoltageNow'), (1, 'armFreqCappedNow'),
+    (2, 'throttledNow'), (3, 'softTempLimitNow'),
+    (16, 'underVoltageOccurred'), (17, 'armFreqCappedOccurred'),
+    (18, 'throttledOccurred'), (19, 'softTempLimitOccurred'),
+)
+
+
+def decode_throttled(raw):
+    """Decode `vcgencmd get_throttled` into named flags; None if unreadable.
+
+    Takes the command's output ('throttled=0x50000'), the hex alone, or an int.
+
+    >>> d = decode_throttled('throttled=0x50000')
+    >>> d['raw'], d['underVoltageNow'], d['underVoltageOccurred'], d['throttledOccurred']
+    ('0x50000', False, True, True)
+    >>> decode_throttled('throttled=0x0')['underVoltageOccurred']
+    False
+    >>> decode_throttled(None) is None
+    True
+    """
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        value = raw
+    elif isinstance(raw, str):
+        m = re.search(r'0x([0-9a-fA-F]+)', raw)
+        if not m:
+            return None
+        value = int(m.group(1), 16)
+    else:
+        return None
+    if value < 0:
+        return None
+    flags = {'raw': hex(value)}
+    for bit, name in THROTTLE_BITS:
+        flags[name] = bool((value >> bit) & 1)
+    return flags
+
+
+def _run(cmd):
+    """A short command's stdout, or None when it is missing or fails."""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _read_text(path):
+    try:
+        with open(path, 'r', errors='replace') as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def _uptime_s():
+    try:
+        return float(_read_text('/proc/uptime').split()[0])
+    except (AttributeError, IndexError, ValueError):
+        return None
+
+
+def _temp_c():
+    try:
+        return round(int(_read_text('/sys/class/thermal/thermal_zone0/temp')) / 1000, 1)
+    except (TypeError, ValueError):
+        pass
+    m = re.search(r'temp=([\d.]+)', _run(['vcgencmd', 'measure_temp']) or '')
+    return float(m.group(1)) if m else None
+
+
+def _load1():
+    try:
+        return round(os.getloadavg()[0], 2)
+    except (AttributeError, OSError):
+        return None
+
+
+def _mem_free_mb():
+    """MemAvailable, what a new program could still get, in MiB."""
+    m = re.search(r'^MemAvailable:\s+(\d+) kB', _read_text('/proc/meminfo') or '', re.M)
+    return int(m.group(1)) // 1024 if m else None
+
+
+def _disk_free_gb():
+    try:
+        return round(shutil.disk_usage('/').free / 1024 ** 3, 1)
+    except OSError:
+        return None
+
+
+def _model():
+    return (_read_text('/proc/device-tree/model') or '').replace('\x00', '').strip() or None
+
+
+def _build_stamp():
+    """The served bundle's build.json stamp ("<sha> - <build time>"), or None."""
+    try:
+        stamp = json.loads(_read_text(os.path.join(KIOSK_DIR, 'build.json')) or 'null').get('stamp')
+    except (ValueError, AttributeError):
+        return None
+    return stamp if isinstance(stamp, str) and stamp else None
+
+
+def kmsg_dip_usec(line):
+    r"""The timestamp (microseconds since boot) of a kernel log record that is
+    the undervoltage warning, else None. One /dev/kmsg record header per line.
+
+    >>> kmsg_dip_usec(b'2,4051,226100123456,-;hwmon hwmon3: Undervoltage detected!')
+    226100123456
+    >>> kmsg_dip_usec(b'6,4052,226102123456,-;hwmon hwmon3: Voltage normalised') is None
+    True
+    """
+    head, sep, text = line.partition(b';')
+    if not sep or b'Undervoltage detected' not in text:
+        return None
+    try:
+        return int(head.split(b',')[2])
+    except (IndexError, ValueError):
+        return None
+
+
+class KernelDips:
+    """Counts the kernel's "Undervoltage detected!" warnings this boot.
+
+    get_throttled only says undervoltage has happened since boot. The kernel's
+    rpi_volt driver logs every dip, and the kitchen's last about 2 s each (152
+    of them in the 2.5 days to 2026-09-24): far too short for a once-a-minute
+    sample to catch, so the count and the age of the last dip come from here.
+    One /dev/kmsg handle is read incrementally, so a dip that later scrolls out
+    of the kernel's ring buffer stays counted; a server started after that
+    counts what the ring still holds. (None, None) without a kernel log (Mac).
+    """
+
+    def __init__(self, path='/dev/kmsg'):
+        self.path = path
+        self.count = 0
+        self.last_usec = None
+        self._fd = None
+        self._unavailable = False
+        self._lock = threading.Lock()
+
+    def poll(self):
+        """Read what is new. Returns (count, last_usec) or (None, None)."""
+        with self._lock:
+            if self._unavailable:
+                return None, None
+            if self._fd is None:
+                try:
+                    self._fd = os.open(self.path, os.O_RDONLY | os.O_NONBLOCK)
+                except OSError:
+                    self._unavailable = True
+                    return None, None
+            while True:
+                try:
+                    chunk = os.read(self._fd, 8192)  # /dev/kmsg: one record per read
+                except BlockingIOError:
+                    break                            # caught up
+                except BrokenPipeError:
+                    continue                         # overwritten before it was read
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                for line in chunk.split(b'\n'):
+                    # Continuation lines (" SUBSYSTEM=...") start with a space.
+                    usec = kmsg_dip_usec(line) if line[:1] not in (b'', b' ') else None
+                    if usec is not None:
+                        self.count += 1
+                        self.last_usec = usec
+            return self.count, self.last_usec
+
+
+_kernel_dips = KernelDips()
+
+
+def build_payload():
+    """This Pi's health report: the heartbeat's body and GET /api/health."""
+    uptime = _uptime_s()
+    dips, last_usec = _kernel_dips.poll()
+    last_dip_ago = None
+    if uptime is not None and last_usec is not None:
+        last_dip_ago = max(0, int(uptime - last_usec / 1e6))
+    at = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds')
+    return {
+        'id': DEVICE_ID,
+        'at': at.replace('+00:00', 'Z'),
+        'uptimeS': int(uptime) if uptime is not None else None,
+        'throttled': decode_throttled(_run(['vcgencmd', 'get_throttled'])),
+        'tempC': _temp_c(),
+        'load1': _load1(),
+        'memFreeMb': _mem_free_mb(),
+        'diskFreeGb': _disk_free_gb(),
+        'kernel': platform.release() or None,
+        'model': _model(),
+        'build': _build_stamp(),
+        'underVoltageDips': dips,
+        'lastDipAgoS': last_dip_ago,
+    }
+
+
+def _why(e):
+    """A short reason for a failed request, the same text for the same failure."""
+    reason = getattr(e, 'reason', None) or e
+    return str(reason) or type(reason).__name__
+
+
+def post_heartbeat(payload):
+    """POST the report to the hub: by name first, then by address.
+
+    Returns a short outcome ('ok, ...', '... answered 404: ...', 'hub
+    unreachable (...)') that reads the same from minute to minute for the same
+    situation, so the caller can log only changes.
+    """
+    body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
+    path = f'/api/devices/{quote(DEVICE_ID, safe="")}/health'
+    failures = []
+    for base in HUB_URLS:
+        req = urllib.request.Request(base + path, data=body, method='POST', headers={
+            'Content-Type': 'application/json', 'User-Agent': HTTP_UA})
+        try:
+            with urllib.request.urlopen(req, timeout=HEARTBEAT_TIMEOUT_S) as r:
+                return f'ok, {base} answered {r.status}'
+        except urllib.error.HTTPError as e:
+            # The hub itself answered: its other address would say the same.
+            try:
+                detail = e.read(200).decode('utf-8', 'replace').strip()
+            except Exception:
+                detail = ''
+            return f'{base} answered {e.code}' + (f': {detail}' if detail else '')
+        except Exception as e:
+            failures.append(f'{base}: {_why(e)}')
+    return 'hub unreachable (' + '; '.join(failures) + ')'
+
+
+def _note(msg, level=syslog.LOG_INFO):
+    """One line in this server's log and in the journal. Never raises."""
+    try:
+        print(msg, file=sys.stderr)
+    except Exception:
+        pass
+    try:
+        syslog.syslog(level, msg)
+    except Exception:
+        pass
+
+
+def _throttle_text(flags):
+    if not flags:
+        return 'no reading (no vcgencmd here)'
+    on = [name for _, name in THROTTLE_BITS if flags.get(name)]
+    return f"{flags['raw']} ({', '.join(on) if on else 'no flags'})"
+
+
+def heartbeat_step(last, note=_note):
+    """One beat: build the report, POST it, log what changed since `last`.
+
+    `last` is what the previous beat returned ({} at first): the throttle value
+    and the outcome. The first beat logs the throttle value, as a startup
+    breadcrumb in the journal; later beats log only changes. Never raises.
+    """
+    new = dict(last)
+    try:
+        payload = build_payload()
+    except Exception as e:
+        payload, outcome = None, f'could not build the report: {e}'
+    if payload is not None:
+        flags = payload.get('throttled')
+        raw = flags.get('raw') if flags else None
+        if 'raw' not in last or raw != last['raw']:
+            flagged = any(v is True for v in (flags or {}).values())
+            note(f'throttled: {_throttle_text(flags)}',
+                 syslog.LOG_WARNING if flagged else syslog.LOG_INFO)
+        new['raw'] = raw
+        try:
+            outcome = post_heartbeat(payload)
+        except Exception as e:
+            outcome = f'heartbeat failed: {e}'
+    if outcome != last.get('outcome'):
+        note(f'heartbeat ({DEVICE_ID}): {outcome}',
+             syslog.LOG_INFO if outcome.startswith('ok') else syslog.LOG_WARNING)
+    new['outcome'] = outcome
+    return new
+
+
+def heartbeat_loop():
+    """The daemon thread: first beat HEARTBEAT_FIRST_S after start, then one
+    every HEARTBEAT_EVERY_S, forever."""
+    time.sleep(HEARTBEAT_FIRST_S)
+    last = {}
+    while True:
+        started = time.monotonic()
+        try:
+            last = heartbeat_step(last)
+        except Exception:
+            pass
+        time.sleep(max(1.0, HEARTBEAT_EVERY_S - (time.monotonic() - started)))
+
+
+def start_heartbeat():
+    """Called once the server holds its port, so the loser of a start race
+    (see BIND) never reports."""
+    try:
+        syslog.openlog('kiosk-server', syslog.LOG_PID)
+    except Exception:
+        pass
+    threading.Thread(target=heartbeat_loop, name='heartbeat', daemon=True).start()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=KIOSK_DIR, **kwargs)
@@ -688,6 +1039,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self._refuse_remote_display():
             return
+        if self.path == '/api/health' or self.path.startswith('/api/health?'):
+            # Read-only, and open to the LAN on purpose: a glance without SSH.
+            try:
+                return self._json(200, build_payload())
+            except Exception as e:
+                return self._json(500, {'ok': False, 'error': str(e)})
         if self.path == '/api/display/state':
             out = detect_output()
             state = get_display_state(out)
@@ -788,6 +1145,7 @@ class ThreadedServer(ThreadingMixIn, HTTPServer):
 def main():
     server = ThreadedServer((BIND, PORT), Handler)
     print(f'kiosk-server listening on http://{BIND}:{PORT} serving {KIOSK_DIR}')
+    start_heartbeat()
     out = detect_output()
     print(f'detected display output: {out}')
     wake_panel_on_startup()
