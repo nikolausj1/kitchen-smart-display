@@ -41,7 +41,9 @@ import './SpecPanel.css'
 // SpecBoard - a Today layout drawn from a layout spec (layoutSpec.js,
 // docs/designs/layout-editor.md): the Entry board and the Board. The layout
 // hands in its one useTodayData() result, its id and its root's classes (and,
-// for the Entry board, the backdrop layers as children); this draws the rest:
+// for the Entry board, the backdrop layers as children: a node, or a function
+// of { panels } for a backdrop that needs to know where the boxes are, as the
+// Entry board's adaptive darkness does); this draws the rest:
 //
 //   - the spec: the editor's draft in the layout editor, else the screen's
 //     saved one (config.layouts.<layoutId>), else the layout's built-in
@@ -328,7 +330,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       data-layout={layoutId}
       data-daypart={view.daypart}
     >
-      {children}
+      {typeof children === 'function' ? children({ panels }) : children}
       <div className="tl-spec-canvas">
         <SpecScrims panels={panels} />
         {panels.map((p) => (

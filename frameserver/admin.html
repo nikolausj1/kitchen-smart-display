@@ -748,6 +748,10 @@ function renderDevice(dev) {
       row(e, 'Darken photos', 'A black wash over the photos so the board reads. Used only with photos behind it.',
         percentControl(disp.entryDim ?? 0.5,
           (v) => patchDevice(dev.id, { display: { entryDim: v } }), { min: 0, max: 90, debounceMs: 300 }))
+      // Phase 1.5 (docs/designs/entry-board.md). Unset: adaptive on.
+      row(e, 'Adapt darkness to each photo', 'Darker behind a bright photo, lighter behind a night one, around the darkness above',
+        select([[true, 'On'], [false, 'Off']], disp.entryAdaptive !== false,
+          (v) => patchDevice(dev.id, { display: { entryAdaptive: v === 'true' } })))
       row(e, 'Home view', 'Where this screen rests outside the school morning. The front-door board wants Today.',
         select([['photos', 'Photos'], ['today', 'Today']], disp.homeView || 'photos',
           (v) => patchDevice(dev.id, { display: { homeView: v } })))

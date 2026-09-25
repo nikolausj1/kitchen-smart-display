@@ -1,9 +1,11 @@
 /* EntryLayout - the front-door board.
  *
- * Stacked layers, bottom to top: the full-bleed PhotoPanel, a flat black wash
- * at display.entryDim, Ambient's scrim across the lower third, then the canvas
- * the layout spec's boxes are placed on. With entryBackdrop 'black' only the
- * canvas is drawn, on black.
+ * Stacked layers, bottom to top (Entry/EntryBackdrop.jsx): the full-bleed
+ * PhotoPanel, a black wash at display.entryDim (adapted to each photo unless
+ * display.entryAdaptive is off), Ambient's scrim across the lower third, then
+ * the canvas the layout spec's boxes are placed on, with the scrims of its
+ * bare boxes under them (SpecPanel.css).
+ * With entryBackdrop 'black' only the canvas is drawn, on black.
  *
  * THE BOXES. Where each panel sits, how big, and whether it is a card come
  * from the layout spec (layoutSpec.js; DEFAULT_ENTRY_SPEC is the phase 1
@@ -88,6 +90,12 @@
   inset: 0;
   background: #000;
   pointer-events: none;
+}
+
+/* Adaptive darkness: each photo's wash eases in over the photo crossfade's
+ * own 1.2 s and curve (PhotoPanel.css), so the two move together. */
+.tl-entry__dim--adaptive {
+  transition: opacity 1200ms ease-in-out;
 }
 
 .tl-entry__scrim {

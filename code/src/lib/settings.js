@@ -559,6 +559,11 @@ export const DEFAULTS = {
     // Off by default. The Framed views drift on their own; a static panel grid
     // does not, so the Board layout wants this on.
     pixelShift: false,
+    // Entry board only. Move the wash with each photo, around entryDim: darker
+    // behind a bright one, lighter behind a night one
+    // (views/TodayLayouts/lib/backdropLuma.js). false keeps it flat at
+    // entryDim, the phase 1 look.
+    entryAdaptive: true,
   },
   slideshow: {
     intervalMs: 6000,
