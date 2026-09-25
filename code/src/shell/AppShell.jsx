@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import TodayLayoutSwitch from '../views/TodayLayouts/TodayLayoutSwitch.jsx'
 import PhotoSlideshow from '../views/PhotoSlideshow/PhotoSlideshow.jsx'
 import NowPlaying from '../views/NowPlaying/NowPlaying.jsx'
+import PlexView from '../views/Plex/PlexView.jsx'
 import SettingsView from '../views/Settings/SettingsView.jsx'
 import MenuPill from './MenuPill.jsx'
 import { ViewProvider, useView } from './ViewContext.jsx'
@@ -14,6 +15,13 @@ import EchoMode from './EchoMode.jsx'
 import useReloadOnDeploy from './useReloadOnDeploy.js'
 import { getHomeView } from './homeView.js'
 import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
+import {
+  PLEX_OFF,
+  effectivePlexFollow,
+  getPlexNow,
+  sessionForPlayer,
+  subscribePlexNow,
+} from '../hooks/usePlexNow.js'
 import { isNoSchoolToday } from '../lib/schoolDay.js'
 import { AUTO_MODE, EDIT_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
 
@@ -128,9 +136,149 @@ function CurrentView() {
       return <NowPlaying />
     case 'settings':
       return <SettingsView />
+    case 'plex':
+      return <PlexView />
     default:
       return <TodayLayoutSwitch />
   }
+}
+
+// --- Plex follow ---------------------------------------------------------------
+// A screen whose display.plexFollow names a Plex player (the family-room Echo
+// follows the living-room Apple TV) shows the Plex view while that player is
+// watching something, and goes back when it stops:
+//   - the player's session playing (or buffering) the same item for 10
+//     continuous seconds -> the Plex view, unless someone is in Settings
+//     (it idles home after a minute, and the rule fires then). The view it
+//     came from is kept for the log.
+//   - on the Plex view a pause keeps it (the view shows a Paused badge);
+//     paused for more than 10 minutes -> the home view.
+//   - the session gone (or stopped) for 30 s -> the home view.
+//   - no answer from the hub, or none from Plex for over 15 s, for 2 minutes
+//     -> the home view (a hub restart mid-film must not bounce the screen).
+// Leaving the Plex view any other way (the menu, a dashboard nudge, the
+// morning auto-show) suppresses re-entry until a different item plays or the
+// session has ended: nobody wants the screen snatched back 10 s after they
+// chose Photos. Its own exits do not count.
+// It does not wake the screen: in the dim or off window the view changes
+// under the night overlay, and a touch shows it (someone watching a film at
+// 1 am has not asked for the family room to light up). Not mounted in edit
+// mode or on the legacy web TV. Polls the hub only while following
+// (hooks/usePlexNow.js); ?plexTest=<machineId> stands in for the setting in
+// dev builds.
+const PLEX_ENTER_MS = 10 * 1000
+const PLEX_GONE_MS = 30 * 1000
+const PLEX_PAUSED_MS = 10 * 60 * 1000
+const PLEX_BLIND_MS = 2 * 60 * 1000
+
+function PlexFollow() {
+  const { view, setView } = useView()
+  const follow = effectivePlexFollow(useSettings().display?.plexFollow)
+  const following = follow !== PLEX_OFF
+  const viewRef = useRef(view)
+  const prevViewRef = useRef(view)
+  const track = useRef({
+    playingSince: 0,
+    playingItem: null,
+    pausedSince: 0,
+    goneSince: 0,
+    blindSince: 0,
+    suppressed: null,
+    lastItem: null,
+    exiting: false,
+    cameFrom: null,
+  })
+
+  // Every way off the Plex view that is not our own exit is someone choosing
+  // something else.
+  useEffect(() => {
+    const prev = prevViewRef.current
+    prevViewRef.current = view
+    viewRef.current = view
+    const t = track.current
+    if (prev !== 'plex' || view === 'plex') return
+    if (t.exiting) {
+      t.exiting = false
+      return
+    }
+    if (!following) return
+    t.suppressed = t.lastItem || '*'
+    logEvent(`plex follow: left for ${view} by hand; no re-entry until a new item`)
+  }, [view, following])
+
+  useEffect(() => {
+    if (!following) return undefined
+    const t = track.current
+    // A newly followed player starts clean.
+    Object.assign(t, {
+      playingSince: 0,
+      playingItem: null,
+      pausedSince: 0,
+      goneSince: 0,
+      blindSince: 0,
+      suppressed: null,
+      lastItem: null,
+    })
+
+    function evaluate() {
+      const snap = getPlexNow()
+      const nowMs = Date.now()
+      const blind = !snap.loaded || (!!snap.hubError && snap.stale) || snap.plexDown
+      const session = blind ? null : sessionForPlayer(follow, snap)
+      const state = blind ? 'blind' : session ? session.player.state : 'gone'
+      const item = session ? session.media.ratingKey || session.key : null
+      const since = (key, on) => {
+        if (!on) t[key] = 0
+        else if (!t[key]) t[key] = nowMs
+      }
+      // The streak is per item: a new one (the next episode) starts again.
+      if (state !== 'playing' && state !== 'buffering') {
+        t.playingSince = 0
+        t.playingItem = null
+      } else if (!t.playingSince || t.playingItem !== item) {
+        t.playingSince = nowMs
+        t.playingItem = item
+      }
+      since('pausedSince', state === 'paused')
+      since('goneSince', state === 'gone' || state === 'stopped')
+      since('blindSince', state === 'blind')
+      if (item) t.lastItem = item
+      if (t.suppressed != null) {
+        const newItem = item && t.suppressed !== '*' && item !== t.suppressed
+        const ended = t.goneSince && nowMs - t.goneSince >= PLEX_GONE_MS
+        if (newItem || ended) t.suppressed = null
+      }
+
+      if (viewRef.current !== 'plex') {
+        if (viewRef.current === 'settings') return
+        if (t.suppressed == null && t.playingSince && nowMs - t.playingSince >= PLEX_ENTER_MS) {
+          t.cameFrom = viewRef.current
+          logEvent(`plex follow: ${session.player.name} playing -> plex (from ${t.cameFrom})`)
+          setView('plex')
+        }
+        return
+      }
+      let why = null
+      if (t.goneSince && nowMs - t.goneSince >= PLEX_GONE_MS) why = 'the session ended'
+      else if (t.pausedSince && nowMs - t.pausedSince >= PLEX_PAUSED_MS) why = 'paused 10 minutes'
+      else if (t.blindSince && nowMs - t.blindSince >= PLEX_BLIND_MS) why = 'no answer from the hub'
+      if (!why) return
+      const home = getHomeView()
+      t.exiting = true
+      logEvent(`plex follow: ${why} -> ${home} (came from ${t.cameFrom || 'unknown'})`)
+      setView(home)
+    }
+
+    const unsubscribe = subscribePlexNow(evaluate)
+    const id = setInterval(evaluate, 1000)
+    evaluate()
+    return () => {
+      unsubscribe()
+      clearInterval(id)
+    }
+  }, [following, follow, setView])
+
+  return null
 }
 
 // The deploy watcher as a component, so edit mode can simply not mount it.
@@ -219,7 +367,7 @@ function Shell({ initialView }) {
         setView(ORDER[(i + delta + ORDER.length) % ORDER.length])
         return
       }
-      if (['today', 'photos', 'music', 'settings'].includes(target)) {
+      if (['today', 'photos', 'music', 'settings', 'plex'].includes(target)) {
         setView(target)
       }
     }
@@ -275,7 +423,7 @@ function Shell({ initialView }) {
     if (EDIT_MODE) return undefined
     function onShowView(e) {
       const target = e?.detail?.view
-      if (!['today', 'photos', 'music', 'settings'].includes(target)) return
+      if (!['today', 'photos', 'music', 'settings', 'plex'].includes(target)) return
       logEvent(`hub: show ${target}`)
       window.dispatchEvent(new CustomEvent('display-wake-now'))
       setView(target)
@@ -436,6 +584,8 @@ function Shell({ initialView }) {
       {/* Keep-alive audio, fullscreen and the tap-to-start overlay for Silk. */}
       {KIOSK_ECHO && !EDIT_MODE && <EchoMode />}
       {!EDIT_MODE && <ReloadOnDeploy />}
+      {/* Show the Plex view while the followed player plays (display.plexFollow). */}
+      {!EDIT_MODE && !KIOSK_TV && <PlexFollow />}
       <DebugHud />
     </div>
   )

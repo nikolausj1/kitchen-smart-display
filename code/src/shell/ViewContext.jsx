@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useState } from 'react'
 
 // ViewContext - app-level current view + setter.
-// Views: 'today' | 'photos' | 'music' | 'settings'.
-// 'music' and 'settings' are stubbed in Phase 1.
+// Views: 'today' | 'photos' | 'music' | 'settings' | 'plex'.
+// 'plex' is the Plex second screen (views/Plex/PlexView.jsx), shown when the
+// followed Plex player is playing (AppShell PlexFollow) or on a nudge.
 
 const ViewContext = createContext({
   view: 'today',

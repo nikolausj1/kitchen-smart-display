@@ -311,7 +311,7 @@ function handleHubCommand(cmd) {
     // nudge, exactly as if someone had tapped the menu on the screen. The
     // schedule watchers and idle rules carry on afterwards; nothing is pinned.
     // AppShell owns the view state, so it listens for this and switches.
-    const VIEWS = ['photos', 'today', 'music', 'settings']
+    const VIEWS = ['photos', 'today', 'music', 'settings', 'plex']
     if (VIEWS.includes(cmd.view)) {
       window.dispatchEvent(new CustomEvent('hub-show-view', { detail: { view: cmd.view } }))
     }
@@ -559,6 +559,12 @@ export const DEFAULTS = {
     // Off by default. The Framed views drift on their own; a static panel grid
     // does not, so the Board layout wants this on.
     pixelShift: false,
+    // The Plex player this screen follows: 'off', or a player's
+    // machineIdentifier (the hub's /api/plex/players lists them). While that
+    // player plays for 10 s the screen shows the Plex view (what is on, the
+    // cast); it goes home 30 s after the session ends or after 10 minutes
+    // paused (shell/AppShell.jsx PlexFollow, frameserver/lib/plex.mjs).
+    plexFollow: 'off',
   },
   slideshow: {
     intervalMs: 6000,

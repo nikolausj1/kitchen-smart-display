@@ -4,6 +4,7 @@ import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView, normalizeHomeView } from '../../shell/homeView.js'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
+import { PLEX_OFF, usePlexPlayers } from '../../hooks/usePlexNow.js'
 import { LAYOUT_IDS, LAYOUT_LABELS, normalizeLayoutId } from '../TodayLayouts/registry.js'
 import { REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import './SettingsView.css'
@@ -416,6 +417,38 @@ function PhotoRefreshControl() {
   )
 }
 
+// The Plex players the hub has seen (GET /api/plex/players, asked once when
+// Settings opens). Two players with one name (two "Apple TV"s) get their
+// product to tell them apart; a saved player the hub no longer lists stays
+// selectable, so opening Settings never silently changes the setting.
+function PlexFollowSelect({ value, onChange }) {
+  const { players, loading } = usePlexPlayers()
+  const current = typeof value === 'string' && value.trim() && value !== PLEX_OFF ? value : PLEX_OFF
+  const known = players.some((p) => p.machineId === current)
+  const label = (p) =>
+    players.filter((q) => q.name === p.name).length > 1
+      ? `${p.name} (${p.product || p.platform || p.machineId.slice(0, 8)})`
+      : p.name
+  return (
+    <select
+      className="settings-select"
+      value={current}
+      onChange={(e) => onChange(e.target.value)}
+      data-interactive="true"
+    >
+      <option value={PLEX_OFF}>Off</option>
+      {players.map((p) => (
+        <option key={p.machineId} value={p.machineId}>
+          {label(p)}
+        </option>
+      ))}
+      {current !== PLEX_OFF && !known && (
+        <option value={current}>{loading ? 'Loading…' : `Unknown player (${current.slice(0, 8)})`}</option>
+      )}
+    </select>
+  )
+}
+
 // --- View --------------------------------------------------------------------
 
 export default function SettingsView() {
@@ -776,6 +809,20 @@ export default function SettingsView() {
               apiBase={sonos.apiBase}
               value={sonos.room}
               onChange={(v) => updateSettings({ sonos: { room: v } })}
+            />
+          </Row>
+        </section>
+
+        {/* --- Plex --- */}
+        <section className="settings-section">
+          <h2 className="settings-section__title">Plex</h2>
+          <Row
+            label="Follow Plex player"
+            hint="When this player has been playing for 10 seconds, this screen shows what is on: the title, the episode, the cast. It goes back 30 seconds after playback stops. Players appear here once they have played something."
+          >
+            <PlexFollowSelect
+              value={display?.plexFollow}
+              onChange={(v) => updateSettings({ display: { plexFollow: v } })}
             />
           </Row>
         </section>

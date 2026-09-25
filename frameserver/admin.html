@@ -239,6 +239,43 @@
     .art-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem .7rem; }
     #toast { left: 1rem; right: 1rem; bottom: max(1rem, env(safe-area-inset-bottom)); text-align: center; }
   }
+
+  /* ==== health: the Power line and Power events ==========================
+     From each screen's heartbeat (pi/kiosk-server.py -> frameserver/lib/
+     health.mjs). Green: no flags. Amber: a flag has been set since boot.
+     Red: a flag is set right now. Grey: the heartbeat stopped. */
+  :root { --pw-amber: #8a5a00; --pw-red: #b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --pw-amber: #e0a33a; --pw-red: #f07b72; }
+  }
+  .side { display: grid; gap: 1.25rem; align-content: start; min-width: 0; }
+  .power-row { margin-bottom: .6rem; }
+  .power-state { font-weight: 600; }
+  .power-state .dot { background: currentColor; }
+  .power-detail { font-weight: 400; color: var(--muted); }
+  .power-meta { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; margin-top: .15rem; }
+  .pw-ok { color: var(--accent); }
+  .pw-amber { color: var(--pw-amber); }
+  .pw-red { color: var(--pw-red); }
+  .pw-grey { color: var(--muted); }
+  .pe { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: .75rem .9rem; }
+  .pe > h2 { margin: 0 0 .3rem; font-size: .85rem; }
+  .pe > h2 small { margin-left: .4rem; color: var(--muted); font-size: .75rem; font-weight: 400; }
+  .pe table { width: 100%; border-collapse: collapse; font-size: .78rem; line-height: 1.35; }
+  .pe td { padding: .4rem 0; vertical-align: top; border-top: 1px solid var(--line); }
+  .pe tr:first-child td { border-top: 0; }
+  .pe td + td { text-align: right; padding-left: .6rem; }
+  .pe .when { font-variant-numeric: tabular-nums; }
+  .pe .dev { color: var(--muted); }
+  .pe .kind { font-weight: 600; white-space: nowrap; }
+  .pe code { font-size: .74rem; }
+  .pe .pe-none { margin: 0; color: var(--muted); font-size: .8rem; }
+  /* With the sidebar gone, the events move below the settings. */
+  @media (max-width: 760px) {
+    .side { display: contents; }
+    #powerEvents { order: 1; }
+  }
+  /* ==== /health ========================================================== */
 </style>
 </head>
 <body>
@@ -250,7 +287,12 @@
 </header>
 
 <div class="layout">
-  <nav id="nav"></nav>
+  <!-- health: the screen list, and the Power events under it -->
+  <div class="side">
+    <nav id="nav"></nav>
+    <section class="pe" id="powerEvents" aria-label="Power events" hidden></section>
+  </div>
+  <!-- /health -->
   <main id="main"></main>
 </div>
 <div id="toast"></div>
@@ -311,12 +353,13 @@ async function loadDevices() {
 }
 
 // What the page was last rendered from, minus lastSeenAt (which moves on every
-// screen poll and is patched in place by updateAges) and screen (the viewport a
-// screen reports for the layout editor; not shown here).
+// screen poll and is patched in place by updateAges), screen (the viewport a
+// screen reports for the layout editor; not shown here) and health (the Power
+// line, repainted in place too; only whether a screen reports at all counts).
 let renderedSig = null
 function dataSig() {
   return JSON.stringify([
-    devices.map(({ lastSeenAt, screen, ...rest }) => rest), shared,
+    devices.map(({ lastSeenAt, screen, health, ...rest }) => ({ ...rest, reports: !!health })), shared,
     albums.map((x) => [x.id, x.name, x.count]),
   ])
 }
@@ -426,6 +469,7 @@ function updateAges() {
     const staleMs = Number(el.dataset.staleMs) || 0
     el.classList.toggle('stale', t != null && staleMs > 0 && Date.now() - t > staleMs)
   }
+  paintPower() // health: the Power lines and the Power events, in place
 }
 
 function card(title, hint) {
@@ -541,6 +585,8 @@ function renderDevice(dev) {
         : isTV ? '' : 'Reload page restarts the app on that screen. ') +
       'Show switches the view once, like tapping the menu; the morning schedule still applies afterwards.')
     p.querySelector('h2').appendChild(seenBadge(dev))
+    // health: the Power line, for a screen that sends a heartbeat (paintPower).
+    if (dev.health) p.appendChild(powerRow(dev))
 
     // One-shot commands. ts identifies the command; the device tracks the last
     // one it ran and ignores anything older than two minutes, so a reload (or
@@ -584,7 +630,8 @@ function renderDevice(dev) {
     lbl.className = 'toolbar-label'
     lbl.textContent = 'Show'
     show.appendChild(lbl)
-    for (const [view, label] of [['photos', 'Photos'], ['today', 'Today'], ['music', 'Now Playing']]) {
+    for (const [view, label] of [['photos', 'Photos'], ['today', 'Today'], ['music', 'Now Playing'],
+      ...(isWeb ? [['plex', 'Plex']] : [])]) {
       const b = document.createElement('button')
       b.className = 'ghost'
       b.textContent = label
@@ -751,6 +798,35 @@ function renderDevice(dev) {
       row(e, 'Home view', 'Where this screen rests outside the school morning. The front-door board wants Today.',
         select([['photos', 'Photos'], ['today', 'Today']], disp.homeView || 'photos',
           (v) => patchDevice(dev.id, { display: { homeView: v } })))
+    }
+
+    // --- Plex (web screens) ---
+    // display.plexFollow: 'off' or a Plex player's machineIdentifier. The hub
+    // lists every player it has seen in a Plex session (GET /api/plex/players),
+    // fetched when the card is drawn. A saved player the hub no longer lists
+    // stays selectable, so a redraw never changes the setting. See
+    // frameserver/lib/plex.mjs and code/src/shell/AppShell.jsx (PlexFollow).
+    if (isWeb) {
+      const px = card('Plex',
+        'Follow a Plex player: while it plays something, this screen shows what is on (title, episode, cast) and goes back 30 seconds after it stops. Takes effect within about 10 seconds.')
+      const cur = disp.plexFollow && disp.plexFollow !== 'off' ? disp.plexFollow : 'off'
+      const sel = select([['off', 'Off'], ...(cur === 'off' ? [] : [[cur, 'Loading players…']])], cur,
+        (v) => patchDevice(dev.id, { display: { plexFollow: v } }))
+      row(px, 'Follow Plex player', 'Players appear once they have played something while the hub was running.', sel)
+      api('/api/plex/players').then(({ players = [] }) => {
+        const named = (p) => (players.filter((q) => q.name === p.name).length > 1
+          ? `${p.name} (${p.product || p.platform || p.machineId.slice(0, 8)})` : p.name)
+        const opts = [['off', 'Off'], ...players.map((p) => [p.machineId, named(p)])]
+        if (cur !== 'off' && !players.some((p) => p.machineId === cur)) {
+          opts.push([cur, `Unknown player (${cur.slice(0, 8)})`])
+        }
+        while (sel.firstChild) sel.removeChild(sel.firstChild)
+        for (const [v, text] of opts) {
+          const o = document.createElement('option')
+          o.value = v; o.textContent = text; o.selected = v === cur
+          sel.appendChild(o)
+        }
+      }).catch(() => { /* a hub without /api/plex/players: Off (and the saved value) stay */ })
     }
 
     const d = card('Display', isEcho
@@ -1347,6 +1423,179 @@ function paintArt(box) {
   }
   box.appendChild(grid)
 }
+
+// ==== health: the Power line and Power events ================================
+// Each screen that runs a server of its own (the kitchen Pi, pi/kiosk-server.py)
+// POSTs a heartbeat every minute: the firmware's throttle flags, temperature,
+// uptime, the build it serves. The hub keeps the latest and logs power events
+// (frameserver/lib/health.mjs). A Screen card shows a Power line once its
+// screen reports, and the events sit under the screen list. Both are
+// read-only and repainted in place from updateAges, so they never disturb an
+// edit and keep aging when the hub stops answering.
+
+// [label, now flag, since-boot flag]; the first one set names the state.
+const POWER_FLAGS = [
+  ['Undervoltage', 'underVoltageNow', 'underVoltageOccurred'],
+  ['Throttled', 'throttledNow', 'throttledOccurred'],
+  ['CPU frequency capped', 'armFreqCappedNow', 'armFreqCappedOccurred'],
+  ['Temperature limit', 'softTempLimitNow', 'softTempLimitOccurred'],
+]
+const POWER_KINDS = { undervoltage: 'undervoltage', throttled: 'throttled', freq: 'frequency capped', temp: 'temperature limit' }
+const POWER_EVENTS_MS = 30 * 1000
+let powerEvents = null // GET /api/health/events, newest first; null = none to show
+
+// "40 s", "12 min", "3 h", "2 d": how long something has lasted.
+function spanText(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  return h < 48 ? `${h} h` : `${Math.floor(h / 24)} d`
+}
+
+// Uptime: "12 min", "5 h 12 min", "2 d 15 h".
+function upText(sec) {
+  const m = Math.floor(sec / 60)
+  const h = Math.floor(m / 60)
+  if (h < 1) return `${m} min`
+  return h < 24 ? `${h} h ${m % 60} min` : `${Math.floor(h / 24)} d ${h % 24} h`
+}
+
+// An event's time: "7:12 AM" today, "Sep 22, 8:34 AM" before.
+function clockText(iso) {
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return ''
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString()
+    ? time : `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`
+}
+
+function powerEventsText(h) {
+  const n = h.events24h || 0
+  if (n > 0) return `${n} event${n === 1 ? '' : 's'} in 24 h, last ${clockText(h.lastEvent.at)}`
+  return h.lastEvent ? `no events in 24 h, last ${clockText(h.lastEvent.at)}` : ''
+}
+
+// A screen's health -> { cls, text, detail: [], raw, meta: [] }.
+function powerView(h) {
+  const L = h.latest
+  const got = seenTime(h.receivedAt)
+  const age = got == null ? null : Math.max(0, Date.now() - got)
+  const stale = !L || age == null || age > (h.staleAfterS || 180) * 1000
+  const flags = L && L.throttled
+  const now = flags && POWER_FLAGS.find(([, n]) => flags[n])
+  const since = flags && POWER_FLAGS.find(([, , o]) => flags[o])
+  const state = !flags ? ['pw-grey', 'No throttle reading']
+    : now ? ['pw-red', `${now[0]} now`]
+    : since ? ['pw-amber', `${since[0]} since boot`]
+    : ['pw-ok', 'Power OK']
+  const v = { cls: state[0], text: state[1], detail: [], raw: null, meta: [] }
+  // The kernel's own count: every dip, where get_throttled only says "since boot".
+  if (L && L.underVoltageDips > 0) {
+    const n = L.underVoltageDips
+    const last = typeof L.lastDipAgoS === 'number' && got != null ? `, last ${agoText(got - L.lastDipAgoS * 1000)}` : ''
+    v.detail.push(`${n} dip${n === 1 ? '' : 's'} this boot${last}`)
+  }
+  const ev = powerEventsText(h)
+  if (ev && (now || since || h.events24h > 0)) v.detail.push(ev)
+  if (now || since) v.raw = flags.raw
+  if (stale) {
+    v.detail = [L && `last report: ${state[1][0].toLowerCase()}${state[1].slice(1)}`, ev].filter(Boolean)
+    v.raw = null
+    v.cls = 'pw-grey'
+    const started = seenTime(h.hubStartedAt)
+    v.text = L ? `No heartbeat for ${spanText(age)}`
+      : `No heartbeat since the hub started${started == null ? '' : `, ${agoText(started)}`}`
+  }
+  if (L) {
+    if (typeof L.tempC === 'number') v.meta.push(`${Math.round(L.tempC)} °C`)
+    if (typeof L.uptimeS === 'number') {
+      v.meta.push(stale ? `was up ${upText(L.uptimeS)}` : `up ${upText(L.uptimeS + Math.floor(age / 1000))}`)
+    }
+    if (!stale) v.meta.push(`heartbeat ${agoText(got)}`)
+    if (L.build) v.meta.push(`build ${L.build}`)
+  }
+  return v
+}
+
+function powerRow(dev) {
+  const r = make('div', 'row info power-row')
+  const v = make('div', 'v')
+  v.dataset.powerId = dev.id
+  r.append(make('div', 'k', 'Power'), v)
+  return r
+}
+
+function paintPowerLine(el, h) {
+  el.innerHTML = ''
+  if (!h) return el.appendChild(make('span', 'muted', 'No heartbeat'))
+  const v = powerView(h)
+  const line = make('div', `power-state ${v.cls}`)
+  line.append(make('span', 'dot'), v.text)
+  if (v.detail.length || v.raw) {
+    const d = make('span', 'power-detail', v.detail.length ? ` · ${v.detail.join(' · ')}` : '')
+    if (v.raw) d.append(' · ', make('code', null, v.raw))
+    line.appendChild(d)
+  }
+  const L = h.latest
+  if (L) line.title = [L.model, L.kernel && `kernel ${L.kernel}`, L.throttled && `throttled=${L.throttled.raw}`]
+    .filter(Boolean).join(' · ')
+  el.appendChild(line)
+  if (v.meta.length) el.appendChild(make('div', 'power-meta', v.meta.join(' · ')))
+}
+
+function paintPowerEvents() {
+  const box = $('#powerEvents')
+  if (!box) return
+  // Shown once any screen reports, or there is history to show.
+  box.hidden = powerEvents == null || (!powerEvents.length && !devices.some((d) => d.health))
+  if (box.hidden) return
+  box.innerHTML = ''
+  const head = make('h2', null, 'Power events')
+  head.appendChild(make('small', null, 'newest 10'))
+  box.appendChild(head)
+  if (!powerEvents.length) return box.appendChild(make('p', 'pe-none', 'None logged.'))
+  const table = make('table')
+  const body = make('tbody')
+  for (const e of powerEvents) {
+    const tr = make('tr')
+    tr.title = [e.at, typeof e.tempC === 'number' ? `${e.tempC} °C` : '',
+      typeof e.uptimeS === 'number' ? `up ${upText(e.uptimeS)}` : ''].filter(Boolean).join(' · ')
+    const dev = devices.find((d) => d.id === e.id)
+    const when = make('td')
+    when.append(make('div', 'when', clockText(e.at)), make('div', 'dev', (dev && dev.name) || e.id))
+    const what = make('td')
+    what.append(make('div', `kind ${e.now ? 'pw-red' : 'pw-amber'}`, `${POWER_KINDS[e.kind] || e.kind}${e.now ? ', now' : ''}`),
+      make('code', null, e.raw || ''))
+    tr.append(when, what)
+    body.appendChild(tr)
+  }
+  table.appendChild(body)
+  box.appendChild(table)
+}
+
+function paintPower() {
+  for (const el of document.querySelectorAll('[data-power-id]')) {
+    const dev = devices.find((d) => d.id === el.dataset.powerId)
+    paintPowerLine(el, dev && dev.health)
+  }
+  paintPowerEvents()
+}
+
+// A hub without the route (not deployed yet) answers 404: no panel.
+async function loadPowerEvents() {
+  try {
+    const list = await api('/api/health/events?limit=10')
+    powerEvents = Array.isArray(list) ? list : null
+  } catch {
+    powerEvents = null
+  }
+  paintPowerEvents()
+}
+loadPowerEvents()
+setInterval(() => { if (!document.hidden) loadPowerEvents() }, POWER_EVENTS_MS)
+// ==== /health ==================================================================
 
 $('#refreshBtn').onclick = async () => {
   const b = $('#refreshBtn')

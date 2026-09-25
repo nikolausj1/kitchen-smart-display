@@ -31,13 +31,25 @@
 //   GET  /api/countdown-art           the Countdown Art index (lib/countdownArt.mjs)
 //   POST /api/countdown-art/refresh   sync it from Immich now (409 if one is running)
 //   GET  /countdown-art/<file>        one art image
+//   GET  /api/plex/now                what Plex is playing, normalized (lib/plex.mjs)
+//   GET  /api/plex/players            every Plex player seen (the follow select)
+//   POST /api/plex/command            {machineId, action}: transport, relayed to
+//                                     a player that advertises (Plex Companion)
+//   GET  /api/plex/person?tmdbId=&name=&exclude=
+//                                     a person card: TMDB (lib/tmdb.mjs) + what
+//                                     else of theirs is in the Plex library
+//   GET  /api/plex/image?path=&w=&h=  a Plex image, the token added here
 //   GET  /healthz                     liveness + a glance at everything
 //
 // Secrets and keys come from the environment or the service root's .env
 // (lib/env.mjs; the environment wins): IMMICH_URL, IMMICH_API_KEY,
 // GOOGLE_CALENDAR_KEY_FILE (default secrets/google-calendar.json, the service
 // account key, never in git), GOOGLE_CALENDAR_FIXTURE (tests). The Entry board
-// additions are specified in docs/designs/entry-board.md.
+// additions are specified in docs/designs/entry-board.md. The Plex second
+// screen: PLEX_URL (default http://127.0.0.1:32400, Plex on this box),
+// PLEX_TOKEN or the file PLEX_TOKEN_FILE (default secrets/plex-token.txt),
+// TMDB_API_KEY or the file TMDB_API_KEY_FILE (default secrets/tmdb-key.txt,
+// optional), PLEX_FIXTURE (tests). Keys and tokens are never logged.
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.
@@ -66,6 +78,8 @@ import { buildCountdowns } from './lib/countdowns.mjs'
 import { ART_EXTS, createCountdownArt } from './lib/countdownArt.mjs'
 import { createAirQuality } from './lib/airQuality.mjs'
 import { headlineFor } from './lib/headline.mjs'
+import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
+import { createTmdb } from './lib/tmdb.mjs'
 import {
   DEFAULT_SCHOOL_SLUG,
   getCachedSchoolCal,
@@ -79,7 +93,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = process.env.FRAMESERVER_ROOT || resolve(__dirname)
 // Before anything below reads process.env. Names only are logged, never values.
 const ENV_FILE = loadEnvFile(join(ROOT, '.env'))
-const ENV_KEYS = ['IMMICH_URL', 'IMMICH_API_KEY', 'GOOGLE_CALENDAR_KEY_FILE', 'GOOGLE_CALENDAR_FIXTURE']
+const ENV_KEYS = [
+  'IMMICH_URL', 'IMMICH_API_KEY', 'GOOGLE_CALENDAR_KEY_FILE', 'GOOGLE_CALENDAR_FIXTURE',
+  'PLEX_URL', 'PLEX_TOKEN', 'PLEX_TOKEN_FILE', 'PLEX_FIXTURE', 'TMDB_API_KEY', 'TMDB_API_KEY_FILE',
+]
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
 // The Vite build of code/ (index.html, assets/, icons/, build.json, ...).
@@ -97,6 +114,13 @@ const CALENDAR_KEY_FILE = resolve(ROOT, process.env.GOOGLE_CALENDAR_KEY_FILE || 
 const CALENDAR_FIXTURE = process.env.GOOGLE_CALENDAR_FIXTURE ? resolve(ROOT, process.env.GOOGLE_CALENDAR_FIXTURE) : null
 const ART_DIR = join(ROOT, 'countdown-art')
 const BIND = process.env.FRAMESERVER_BIND || '0.0.0.0'
+// Plex Media Server runs on this box; its token is copied here by hand. TMDB
+// (optional) fills the Plex view's cast pictures and person cards. Relative
+// file values resolve against ROOT, like the calendar key.
+const PLEX_URL = (process.env.PLEX_URL || DEFAULT_PLEX_URL).replace(/\/+$/, '')
+const PLEX_TOKEN_FILE = resolve(ROOT, process.env.PLEX_TOKEN_FILE || join('secrets', 'plex-token.txt'))
+const PLEX_FIXTURE = process.env.PLEX_FIXTURE ? resolve(ROOT, process.env.PLEX_FIXTURE) : null
+const TMDB_KEY_FILE = resolve(ROOT, process.env.TMDB_API_KEY_FILE || join('secrets', 'tmdb-key.txt'))
 
 const MIME = {
   '.jpg': 'image/jpeg',
@@ -397,6 +421,36 @@ const art = createCountdownArt({
   getConfig: () => ({ url: process.env.IMMICH_URL, apiKey: process.env.IMMICH_API_KEY }),
 })
 const air = createAirQuality({ dir: ROOT, getShared })
+
+// --- Plex second screen (lib/plex.mjs, lib/tmdb.mjs) ---------------------------
+// A secret from the environment (or .env), else its file, re-read at most once
+// a minute: adding or rotating one needs no restart. The value never leaves
+// the process except in a request header or query to its own service.
+function secretFrom(envName, file) {
+  let readAt = 0
+  let value = null
+  return () => {
+    const env = process.env[envName]
+    if (typeof env === 'string' && env.trim()) return env.trim()
+    if (Date.now() - readAt > 60_000) {
+      readAt = Date.now()
+      try {
+        value = readFileSync(file, 'utf8').trim() || null
+      } catch {
+        value = null
+      }
+    }
+    return value
+  }
+}
+const tmdb = createTmdb({ getKey: secretFrom('TMDB_API_KEY', TMDB_KEY_FILE) })
+const plex = createPlex({
+  dir: ROOT,
+  url: PLEX_URL,
+  getToken: secretFrom('PLEX_TOKEN', PLEX_TOKEN_FILE),
+  tmdb,
+  fixtureFile: PLEX_FIXTURE,
+})
 
 // Everything derived from the shared settings refreshes as soon as its inputs
 // move: location and departure hour (travel default, air quality), the
@@ -734,6 +788,7 @@ async function handle(req, res) {
       calendar: { connected: cal.connected, events: cal.events.length, fetchedAt: cal.fetchedAt, error: cal.error },
       countdownArt: { items: artStatus.items.length, syncedAt: artStatus.syncedAt },
       airQuality: state.airQuality ? state.airQuality.label : null,
+      plex: { ...plex.health(), tmdb: tmdb.configured() },
     })
   }
 
@@ -957,6 +1012,56 @@ async function handle(req, res) {
     }
   }
 
+  // --- Plex second screen (lib/plex.mjs) ---
+  // The snapshot from the 5 s poll; never waits on Plex.
+  if (path === '/api/plex/now') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, plex.now())
+  }
+
+  if (path === '/api/plex/players') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, plex.playersResponse())
+  }
+
+  // { machineId, action } -> { ok, status, error }. A refused command is
+  // still a 200: the body says what happened (status is Plex's, or the
+  // reason's), so a screen reads one shape. Malformed input is a 400.
+  if (path === '/api/plex/command') {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'POST only' })
+    let body
+    try {
+      body = await readBody(req)
+    } catch (e) {
+      return json(res, 400, { ok: false, status: 400, error: String(e.message || e) })
+    }
+    const r = await plex.command(body)
+    return json(res, r.status === 400 ? 400 : 200, { ok: r.ok, status: r.status, error: r.error })
+  }
+
+  if (path === '/api/plex/person') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    const q = url.searchParams
+    const r = await plex.person({ tmdbId: q.get('tmdbId'), name: q.get('name'), exclude: q.get('exclude') })
+    return json(res, r.status, r.body)
+  }
+
+  // Plex images need the token, so screens load them through here. The path
+  // (a Plex /library/ or /photo/ path) names the image and its version, so a
+  // day's cache is safe.
+  if (path === '/api/plex/image') {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'GET only' })
+    const r = await plex.image(url.searchParams)
+    if (r.json) return json(res, r.status, r.json)
+    cors(res)
+    res.writeHead(200, {
+      'Content-Type': r.type,
+      'Content-Length': r.body.length,
+      'Cache-Control': 'public, max-age=86400',
+    })
+    return res.end(req.method === 'HEAD' ? undefined : r.body)
+  }
+
   // --- Sonos ---
   if (path === '/api/sonos' || path.startsWith('/api/sonos/')) return proxySonos(req, res, url)
 
@@ -1007,6 +1112,7 @@ const restoredTravel = travel.start()
 const restoredCalendar = calendar.start()
 const restoredArt = art.start()
 const restoredAir = air.start()
+const restoredPlex = plex.start()
 
 function envSummary() {
   const file = ENV_FILE.found
@@ -1034,6 +1140,9 @@ server.listen(PORT, BIND, () => {
   console.log(`  art    : ${ART_DIR} (${restoredArt.items} image(s) in index.json` +
               `${restoredArt.syncedAt ? `, written ${restoredArt.syncedAt}` : ''}); Immich album "Countdown Art", hourly`)
   console.log(`  air    : ${restoredAir ? `restored AQI ${restoredAir.aqi} (${restoredAir.label}) from ${restoredAir.fetchedAt}` : 'no recent reading'}`)
+  console.log(`  plex   : ${PLEX_FIXTURE ? `FIXTURE ${PLEX_FIXTURE} (instead of /status/sessions)` : PLEX_URL}; ` +
+              `token ${plex.configured() ? 'present' : `MISSING (${PLEX_TOKEN_FILE}): /api/plex/now reports it`}; ` +
+              `${restoredPlex.players} known player(s); TMDB key ${tmdb.configured() ? 'present' : 'absent (cast from Plex)'}`)
   console.log(`  cached : schoolcal ${cachedSchool.calendar ?? 'none'} | lunch ${cachedSchool.lunch ?? 'none'} | ` +
               `travel ${restoredTravel ? `${restoredTravel.date} ${restoredTravel.mode}` : 'none'}`)
   if (!existsSync(PHOTOS_DIR)) console.warn(`  WARNING: photos dir does not exist`)
