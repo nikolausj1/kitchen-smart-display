@@ -842,11 +842,21 @@ function renderDevice(dev) {
     // frameserver/lib/plex.mjs and code/src/shell/AppShell.jsx (PlexFollow).
     if (isWeb) {
       const px = card('Plex',
-        'Follow a Plex player: while it plays something, this screen shows what is on (title, episode, cast) and goes back 30 seconds after it stops. Takes effect within about 10 seconds.')
+        'Follow a Plex player: while it plays something, this screen shows what is on (title, episode, cast) and goes back a minute after it stops, once nobody is using it. Takes effect within about 10 seconds.')
       const cur = disp.plexFollow && disp.plexFollow !== 'off' ? disp.plexFollow : 'off'
       const sel = select([['off', 'Off'], ...(cur === 'off' ? [] : [[cur, 'Loading players…']])], cur,
         (v) => patchDevice(dev.id, { display: { plexFollow: v } }))
       row(px, 'Follow Plex player', 'Players appear once they have played something while the hub was running.', sel)
+      // display.plexTextScale: the whole Plex view (type, headshots, posters)
+      // scales by it, 0.8..1.6, unset 1. Steps of 10%, so a select (the
+      // range helper steps by 5); a value saved off the steps stays listed.
+      const pxScale = Math.round(Math.min(1.6, Math.max(0.8,
+        typeof disp.plexTextScale === 'number' && Number.isFinite(disp.plexTextScale) ? disp.plexTextScale : 1)) * 100)
+      const pxSteps = [80, 90, 100, 110, 120, 130, 140, 150, 160]
+      if (!pxSteps.includes(pxScale)) pxSteps.push(pxScale)
+      row(px, 'Plex text size', 'Everything on the Plex view: the words, the faces and the posters. 100% shows two rows of the cast.',
+        select(pxSteps.sort((a, b) => a - b).map((p) => [p, `${p}%`]), pxScale,
+          (v) => patchDevice(dev.id, { display: { plexTextScale: Number(v) / 100 } })))
       api('/api/plex/players').then(({ players = [] }) => {
         const named = (p) => (players.filter((q) => q.name === p.name).length > 1
           ? `${p.name} (${p.product || p.platform || p.machineId.slice(0, 8)})` : p.name)

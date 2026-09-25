@@ -8,15 +8,6 @@ export function fmtClock(d) {
   return `${h}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-// 13:22, or 1:02:15 past the hour.
-export function fmtTimecode(ms) {
-  const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000))
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = String(s % 60).padStart(2, '0')
-  return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
-}
-
 // A runtime: "25 min", "1 hr 6 min", "2 hr".
 export function fmtRuntime(ms) {
   const total = Math.round((Number(ms) || 0) / 60000)
@@ -27,18 +18,30 @@ export function fmtRuntime(ms) {
   return m ? `${h} hr ${m} min` : `${h} hr`
 }
 
-// Time left: "52 min left", "1 hr 4 min left", "under a minute left".
-export function fmtLeft(ms) {
-  const mins = Math.floor((Number(ms) || 0) / 60000)
-  if (mins < 1) return 'under a minute left'
-  return `${fmtRuntime(mins * 60000)} left`
+function dateParts(key) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''))
+  return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null
 }
 
 // '2019-10-12' -> '12 Oct 2019' (read as a calendar date, no time zone).
 export function fmtDate(key) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''))
-  if (!m) return null
-  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`
+  const p = dateParts(key)
+  if (!p) return null
+  return `${p.d} ${MONTHS[p.m - 1]} ${p.y}`
+}
+
+// Whole years from a birthday to a date key (a death day) or to nowMs.
+// null when the birthday does not parse.
+export function yearsOld(birthday, deathday, nowMs = Date.now()) {
+  const b = dateParts(birthday)
+  if (!b) return null
+  let e = dateParts(deathday)
+  if (!e) {
+    const n = new Date(nowMs)
+    e = { y: n.getFullYear(), m: n.getMonth() + 1, d: n.getDate() }
+  }
+  const age = e.y - b.y - (e.m < b.m || (e.m === b.m && e.d < b.d) ? 1 : 0)
+  return age >= 0 && age < 130 ? age : null
 }
 
 // "just now", "5 min ago", "3 hours ago", "yesterday", "4 days ago".
@@ -60,21 +63,13 @@ export function cleanShowTitle(t) {
   return String(t || '').replace(/\s+\((19|20)\d{2}\)$/, '')
 }
 
-// "IMDb 8.1", "TMDB 8.0", "RT 92%", or a bare number.
-export function fmtAudience(rating, source) {
-  const n = Number(rating)
-  if (!Number.isFinite(n) || n <= 0) return null
-  if (source === 'imdb') return `IMDb ${n.toFixed(1)}`
-  if (source === 'tmdb') return `TMDB ${n.toFixed(1)}`
-  if (source === 'rottentomatoes') return `RT ${Math.round(n * 10)}%`
-  return n.toFixed(1)
-}
-
-// "Seth Rogen", "Seth Rogen and Evan Goldberg", "A, B and C".
-export function joinNames(names, max = 3) {
-  const list = (Array.isArray(names) ? names : []).filter(Boolean).slice(0, max)
-  if (list.length <= 1) return list[0] || ''
-  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+// A character name for a one-line caption: TMDB's " (voice)" says nothing an
+// animated film does not, and costs the end of the name. Someone playing
+// themselves (a cameo credited under their own name) is "Self".
+export function cleanRole(role, name) {
+  const s = String(role || '').replace(/\s*\(voice\)\s*$/i, '').trim()
+  if (!s) return null
+  return name && s.toLowerCase() === String(name).trim().toLowerCase() ? 'Self' : s
 }
 
 export function initials(name) {
@@ -85,8 +80,44 @@ export function initials(name) {
   return (first + last).toUpperCase()
 }
 
+// A muted colour for a missing headshot, the same for the same name.
+export function nameTint(name) {
+  let h = 0
+  for (const ch of String(name || '')) h = (h * 31 + ch.charCodeAt(0)) % 360
+  return `hsl(${h}, 24%, 27%)`
+}
+
 // "S3 E7" for a last-played line.
 export function episodeCode(season, episode) {
   if (season == null || episode == null) return null
   return `S${season} E${episode}`
+}
+
+// "S1 · E2 · The Oner", the strip's second line for an episode.
+export function episodeLine(season, episode, title) {
+  return [season != null ? `S${season}` : null, episode != null ? `E${episode}` : null, title || null]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+// A title for matching TMDB's list against Plex's: case, accents,
+// punctuation and a leading article do not count.
+export function titleKey(title) {
+  return String(title || '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/^(the|a|an) /, '')
+}
+
+// The same film or show: the same title, and years at most one apart (a
+// festival premiere against a release) or one of them unknown.
+export function sameWork(a, b) {
+  if (!a || !b || titleKey(a.title) !== titleKey(b.title)) return false
+  const ya = Number(a.year)
+  const yb = Number(b.year)
+  return !ya || !yb || Math.abs(ya - yb) <= 1
 }

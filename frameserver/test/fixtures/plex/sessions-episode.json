@@ -1,0 +1,371 @@
+{
+  "MediaContainer": {
+    "size": 1,
+    "Metadata": [
+      {
+        "ratingKey": "77536",
+        "key": "/library/metadata/77536",
+        "parentRatingKey": "77534",
+        "grandparentRatingKey": "77533",
+        "guid": "plex://episode/673e0a3110c42dd225bfe6e9",
+        "parentGuid": "plex://season/65e1ca66944cddc4295cdf7f",
+        "grandparentGuid": "plex://show/65e1ca66944cddc4295cdf68",
+        "grandparentSlug": "the-studio-2025",
+        "type": "episode",
+        "title": "The Oner",
+        "titleSort": "Oner",
+        "grandparentKey": "/library/metadata/77533",
+        "parentKey": "/library/metadata/77534",
+        "librarySectionTitle": "TV Shows",
+        "librarySectionID": 2,
+        "librarySectionKey": "/library/sections/2",
+        "grandparentTitle": "The Studio (2025)",
+        "parentTitle": "Season 1",
+        "contentRating": "TV-MA",
+        "summary": "The filming of an intricate sunset shot becomes complicated by Matt's set visit.",
+        "index": 2,
+        "parentIndex": 1,
+        "audienceRating": 8.2,
+        "year": 2025,
+        "thumb": "/library/metadata/77536/thumb/1779445507",
+        "art": "/library/metadata/77533/art/1788263635",
+        "parentThumb": "/library/metadata/77534/thumb/1748082217",
+        "grandparentThumb": "/library/metadata/77533/thumb/1788263635",
+        "grandparentArt": "/library/metadata/77533/art/1788263635",
+        "duration": 1506048,
+        "originallyAvailableAt": "2025-03-25",
+        "addedAt": 1742962346,
+        "updatedAt": 1779445507,
+        "audienceRatingImage": "themoviedb://image.rating",
+        "Media": [
+          {
+            "id": 120332,
+            "duration": 1506048,
+            "bitrate": 2596,
+            "width": 1920,
+            "height": 1038,
+            "aspectRatio": 1.85,
+            "audioChannels": 6,
+            "audioCodec": "eac3",
+            "videoCodec": "hevc",
+            "videoResolution": "1080",
+            "container": "mkv",
+            "videoFrameRate": "24p",
+            "audioProfile": "dolby digital plus + dolby atmos",
+            "videoProfile": "main 10",
+            "hasVoiceActivity": false,
+            "Part": [
+              {
+                "id": 121265,
+                "key": "/library/parts/121265/1742962200/file.mkv",
+                "duration": 1506048,
+                "size": 488769853,
+                "audioProfile": "dolby digital plus + dolby atmos",
+                "container": "mkv",
+                "videoProfile": "main 10",
+                "Stream": [
+                  {
+                    "id": 281229,
+                    "streamType": 1,
+                    "default": true,
+                    "codec": "hevc",
+                    "index": 0,
+                    "bitrate": 1828,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "bitDepth": 10,
+                    "chromaLocation": "topleft",
+                    "chromaSubsampling": "4:2:0",
+                    "codedHeight": 1040,
+                    "codedWidth": 1920,
+                    "colorPrimaries": "bt709",
+                    "colorRange": "tv",
+                    "colorSpace": "bt709",
+                    "colorTrc": "bt709",
+                    "frameRate": 23.976,
+                    "height": 1038,
+                    "level": 120,
+                    "profile": "main 10",
+                    "refFrames": 1,
+                    "scanType": "progressive",
+                    "width": 1920,
+                    "displayTitle": "1080p",
+                    "extendedDisplayTitle": "1080p (HEVC Main 10)"
+                  },
+                  {
+                    "id": 281230,
+                    "streamType": 2,
+                    "canNormalizeLoudness": false,
+                    "selected": true,
+                    "default": true,
+                    "codec": "eac3",
+                    "index": 1,
+                    "channels": 6,
+                    "bitrate": 768,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "audioChannelLayout": "5.1(side)",
+                    "profile": "dolby digital plus + dolby atmos",
+                    "samplingRate": 48000,
+                    "displayTitle": "English (EAC3 5.1 + Atmos)",
+                    "extendedDisplayTitle": "English (EAC3 5.1 + Atmos)"
+                  },
+                  {
+                    "id": 281231,
+                    "streamType": 3,
+                    "canAutoSync": false,
+                    "codec": "ass",
+                    "index": 2,
+                    "bitrate": 0,
+                    "language": "English",
+                    "languageTag": "en",
+                    "languageCode": "eng",
+                    "title": "English",
+                    "displayTitle": "English",
+                    "extendedDisplayTitle": "English (ASS)"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Image": [
+          {
+            "alt": "The Oner",
+            "type": "coverPoster",
+            "url": "/library/metadata/77533/thumb/1788263635"
+          },
+          {
+            "alt": "The Oner",
+            "type": "snapshot",
+            "url": "/library/metadata/77536/thumb/1779445507"
+          },
+          {
+            "alt": "The Oner",
+            "type": "background",
+            "url": "/library/metadata/77533/art/1788263635"
+          },
+          {
+            "alt": "The Oner",
+            "type": "clearLogo",
+            "url": "/library/metadata/77533/clearLogo/1788263635"
+          }
+        ],
+        "UltraBlurColors": {
+          "topLeft": "441f04",
+          "topRight": "355c9c",
+          "bottomRight": "7f4b28",
+          "bottomLeft": "6a3103"
+        },
+        "Guid": [
+          {
+            "id": "imdb://tt34901367"
+          },
+          {
+            "id": "tmdb://5772135"
+          },
+          {
+            "id": "tvdb://10814412"
+          }
+        ],
+        "Rating": [
+          {
+            "image": "imdb://image.rating",
+            "value": 9.0,
+            "type": "audience"
+          },
+          {
+            "image": "themoviedb://image.rating",
+            "value": 8.2,
+            "type": "audience"
+          }
+        ],
+        "Director": [
+          {
+            "id": 56036,
+            "filter": "director=56036",
+            "tag": "Seth Rogen",
+            "tagKey": "5d776825103a2d001f563c1e",
+            "thumb": "https://metadata-static.plex.tv/1/people/136ae1d23b961770f9aa674b7ef7ea0d.jpg"
+          },
+          {
+            "id": 56037,
+            "filter": "director=56037",
+            "tag": "Evan Goldberg",
+            "tagKey": "5d776835961905001eb94079",
+            "thumb": "https://metadata-static.plex.tv/9/people/9e0df556ce242c001fbd691f2d85567c.jpg"
+          }
+        ],
+        "Writer": [
+          {
+            "id": 33896,
+            "filter": "writer=33896",
+            "tag": "Peter Huyck",
+            "tagKey": "5d9c0871e264b7001fc444b3",
+            "thumb": "https://metadata-static.plex.tv/2/people/249ded60d482280d6a8ee58d1558dbb5.jpg"
+          }
+        ],
+        "Role": [
+          {
+            "id": 1291,
+            "filter": "actor=1291",
+            "tag": "Seth Rogen",
+            "tagKey": "5d776825103a2d001f563c1e",
+            "role": "Matt Remick",
+            "thumb": "https://metadata-static.plex.tv/1/people/136ae1d23b961770f9aa674b7ef7ea0d.jpg"
+          },
+          {
+            "id": 25082,
+            "filter": "actor=25082",
+            "tag": "Catherine O'Hara",
+            "tagKey": "5d7768275af944001f1f6e83",
+            "role": "Patty Leigh",
+            "thumb": "https://metadata-static.plex.tv/5/people/5493d74287dd22140dc97578c68d4c1a.jpg"
+          },
+          {
+            "id": 1357,
+            "filter": "actor=1357",
+            "tag": "Ike Barinholtz",
+            "tagKey": "5d776831103a2d001f566ae9",
+            "role": "Sal Saperstein",
+            "thumb": "https://metadata-static.plex.tv/1/people/14e5088c113e9f242990d3fa55ad05b2.jpg"
+          },
+          {
+            "id": 105418,
+            "filter": "actor=105418",
+            "tag": "Chase Sui Wonders",
+            "tagKey": "5de4aba290dd0f001ef2eb3d",
+            "role": "Quinn Hackett",
+            "thumb": "https://metadata-static.plex.tv/8/people/8ad024a692e36b495b383b612eab1bc8.jpg"
+          },
+          {
+            "id": 1289,
+            "filter": "actor=1289",
+            "tag": "Kathryn Hahn",
+            "tagKey": "5d77682a3c3c2a001fbcbd51",
+            "role": "Maya Mason",
+            "thumb": "https://metadata-static.plex.tv/0/people/0fa6ab4c68ec9bcd3ff24b00b089dbd5.jpg"
+          },
+          {
+            "id": 10642,
+            "filter": "actor=10642",
+            "tag": "Thomas Barbusca",
+            "tagKey": "5d776aeffb0d55001f55613f",
+            "role": "PA Doug",
+            "thumb": "https://metadata-static.plex.tv/6/people/6661366aa9e3e326c420f3aa174d260a.jpg"
+          },
+          {
+            "id": 31357,
+            "filter": "actor=31357",
+            "tag": "Greta Lee",
+            "tagKey": "5d7768d3ebdf2200209c9384",
+            "role": "Greta Lee",
+            "thumb": "https://metadata-static.plex.tv/9/people/9f8f0af7870be78b7fb3412ff9144de0.jpg"
+          },
+          {
+            "id": 9016,
+            "filter": "actor=9016",
+            "tag": "Sarah Polley",
+            "tagKey": "5d776824103a2d001f563ab5",
+            "role": "Sarah Polley",
+            "thumb": "https://metadata-static.plex.tv/8/people/8eea65f2861882fd327b9da6bc4615f1.jpg"
+          },
+          {
+            "id": 237589,
+            "filter": "actor=237589",
+            "tag": "Bonnie Soper",
+            "tagKey": "5d7768407228e5001f1e05bc",
+            "role": "Amanda",
+            "thumb": "https://metadata-static.plex.tv/f/people/f6ef68357093f08f4216f58538316bbc.jpg"
+          },
+          {
+            "id": 165448,
+            "filter": "actor=165448",
+            "tag": "Billy Budinich",
+            "tagKey": "5f401cab864225004282ad5c",
+            "role": "Randall",
+            "thumb": "https://metadata-static.plex.tv/c/people/c092dab45dc2dbe15766c88ce792db78.jpg"
+          },
+          {
+            "id": 7897,
+            "filter": "actor=7897",
+            "tag": "Dan Sachoff",
+            "tagKey": "5d776b1a7a53e9001e71a26c",
+            "role": "Cinematographer Jonas",
+            "thumb": "https://metadata-static.plex.tv/a/people/acf39ced6d8709db3788ca23c7f1933f.jpg"
+          },
+          {
+            "id": 246645,
+            "filter": "actor=246645",
+            "tag": "Mindee de Lacey",
+            "tagKey": "5d776c82fb0d55001f58998e",
+            "role": "Script Supervisor",
+            "thumb": "https://metadata-static.plex.tv/d/people/d1ad3e02fa4a95e1fbb31b1b3fe92a93.jpg"
+          },
+          {
+            "id": 104273,
+            "filter": "actor=104273",
+            "tag": "Christopher Carrington",
+            "tagKey": "5d77696d96b655001fdceb3f",
+            "role": "1st AD",
+            "thumb": "https://metadata-static.plex.tv/d/people/dc7d4f169578af099b9ad6ef965648b1.jpg"
+          },
+          {
+            "id": 237647,
+            "filter": "actor=237647",
+            "tag": "Monnie Aleahmad",
+            "tagKey": "60e5d0d0d311d4002d48e4a4",
+            "role": "Set Medic",
+            "thumb": "https://metadata-static.plex.tv/7/people/71c9a0f195a045375694506b65035292.jpg"
+          },
+          {
+            "id": 237648,
+            "filter": "actor=237648",
+            "tag": "Lia Kim",
+            "tagKey": "67e69e481fade9b041cc3d1c",
+            "role": "Greta Lee Stand In"
+          }
+        ],
+        "Producer": [
+          {
+            "id": 231336,
+            "filter": "producer=231336",
+            "tag": "Jesse Sternbaum",
+            "tagKey": "5f3fe4a2427eeb0041e6180f"
+          }
+        ],
+        "sessionKey": "1",
+        "viewOffset": 754000,
+        "Player": {
+          "title": "Living Room",
+          "machineIdentifier": "TEST-PLAYER-0001",
+          "product": "Plex for Apple TV",
+          "platform": "tvOS",
+          "platformVersion": "18.0",
+          "device": "Apple TV",
+          "model": "4K",
+          "vendor": "Apple",
+          "address": "192.168.4.50",
+          "remotePublicAddress": "192.168.4.50",
+          "local": true,
+          "relayed": false,
+          "secure": true,
+          "userID": 1,
+          "state": "playing"
+        },
+        "User": {
+          "id": "1",
+          "title": "Justin",
+          "thumb": ""
+        },
+        "Session": {
+          "id": "test-session-1",
+          "bandwidth": 20000,
+          "location": "lan"
+        }
+      }
+    ]
+  }
+}

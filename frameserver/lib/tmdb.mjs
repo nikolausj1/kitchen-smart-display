@@ -1,4 +1,4 @@
-// tmdb.mjs - The Movie Database, for the Plex view's cast row and person cards.
+// tmdb.mjs - The Movie Database, for the Plex view's cast board and person cards.
 //
 // Optional. The key is TMDB_API_KEY from the environment or .env, else the
 // file TMDB_API_KEY_FILE (default secrets/tmdb-key.txt, copied by hand, never
@@ -13,23 +13,36 @@
 //
 //   credits(lookup)  lookup = { kind: 'movie', id } |
 //                             { kind: 'episode', showId, season, episode }
-//     -> [{ name, role, thumb, tmdbPersonId }], the top 12 that have a
-//        profile picture: a movie's cast in billing order; an episode's cast
-//        then its guest stars (GET /3/tv/{id}/season/{n}/episode/{m}/credits),
-//        falling back to the show's regular cast when TMDB does not know the
-//        episode. thumb = https://image.tmdb.org/t/p/w185<profile_path>,
-//        public, so a screen loads it directly. Cached 24 h per item.
+//     -> { cast: [{ name, role, thumb, tmdbPersonId, guest, regular, order }],
+//          total }: every credited person (a picture when TMDB has one, else
+//        thumb: null; the cast board wants everyone, not just who has a
+//        photo), capped at CAST_MAX = 60, `total` the count before the cap.
+//        A movie's cast in billing order. An episode's own cast, then its
+//        guest stars (guest: true), then - always, so a thin episode credit
+//        never shows five people for a full ensemble show - the series'
+//        regular cast from GET /3/tv/{id}/aggregate_credits (falling back to
+//        GET /3/tv/{id}/credits when aggregate has nothing), regular: true,
+//        for anyone not already listed. Deduped by TMDB person id, else by
+//        normalised name. thumb = https://image.tmdb.org/t/p/w342<profile_path>,
+//        public, so a screen loads it directly. Cached 24 h per item; the
+//        series' regular cast is one more call, cached 24 h per series id
+//        (shared by every episode of the show, so a poll never repeats it).
 //   cachedCredits(lookup)  the same, synchronously: undefined when not
-//        fetched yet (or expired), else the array (possibly empty).
+//        fetched yet (or expired), else { cast, total } (cast possibly []).
 //   person(id)  GET /3/person/{id}?append_to_response=combined_credits ->
-//        { tmdbId, name, profile, biography, birthday, deathday,
-//          placeOfBirth, knownForDepartment,
+//        { tmdbId, name, profile, profileLarge, age, biography, birthday,
+//          deathday, placeOfBirth, knownForDepartment,
 //          knownFor: [{ tmdbId, mediaType: 'movie'|'tv', title, year,
 //                       poster, character }] }
+//        profile is w185 (small, for a cast row's tap target); profileLarge
+//        is h632, for the full-screen person card. age is whole years at
+//        death, or today when still alive; null with no birthday.
 //        knownFor: acting credits by vote_count, highest first, deduped by
 //        title, talk / news / reality TV left out (every actor's most-voted
-//        "credit" is otherwise a late-night show), top 10; posters w342.
-//        Cached 24 h.
+//        "credit" is otherwise a late-night show), top KNOWN_FOR_MAX = 12;
+//        posters w342. Cached 24 h. lib/plex.mjs adds inLibrary/plexRatingKey
+//        to each knownFor entry (it needs the Plex library search, which this
+//        module does not do).
 //
 // A 404 is cached as "nothing there" for 6 h; a failure (network, 5xx, a
 // refused key) is retried after 10 minutes and logged at most every 10.
@@ -38,8 +51,8 @@ import { fetchWithTimeout, isDict } from './io.mjs'
 
 export const TMDB_API = 'https://api.themoviedb.org/3'
 export const TMDB_IMAGES = 'https://image.tmdb.org/t/p'
-export const CAST_MAX = 12
-export const KNOWN_FOR_MAX = 10
+export const CAST_MAX = 60
+export const KNOWN_FOR_MAX = 12
 const TTL_MS = 24 * 60 * 60 * 1000
 const MISS_TTL_MS = 6 * 60 * 60 * 1000
 const RETRY_MS = 10 * 60 * 1000
@@ -65,29 +78,72 @@ function byOrder(a, b) {
   return x - y
 }
 
-// A credits payload -> the cast row. Episodes: cast, then guest stars.
-export function creditsFromTmdb(payload, kind = 'movie') {
-  if (!isDict(payload)) return []
-  const people = [
-    ...list(payload.cast).slice().sort(byOrder),
-    ...(kind === 'episode' ? list(payload.guest_stars).slice().sort(byOrder) : []),
-  ]
-  const out = []
-  const seen = new Set()
-  for (const c of people) {
-    if (!isDict(c) || !str(c.profile_path) || !str(c.name) || c.id == null || seen.has(c.id)) continue
-    seen.add(c.id)
-    out.push({
-      name: str(c.name),
-      // A regular's role on /tv/{id}/credits sits in roles[]; everywhere
-      // else it is `character`.
-      role: str(c.character) || str(list(c.roles)[0]?.character),
-      thumb: profileUrl(c.profile_path),
-      tmdbPersonId: Number(c.id),
-    })
-    if (out.length >= CAST_MAX) break
+// One TMDB cast/guest_stars row -> our shape, or null for a malformed one. On
+// an aggregate-credits row the character sits in roles[0] instead of
+// directly on the row. No profile_path filter: every credited person is
+// kept, thumb null when TMDB has no picture.
+function castEntry(c, { guest, regular }) {
+  if (!isDict(c) || c.id == null || !str(c.name)) return null
+  return {
+    name: str(c.name),
+    role: str(c.character) || str(list(c.roles)[0]?.character) || '',
+    thumb: profileUrl(c.profile_path, 'w342'),
+    tmdbPersonId: Number(c.id),
+    guest,
+    regular,
   }
-  return out
+}
+
+function rowsOf(arr, flags) {
+  return list(arr).slice().sort(byOrder).map((c) => castEntry(c, flags)).filter(Boolean)
+}
+
+// A movie's (or a show's plain, non-aggregate) credits payload -> billing-order rows.
+export function movieCastRows(payload) {
+  return isDict(payload) ? rowsOf(payload.cast, { guest: false, regular: false }) : []
+}
+
+// An episode credits payload -> its own cast, in order, then its guest
+// stars, in order, flagged guest: true.
+export function episodeCastRows(payload) {
+  if (!isDict(payload)) return []
+  return [
+    ...rowsOf(payload.cast, { guest: false, regular: false }),
+    ...rowsOf(payload.guest_stars, { guest: true, regular: false }),
+  ]
+}
+
+// A series aggregate_credits (or plain credits, as a fallback) payload -> its
+// regular cast, in the show's own billing order, flagged regular: true.
+export function regularCastRows(payload) {
+  return isDict(payload) ? rowsOf(payload.cast, { guest: false, regular: true }) : []
+}
+
+const normKey = (s) => String(s ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/\s+/g, ' ').trim()
+
+// Merge rows from several already-flagged, already-ordered lists (an
+// episode's cast, then its guests, then a show's regulars): a later list's
+// repeat of an earlier person is dropped, by TMDB person id, else by
+// normalised name (for the rare row with no id). Returns the merged list
+// capped at `max` with `order` set to its final position, and `total`, the
+// count before the cap - so a cast board can say "and N more" honestly.
+export function combineCast(lists, max = CAST_MAX) {
+  const seenIds = new Set()
+  const seenNames = new Set()
+  const merged = []
+  for (const rows of list(lists)) {
+    for (const c of list(rows)) {
+      if (!isDict(c)) continue
+      const idKey = Number.isFinite(c.tmdbPersonId) ? c.tmdbPersonId : null
+      const nameKey = normKey(c.name)
+      if (idKey != null ? seenIds.has(idKey) : seenNames.has(nameKey)) continue
+      if (idKey != null) seenIds.add(idKey)
+      seenNames.add(nameKey)
+      merged.push(c)
+    }
+  }
+  return { cast: merged.slice(0, max).map((c, i) => ({ ...c, order: i })), total: merged.length }
 }
 
 function yearOf(d) {
@@ -95,8 +151,24 @@ function yearOf(d) {
   return m ? Number(m[1]) : null
 }
 
+// Whole years lived at deathday, or as of `now` when still alive. null with
+// no birthday, or with either date unparsable.
+export function ageFromBirthday(birthday, deathday, now = new Date()) {
+  const b = str(birthday)
+  if (!b) return null
+  const bd = new Date(b)
+  const end = str(deathday) ? new Date(str(deathday)) : now
+  if (Number.isNaN(bd.getTime()) || Number.isNaN(end.getTime())) return null
+  let age = end.getUTCFullYear() - bd.getUTCFullYear()
+  const beforeBirthday = end.getUTCMonth() < bd.getUTCMonth() ||
+    (end.getUTCMonth() === bd.getUTCMonth() && end.getUTCDate() < bd.getUTCDate())
+  if (beforeBirthday) age -= 1
+  return age >= 0 ? age : null
+}
+
 // A person payload (with combined_credits appended) -> the person card.
-export function personFromTmdb(p) {
+// `now`: tests pass a fixed clock for `age`; live calls use the real time.
+export function personFromTmdb(p, now = new Date()) {
   if (!isDict(p) || p.id == null || !str(p.name)) return null
   const credits = list(p.combined_credits?.cast)
     .filter((c) => isDict(c) && (c.media_type === 'movie' || c.media_type === 'tv'))
@@ -126,6 +198,8 @@ export function personFromTmdb(p) {
     tmdbId: Number(p.id),
     name: str(p.name),
     profile: profileUrl(p.profile_path),
+    profileLarge: profileUrl(p.profile_path, 'h632'),
+    age: ageFromBirthday(p.birthday, p.deathday, now),
     biography: bio && bio.length > 900 ? `${bio.slice(0, 897).replace(/\s+\S*$/, '')}...` : bio,
     birthday: str(p.birthday),
     deathday: str(p.deathday),
@@ -210,22 +284,40 @@ export function createTmdb({ getKey = () => null, apiBase = TMDB_API, log = (m) 
     return promise
   }
 
+  // A series' regular cast: aggregate_credits (roles per person, so a
+  // recurring guest still reads as a regular), falling back to plain
+  // credits when aggregate has nothing. Cached 24 h per series id, shared by
+  // every episode of the show.
+  async function loadRegularRows(showId) {
+    const agg = await get(`/tv/${showId}/aggregate_credits`)
+    if (agg && !agg.notFound && list(agg.cast).length) {
+      return { value: regularCastRows(agg), ttl: TTL_MS }
+    }
+    const plain = await get(`/tv/${showId}/credits`)
+    if (!plain || plain.notFound || !list(plain.cast).length) return { value: [], ttl: MISS_TTL_MS }
+    return { value: regularCastRows(plain), ttl: TTL_MS }
+  }
+
+  function seriesRegularRows(showId) {
+    return cached(`aggregate:${showId}`, () => loadRegularRows(showId))
+  }
+
   async function loadCredits(l) {
     if (l.kind === 'movie') {
       const r = await get(`/movie/${l.id}/credits`)
-      if (!r || r.notFound) return { value: [], ttl: MISS_TTL_MS }
-      return { value: creditsFromTmdb(r, 'movie'), ttl: TTL_MS }
+      if (!r || r.notFound) return { value: { cast: [], total: 0 }, ttl: MISS_TTL_MS }
+      const { cast, total } = combineCast([movieCastRows(r)])
+      return { value: { cast, total }, ttl: TTL_MS }
     }
-    const r = await get(`/tv/${l.showId}/season/${Number(l.season)}/episode/${Number(l.episode)}/credits`)
-    if (r && !r.notFound) {
-      const value = creditsFromTmdb(r, 'episode')
-      if (value.length) return { value, ttl: TTL_MS }
-    }
-    // TMDB's numbering can differ from Plex's (specials, split seasons):
-    // the show's regular cast is still right for the show.
-    const show = await get(`/tv/${l.showId}/credits`)
-    if (!show || show.notFound) return { value: [], ttl: MISS_TTL_MS }
-    return { value: creditsFromTmdb(show, 'movie'), ttl: TTL_MS }
+    const episodeR = await get(`/tv/${l.showId}/season/${Number(l.season)}/episode/${Number(l.episode)}/credits`)
+    const episodeRows = episodeR && !episodeR.notFound ? episodeCastRows(episodeR) : []
+    // Always merged in, not just when the episode credits are thin: an
+    // ensemble show's regulars belong on the board even when TMDB's episode
+    // credits are complete on their own.
+    const regularRows = await seriesRegularRows(l.showId)
+    const { cast, total } = combineCast([episodeRows, regularRows])
+    if (!cast.length) return { value: { cast: [], total: 0 }, ttl: MISS_TTL_MS }
+    return { value: { cast, total }, ttl: TTL_MS }
   }
 
   return {

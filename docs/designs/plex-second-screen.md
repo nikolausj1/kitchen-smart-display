@@ -2,7 +2,7 @@
 title: "Plex second screen - what the living room is watching, on the family-room screen"
 created: 2026-09-25
 modified: 2026-09-25
-version: 1.0
+version: 1.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, plex, tmdb, second-screen, echo-show, family-room, frameserver, web-app]
 ---
@@ -267,5 +267,155 @@ and checked at 1920x1080:
 - A Plex button in the menu pill, to open the view by hand.
 - A "New on Plex" panel (recently added to the library) for the spec
   layouts.
-- Unit tests for `lib/plex.mjs` and `lib/tmdb.mjs` in the hub suite (their
-  normalisers and command builders are pure and exported).
+
+## As built, rev 2: the cast board's data (2026-09-25)
+
+Justin's real use for this view is "who is that, and what else are they in."
+The view is being rebuilt as a cast board (every credited actor, big
+portraits, character names) with a full-screen person card. This round
+changed what the hub serves so the new view has everyone to work with; it
+kept every field the phase-1 view already reads, so that view kept working
+unchanged while the cast board was built against the new fields
+concurrently.
+
+- **`media.cast` (`GET /api/plex/now`)**: entries are now `{ name, role,
+  thumb, tmdbPersonId, plexId?, guest, regular, order }`. `CAST_MAX` is 60
+  (was 12); `media.castTotal` is the count before that cap, so the board can
+  say "and N more" honestly. Source preference is unchanged (TMDB by id when
+  the item has one and the key is present, else Plex's `Role[]`), but the
+  TMDB side is richer:
+  - A movie's cast is the full billing-order list, `guest: false, regular:
+    false` - no more dropping anyone without a profile photo (`thumb` is
+    null instead; the board wants everyone, pictured or not).
+  - An episode's cast is its own `cast`, then its `guest_stars` (`guest:
+    true`), then - always, not only when the episode's own credits are thin
+    - the show's regular cast from `GET /3/tv/{id}/aggregate_credits`
+      (`regular: true`), for anyone not already listed. Deduped by TMDB
+    person id, else by normalised name. `lib/tmdb.mjs` exports the row
+    builders (`movieCastRows`, `episodeCastRows`, `regularCastRows`) and the
+    merge (`combineCast`) separately, so each step is unit-tested on its own.
+  - Plex's own fallback list is unchanged in spirit (billing order, capped,
+    deduped by name) but now carries the same shape: `tmdbPersonId: null`,
+    `plexId` set, `guest`/`regular` false, `order` assigned.
+  - Thumbs moved from TMDB's w185 to w342; Plex's own role thumbs moved from
+    about 200px to about 300px wide.
+  - The aggregate-credits call is cached 24h per series id (like a movie's or
+    episode's own credits), so a show with several episodes in play across
+    the house does not refetch it per episode.
+- **`GET /api/plex/person`**: every existing field stays. New: `profileLarge`
+  (TMDB's h632 profile image, for the full-screen card, versus `profile`'s
+  w185 for a small tap target), `age` (whole years at death, or today for
+  someone still with us; null with no birthday). `KNOWN_FOR_MAX` is 12 (was
+  10); each `knownFor` entry now carries `inLibrary` and, when it matched,
+  `plexRatingKey`: matched by TMDB id when the library search's own item
+  carries one (`searchPerson` now asks Plex for `includeGuids=1`, no extra
+  per-item read), else by normalised title and a release year within one of
+  each other. `LIBRARY_MAX` (the person's own Plex library appearances) is
+  12 (was 8), posters at about 300x450 (was 240x360). The matching is
+  `matchKnownFor`, a pure function, exported and tested on its own.
+- **Fixtures rebuilt** under `frameserver/test/fixtures/plex/` (the earlier
+  ones were gone): live Plex metadata for the movie "Gianmarco Soresi: Thief
+  of Joy" and for "The Oner" (The Studio S1E2) plus its show, with
+  hand-written `/status/sessions` fixtures over the same items
+  (`TEST-PLAYER-0001`); live TMDB credits for the episode, a trimmed series
+  aggregate-credits payload, the movie's credits, and a trimmed person +
+  `combined_credits` payload for Catherine O'Hara (TMDB id 11514). Trimmed
+  fixtures keep real ids, names, vote counts and orderings, just fewer rows,
+  so the dedup and cap logic exercise real shapes offline.
+- **Tests**: `frameserver/test/plex.test.mjs` and `frameserver/test/tmdb.test.mjs`,
+  `node:test`, no network (a stubbed `globalThis.fetch` where HTTP is
+  involved, per `frameserver/test/io.test.mjs`'s pattern) - cast ordering and
+  capping, the Plex fallback, image sizes, `age`, the `knownFor` cap and its
+  library matching, and `LIBRARY_MAX`.
+- **Live-checked**, read-only, against the real Plex and TMDB: `GET
+  /api/plex/person` for Catherine O'Hara showed `profileLarge`, `age: 71`
+  (TMDB carries a `deathday` for her in this environment), 12 `knownFor`
+  entries with several matched `inLibrary`, and 12 `inLibrary` posters at
+  300x450. A second run in `PLEX_FIXTURE` mode with the episode session
+  fixture showed the real, untrimmed live cast for The Studio: 5 cast + 10
+  guests + 45 regulars = 60 shown, `castTotal: 106` (the show's real
+  aggregate cast size).
+- **Not touched**: `server.mjs`'s Plex routes (no new query parameter was
+  needed for any of this) and the `/api/plex/now` fields outside `media.cast`
+  and `media.castTotal`.
+
+## Later (data side)
+
+- Unit tests for the transport/offset side of `lib/plex.mjs` (`commandPath`,
+  `currentOffset`, `captionsStream`): pure and exported, still untested.
+- `matchKnownFor`'s TMDB-id path depends on Plex's per-library-item `Guid`
+  coming back from `includeGuids=1`; confirmed live for TV shows and movies,
+  but worth a glance if a library section's agent does not carry guids.
+
+## As built, rev 2: the cast board (2026-09-25, hub deployed 16:10)
+
+Justin's verdict on rev 1 from the family-room couch: too small to read, the
+poster too big, the cast too small. The screen's job is "who is that, and what
+else are they in", so rev 2 is a cast board. Decisions: portrait headshots;
+every credited actor, then the episode's guest stars, then the series
+regulars; character names under actor names (they help with animated films);
+no synopsis, rating, genres or director anywhere; Known for stays one row;
+the cast stays a minute after the player stops; a person card stays a minute;
+only the family-room Echo (1280x800) is hand-checked; no crew.
+
+### Layout at 1280x800 (every size multiplied by `--pv-scale`)
+
+- **Top strip**, 151 px: poster 90x135, the series name at 34 px semibold
+  with "S1 - E2 - The Oner" at 26 px under it (movies: title, then year and
+  runtime at 24 px muted), the clock at 34 px over the state at 22 px
+  ("Playing on Apple TV", "Paused on Apple TV" in amber, "Stopped on Apple
+  TV"), a 4 px progress bar along the strip's bottom edge. The transport
+  buttons (56 px) sit inline in the strip when the player is controllable;
+  otherwise one 20 px line keeps the "Advertise as Player" hint.
+- **Cast board**, the remaining 649 px: six columns of 186 px, portrait
+  headshots 150x190 (cropped from the bottom so faces stay; 225 px tall would
+  not fit two rows once names wrap), actor name at 30 px semibold up to two
+  lines, character at 24 px muted, a "Guest" tag at 18 px caps on the photo,
+  a "Series regulars" divider at 20 px caps before the fallback entries, and
+  a "18 more" pill over a bottom fade ("18 more - 30 of 106 shown" when the
+  hub capped the list). Touch scrolls the board; the pill is a button that
+  scrolls too; the scroll position resets when the item changes; images load
+  eagerly so nothing pops in under a finger. A card with no photo shows
+  initials on a colour derived from the name. " (voice)" is dropped from
+  character names, and someone credited as themselves shows "Self".
+- **Person card**, full screen: headshot 300x450 (`profileLarge`, h632),
+  name at 44 px bold, "Patty Leigh in The Studio" at 28 px, born and died
+  lines at 24 px muted (the Died line carries "aged 71"), a 72 px close
+  button. One "Known for" row of 134x200 posters with title at 24 px, year at
+  22 px and an "In your library" badge, then "In your Plex library" with the
+  items not already shown (deduped by title and year), hidden when empty.
+  The right column scrolls under a bottom fade. Closes on a tap outside the
+  card or 60 s after the last tap inside it.
+- **Removed**: synopsis, tagline, rating, content rating, genres, director,
+  the elapsed and time-left figures, the TV/Movie chip and the Paused badge.
+
+### Timers and activity
+
+`hooks/usePlexNow.js` exports `notePlexActivity()`, `holdPlexActivity()`
+(returns a release; activity counts as "now" while held) and
+`getPlexActivityAt()`. The view notes activity on every pointer-down, on
+every cast-board scroll, and when a card opens or closes; an open person card
+holds activity until it closes. `PlexFollow` leaves 60 s after the session is
+gone or stopped (was 30 s) AND only once the last activity is 60 s old; the
+cast stays up for that minute marked "Stopped on Apple TV". The pause rule (10
+minutes) and the hub-silent rule are unchanged. Opened by hand with nothing
+playing, the view goes home after 60 s without activity. Verified with a 10x
+clock: exit 61.1 s after an untouched stop; a card open at the stop closed at
+60.2 s and the view left 60.2 s later; a scroll 45 s after the stop pushed
+the exit to 60.6 s after the scroll.
+
+### Text size
+
+`display.plexTextScale` (device scope, 0.8 to 1.6, default 1) sets
+`--pv-scale`. Dashboard: "Plex text size" in the Plex card, 80 to 160 % in
+steps of 10. Settings: the same row beside "Follow Plex player". At 130 % the
+board shows four columns; at 80 %, eight.
+
+### Data (see "the cast board's data" above)
+
+Cast to 60 entries with `guest`, `regular`, `order` and `castTotal`; TMDB
+thumbs at w342; the person payload gains `profileLarge`, `age`, `knownFor`
+to 12 with `inLibrary` flags, `inLibrary` to 12 at 300x450. Tests: 17 in
+`plex.test.mjs`, 22 in `tmdb.test.mjs`, fixtures under
+`frameserver/test/fixtures/plex/`. Review shots: `_review/plex/rev2-*.png`.
+

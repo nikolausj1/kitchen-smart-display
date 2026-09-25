@@ -1,0 +1,973 @@
+{
+  "MediaContainer": {
+    "size": 1,
+    "allowSync": true,
+    "identifier": "com.plexapp.plugins.library",
+    "librarySectionID": 2,
+    "librarySectionTitle": "TV Shows",
+    "librarySectionUUID": "46de2117-03f4-4e48-9858-2f9c1ec547f6",
+    "mediaTagPrefix": "/system/bundle/media/flags/",
+    "mediaTagVersion": 1786939784,
+    "Metadata": [
+      {
+        "ratingKey": "77533",
+        "key": "/library/metadata/77533/children",
+        "guid": "plex://show/65e1ca66944cddc4295cdf68",
+        "slug": "the-studio-2025",
+        "studio": "Point Grey Pictures",
+        "type": "show",
+        "title": "The Studio (2025)",
+        "titleSort": "Studio (2025)",
+        "librarySectionTitle": "TV Shows",
+        "librarySectionID": 2,
+        "librarySectionKey": "/library/sections/2",
+        "contentRating": "TV-MA",
+        "contentRatingAge": 15,
+        "summary": "Desperate for celebrity approval, the newly appointed head of a movie studio and his executive team at Continental Studios must juggle corporate demands with creative ambitions as they try to keep movies alive and relevant.",
+        "index": 1,
+        "audienceRating": 7.8,
+        "year": 2025,
+        "tagline": "Think outside the box office.",
+        "thumb": "/library/metadata/77533/thumb/1788263635",
+        "art": "/library/metadata/77533/art/1788263635",
+        "duration": 1800000,
+        "originallyAvailableAt": "2025-03-26",
+        "leafCount": 10,
+        "viewedLeafCount": 0,
+        "childCount": 1,
+        "addedAt": 1742962346,
+        "updatedAt": 1788263635,
+        "audienceRatingImage": "themoviedb://image.rating",
+        "primaryExtraKey": "/library/metadata/77537",
+        "Image": [
+          {
+            "alt": "The Studio (2025)",
+            "type": "coverPoster",
+            "url": "/library/metadata/77533/thumb/1788263635"
+          },
+          {
+            "alt": "The Studio (2025)",
+            "type": "background",
+            "url": "/library/metadata/77533/art/1788263635"
+          },
+          {
+            "alt": "The Studio (2025)",
+            "type": "clearLogo",
+            "url": "/library/metadata/77533/clearLogo/1788263635"
+          }
+        ],
+        "UltraBlurColors": {
+          "topLeft": "442511",
+          "topRight": "3c1807",
+          "bottomRight": "993c1f",
+          "bottomLeft": "944031"
+        },
+        "Genre": [
+          {
+            "id": 391,
+            "filter": "genre=391",
+            "tag": "Comedy"
+          },
+          {
+            "id": 222,
+            "filter": "genre=222",
+            "tag": "Drama"
+          }
+        ],
+        "Country": [
+          {
+            "id": 77,
+            "filter": "country=77",
+            "tag": "United States of America"
+          }
+        ],
+        "Guid": [
+          {
+            "id": "imdb://tt23649128"
+          },
+          {
+            "id": "tmdb://247767"
+          },
+          {
+            "id": "tvdb://448147"
+          }
+        ],
+        "Rating": [
+          {
+            "image": "imdb://image.rating",
+            "value": 8.0,
+            "type": "audience"
+          },
+          {
+            "image": "rottentomatoes://image.rating.ripe",
+            "value": 9.2,
+            "type": "critic"
+          },
+          {
+            "image": "rottentomatoes://image.rating.upright",
+            "value": 7.7,
+            "type": "audience"
+          },
+          {
+            "image": "themoviedb://image.rating",
+            "value": 7.8,
+            "type": "audience"
+          }
+        ],
+        "Role": [
+          {
+            "id": 1291,
+            "filter": "actor=1291",
+            "tag": "Seth Rogen",
+            "tagKey": "5d776825103a2d001f563c1e",
+            "role": "Matt Remick",
+            "thumb": "https://metadata-static.plex.tv/1/people/136ae1d23b961770f9aa674b7ef7ea0d.jpg"
+          },
+          {
+            "id": 25082,
+            "filter": "actor=25082",
+            "tag": "Catherine O'Hara",
+            "tagKey": "5d7768275af944001f1f6e83",
+            "role": "Patty Leigh",
+            "thumb": "https://metadata-static.plex.tv/5/people/5493d74287dd22140dc97578c68d4c1a.jpg"
+          },
+          {
+            "id": 1357,
+            "filter": "actor=1357",
+            "tag": "Ike Barinholtz",
+            "tagKey": "5d776831103a2d001f566ae9",
+            "role": "Sal Saperstein",
+            "thumb": "https://metadata-static.plex.tv/1/people/14e5088c113e9f242990d3fa55ad05b2.jpg"
+          },
+          {
+            "id": 105418,
+            "filter": "actor=105418",
+            "tag": "Chase Sui Wonders",
+            "tagKey": "5de4aba290dd0f001ef2eb3d",
+            "role": "Quinn Hackett",
+            "thumb": "https://metadata-static.plex.tv/8/people/8ad024a692e36b495b383b612eab1bc8.jpg"
+          },
+          {
+            "id": 1289,
+            "filter": "actor=1289",
+            "tag": "Kathryn Hahn",
+            "tagKey": "5d77682a3c3c2a001fbcbd51",
+            "role": "Maya Mason",
+            "thumb": "https://metadata-static.plex.tv/0/people/0fa6ab4c68ec9bcd3ff24b00b089dbd5.jpg"
+          },
+          {
+            "id": 47282,
+            "filter": "actor=47282",
+            "tag": "Keyla Monterroso Mejia",
+            "tagKey": "5f405f5dfea1a1003fa67f4e",
+            "role": "Petra",
+            "thumb": "https://metadata-static.plex.tv/3/people/3ff4e2d4c1291502a111a5ba90a3363d.jpg"
+          },
+          {
+            "id": 237585,
+            "filter": "actor=237585",
+            "tag": "Dewayne Perkins",
+            "tagKey": "5f4018c952f2000041500c0f",
+            "role": "Tyler",
+            "thumb": "https://metadata-static.plex.tv/8/people/80bf1ed70571d41ceb8cd210c8c05d21.jpg"
+          },
+          {
+            "id": 237586,
+            "filter": "actor=237586",
+            "tag": "Nicholas Stoller",
+            "tagKey": "5d776831999c64001ec2e960",
+            "role": "Nicholas Stoller",
+            "thumb": "https://metadata-static.plex.tv/b/people/bec165691dc6d82b1a9642dff2e8655c.jpg"
+          },
+          {
+            "id": 6877,
+            "filter": "actor=6877",
+            "tag": "Bryan Cranston",
+            "tagKey": "5d776828961905001eb916ef",
+            "role": "Griffin Mill",
+            "thumb": "https://metadata-static.plex.tv/1/people/1c47293e0ee94082ea91afcb1253ebb7.jpg"
+          },
+          {
+            "id": 10895,
+            "filter": "actor=10895",
+            "tag": "David Krumholtz",
+            "tagKey": "5d77682a3c3c2a001fbcbe80",
+            "role": "Mitch Weitz",
+            "thumb": "https://metadata-static.plex.tv/5/people/5f7736be0b1622c8939b42eeb01273db.jpg"
+          },
+          {
+            "id": 13282,
+            "filter": "actor=13282",
+            "tag": "Zo\u00eb Kravitz",
+            "tagKey": "5d77682ee6d55c002040bc49",
+            "role": "Zo\u00eb Kravitz",
+            "thumb": "https://metadata-static.plex.tv/c/people/cd7e73cc7ebfe2518b67308987f4d9e4.jpg"
+          },
+          {
+            "id": 9457,
+            "filter": "actor=9457",
+            "tag": "Dave Franco",
+            "tagKey": "5d7768327228e5001f1de14f",
+            "role": "Dave Franco",
+            "thumb": "https://metadata-static.plex.tv/7/people/7bd5fa3a81a2fcfaf4a8db19b24583ed.jpg"
+          },
+          {
+            "id": 271702,
+            "filter": "actor=271702",
+            "tag": "Matt Belloni",
+            "tagKey": "5f4033ee03883a0040b550cb",
+            "role": "Matt Belloni",
+            "thumb": "https://metadata-static.plex.tv/8/people/854607a34c29eac49d73470124b14459.jpg"
+          },
+          {
+            "id": 123666,
+            "filter": "actor=123666",
+            "tag": "Lisa Gilroy",
+            "tagKey": "5f404020537293003d3c7ded",
+            "role": "Gabby",
+            "thumb": "https://metadata-static.plex.tv/8/people/84b7ac5833fafc3adef553448aeb2439.jpg"
+          },
+          {
+            "id": 18842,
+            "filter": "actor=18842",
+            "tag": "Rhea Perlman",
+            "tagKey": "5d77682aeb5d26001f1de547",
+            "role": "Matt's Mom (voice)",
+            "thumb": "https://metadata-static.plex.tv/9/people/9ea2f95fe81c80cb57e144f6863d68b5.jpg"
+          },
+          {
+            "id": 17561,
+            "filter": "actor=17561",
+            "tag": "Ron Howard",
+            "tagKey": "5d776826880197001ec90735",
+            "role": "Ron Howard",
+            "thumb": "https://metadata-static.plex.tv/e/people/edfb6d061575544c511412cf544a2122.jpg"
+          },
+          {
+            "id": 41602,
+            "filter": "actor=41602",
+            "tag": "Peter Berg",
+            "tagKey": "5d77682a85719b001f3a1661",
+            "role": "Peter Berg",
+            "thumb": "https://metadata-static.plex.tv/9/people/903b662b3696198392f911a5f719801f.jpg"
+          },
+          {
+            "id": 2350,
+            "filter": "actor=2350",
+            "tag": "Steve Buscemi",
+            "tagKey": "5d776825151a60001f24a3e5",
+            "role": "Steve Buscemi",
+            "thumb": "https://metadata-static.plex.tv/e/people/e2ead0fa579f7fef7cce7b53ea367f8e.jpg"
+          },
+          {
+            "id": 8237,
+            "filter": "actor=8237",
+            "tag": "Paul Dano",
+            "tagKey": "5d776828961905001eb916ed",
+            "role": "Paul Dano",
+            "thumb": "https://metadata-static.plex.tv/5/people/5334c3c78cbe949a4db839940c76a3c5.jpg"
+          },
+          {
+            "id": 10319,
+            "filter": "actor=10319",
+            "tag": "Martin Scorsese",
+            "tagKey": "5d776824961905001eb90983",
+            "role": "Martin Scorsese",
+            "thumb": "https://metadata-static.plex.tv/c/people/cebf5e47db08c3287e82dcb5ee2148ba.jpg"
+          },
+          {
+            "id": 2986,
+            "filter": "actor=2986",
+            "tag": "Charlize Theron",
+            "tagKey": "5d776826999c64001ec2c65f",
+            "role": "Charlize Theron",
+            "thumb": "https://metadata-static.plex.tv/1/people/1ce550b93a6246536cf9e2b9a14b424a.jpg"
+          },
+          {
+            "id": 130069,
+            "filter": "actor=130069",
+            "tag": "Yuli Zorrilla",
+            "tagKey": "5f1e63be4de80e004280abb0",
+            "role": "Tour Guide",
+            "thumb": "https://metadata-static.plex.tv/3/people/388d16c456ecd9b15d7bd471c22d32ad.jpg"
+          },
+          {
+            "id": 303120,
+            "filter": "actor=303120",
+            "tag": "Renae Anderson",
+            "tagKey": "6a0c112884ce675343a9c7a2",
+            "role": "Assistant",
+            "thumb": "https://metadata-static.plex.tv/3/people/3ddebbe1fd2188aee0f9bf2459d3d7ea.jpg"
+          },
+          {
+            "id": 10642,
+            "filter": "actor=10642",
+            "tag": "Thomas Barbusca",
+            "tagKey": "5d776aeffb0d55001f55613f",
+            "role": "PA Doug",
+            "thumb": "https://metadata-static.plex.tv/6/people/6661366aa9e3e326c420f3aa174d260a.jpg"
+          },
+          {
+            "id": 31357,
+            "filter": "actor=31357",
+            "tag": "Greta Lee",
+            "tagKey": "5d7768d3ebdf2200209c9384",
+            "role": "Greta Lee",
+            "thumb": "https://metadata-static.plex.tv/9/people/9f8f0af7870be78b7fb3412ff9144de0.jpg"
+          },
+          {
+            "id": 9016,
+            "filter": "actor=9016",
+            "tag": "Sarah Polley",
+            "tagKey": "5d776824103a2d001f563ab5",
+            "role": "Sarah Polley",
+            "thumb": "https://metadata-static.plex.tv/8/people/8eea65f2861882fd327b9da6bc4615f1.jpg"
+          },
+          {
+            "id": 237589,
+            "filter": "actor=237589",
+            "tag": "Bonnie Soper",
+            "tagKey": "5d7768407228e5001f1e05bc",
+            "role": "Amanda",
+            "thumb": "https://metadata-static.plex.tv/f/people/f6ef68357093f08f4216f58538316bbc.jpg"
+          },
+          {
+            "id": 165448,
+            "filter": "actor=165448",
+            "tag": "Billy Budinich",
+            "tagKey": "5f401cab864225004282ad5c",
+            "role": "Randall",
+            "thumb": "https://metadata-static.plex.tv/c/people/c092dab45dc2dbe15766c88ce792db78.jpg"
+          },
+          {
+            "id": 7897,
+            "filter": "actor=7897",
+            "tag": "Dan Sachoff",
+            "tagKey": "5d776b1a7a53e9001e71a26c",
+            "role": "Cinematographer Jonas",
+            "thumb": "https://metadata-static.plex.tv/a/people/acf39ced6d8709db3788ca23c7f1933f.jpg"
+          },
+          {
+            "id": 251773,
+            "filter": "actor=251773",
+            "tag": "Mindee de Lacey",
+            "tagKey": "685568bea9c3e03d2c2f134e",
+            "role": "Script Supervisor",
+            "thumb": "https://metadata-static.plex.tv/d/people/d1ad3e02fa4a95e1fbb31b1b3fe92a93.jpg"
+          },
+          {
+            "id": 104273,
+            "filter": "actor=104273",
+            "tag": "Christopher Carrington",
+            "tagKey": "5d77696d96b655001fdceb3f",
+            "role": "1st AD",
+            "thumb": "https://metadata-static.plex.tv/d/people/dc7d4f169578af099b9ad6ef965648b1.jpg"
+          },
+          {
+            "id": 303121,
+            "filter": "actor=303121",
+            "tag": "Monnie Aleahmad",
+            "tagKey": "5d776c30fb0d55001f57f9d6",
+            "role": "Set Medic",
+            "thumb": "https://metadata-static.plex.tv/7/people/71c9a0f195a045375694506b65035292.jpg"
+          },
+          {
+            "id": 237648,
+            "filter": "actor=237648",
+            "tag": "Lia Kim",
+            "tagKey": "67e69e481fade9b041cc3d1c",
+            "role": "Greta Lee Stand In"
+          },
+          {
+            "id": 237646,
+            "filter": "actor=237646",
+            "tag": "Donald Murphy",
+            "tagKey": "5d7770c9594b2b001e751af7",
+            "role": "AD"
+          },
+          {
+            "id": 5542,
+            "filter": "actor=5542",
+            "tag": "Olivia Wilde",
+            "tagKey": "5d7768325af944001f1f91b7",
+            "role": "Olivia Wilde",
+            "thumb": "https://metadata-static.plex.tv/3/people/3d55f378157d0c2780c337dbebef30f3.jpg"
+          },
+          {
+            "id": 13850,
+            "filter": "actor=13850",
+            "tag": "Rebecca Hall",
+            "tagKey": "5d776829999c64001ec2cef7",
+            "role": "Dr. Sarah Cohen",
+            "thumb": "https://metadata-static.plex.tv/8/people/85ccf93c0c4820e80b62a8e5ac85b563.jpg"
+          },
+          {
+            "id": 42731,
+            "filter": "actor=42731",
+            "tag": "Anthony Mackie",
+            "tagKey": "5d776824151a60001f24a321",
+            "role": "Anthony Mackie",
+            "thumb": "https://metadata-static.plex.tv/0/people/0adee82fb613647af4c344310be99524.jpg"
+          },
+          {
+            "id": 228851,
+            "filter": "actor=228851",
+            "tag": "Tremarri Limbrick",
+            "tagKey": "625a79aa17189afb6dd500dd",
+            "role": "Young Boy"
+          },
+          {
+            "id": 297323,
+            "filter": "actor=297323",
+            "tag": "Kiki Seto",
+            "tagKey": "5f4057e2ce2564003f951788",
+            "role": "Marketing Assistant",
+            "thumb": "https://metadata-static.plex.tv/c/people/c0cbd5767d350b7c2191c78cef12c8d9.jpg"
+          },
+          {
+            "id": 139263,
+            "filter": "actor=139263",
+            "tag": "Kevin Fry-Bowers",
+            "tagKey": "5d77688096b655001fdb9fce",
+            "role": "Mean Guy",
+            "thumb": "https://metadata-static.plex.tv/people/5d77688096b655001fdb9fce.jpg"
+          },
+          {
+            "id": 20733,
+            "filter": "actor=20733",
+            "tag": "Zac Efron",
+            "tagKey": "5d77682ceb5d26001f1dedf0",
+            "role": "Zac Efron",
+            "thumb": "https://metadata-static.plex.tv/c/people/cbe61e16c949752795d4ccd5dec19ece.jpg"
+          },
+          {
+            "id": 96181,
+            "filter": "actor=96181",
+            "tag": "Larry Brown",
+            "tagKey": "5d776982ad5437001f75f197",
+            "role": "Jean-Paul",
+            "thumb": "https://metadata-static.plex.tv/a/people/a43ade7ee088a1f9dd6d68ed0dff9629.jpg"
+          },
+          {
+            "id": 218935,
+            "filter": "actor=218935",
+            "tag": "Andrew Santiago",
+            "tagKey": "5f405cfdc63b480040e58a55",
+            "role": "PA Fred",
+            "thumb": "https://image.tmdb.org/t/p/original/3zYLdw9EF7bgQLQAvPrgzeX8JLh.jpg"
+          },
+          {
+            "id": 240689,
+            "filter": "actor=240689",
+            "tag": "Tara Brook",
+            "tagKey": "5d776843961905001eb96af2",
+            "role": "Evelyn",
+            "thumb": "https://metadata-static.plex.tv/8/people/88fcd0abf6a53bce13d1e8b36d6a17b3.jpg"
+          },
+          {
+            "id": 166944,
+            "filter": "actor=166944",
+            "tag": "Alan Barinholtz",
+            "tagKey": "5ee7bd3270a2020042519c17",
+            "role": "Projectionist",
+            "thumb": "https://metadata-static.plex.tv/2/people/2b767fd1f2be0bc91d24be71ed16e62b.jpg"
+          },
+          {
+            "id": 240690,
+            "filter": "actor=240690",
+            "tag": "Sanya Arnold",
+            "tagKey": "6287bca6c25767f1fcb3ecac",
+            "role": "PA"
+          },
+          {
+            "id": 143085,
+            "filter": "actor=143085",
+            "tag": "Aaron Behr",
+            "tagKey": "5d77699ead5437001f76232f",
+            "role": "Sketchy Guy",
+            "thumb": "https://metadata-static.plex.tv/1/people/1eb690595f8509e35771857c718284d0.jpg"
+          },
+          {
+            "id": 167773,
+            "filter": "actor=167773",
+            "tag": "Evan Mulrooney",
+            "tagKey": "5f9edc2f163563002d005371",
+            "role": "Chateau Security Guy",
+            "thumb": "https://metadata-static.plex.tv/7/people/7e04f281a5b35686bc6e8492cfd58e19.jpg"
+          },
+          {
+            "id": 230474,
+            "filter": "actor=230474",
+            "tag": "Kschris Anda",
+            "tagKey": "61bc459417f321029d586b5e",
+            "role": "Chateau Waiter"
+          },
+          {
+            "id": 87872,
+            "filter": "actor=87872",
+            "tag": "Devon Bostick",
+            "tagKey": "5d77683361141d001fb1525b",
+            "role": "Miles",
+            "thumb": "https://metadata-static.plex.tv/b/people/b73fc0a5a0d1ba39274cf3d6227a69b8.jpg"
+          },
+          {
+            "id": 242080,
+            "filter": "actor=242080",
+            "tag": "Parker Finn",
+            "tagKey": "5e92d1912297a900417918b1",
+            "role": "Parker Finn",
+            "thumb": "https://metadata-static.plex.tv/9/people/91d50933f9c3cac30df3469b269843fb.jpg"
+          },
+          {
+            "id": 132481,
+            "filter": "actor=132481",
+            "tag": "Owen Kline",
+            "tagKey": "5d77683654c0f0001f3039d5",
+            "role": "Owen Kline",
+            "thumb": "https://metadata-static.plex.tv/f/people/f161bec3b2a2f6c25e06d92faa5c9881.jpg"
+          },
+          {
+            "id": 190119,
+            "filter": "actor=190119",
+            "tag": "Trevor Tordjman",
+            "tagKey": "5d776b3423d5a3001f50dce6",
+            "role": "Daniel",
+            "thumb": "https://metadata-static.plex.tv/5/people/5564288c6667bc02cd3089d10b275288.jpg"
+          },
+          {
+            "id": 107692,
+            "filter": "actor=107692",
+            "tag": "Scout Tayui-Lepore",
+            "tagKey": "5d77707081ba41001faf0645",
+            "role": "Skye",
+            "thumb": "https://metadata-static.plex.tv/a/people/a2364a8010dd45d38a837fa61e0a4b98.jpg"
+          },
+          {
+            "id": 107693,
+            "filter": "actor=107693",
+            "tag": "Sophia Tayui-Lepore",
+            "tagKey": "5f3ff78dcae2c60042ebf8f1",
+            "role": "Bella",
+            "thumb": "https://metadata-static.plex.tv/5/people/5a173c127feb7bbc4d149faada1b8f6f.jpg"
+          },
+          {
+            "id": 19732,
+            "filter": "actor=19732",
+            "tag": "Jill Lover",
+            "tagKey": "5d7768b4374a5b001fecdd18",
+            "role": "Laura",
+            "thumb": "https://metadata-static.plex.tv/7/people/7000c4841025d363cbb6cb09066c1075.jpg"
+          },
+          {
+            "id": 164132,
+            "filter": "actor=164132",
+            "tag": "Damian Muziani",
+            "tagKey": "5d776e63fb0d55001f5bfc48",
+            "role": "VIP Lot Security Guard",
+            "thumb": "https://metadata-static.plex.tv/4/people/41d39061798246a56c30615ded6472de.jpg"
+          },
+          {
+            "id": 242081,
+            "filter": "actor=242081",
+            "tag": "Brick Jackson",
+            "tagKey": "5d776a62ad5437001f77c553",
+            "role": "Security Guard",
+            "thumb": "https://metadata-static.plex.tv/people/5d776a62ad5437001f77c553.jpg"
+          },
+          {
+            "id": 135980,
+            "filter": "actor=135980",
+            "tag": "Pamela Shafer",
+            "tagKey": "5d776905fb0d55001f51fcf7",
+            "role": "Lawyer #1",
+            "thumb": "https://metadata-static.plex.tv/people/5d776905fb0d55001f51fcf7.jpg"
+          },
+          {
+            "id": 242082,
+            "filter": "actor=242082",
+            "tag": "Chris Durmick",
+            "tagKey": "5f3fa54903883a0040a89c57",
+            "role": "Lawyer #2"
+          },
+          {
+            "id": 242083,
+            "filter": "actor=242083",
+            "tag": "Peder Meyer",
+            "tagKey": "67ffa51a0052d9002b296245",
+            "role": "Angry 1st AD"
+          },
+          {
+            "id": 235945,
+            "filter": "actor=235945",
+            "tag": "Scott Lang",
+            "tagKey": "5d776971f617c9002015fb63",
+            "role": "Stunt French Soldier",
+            "thumb": "https://metadata-static.plex.tv/f/people/f9ec0c68cb6bf4fce2d8f70611bb8a49.jpg"
+          },
+          {
+            "id": 39152,
+            "filter": "actor=39152",
+            "tag": "Johnny Knoxville",
+            "tagKey": "5d776827eb5d26001f1dd878",
+            "role": "Johnny Knoxville",
+            "thumb": "https://metadata-static.plex.tv/d/people/da7c53245e27c111f06ce1ee66528e2c.jpg"
+          },
+          {
+            "id": 26302,
+            "filter": "actor=26302",
+            "tag": "Jessica St. Clair",
+            "tagKey": "5d7768377e9a3c0020c6d217",
+            "role": "Leigh Schnabel",
+            "thumb": "https://metadata-static.plex.tv/9/people/9cc31e2591ddbd3359db6d0bc89d020f.jpg"
+          },
+          {
+            "id": 54296,
+            "filter": "actor=54296",
+            "tag": "Josh Hutcherson",
+            "tagKey": "5d776829151a60001f24b105",
+            "role": "Josh Hutcherson",
+            "thumb": "https://metadata-static.plex.tv/3/people/39643df311b578e2cd3d6140c0f4085b.jpg"
+          },
+          {
+            "id": 117977,
+            "filter": "actor=117977",
+            "tag": "Sugar Lyn Beard",
+            "tagKey": "5d7768432ec6b5001f6be783",
+            "role": "Dr. Rebecca Chan-Sanders",
+            "thumb": "https://metadata-static.plex.tv/b/people/b2d1ae75428b83ff4a2357958c0243c9.jpg"
+          },
+          {
+            "id": 160053,
+            "filter": "actor=160053",
+            "tag": "Arthur Keng",
+            "tagKey": "5f4023418642250042833f3b",
+            "role": "Dr. Steve Chan",
+            "thumb": "https://metadata-static.plex.tv/2/people/2f57c607a6875cf68d6c643c616f2df6.jpg"
+          },
+          {
+            "id": 2483,
+            "filter": "actor=2483",
+            "tag": "Derek Wilson",
+            "tagKey": "5d776ac7594b2b001e6c5ab6",
+            "role": "Dr. Josh Fleisher",
+            "thumb": "https://metadata-static.plex.tv/0/people/019060ab3cfb54a22d8c2ac5b64bef37.jpg"
+          },
+          {
+            "id": 242949,
+            "filter": "actor=242949",
+            "tag": "Shereen Khan",
+            "tagKey": "5f40679303883a0040bc9d96",
+            "role": "June Fleisher",
+            "thumb": "https://metadata-static.plex.tv/e/people/e7e1ea0b967d75e4cfa80508ade0ffcf.jpg"
+          },
+          {
+            "id": 242950,
+            "filter": "actor=242950",
+            "tag": "Chuck Lines",
+            "tagKey": "5d776b287a53e9001e71c1e5",
+            "role": "Zombie",
+            "thumb": "https://metadata-static.plex.tv/c/people/cf9f68ff05b36ef78ff1756e6cb02014.jpg"
+          },
+          {
+            "id": 242951,
+            "filter": "actor=242951",
+            "tag": "Zack Krone",
+            "tagKey": "5e164f2819f29500377b64aa",
+            "role": "Auctioneer"
+          },
+          {
+            "id": 242952,
+            "filter": "actor=242952",
+            "tag": "Alex Gregory",
+            "tagKey": "62fb7d043f312e5f41faae18",
+            "role": "Doctor",
+            "thumb": "https://metadata-static.plex.tv/2/people/2a3135d31c1fbaf573f4d0feb3b65120.jpg"
+          },
+          {
+            "id": 56046,
+            "filter": "actor=56046",
+            "tag": "Ricky Mabe",
+            "tagKey": "5d77682c7228e5001f1dd74a",
+            "role": "Cardiologist",
+            "thumb": "https://metadata-static.plex.tv/0/people/01f980239a7bb362c40fa6e65782475f.jpg"
+          },
+          {
+            "id": 242953,
+            "filter": "actor=242953",
+            "tag": "Daniel Tatar",
+            "tagKey": "5d7769f896b655001fddf76d",
+            "role": "Cardiologist #2"
+          },
+          {
+            "id": 24553,
+            "filter": "actor=24553",
+            "tag": "Theo Wilson",
+            "tagKey": "5e559daf784ec8003feccb26",
+            "role": "Surgeon",
+            "thumb": "https://metadata-static.plex.tv/c/people/cf82abea5548939faa20b08bd82148c7.jpg"
+          },
+          {
+            "id": 242954,
+            "filter": "actor=242954",
+            "tag": "Jen Zaborowski",
+            "tagKey": "5d77684f6f4521001eaa0e3a",
+            "role": "Surgeon #2",
+            "thumb": "https://metadata-static.plex.tv/2/people/2f9bc3df2552f833ba59b985b4c336ec.jpg"
+          },
+          {
+            "id": 47834,
+            "filter": "actor=47834",
+            "tag": "Ice Cube",
+            "tagKey": "5d776827999c64001ec2c8c9",
+            "role": "Ice Cube",
+            "thumb": "https://metadata-static.plex.tv/a/people/a3c0ead2c74db37b27a5f087dd25a568.jpg"
+          },
+          {
+            "id": 243724,
+            "filter": "actor=243724",
+            "tag": "Ziwe",
+            "tagKey": "5f40645b02101b0040fd43ad",
+            "role": "Ziwe",
+            "thumb": "https://metadata-static.plex.tv/3/people/3a120b1cd5cb10572a34be2a220f656e.jpg"
+          },
+          {
+            "id": 5303,
+            "filter": "actor=5303",
+            "tag": "Lil Rel Howery",
+            "tagKey": "5d776adc96b655001fdfbc01",
+            "role": "Lil Rel Howery",
+            "thumb": "https://metadata-static.plex.tv/3/people/393bb7b453093c8cac32cb2db4d79821.jpg"
+          },
+          {
+            "id": 243725,
+            "filter": "actor=243725",
+            "tag": "Aniz Adam Ansari",
+            "tagKey": "5ff9f150ec0b15002c62f01b",
+            "role": "Dev"
+          },
+          {
+            "id": 22029,
+            "filter": "actor=22029",
+            "tag": "Kara Luiz",
+            "tagKey": "5d7768b7d95456001fd2567b",
+            "role": "Sandra",
+            "thumb": "https://metadata-static.plex.tv/c/people/c63dca5c34e5ebb463bcf850021a5396.jpg"
+          },
+          {
+            "id": 243726,
+            "filter": "actor=243726",
+            "tag": "Earl Baylon",
+            "tagKey": "5d776b1cad5437001f7937d6",
+            "role": "Recording Engineer",
+            "thumb": "https://metadata-static.plex.tv/c/people/cec55f78c868bad84f72e791a2fea4ac.jpg"
+          },
+          {
+            "id": 164572,
+            "filter": "actor=164572",
+            "tag": "Amber Dancy",
+            "tagKey": "5f3fbe3f04a8650040966836",
+            "role": "Nerd"
+          },
+          {
+            "id": 210470,
+            "filter": "actor=210470",
+            "tag": "Lucia Aniello",
+            "tagKey": "5d776c3851dd69001fe38eaf",
+            "role": "Lucia Aniello",
+            "thumb": "https://metadata-static.plex.tv/9/people/956a237d4fef93a0a0643595e95b15aa.jpg"
+          },
+          {
+            "id": 43095,
+            "filter": "actor=43095",
+            "tag": "Quinta Brunson",
+            "tagKey": "5f403b005a76a80042d7abc4",
+            "role": "Quinta Brunson",
+            "thumb": "https://metadata-static.plex.tv/f/people/f48d0e2a14e1b43371406098f7bafe15.jpg"
+          },
+          {
+            "id": 22018,
+            "filter": "actor=22018",
+            "tag": "Paul W. Downs",
+            "tagKey": "5d776c3851dd69001fe38eb0",
+            "role": "Paul W. Downs",
+            "thumb": "https://metadata-static.plex.tv/b/people/b59d8e06ee9873879ad7c6ccf6d8fc11.jpg"
+          },
+          {
+            "id": 33513,
+            "filter": "actor=33513",
+            "tag": "Erin Moriarty",
+            "tagKey": "5d7768c1431c830024c156f1",
+            "role": "Erin Moriarty",
+            "thumb": "https://metadata-static.plex.tv/7/people/70c7721c88bd4e43493c07b8f54911c4.jpg"
+          },
+          {
+            "id": 245171,
+            "filter": "actor=245171",
+            "tag": "Ted Sarandos",
+            "tagKey": "5d776bbb96b655001fe1a284",
+            "role": "Ted Sarandos",
+            "thumb": "https://metadata-static.plex.tv/c/people/c02eda42e2365f88257428e34d4b19a9.jpg"
+          },
+          {
+            "id": 12270,
+            "filter": "actor=12270",
+            "tag": "Adam Scott",
+            "tagKey": "5d77682beb5d26001f1de8cb",
+            "role": "Adam Scott",
+            "thumb": "https://metadata-static.plex.tv/5/people/5beaf6c5b7b7917c878909df8c2bb85d.jpg"
+          },
+          {
+            "id": 13899,
+            "filter": "actor=13899",
+            "tag": "Jean Smart",
+            "tagKey": "5d7768266f4521001ea98d3b",
+            "role": "Jean Smart",
+            "thumb": "https://metadata-static.plex.tv/b/people/b44267ed7a17db286268977d19ef8fc9.jpg"
+          },
+          {
+            "id": 43040,
+            "filter": "actor=43040",
+            "tag": "Zack Snyder",
+            "tagKey": "5d7768298a7581001f12c1dd",
+            "role": "Zack Snyder",
+            "thumb": "https://metadata-static.plex.tv/a/people/ab92a26950042ba1616f027e30405256.jpg"
+          },
+          {
+            "id": 40871,
+            "filter": "actor=40871",
+            "tag": "Aaron Sorkin",
+            "tagKey": "5d7768288718ba001e3121c7",
+            "role": "Aaron Sorkin",
+            "thumb": "https://metadata-static.plex.tv/5/people/530d75b6005cf308f3763e5da425c003.jpg"
+          },
+          {
+            "id": 83793,
+            "filter": "actor=83793",
+            "tag": "Antony Starr",
+            "tagKey": "5d776837880197001ec93ab0",
+            "role": "Antony Starr",
+            "thumb": "https://metadata-static.plex.tv/a/people/aa2e65956be95d0476d6c8ddae09ac44.jpg"
+          },
+          {
+            "id": 168760,
+            "filter": "actor=168760",
+            "tag": "Jen Statsky",
+            "tagKey": "5e16393291c20300412137ff",
+            "role": "Jen Statsky",
+            "thumb": "https://metadata-static.plex.tv/9/people/95d7c34a8d59fad1fc7ee5fef8373422.jpg"
+          },
+          {
+            "id": 93399,
+            "filter": "actor=93399",
+            "tag": "Ramy Youssef",
+            "tagKey": "5d776bd123d5a3001f51476a",
+            "role": "Ramy Youssef",
+            "thumb": "https://metadata-static.plex.tv/d/people/d3465a9c4b1c1d079d5a218d1c42ce66.jpg"
+          },
+          {
+            "id": 31827,
+            "filter": "actor=31827",
+            "tag": "Chris Gann",
+            "tagKey": "5d7768315af944001f1f9134",
+            "role": "Limo Driver",
+            "thumb": "https://metadata-static.plex.tv/people/5d7768315af944001f1f9134.jpg"
+          },
+          {
+            "id": 163325,
+            "filter": "actor=163325",
+            "tag": "Kit Hoover",
+            "tagKey": "5d9c080f2df347001e3a9a85",
+            "role": "Access Hollywood Reporter",
+            "thumb": "https://metadata-static.plex.tv/f/people/f3466260c8e00e474c225af6b6b2d94a.jpg"
+          },
+          {
+            "id": 245172,
+            "filter": "actor=245172",
+            "tag": "Charli D'Amelio",
+            "tagKey": "5e748356303828004341441e",
+            "role": "Charli D'Amelio",
+            "thumb": "https://metadata-static.plex.tv/d/people/d606becc006173cf418e0f4df6beb29a.jpg"
+          },
+          {
+            "id": 245173,
+            "filter": "actor=245173",
+            "tag": "Jessica Clements",
+            "tagKey": "6731f286aecffff9a2d00f95",
+            "role": "Influencer #2"
+          },
+          {
+            "id": 261271,
+            "filter": "actor=261271",
+            "tag": "Dan Black",
+            "tagKey": "5d776b6ead5437001f79f6a8",
+            "role": "Teleprompter Guy",
+            "thumb": "https://metadata-static.plex.tv/4/people/41ce8cfc6cca43711cbc30251aa06fa1.jpg"
+          },
+          {
+            "id": 19078,
+            "filter": "actor=19078",
+            "tag": "Bill Watterson",
+            "tagKey": "5d7769d3ad5437001f768ee8",
+            "role": "Announcer (voice)",
+            "thumb": "https://image.tmdb.org/t/p/original/791ZGmHqzGAgzAXxBrG8JVGNUXm.jpg"
+          },
+          {
+            "id": 71390,
+            "filter": "actor=71390",
+            "tag": "Courtney Pauroso",
+            "tagKey": "5d77689e9ab54400214e8ae3",
+            "role": "Gemma",
+            "thumb": "https://metadata-static.plex.tv/9/people/9321ac687809f31f9447217e82d793f0.jpg"
+          },
+          {
+            "id": 245935,
+            "filter": "actor=245935",
+            "tag": "Mario W. Peoples",
+            "tagKey": "5f403e1c1ae710004107e67e",
+            "role": "Dealer"
+          },
+          {
+            "id": 245936,
+            "filter": "actor=245936",
+            "tag": "Rayshawn Williams",
+            "tagKey": "64e0af636a1fb1fa344521de",
+            "role": "Kool-Aid Man"
+          },
+          {
+            "id": 245937,
+            "filter": "actor=245937",
+            "tag": "Tyler Crystal",
+            "tagKey": "67ea8989e6c756a7614d225c",
+            "role": "Passing Partier"
+          },
+          {
+            "id": 246646,
+            "filter": "actor=246646",
+            "tag": "Saige Hooke",
+            "tagKey": "5f406e7bbe690b0043172574",
+            "role": "Zo\u00eb's Hairstylist",
+            "thumb": "https://metadata-static.plex.tv/a/people/a77e0feff6dbb998bc7063906476e02b.jpg"
+          }
+        ],
+        "CommonSenseMedia": [
+          {
+            "id": 255005,
+            "oneLiner": "Lots of language in fast-paced Hollywood insider comedy.",
+            "AgeRating": [
+              {
+                "type": "official",
+                "rating": 3,
+                "age": 15
+              }
+            ]
+          }
+        ],
+        "Location": [
+          {
+            "path": "Z:\\TV Shows\\The Studio (2025)"
+          }
+        ]
+      }
+    ]
+  }
+}

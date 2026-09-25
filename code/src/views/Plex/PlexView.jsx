@@ -1,46 +1,47 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import usePlexNow, {
   PLEX_OFF,
   currentOffsetMs,
   effectivePlexFollow,
+  getPlexActivityAt,
+  notePlexActivity,
   pickSession,
   plexImageUrl,
   postPlexCommand,
 } from '../../hooks/usePlexNow.js'
 import { HUB } from '../../lib/hub.js'
-import { useSettings } from '../../lib/settings.js'
+import { plexTextScaleOf, useSettings } from '../../lib/settings.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView } from '../../shell/homeView.js'
+import CastBoard from './CastBoard.jsx'
 import PersonCard from './PersonCard.jsx'
-import { Face, PlexIcon, Poster } from './PlexParts.jsx'
-import {
-  cleanShowTitle,
-  episodeCode,
-  fmtAgo,
-  fmtAudience,
-  fmtClock,
-  fmtDate,
-  fmtLeft,
-  fmtRuntime,
-  fmtTimecode,
-  joinNames,
-} from './plexFormat.js'
+import { PlexIcon, Poster } from './PlexParts.jsx'
+import { cleanShowTitle, episodeCode, episodeLine, fmtAgo, fmtClock, fmtRuntime } from './plexFormat.js'
 import './PlexView.css'
 
-// PlexView - what the living room is watching, for the family-room screen.
+// PlexView - who is in what the living room is watching, for the family-room
+// screen (the Echo Show 10, 1280x800).
 //
-// Designed at 1280x800 (the family-room Echo Show 10), checked at 1920x1080.
-// The item's art, blurred and darkened, fills the screen; the poster sits left;
-// the right column carries the show and episode (or the film), the air date,
-// the runtime and a progress bar that advances locally between the hub's
-// 5 s polls, the transport bar when the player advertises itself to Plex,
-// the summary and six of the cast. A tap on a headshot opens a person card.
+// Its job is "who is that, and what else are they in". A strip across the top
+// says what is on: a small poster, the show and "S1 · E2 · The Oner" (or the
+// film, its year and runtime), whether it is playing, the clock, the transport
+// buttons when the player advertises itself to Plex (else a hint), and a thin
+// progress bar along its bottom edge that advances locally between the hub's
+// 5 s polls. The rest of the screen is the cast (CastBoard): everyone
+// credited, big portrait cards with the character under the actor, scrolled
+// by touch. A tap on a card opens that person full screen (PersonCard).
+//
+// Sizes are CSS pixels at 1280x800 times --pv-scale, which is the screen's
+// display.plexTextScale (Settings > Plex > Plex text size, or the dashboard's
+// Plex card), so one knob scales the whole view.
 //
 // The shell brings this view up when the followed player plays for 10 s and
-// takes it down when the session ends (AppShell PlexFollow, display.plexFollow).
-// Opened by hand (the dashboard's Show, ?view=plex) on a screen that follows
-// nobody, it shows the first session playing and goes home after a minute of
-// nothing.
+// takes it down a minute after the session ends, once nobody has touched the
+// view for a minute (AppShell PlexFollow, display.plexFollow). Until then the
+// last item's cast stays, marked Stopped. Opened by hand (the dashboard's
+// Show, ?view=plex) on a screen that follows nobody, it shows the first
+// session playing and goes home after a minute with nothing playing and
+// nobody touching it.
 //
 // Honest states: the hub unreachable, Plex unreachable (the hub's error), and
 // nothing playing (the player's last item, faded).
@@ -50,7 +51,6 @@ const IDLE_TO_HOME_MS = 60 * 1000
 // until the hub confirms it.
 const PENDING_MS = 6 * 1000
 const COMMAND_ERROR_MS = 6 * 1000
-const CAST_SHOWN = 6
 
 function useNow(ms = 1000) {
   const [now, setNow] = useState(() => new Date())
@@ -59,25 +59,6 @@ function useNow(ms = 1000) {
     return () => clearInterval(id)
   }, [ms])
   return now
-}
-
-function Separated({ items, className }) {
-  const shown = items.filter(Boolean)
-  if (!shown.length) return null
-  return (
-    <div className={className}>
-      {shown.map((it, i) => (
-        <span className="pv__mi" key={i}>
-          {i > 0 && (
-            <span className="pv__sep" aria-hidden="true">
-              ·
-            </span>
-          )}
-          {it}
-        </span>
-      ))}
-    </div>
-  )
 }
 
 function Backdrop({ media }) {
@@ -126,19 +107,21 @@ function TransportButton({ icon, label, onClick, main = false, on = false, disab
   )
 }
 
-// A message in place of the details, over the last poster (faded).
-function StateScreen({ now, poster, posterTitle, title, lines }) {
+// A message in place of the cast, over the last poster (faded).
+function StateScreen({ now, scale, poster, posterTitle, title, lines }) {
   return (
-    <div className="pv pv--state">
+    <div className="pv pv--state" style={{ '--pv-scale': scale }} onPointerDown={notePlexActivity}>
       <Backdrop media={null} />
-      <header className="pv__top">
+      <header className="pv__corner">
         <span className="pv__clock">{fmtClock(now)}</span>
       </header>
-      <main className="pv__main">
-        <div className="pv__poster-wrap">
-          <Poster src={plexImageUrl(poster)} title={posterTitle || 'Plex'} className="pv__poster pv__poster--faded" />
-        </div>
-        <section className="pv__details">
+      <main className="pv__state">
+        <Poster
+          src={plexImageUrl(poster, 400, 600)}
+          title={posterTitle || 'Plex'}
+          className="pv__state-poster pv__poster--faded"
+        />
+        <section className="pv__state-text">
           <h1 className="pv__state-title">{title}</h1>
           {lines.filter(Boolean).map((l, i) => (
             <p className="pv__state-line" key={i}>
@@ -159,30 +142,43 @@ function lastPlayedLine(item) {
   return item.year ? `${item.title} (${item.year})` : item.title
 }
 
+const STATE_WORD = { playing: 'Playing', paused: 'Paused', buffering: 'Loading', stopped: 'Stopped' }
+
 export default function PlexView() {
   const snap = usePlexNow()
   const settings = useSettings()
   const follow = effectivePlexFollow(settings.display?.plexFollow)
+  const scale = plexTextScaleOf(settings.display?.plexTextScale)
   const { setView } = useView()
   const now = useNow()
-  const [personFor, setPersonFor] = useState(null)
+  const [personFor, setPersonFor] = useState(null) // { person, media }
   const [pending, setPending] = useState(null) // { key, state, until, offset }
   const [pendingCc, setPendingCc] = useState(null) // { key, on, until }
   const [cmdError, setCmdError] = useState(null)
+  // The last session shown, kept on screen after it ends (as Stopped) so
+  // someone reading the cast is not left with nothing: { follow, session }.
+  const [kept, setKept] = useState(null)
 
-  const session = pickSession(snap, follow)
+  const live = pickSession(snap, follow)
   const followed = follow !== PLEX_OFF ? snap.players.find((p) => p.machineId === follow) || null : null
-  const player = session?.player || followed || snap.players[0] || null
   const hubDown = !!snap.hubError && (snap.stale || !snap.loaded)
   const plexDown = !hubDown && snap.plexDown
-  const hasSession = !hubDown && !plexDown && !!session
+  const hasSession = !hubDown && !plexDown && !!live
+  if (hasSession && (kept?.session !== live || kept?.follow !== follow)) setKept({ follow, session: live })
+  const keptSession = !hubDown && !plexDown && kept?.follow === follow ? kept.session : null
+  const session = hasSession ? live : keptSession
+  const player = session?.player || followed || snap.players[0] || null
 
-  // Following nobody, opened by hand: nothing playing for a minute -> home.
-  // (Following a player, the shell's follow logic owns the way out.)
+  // Following nobody, opened by hand: a minute with nothing playing and
+  // nobody touching the view -> home. (Following a player, the shell's
+  // follow logic owns the way out.)
   useEffect(() => {
     if (follow !== PLEX_OFF || hasSession) return undefined
-    const id = setTimeout(() => setView(getHomeView()), IDLE_TO_HOME_MS)
-    return () => clearTimeout(id)
+    const since = Date.now()
+    const id = setInterval(() => {
+      if (Date.now() - Math.max(since, getPlexActivityAt()) >= IDLE_TO_HOME_MS) setView(getHomeView())
+    }, 1000)
+    return () => clearInterval(id)
   }, [follow, hasSession, setView])
 
   useEffect(() => {
@@ -191,15 +187,34 @@ export default function PlexView() {
     return () => clearTimeout(id)
   }, [cmdError])
 
-  const closePerson = useCallback(() => setPersonFor(null), [setPersonFor])
+  // Both stable: the card's close timer is keyed on closePerson, and the
+  // memoised cast board would re-render every second for a new openPerson.
+  // The media goes with the person, so the card still says "in <this>" if the
+  // next episode starts while it is open.
+  const mediaRef = useRef(null)
+  useEffect(() => {
+    mediaRef.current = session ? session.media : null
+  })
+  const openPerson = useCallback(
+    (person) => {
+      notePlexActivity()
+      if (mediaRef.current) setPersonFor({ person, media: mediaRef.current })
+    },
+    [setPersonFor]
+  )
+  const closePerson = useCallback(() => {
+    notePlexActivity()
+    setPersonFor(null)
+  }, [setPersonFor])
 
   if (!snap.loaded && !snap.hubError) {
-    return <StateScreen now={now} title="Looking for Plex…" lines={[]} />
+    return <StateScreen now={now} scale={scale} title="Looking for Plex…" lines={[]} />
   }
   if (hubDown) {
     return (
       <StateScreen
         now={now}
+        scale={scale}
         poster={player?.lastItem?.poster}
         posterTitle={player?.lastItem?.title}
         title="Can't reach the hub"
@@ -211,6 +226,7 @@ export default function PlexView() {
     return (
       <StateScreen
         now={now}
+        scale={scale}
         poster={player?.lastItem?.poster}
         posterTitle={player?.lastItem?.title}
         title="Plex isn't answering"
@@ -224,6 +240,7 @@ export default function PlexView() {
     return (
       <StateScreen
         now={now}
+        scale={scale}
         poster={item?.poster}
         posterTitle={item?.title}
         title={`Nothing playing on ${player?.name || 'Plex'}`}
@@ -234,13 +251,18 @@ export default function PlexView() {
 
   const media = session.media
   const isEpisode = media.type === 'episode'
-  const realState = session.player.state
+  const ended = !hasSession || session.player.state === 'stopped'
+  const realState = ended ? 'stopped' : session.player.state
   const nowMs = now.getTime()
-  const pend = pending && pending.key === session.key && nowMs < pending.until && pending.state !== realState ? pending : null
+  const pend =
+    !ended && pending && pending.key === session.key && nowMs < pending.until && pending.state !== realState
+      ? pending
+      : null
   const state = pend ? pend.state : realState
   const paused = state === 'paused'
   const ccReal = !!media.subtitlesOn
-  const pendC = pendingCc && pendingCc.key === session.key && nowMs < pendingCc.until && pendingCc.on !== ccReal ? pendingCc : null
+  const pendC =
+    pendingCc && pendingCc.key === session.key && nowMs < pendingCc.until && pendingCc.on !== ccReal ? pendingCc : null
   const ccOn = pendC ? pendC.on : ccReal
   const hasSubs = media.subtitles.length > 0
 
@@ -271,126 +293,87 @@ export default function PlexView() {
     }
   }
 
-  const where = `${state === 'paused' ? 'Paused' : state === 'buffering' ? 'Loading' : 'Playing'} on ${session.player.name}`
+  const where = `${STATE_WORD[state] || 'Playing'} on ${session.player.name}`
   const hint =
     session.player.platform === 'tvOS'
       ? 'Turn on Advertise as Player in the Plex app on the Apple TV to control it from here'
       : `Turn on Advertise as Player in the Plex app on ${session.player.name} to control it from here`
-
-  const meta = isEpisode
-    ? [
-        media.airDate ? `Aired ${fmtDate(media.airDate)}` : media.year,
-        fmtRuntime(duration),
-        media.contentRating && <span className="pv__chip">{media.contentRating}</span>,
-        media.genres.slice(0, 3).join(', ') || null,
-      ]
-    : [
-        media.year,
-        fmtRuntime(duration),
-        media.contentRating && <span className="pv__chip">{media.contentRating}</span>,
-        fmtAudience(media.rating, media.ratingSource),
-      ]
+  const title = isEpisode ? cleanShowTitle(media.show) || media.title : media.title
+  const sub = isEpisode
+    ? episodeLine(media.season, media.episode, media.title)
+    : [media.year, fmtRuntime(duration)].filter(Boolean).join(' · ')
+  const controls = !ended && session.controllable
+  const castKey = `${session.key}:${media.ratingKey || media.title}`
 
   return (
-    <div className={`pv${paused ? ' pv--paused' : ''}`}>
+    <div
+      className={`pv${paused ? ' pv--paused' : ''}${ended ? ' pv--ended' : ''}`}
+      style={{ '--pv-scale': scale }}
+      onPointerDown={notePlexActivity}
+    >
       <Backdrop media={media} />
 
-      <header className="pv__top">
-        <span className="pv__where">{where}</span>
-        <span className="pv__clock">{fmtClock(now)}</span>
+      <header className="pv__strip">
+        <Poster
+          src={plexImageUrl(media.poster, 240, 360)}
+          title={isEpisode ? cleanShowTitle(media.show) : media.title}
+          className="pv__poster"
+        />
+        <div className="pv__heading">
+          <h1 className="pv__title">{title}</h1>
+          {sub && <div className={`pv__sub${isEpisode ? ' pv__sub--episode' : ''}`}>{sub}</div>}
+          {cmdError ? (
+            <div className="pv__cmd-error">Could not send that: {cmdError}</div>
+          ) : (
+            !ended && !session.controllable && <div className="pv__hint">{hint}</div>
+          )}
+        </div>
+        {controls && (
+          <div className="pv__transport">
+            <TransportButton icon="back" label="Back 10 seconds" onClick={() => send('back')} />
+            <TransportButton
+              icon={paused ? 'play' : 'pause'}
+              label={paused ? 'Play' : 'Pause'}
+              main
+              onClick={() => send(paused ? 'play' : 'pause')}
+            />
+            <TransportButton icon="stop" label="Stop" onClick={() => send('stop')} />
+            <TransportButton icon="forward" label="Forward 30 seconds" onClick={() => send('forward')} />
+            <TransportButton
+              icon="cc"
+              label={ccOn ? 'Captions off' : 'Captions on'}
+              on={ccOn}
+              disabled={!hasSubs}
+              onClick={() => send(ccOn ? 'ccOff' : 'ccOn')}
+            />
+          </div>
+        )}
+        <div className="pv__status">
+          <span className="pv__clock">{fmtClock(now)}</span>
+          <span className="pv__where">{where}</span>
+        </div>
+        {!ended && (
+          <div className="pv__bar" aria-hidden="true">
+            <div className="pv__fill" style={{ width: `${pct}%` }} />
+          </div>
+        )}
       </header>
 
-      <main className="pv__main">
-        <div className="pv__poster-wrap">
-          <Poster
-            src={plexImageUrl(media.poster)}
-            title={isEpisode ? cleanShowTitle(media.show) : media.title}
-            className="pv__poster"
-          />
-          {paused && <span className="pv__badge">Paused</span>}
-        </div>
+      {media.cast.length > 0 ? (
+        <CastBoard key={castKey} cast={media.cast} castTotal={media.castTotal} onOpen={openPerson} />
+      ) : (
+        <div className="pv__no-cast">No cast listed for this one.</div>
+      )}
 
-        <section className="pv__details">
-          {isEpisode ? (
-            <>
-              <div className="pv__eyebrow">{cleanShowTitle(media.show)}</div>
-              {media.season != null && media.episode != null && (
-                <div className="pv__sub">
-                  Season {media.season} · Episode {media.episode}
-                </div>
-              )}
-            </>
-          ) : (
-            media.genres.length > 0 && <div className="pv__eyebrow">{media.genres.slice(0, 3).join(' · ')}</div>
-          )}
-          <h1 className="pv__title">{media.title}</h1>
-          <Separated items={meta} className="pv__meta" />
-          {!isEpisode && media.tagline && <div className="pv__tagline">{media.tagline}</div>}
-          {!isEpisode && media.directors.length > 0 && (
-            <div className="pv__credit">Directed by {joinNames(media.directors)}</div>
-          )}
-
-          <div className="pv__progress">
-            <div className="pv__bar">
-              <div className="pv__fill" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="pv__times">
-              <span>{fmtTimecode(offset)}</span>
-              <span>{duration > 0 ? fmtLeft(duration - offset) : ''}</span>
-            </div>
-          </div>
-
-          {session.controllable ? (
-            <div className="pv__transport">
-              <TransportButton icon="back" label="Back 10 seconds" onClick={() => send('back')} />
-              <TransportButton
-                icon={paused ? 'play' : 'pause'}
-                label={paused ? 'Play' : 'Pause'}
-                main
-                onClick={() => send(paused ? 'play' : 'pause')}
-              />
-              <TransportButton icon="stop" label="Stop" onClick={() => send('stop')} />
-              <TransportButton icon="forward" label="Forward 30 seconds" onClick={() => send('forward')} />
-              <TransportButton
-                icon="cc"
-                label={ccOn ? 'Captions off' : 'Captions on'}
-                on={ccOn}
-                disabled={!hasSubs}
-                onClick={() => send(ccOn ? 'ccOff' : 'ccOn')}
-              />
-            </div>
-          ) : (
-            <div className="pv__hint">{hint}</div>
-          )}
-          {cmdError && <div className="pv__cmd-error">Could not send that: {cmdError}</div>}
-
-          {media.summary && <p className="pv__summary">{media.summary}</p>}
-
-          {media.cast.length > 0 && (
-            <div className="pv__cast">
-              {media.cast.slice(0, CAST_SHOWN).map((c) => (
-                <button
-                  type="button"
-                  className="pv__person"
-                  key={`${c.name}:${c.role || ''}`}
-                  data-interactive="true"
-                  aria-label={c.role ? `${c.name}, ${c.role}` : c.name}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setPersonFor(c)
-                  }}
-                >
-                  <Face src={plexImageUrl(c.thumb)} name={c.name} className="pv__face" />
-                  <span className="pv__person-name">{c.name}</span>
-                  {c.role && <span className="pv__person-role">{c.role}</span>}
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
-
-      {personFor && <PersonCard key={personFor.name} person={personFor} media={media} onClose={closePerson} />}
+      {personFor && (
+        <PersonCard
+          key={personFor.person.name}
+          person={personFor.person}
+          media={personFor.media}
+          nowMs={nowMs}
+          onClose={closePerson}
+        />
+      )}
     </div>
   )
 }

@@ -18,6 +18,7 @@ import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar
 import {
   PLEX_OFF,
   effectivePlexFollow,
+  getPlexActivityAt,
   getPlexNow,
   sessionForPlayer,
   subscribePlexNow,
@@ -151,9 +152,13 @@ function CurrentView() {
 //     continuous seconds -> the Plex view, unless someone is in Settings
 //     (it idles home after a minute, and the rule fires then). The view it
 //     came from is kept for the log.
-//   - on the Plex view a pause keeps it (the view shows a Paused badge);
-//     paused for more than 10 minutes -> the home view.
-//   - the session gone (or stopped) for 30 s -> the home view.
+//   - on the Plex view a pause keeps it (the view says Paused); paused for
+//     more than 10 minutes -> the home view.
+//   - the session gone (or stopped) for a minute AND nobody has used the view
+//     for a minute -> the home view. The view keeps the last item's cast up
+//     meanwhile, and a tap, a scroll or an open person card there counts as
+//     use (usePlexNow.js notePlexActivity / holdPlexActivity), so someone
+//     reading the cast is not yanked away.
 //   - no answer from the hub, or none from Plex for over 15 s, for 2 minutes
 //     -> the home view (a hub restart mid-film must not bounce the screen).
 // Leaving the Plex view any other way (the menu, a dashboard nudge, the
@@ -167,7 +172,9 @@ function CurrentView() {
 // (hooks/usePlexNow.js); ?plexTest=<machineId> stands in for the setting in
 // dev builds.
 const PLEX_ENTER_MS = 10 * 1000
-const PLEX_GONE_MS = 30 * 1000
+const PLEX_GONE_MS = 60 * 1000
+// ...and the view untouched this long (getPlexActivityAt).
+const PLEX_QUIET_MS = 60 * 1000
 const PLEX_PAUSED_MS = 10 * 60 * 1000
 const PLEX_BLIND_MS = 2 * 60 * 1000
 
@@ -259,8 +266,9 @@ function PlexFollow() {
         return
       }
       let why = null
-      if (t.goneSince && nowMs - t.goneSince >= PLEX_GONE_MS) why = 'the session ended'
-      else if (t.pausedSince && nowMs - t.pausedSince >= PLEX_PAUSED_MS) why = 'paused 10 minutes'
+      if (t.goneSince && nowMs - t.goneSince >= PLEX_GONE_MS) {
+        if (nowMs - getPlexActivityAt() >= PLEX_QUIET_MS) why = 'the session ended'
+      } else if (t.pausedSince && nowMs - t.pausedSince >= PLEX_PAUSED_MS) why = 'paused 10 minutes'
       else if (t.blindSince && nowMs - t.blindSince >= PLEX_BLIND_MS) why = 'no answer from the hub'
       if (!why) return
       const home = getHomeView()

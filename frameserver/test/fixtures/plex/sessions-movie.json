@@ -1,0 +1,255 @@
+{
+  "MediaContainer": {
+    "size": 1,
+    "Metadata": [
+      {
+        "ratingKey": "83499",
+        "key": "/library/metadata/83499",
+        "guid": "plex://movie/68c603a502c87f50d12dda28",
+        "slug": "thief-of-joy",
+        "studio": "800 Pound Gorilla Pictures",
+        "type": "movie",
+        "title": "Gianmarco Soresi: Thief of Joy",
+        "librarySectionTitle": "Stand Up",
+        "librarySectionID": 7,
+        "librarySectionKey": "/library/sections/7",
+        "contentRating": "Not Rated",
+        "summary": "Thief of Joy blends Soresi\u2019s signature theatrical flair with deeply personal storytelling. Drawing from his life as a theatre kid turned theatre major, he weaves together intimate anecdotes about his relationship, career, and his parents\u2019 divorce, all delivered in the animated style The New York Times calls \u201csilkily feline physicality and frenetic gesticulation.\u201d",
+        "audienceRating": 8.1,
+        "year": 2025,
+        "tagline": "Taped at the Elysian Theatre in Los Angeles over five sold-out shows in February 2025",
+        "thumb": "/library/metadata/83499/thumb/1789986697",
+        "art": "/library/metadata/83499/art/1789986697",
+        "duration": 3979575,
+        "originallyAvailableAt": "2025-09-19",
+        "addedAt": 1760682030,
+        "updatedAt": 1789986697,
+        "audienceRatingImage": "imdb://image.rating",
+        "Media": [
+          {
+            "id": 126827,
+            "duration": 3979575,
+            "bitrate": 1320,
+            "width": 1920,
+            "height": 1080,
+            "aspectRatio": 1.78,
+            "audioChannels": 2,
+            "audioCodec": "aac",
+            "videoCodec": "h264",
+            "videoResolution": "1080",
+            "container": "mp4",
+            "videoFrameRate": "24p",
+            "optimizedForStreaming": 0,
+            "audioProfile": "lc",
+            "has64bitOffsets": false,
+            "videoProfile": "high",
+            "hasVoiceActivity": false,
+            "Part": [
+              {
+                "id": 127760,
+                "key": "/library/parts/127760/1760681984/file.mp4",
+                "duration": 3979575,
+                "size": 656582980,
+                "audioProfile": "lc",
+                "container": "mp4",
+                "has64bitOffsets": false,
+                "optimizedForStreaming": false,
+                "videoProfile": "high",
+                "Stream": [
+                  {
+                    "id": 296677,
+                    "streamType": 1,
+                    "default": true,
+                    "codec": "h264",
+                    "index": 0,
+                    "bitrate": 1186,
+                    "bitDepth": 8,
+                    "chromaLocation": "left",
+                    "chromaSubsampling": "4:2:0",
+                    "codedHeight": 1088,
+                    "codedWidth": 1920,
+                    "colorPrimaries": "bt709",
+                    "colorRange": "tv",
+                    "colorSpace": "bt709",
+                    "colorTrc": "bt709",
+                    "frameRate": 23.976,
+                    "hasScalingMatrix": false,
+                    "height": 1080,
+                    "level": 40,
+                    "profile": "high",
+                    "refFrames": 3,
+                    "scanType": "progressive",
+                    "streamIdentifier": "1",
+                    "width": 1920,
+                    "displayTitle": "1080p",
+                    "extendedDisplayTitle": "1080p (H.264)"
+                  },
+                  {
+                    "id": 296678,
+                    "streamType": 2,
+                    "canNormalizeLoudness": false,
+                    "selected": true,
+                    "default": true,
+                    "codec": "aac",
+                    "index": 1,
+                    "channels": 2,
+                    "bitrate": 128,
+                    "audioChannelLayout": "stereo",
+                    "profile": "lc",
+                    "samplingRate": 44100,
+                    "streamIdentifier": "2",
+                    "displayTitle": "Unknown (AAC Stereo)",
+                    "extendedDisplayTitle": "Unknown (AAC Stereo)"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "Image": [
+          {
+            "alt": "Gianmarco Soresi: Thief of Joy",
+            "type": "coverPoster",
+            "url": "/library/metadata/83499/thumb/1789986697"
+          },
+          {
+            "alt": "Gianmarco Soresi: Thief of Joy",
+            "type": "background",
+            "url": "/library/metadata/83499/art/1789986697"
+          },
+          {
+            "alt": "Gianmarco Soresi: Thief of Joy",
+            "type": "clearLogo",
+            "url": "/library/metadata/83499/clearLogo/1789986697"
+          }
+        ],
+        "UltraBlurColors": {
+          "topLeft": "102d56",
+          "topRight": "441c0b",
+          "bottomRight": "7a3531",
+          "bottomLeft": "054f91"
+        },
+        "Genre": [
+          {
+            "id": 391,
+            "filter": "genre=391",
+            "tag": "Comedy"
+          }
+        ],
+        "Country": [
+          {
+            "id": 77,
+            "filter": "country=77",
+            "tag": "United States of America"
+          }
+        ],
+        "Guid": [
+          {
+            "id": "imdb://tt37961407"
+          },
+          {
+            "id": "tmdb://1547831"
+          },
+          {
+            "id": "tvdb://370713"
+          }
+        ],
+        "Rating": [
+          {
+            "image": "imdb://image.rating",
+            "value": 8.1,
+            "type": "audience"
+          },
+          {
+            "image": "themoviedb://image.rating",
+            "value": 8.0,
+            "type": "audience"
+          }
+        ],
+        "Director": [
+          {
+            "id": 264694,
+            "filter": "director=264694",
+            "tag": "Gianmarco Soresi",
+            "tagKey": "5e16256cfef2d4003e88a949",
+            "thumb": "https://metadata-static.plex.tv/c/people/c337dc0a7cfc5f9eb73bf93fb8bfc0cc.jpg"
+          }
+        ],
+        "Writer": [
+          {
+            "id": 264695,
+            "filter": "writer=264695",
+            "tag": "Gianmarco Soresi",
+            "tagKey": "5e16256cfef2d4003e88a949",
+            "thumb": "https://metadata-static.plex.tv/c/people/c337dc0a7cfc5f9eb73bf93fb8bfc0cc.jpg"
+          }
+        ],
+        "Role": [
+          {
+            "id": 264696,
+            "filter": "actor=264696",
+            "tag": "Gianmarco Soresi",
+            "tagKey": "5e16256cfef2d4003e88a949",
+            "role": "Self",
+            "thumb": "https://metadata-static.plex.tv/c/people/c337dc0a7cfc5f9eb73bf93fb8bfc0cc.jpg"
+          },
+          {
+            "id": 289711,
+            "filter": "actor=289711",
+            "tag": "Tovah Silbermann",
+            "tagKey": "5f40520ac63b480040e45d0c",
+            "role": "Self (uncredited)",
+            "thumb": "https://metadata-static.plex.tv/3/people/3083d613fb2c55f9d9731ab52bc9ad3a.jpg"
+          }
+        ],
+        "Producer": [
+          {
+            "id": 152477,
+            "filter": "producer=152477",
+            "tag": "Matt Schuler",
+            "tagKey": "5f1e6cd194481b0042c120ec"
+          }
+        ],
+        "Field": [
+          {
+            "locked": true,
+            "name": "title"
+          },
+          {
+            "locked": true,
+            "name": "thumb"
+          }
+        ],
+        "sessionKey": "2",
+        "viewOffset": 1200000,
+        "Player": {
+          "title": "Living Room",
+          "machineIdentifier": "TEST-PLAYER-0001",
+          "product": "Plex for Apple TV",
+          "platform": "tvOS",
+          "platformVersion": "18.0",
+          "device": "Apple TV",
+          "model": "4K",
+          "vendor": "Apple",
+          "address": "192.168.4.50",
+          "remotePublicAddress": "192.168.4.50",
+          "local": true,
+          "relayed": false,
+          "secure": true,
+          "userID": 1,
+          "state": "playing"
+        },
+        "User": {
+          "id": "1",
+          "title": "Justin",
+          "thumb": ""
+        },
+        "Session": {
+          "id": "test-session-2",
+          "bandwidth": 20000,
+          "location": "lan"
+        }
+      }
+    ]
+  }
+}

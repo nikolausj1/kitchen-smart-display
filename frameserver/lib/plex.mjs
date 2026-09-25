@@ -38,10 +38,13 @@
 //   poster, art  hub image paths (/api/plex/image?path=...): Plex images
 //              need the token, so the hub proxies them. An episode's poster
 //              is its show's.
-//   cast       up to 12 [{ name, role, thumb, tmdbPersonId? , plexId? }]:
-//              TMDB's credits when a key is configured and the item has a
-//              TMDB id (lib/tmdb.mjs), else Plex's Role[]. thumb is an
-//              absolute URL (TMDB, metadata-static.plex.tv) or a hub path.
+//   cast       up to CAST_MAX = 60 [{ name, role, thumb, tmdbPersonId,
+//              plexId?, guest, regular, order }]; castTotal (on media) is the
+//              count before that cap. TMDB's credits when a key is
+//              configured and the item has a TMDB id (lib/tmdb.mjs), else
+//              Plex's Role[] (plexId set, tmdbPersonId null, guest/regular
+//              false). thumb is an absolute URL (TMDB, metadata-static.plex.tv)
+//              or a hub path.
 //   subtitles  [{ id, language, languageCode, title, forced, selected }]
 //   guids      { tmdb, imdb, tvdb } from the item's Guid[]; showGuids the
 //              show's (episodes)
@@ -85,8 +88,8 @@ export const NOT_ADVERTISING = 'player not advertising'
 export const ACTIONS = Object.freeze(['play', 'pause', 'stop', 'back', 'forward', 'ccOn', 'ccOff'])
 export const BACK_MS = 10_000
 export const FORWARD_MS = 30_000
-export const CAST_MAX = 12
-export const LIBRARY_MAX = 8
+export const CAST_MAX = 60
+export const LIBRARY_MAX = 12
 const POLL_MS = 5_000
 const CLIENTS_MS = 30_000
 // A command re-reads /clients first when the list is older than this.
@@ -243,7 +246,10 @@ export function captionsStream(subs) {
     all.find((s) => !s.forced) || all[0] || null
 }
 
-// Plex's Role[] as the cast row: billing order, capped.
+// Plex's Role[] as the cast row, in Plex's own billing order: { cast, total },
+// total the deduped count before the cap (max, CAST_MAX by default). Neither
+// guest nor regular applies to Plex's own list (Plex does not distinguish
+// them), and there is no TMDB person id to attach.
 export function plexCast(roles, max = CAST_MAX) {
   const out = []
   const seen = new Set()
@@ -251,10 +257,17 @@ export function plexCast(roles, max = CAST_MAX) {
     const name = str(r?.tag)
     if (!name || seen.has(name.toLowerCase())) continue
     seen.add(name.toLowerCase())
-    out.push({ name, role: str(r?.role), thumb: thumbUrl(r?.thumb), plexId: int(r?.id) })
-    if (out.length >= max) break
+    out.push({
+      name,
+      role: str(r?.role) || '',
+      thumb: thumbUrl(r?.thumb, 300),
+      tmdbPersonId: null,
+      plexId: int(r?.id),
+      guest: false,
+      regular: false,
+    })
   }
-  return out
+  return { cast: out.slice(0, max).map((c, i) => ({ ...c, order: i })), total: out.length }
 }
 
 function longer(a, b) {
@@ -294,7 +307,10 @@ export function normalizeSession(m, ctx = {}) {
     : str(pick('thumb'))
   const artPath = str(pick('art')) || str(pick('grandparentArt')) || str(show.art)
   const roles = longer(meta.Role, m.Role).length ? longer(meta.Role, m.Role) : list(show.Role)
-  const credits = Array.isArray(ctx.credits) && ctx.credits.length ? ctx.credits : null
+  // ctx.credits: lib/tmdb.mjs's { cast, total }, once it has something to show.
+  const tmdbCredits = isDict(ctx.credits) && Array.isArray(ctx.credits.cast) && ctx.credits.cast.length
+    ? ctx.credits : null
+  const castResult = tmdbCredits || plexCast(roles)
   const subtitles = subtitleStreams(m).length ? subtitleStreams(m) : subtitleStreams(meta)
 
   return {
@@ -336,8 +352,9 @@ export function normalizeSession(m, ctx = {}) {
       poster: imagePath(posterPath, 600, 900),
       art: imagePath(artPath, 1280, 720),
       ultraBlur: ultraBlur(m.UltraBlurColors) || ultraBlur(meta.UltraBlurColors) || ultraBlur(show.UltraBlurColors),
-      cast: credits || plexCast(roles),
-      castSource: credits ? 'tmdb' : 'plex',
+      cast: castResult.cast,
+      castTotal: castResult.total,
+      castSource: tmdbCredits ? 'tmdb' : 'plex',
       subtitles,
       subtitlesOn: subtitles.some((s) => s.selected),
       guids: parseGuids(meta.Guid ?? m.Guid),
@@ -427,6 +444,31 @@ export function normName(s) {
 function excludeSet(v) {
   const raw = Array.isArray(v) ? v : String(v ?? '').split(',')
   return new Set(raw.map((x) => String(x).trim()).filter((x) => RATING_KEY_RE.test(x)))
+}
+
+// Which of a TMDB person's "known for" credits (lib/tmdb.mjs) are already in
+// the library search above: by TMDB id when the library item's own Guid
+// carried one (searchPerson's includeGuids=1), else by normalised title and
+// a release year within one of each other (a knownFor entry or library item
+// missing a year still matches on title alone, rather than losing the match).
+// plexRatingKey is set only when it matched.
+export function matchKnownFor(knownFor, libraryItems) {
+  const items = list(libraryItems)
+  const byTmdbId = new Map()
+  for (const it of items) {
+    const id = it?.tmdbId != null ? Number(it.tmdbId) : null
+    if (id != null && !byTmdbId.has(id)) byTmdbId.set(id, it)
+  }
+  return list(knownFor).map((k) => {
+    const wantId = k?.tmdbId != null ? Number(k.tmdbId) : null
+    let match = wantId != null ? byTmdbId.get(wantId) : null
+    if (!match) {
+      const name = normName(k?.title)
+      match = items.find((it) => normName(it?.title) === name &&
+        (k?.year == null || it?.year == null || Math.abs(it.year - k.year) <= 1)) || null
+    }
+    return match ? { ...k, inLibrary: true, plexRatingKey: match.ratingKey } : { ...k, inLibrary: false }
+  })
 }
 
 // --- the service ---------------------------------------------------------------------
@@ -662,8 +704,9 @@ export function createPlex({
       if (!s) continue
       const look = tmdb ? tmdbLookup(s.media) : null
       const credits = look ? tmdb.cachedCredits(look) : null
-      if (Array.isArray(credits) && credits.length) {
-        s.media.cast = credits
+      if (credits && Array.isArray(credits.cast) && credits.cast.length) {
+        s.media.cast = credits.cast
+        s.media.castTotal = credits.total
         s.media.castSource = 'tmdb'
       }
       sessions.push(s)
@@ -808,19 +851,24 @@ export function createPlex({
     const items = []
     for (const k of [...new Set(keys)].slice(0, 6)) {
       try {
-        const res = await plexJson(`${k}&sort=audienceRating:desc`, {
+        // includeGuids=1: the show/movie's own Guid[] comes back inline, no
+        // per-item metadata read, so a "known for" match can use the TMDB id
+        // when it is there (else title + year, in matchKnownFor below).
+        const res = await plexJson(`${k}&sort=audienceRating:desc&includeGuids=1`, {
           headers: { 'X-Plex-Container-Start': '0', 'X-Plex-Container-Size': String(LIBRARY_MAX + 4) },
         })
         for (const m of metadataList(res)) {
           const type = str(m?.type)
           if (type !== 'movie' && type !== 'show') continue
+          const tmdbId = parseGuids(m.Guid).tmdb
           items.push({
             ratingKey: str(m.ratingKey),
             type,
             title: str(m.title) || '(untitled)',
             year: int(m.year),
             rating: num(m.audienceRating),
-            poster: imagePath(str(m.thumb), 240, 360),
+            poster: imagePath(str(m.thumb), 300, 450),
+            tmdbId: tmdbId ? Number(tmdbId) : null,
           })
         }
       } catch (e) {
@@ -886,13 +934,20 @@ export function createPlex({
         name: who,
         tmdbId: card?.tmdbId ?? (id ? Number(id) : null),
         profile: card?.profile ?? null,
+        profileLarge: card?.profileLarge ?? null,
+        age: card?.age ?? null,
         biography: card?.biography ?? null,
         birthday: card?.birthday ?? null,
         deathday: card?.deathday ?? null,
         placeOfBirth: card?.placeOfBirth ?? null,
         knownForDepartment: card?.knownForDepartment ?? null,
-        knownFor: card?.knownFor ?? [],
-        inLibrary: lib,
+        knownFor: matchKnownFor(card?.knownFor ?? [], lib),
+        // The library search's own tmdbId (used only for that match, above)
+        // is not part of this list's public shape.
+        inLibrary: lib.map((it) => ({
+          ratingKey: it.ratingKey, type: it.type, title: it.title,
+          year: it.year, rating: it.rating, poster: it.poster,
+        })),
         tmdb: { configured: !!(tmdb && tmdb.configured()), found: !!card },
         error,
       },

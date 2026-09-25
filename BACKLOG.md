@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-25
-version: 7.3
+version: 7.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -590,6 +590,14 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-25 - The Plex screen is a cast board.** Its job is "who is that,
+  and what else are they in": portrait headshots, every credited actor plus
+  guest stars and series regulars, character names under actor names, no
+  synopsis, rating, genres or director, Known for as one row, no crew. The
+  cast stays one minute after a stop and a person card one minute after the
+  last tap, both reset by touch. Headshots are 150x190 rather than 150x225 so
+  two rows fit at 100 %; the per-screen text size knob covers the rest. Only
+  the family-room Echo Show 10 is hand-checked.
 - **2026-09-25 - The office flip clock goes full width: no AM/PM, the date on
   the bottom edge.** Justin wants the time to fill the Echo Show 5. The
   numerals stay Inter 800, so the screen's width is now the limit (cards at
@@ -877,6 +885,18 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-25 - Plex second screen, rev 2: the cast board** (hub deployed
+  16:10, build `4564476`). After Justin's couch review of rev 1 (too small,
+  poster too big, cast too small): a 151 px title strip, then a scrolling
+  board of every credited actor with portrait headshots (150x190), names at
+  30 px and character names at 24 px, guest tags and a series-regulars
+  divider; a full-screen person card (300x450 headshot, one Known for row
+  with library badges, In your Plex library); the cast stays a minute after
+  a stop and a person card a minute after the last tap; `display.plexTextScale`
+  on the dashboard and in Settings. Hub: cast to 60 with guest and regular
+  flags, w342 thumbs, `profileLarge`, `age`, library matching; 39 new tests
+  (384 total). Design: `docs/designs/plex-second-screen.md`, "As built, rev
+  2". Shots: `_review/plex/rev2-*.png`.
 - **2026-09-25 - Flip clock, full width** (hub deployed 09:43). For the
   office Echo Show 5, at Justin's request: the cards run across about 96% of
   the width (`--tl-flip-u: min(30vw, 76vh)`; a 288px card, numerals about

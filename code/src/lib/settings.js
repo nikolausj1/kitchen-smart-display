@@ -562,8 +562,9 @@ export const DEFAULTS = {
     // The Plex player this screen follows: 'off', or a player's
     // machineIdentifier (the hub's /api/plex/players lists them). While that
     // player plays for 10 s the screen shows the Plex view (what is on, the
-    // cast); it goes home 30 s after the session ends or after 10 minutes
-    // paused (shell/AppShell.jsx PlexFollow, frameserver/lib/plex.mjs).
+    // cast); it goes home a minute after the session ends (once nobody has
+    // touched the view for a minute) or after 10 minutes paused
+    // (shell/AppShell.jsx PlexFollow, frameserver/lib/plex.mjs).
     plexFollow: 'off',
     // Entry board only. Move the wash with each photo, around entryDim: darker
     // behind a bright one, lighter behind a night one
@@ -573,6 +574,10 @@ export const DEFAULTS = {
     // Entry board only. Blur the photos behind the board, 0..20 px (clamped by
     // the layout, like entryDim). 0 = sharp.
     entryBlur: 0,
+    // The Plex view's size: its type, headshots and posters all scale by
+    // this, 0.8..1.6 (clamped by plexTextScaleOf below, like entryDim). 1 is
+    // the 1280x800 design: six columns, two rows of the cast in view.
+    plexTextScale: 1,
   },
   slideshow: {
     intervalMs: 6000,
@@ -596,6 +601,16 @@ export const DEFAULTS = {
     // don't fit, fall back to Fit with blur backdrop.
     smartFaces: true,
   },
+}
+
+// display.plexTextScale as the Plex view uses it (--pv-scale): a number,
+// clamped to 0.8..1.6, anything else 1. The Settings row and the dashboard's
+// Plex card offer 80..160 % in steps of 10.
+export const PLEX_TEXT_SCALE_MIN = 0.8
+export const PLEX_TEXT_SCALE_MAX = 1.6
+export function plexTextScaleOf(v) {
+  const n = typeof v === 'number' && Number.isFinite(v) ? v : 1
+  return Math.max(PLEX_TEXT_SCALE_MIN, Math.min(PLEX_TEXT_SCALE_MAX, n))
 }
 
 // Structural equality for settings blobs (plain objects, arrays, primitives).

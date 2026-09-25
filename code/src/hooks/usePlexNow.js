@@ -17,10 +17,16 @@ import { READ_ONLY, deepEqual } from '../lib/settings.js'
 //                           offsetMs, offsetAt, contentRating, rating,
 //                           ratingSource, tagline, summary, genres, directors,
 //                           writers, studio, poster, art, ultraBlur, cast,
-//                           castSource, subtitles, subtitlesOn, guids,
-//                           showGuids },
+//                           castTotal, castSource, subtitles, subtitlesOn,
+//                           guids, showGuids },
 //                  controllable }],
 //     players: [{ name, machineId, product, platform, lastSeenAt, lastItem }] }
+//
+// cast: [{ name, role, thumb, tmdbPersonId, plexId?, guest, regular, order }],
+// up to 60 in billing order (an episode's cast, then its guest stars, then the
+// series regulars not in it); castTotal is how many there were before the cap.
+// An older hub sends up to 12 without guest / regular / castTotal, and the
+// view copes.
 //
 // Same pattern as hooks/useCalendar.js: a module store read with
 // useSyncExternalStore that polls only while something needs it. Two kinds of
@@ -45,6 +51,12 @@ import { READ_ONLY, deepEqual } from '../lib/settings.js'
 // (servedAt - offsetAt) and then this screen's (Date.now() - offsetBaseAt),
 // so a screen whose clock is off by a minute still draws the right progress.
 // currentOffsetMs(session) advances it while playing.
+//
+// Activity: notePlexActivity() records that someone is using the Plex view (a
+// tap, a scroll, a person card opening or closing), holdPlexActivity() keeps
+// it "now" while a person card is open, and getPlexActivityAt() is the
+// shell's answer to "is someone reading the cast?" (AppShell PlexFollow waits
+// for a quiet minute before taking the view down).
 
 const POLL_MS = 5 * 1000
 const STALE_AFTER_MS = 30 * 1000
@@ -126,13 +138,15 @@ function localize(raw, prev, receivedAt, servedAtMs) {
       offsetBaseMs = (Number(m.offsetMs) || 0) + age
       offsetBaseAt = receivedAt
     }
+    // The cast keeps its identity while it is unchanged (a moving offset
+    // makes a new session object every poll), so the view's cast board does
+    // not re-render for nothing.
+    const cast = Array.isArray(m.cast) ? m.cast.filter((c) => isObj(c) && str(c.name)) : []
     out.push({
       ...s,
       media: {
         ...m,
-        cast: Array.isArray(m.cast) ? m.cast.filter((c) => isObj(c) && str(c.name)) : [],
-        genres: Array.isArray(m.genres) ? m.genres : [],
-        directors: Array.isArray(m.directors) ? m.directors : [],
+        cast: old && deepEqual(old.media.cast, cast) ? old.media.cast : cast,
         subtitles: Array.isArray(m.subtitles) ? m.subtitles : [],
         offsetBaseMs,
         offsetBaseAt,
@@ -290,6 +304,35 @@ export function sessionForPlayer(machineId, snap = current) {
 export function pickSession(snap, follow) {
   if (follow && follow !== PLEX_OFF) return sessionForPlayer(follow, snap)
   return snap.sessions.find((s) => s.player?.state === 'playing') || snap.sessions[0] || null
+}
+
+// --- activity ------------------------------------------------------------------
+// Someone using the Plex view. Module state, not React state: the shell's
+// follow logic reads it on its 1 s tick, and a scroll notes it per frame.
+let lastActivityAt = 0
+let activityHolds = 0
+
+export function notePlexActivity() {
+  lastActivityAt = Date.now()
+}
+
+// Activity is "now" until the returned function is called (an open person
+// card), which notes it once more on the way out.
+export function holdPlexActivity() {
+  activityHolds += 1
+  notePlexActivity()
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    activityHolds -= 1
+    notePlexActivity()
+  }
+}
+
+// When the Plex view was last used, in ms (0 = never).
+export function getPlexActivityAt() {
+  return activityHolds > 0 ? Date.now() : lastActivityAt
 }
 
 // Where the item is now, in ms: advanced locally while playing.

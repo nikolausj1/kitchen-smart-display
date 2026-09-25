@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { initials } from './plexFormat.js'
+import { initials, nameTint } from './plexFormat.js'
 
 // Small pieces the Plex view and its person card share.
 
@@ -79,17 +79,37 @@ export function PlexIcon({ name, on = false }) {
   }
 }
 
-// A round headshot, or the person's initials when there is no picture (or it
-// fails to load).
-export function Face({ src, name, className = '' }) {
-  const [failed, setFailed] = useState(false)
-  const show = src && !failed
+// A portrait headshot filling its box (the box sets the size), or the
+// person's initials on a colour of their own when there is no picture or it
+// fails to load. `over` is a sharper copy laid on top once it has loaded (the
+// person card: the cast thumb at once, TMDB's large profile when it arrives).
+// Not loading="lazy", here or on the posters: Chrome does not fetch a lazy
+// image clipped by a scroller until it scrolls into view, so the cast board
+// and the Known for row would fill in late under a finger. A cast is 30 to
+// 60 headshots of about 25 kB, once per item.
+export function Headshot({ src, over = null, name, className = '' }) {
+  // The src that failed, so a new src gets its own chance.
+  const [failed, setFailed] = useState(null)
+  const [overFailed, setOverFailed] = useState(null)
+  const [overLoaded, setOverLoaded] = useState(null)
+  const base = src && failed !== src ? src : null
+  const top = over && over !== src && overFailed !== over ? over : null
+  const initialsOnly = !base && !(top && overLoaded === top)
   return (
-    <span className={`pv-face ${className}`}>
-      {show ? (
-        <img src={src} alt="" draggable="false" loading="lazy" onError={() => setFailed(true)} />
-      ) : (
-        <span className="pv-face__initials" aria-hidden="true">
+    <span className={`pv-shot ${className}`} style={initialsOnly ? { background: nameTint(name) } : undefined}>
+      {base && <img src={base} alt="" draggable="false" onError={() => setFailed(base)} />}
+      {top && (
+        <img
+          className={`pv-shot__over${overLoaded === top ? ' pv-shot__over--in' : ''}`}
+          src={top}
+          alt=""
+          draggable="false"
+          onLoad={() => setOverLoaded(top)}
+          onError={() => setOverFailed(top)}
+        />
+      )}
+      {initialsOnly && (
+        <span className="pv-shot__initials" aria-hidden="true">
           {initials(name)}
         </span>
       )}
@@ -97,13 +117,14 @@ export function Face({ src, name, className = '' }) {
   )
 }
 
-// A 2:3 poster, or its title on a plain card when there is no picture.
+// A poster filling its box, or its title on a plain card when there is no
+// picture.
 export function Poster({ src, title, className = '' }) {
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(null)
   return (
     <div className={`pv-poster ${className}`}>
-      {src && !failed ? (
-        <img src={src} alt="" draggable="false" onError={() => setFailed(true)} />
+      {src && failed !== src ? (
+        <img src={src} alt="" draggable="false" onError={() => setFailed(src)} />
       ) : (
         <span className="pv-poster__title">{title}</span>
       )}

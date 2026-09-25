@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEVICE_ID, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
+import { DEVICE_ID, plexTextScaleOf, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
 import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView, normalizeHomeView } from '../../shell/homeView.js'
@@ -449,6 +449,29 @@ function PlexFollowSelect({ value, onChange }) {
   )
 }
 
+// display.plexTextScale as a percent, 80..160 in tens (the dashboard's Plex
+// card offers the same). A value saved off the steps stays listed, so opening
+// Settings never changes it.
+const PLEX_TEXT_STEPS = [80, 90, 100, 110, 120, 130, 140, 150, 160]
+function PlexTextSizeSelect({ value, onChange }) {
+  const pct = Math.round(plexTextScaleOf(value) * 100)
+  const choices = PLEX_TEXT_STEPS.includes(pct) ? PLEX_TEXT_STEPS : [...PLEX_TEXT_STEPS, pct].sort((a, b) => a - b)
+  return (
+    <select
+      className="settings-select"
+      value={pct}
+      onChange={(e) => onChange(Number(e.target.value) / 100)}
+      data-interactive="true"
+    >
+      {choices.map((p) => (
+        <option key={p} value={p}>
+          {p}%
+        </option>
+      ))}
+    </select>
+  )
+}
+
 // --- View --------------------------------------------------------------------
 
 export default function SettingsView() {
@@ -818,11 +841,17 @@ export default function SettingsView() {
           <h2 className="settings-section__title">Plex</h2>
           <Row
             label="Follow Plex player"
-            hint="When this player has been playing for 10 seconds, this screen shows what is on: the title, the episode, the cast. It goes back 30 seconds after playback stops. Players appear here once they have played something."
+            hint="When this player has been playing for 10 seconds, this screen shows what is on: the title, the episode, the cast. It goes back a minute after playback stops, once nobody is using it. Players appear here once they have played something."
           >
             <PlexFollowSelect
               value={display?.plexFollow}
               onChange={(v) => updateSettings({ display: { plexFollow: v } })}
+            />
+          </Row>
+          <Row label="Plex text size" hint="Everything on the Plex view: the words, the faces and the posters. 100% shows two rows of the cast.">
+            <PlexTextSizeSelect
+              value={display?.plexTextScale}
+              onChange={(v) => updateSettings({ display: { plexTextScale: v } })}
             />
           </Row>
         </section>
