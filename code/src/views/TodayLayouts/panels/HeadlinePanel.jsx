@@ -6,21 +6,24 @@ import './HeadlinePanel.css'
 //
 // headline: { text, kind, eventId, until } from the hub (frameserver/lib/
 // headline.mjs), where kind says what sort of line it is and picks the prefix
-// dot: 'now' (running), 'soon' (inside the hour), 'next' (later today),
+// dot: 'alert' (a National Weather Service alert: an amber dot AND amber
+// words), 'now' (running), 'soon' (inside the hour), 'weather' (a forecast
+// line such as "Rain from 3 pm": a cool blue-grey dot), 'next' (later today),
 // 'today' (an all-day event), 'tomorrow' (evenings), 'daypart' (a greeting,
 // no dot).
 //
-// `now` is used for one thing: a 'now' or 'soon' line reads relative time ("in
-// 40 min"), so once the hub's `until` has passed by a margin the words are
-// probably out of date (the hub stopped answering). Such a line steps back
-// rather than keep counting down confidently. null or empty: an empty line.
+// `now` is used for one thing: a 'now', 'soon', 'alert' or 'weather' line is
+// only true until the hub's `until` ("in 40 min", "Rain within the hour",
+// "Wind Advisory until 6 pm"), so once that has passed by a margin the words
+// are probably out of date (the hub stopped answering). Such a line steps
+// back rather than keep asserting itself. null or empty: an empty line.
 //
 // knobs (a spec layout, panels/schemas.js 'headline'): size, weight, showDot,
 // maxLines. Past one line a long headline wraps instead of ending in an
 // ellipsis, and the type steps down so that many lines fit the box.
 
-const KINDS = ['now', 'soon', 'next', 'today', 'tomorrow', 'daypart']
-const RELATIVE_KINDS = ['now', 'soon']
+const KINDS = ['alert', 'now', 'soon', 'weather', 'next', 'today', 'tomorrow', 'daypart']
+const RELATIVE_KINDS = ['alert', 'now', 'soon', 'weather']
 // A poll or two of slack past `until` before the line is called outdated.
 const OUTDATED_GRACE_MS = 2 * 60_000
 

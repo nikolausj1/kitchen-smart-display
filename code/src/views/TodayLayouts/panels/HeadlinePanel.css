@@ -37,6 +37,14 @@
   text-overflow: ellipsis;
 }
 
+/* The weather kinds' inks. An alert rides on the timer's orange band (the
+ * palette's amber), so a layout that re-inks the bands re-inks it. No token
+ * carries a cool colour, so the weather dot's blue-grey is set here. */
+.tl-headline {
+  --tl-alert: var(--tl-band-orange);
+  --tl-weather: #8fa4ba;
+}
+
 /* The kind, at a glance, before a word is read. */
 .tl-headline__dot {
   flex: 0 0 auto;
@@ -64,6 +72,19 @@
 
 .tl-headline--tomorrow .tl-headline__dot {
   background: var(--tl-fg-3);
+}
+
+/* An NWS alert: the dot and the words in amber. */
+.tl-headline--alert .tl-headline__dot {
+  background: var(--tl-alert);
+}
+
+.tl-headline--alert .tl-headline__line {
+  color: var(--tl-alert);
+}
+
+.tl-headline--weather .tl-headline__dot {
+  background: var(--tl-weather);
 }
 
 /* Relative wording past its time: kept, but no longer asserted. */

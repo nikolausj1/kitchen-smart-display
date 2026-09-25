@@ -1,27 +1,38 @@
 // headline.mjs - the one-line "top thing to know right now" for the Entry board.
 //
-// Phase 1 rules (decided 2026-09-24), highest priority first:
-//   1. The next TIMED event today: "Vinny soccer at 5:00 pm"; inside the last
-//      hour "Vinny soccer in 40 min"; while it runs "Vinny soccer now".
-//   2. Otherwise an all-day event today: "Today: PJ and Stuffy day".
-//   3. After 6 pm, tomorrow's first event: "Tomorrow: Sheena Chicago" (with
+// The rules, highest priority first (phase 1 decided 2026-09-24; the weather
+// rules, phase 1.5, in lib/weatherRules.mjs):
+//   1. Tier A weather: a National Weather Service alert that is Extreme or
+//      Severe, or any Warning: "Winter Storm Warning through Sat 6 am".
+//   2. A timed event running now: "Vinny soccer now".
+//   3. The next timed event today, inside the hour: "Vinny soccer in 40 min".
+//   4. Tier B weather: any other NWS alert ("Wind Advisory until 6 pm"), then
+//      the forecast rules: rain ("Rain from 3 pm"), frost, wind, heat, cold.
+//   5. The next timed event today, later: "Vinny soccer at 5:00 pm".
+//   6. An all-day event today: "Today: PJ and Stuffy day".
+//   7. After 6 pm, tomorrow's first event: "Tomorrow: Sheena Chicago" (with
 //      "at 10:00 am" when timed).
-//   4. Otherwise a day-part line: morning, afternoon, evening, night, and the
-//      late-night "You're up late. Go to bed."
-//
-// Weather interjections (rain from 3 pm, frost tonight) are phase 1.5.
+//   8. A day-part line: morning, afternoon, evening, night, and the late-night
+//      "You're up late. Go to bed."
+// Without a forecast or alerts (or with nothing to say about them) the line
+// is exactly phase 1's.
 //
 // Computed on the hub (GET /api/state.headline) so every screen says the same
-// thing; the same function can run in the browser as a fallback. Pure ESM,
-// local time, no imports beyond countdown.mjs's dateKey.
+// thing, over the hub's cached events, its own forecast (lib/hubWeather.mjs)
+// and the NWS alerts (lib/nwsAlerts.mjs). Pure ESM and local time, importing
+// only countdown.mjs's dateKey and weatherRules.mjs (itself pure), so the
+// same function can run in the browser as a fallback.
 //
 // Events are the normalized shape GET /api/calendar serves:
 //   { id, title, allDay, start, end, startDate, endDate, calendarLabel, color }
 //   allDay: startDate / endDate are 'YYYY-MM-DD', endDate EXCLUSIVE (Google's
 //           convention); start / end are null.
 //   timed:  start / end are ISO strings; startDate is the local date of start.
+// forecast, alerts, units: as weatherLinesFor takes them (weatherRules.mjs);
+// all optional.
 
 import { dateKey } from './countdown.mjs'
+import { TIER_B_RANK, weatherLinesFor } from './weatherRules.mjs'
 
 export const SOON_MINUTES = 60
 export const TOMORROW_FROM_HOUR = 18
@@ -65,16 +76,36 @@ export function dayPartLine(now) {
   return 'Good night.'
 }
 
+// A weather line as a headline. `changeAtMs`: when the calendar would take
+// the line back (the next event coming inside the hour), which makes an
+// earlier `until` when it comes first.
+function weatherHeadline(line, changeAtMs = null) {
+  let until = line.until
+  if (changeAtMs != null && (until == null || changeAtMs < Date.parse(until))) {
+    until = new Date(changeAtMs).toISOString()
+  }
+  return { text: line.text, kind: line.kind, eventId: null, until }
+}
+
 // Returns { text, kind, eventId, until } where kind is one of
-// 'now' | 'soon' | 'next' | 'today' | 'tomorrow' | 'daypart', and `until` is
-// an ISO time after which the line may change (a hint for pollers; null for
-// day-part lines).
-export function headlineFor({ now = new Date(), events = [] } = {}) {
+// 'alert' | 'now' | 'soon' | 'weather' | 'next' | 'today' | 'tomorrow' |
+// 'daypart' ('alert' for an NWS alert of either tier, 'weather' for a
+// forecast rule), and `until` is an ISO time after which the line may change
+// (a hint for pollers; null for day-part lines). eventId is the calendar
+// event's id, null for weather and day-part lines.
+export function headlineFor({ now = new Date(), events = [], forecast = null, alerts = null, units } = {}) {
   const list = Array.isArray(events) ? events.filter((e) => e && e.status !== 'cancelled') : []
   const today = dateKey(now)
   const nowMs = now.getTime()
 
-  // 1. Timed events today: running now, else the next to start.
+  const weather = weatherLinesFor({ now, forecast, alerts, units })
+  const tierA = weather.find((l) => l.rank < TIER_B_RANK)
+  const tierB = weather.find((l) => l.rank >= TIER_B_RANK)
+
+  // 1. A severe alert or any warning outranks everything.
+  if (tierA) return weatherHeadline(tierA)
+
+  // 2, 3. Timed events today: running now, else the next to start.
   const timedToday = list
     .filter((e) => !e.allDay && parse(e.start))
     .map((e) => ({ e, start: parse(e.start), end: parse(e.end) }))
@@ -91,6 +122,7 @@ export function headlineFor({ now = new Date(), events = [] } = {}) {
     }
   }
   const next = timedToday.find(({ start }) => start.getTime() > nowMs)
+  const soonAtMs = next ? next.start.getTime() - SOON_MINUTES * 60_000 : null
   if (next) {
     const minutes = Math.ceil((next.start.getTime() - nowMs) / 60_000)
     if (minutes <= SOON_MINUTES) {
@@ -101,21 +133,29 @@ export function headlineFor({ now = new Date(), events = [] } = {}) {
         until: next.start.toISOString(),
       }
     }
+  }
+
+  // 4. A weather interjection, until it changes or the next event comes
+  //    inside the hour, whichever is first.
+  if (tierB) return weatherHeadline(tierB, soonAtMs)
+
+  // 5. The next timed event today, later.
+  if (next) {
     return {
       text: `${clean(next.e.title)} at ${fmtTime(next.start)}`,
       kind: 'next',
       eventId: next.e.id ?? null,
-      until: new Date(next.start.getTime() - SOON_MINUTES * 60_000).toISOString(),
+      until: new Date(soonAtMs).toISOString(),
     }
   }
 
-  // 2. An all-day event today.
+  // 6. An all-day event today.
   const allDayToday = list.find((e) => allDayCovers(e, today))
   if (allDayToday) {
     return { text: `Today: ${clean(allDayToday.title)}`, kind: 'today', eventId: allDayToday.id ?? null, until: null }
   }
 
-  // 3. Evening: tomorrow's first thing.
+  // 7. Evening: tomorrow's first thing.
   if (now.getHours() >= TOMORROW_FROM_HOUR) {
     const tomorrow = addDays(today, 1)
     const allDayTomorrow = list.find((e) => allDayCovers(e, tomorrow))
@@ -129,6 +169,6 @@ export function headlineFor({ now = new Date(), events = [] } = {}) {
     }
   }
 
-  // 4. Day part.
+  // 8. Day part.
   return { text: dayPartLine(now), kind: 'daypart', eventId: null, until: null }
 }

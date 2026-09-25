@@ -20,6 +20,9 @@
 //   GET  /api/albums                  album index for the dashboard
 //   GET  /admin                       the dashboard
 //   ...  /api/devices, /api/settings  the device registry (below)
+//   POST /api/devices/<id>/health     a screen's heartbeat, JSON <= 1 KB -> 204
+//   GET  /api/devices/<id>/health     its latest report, age and power events
+//   GET  /api/health/events?limit=N   the newest power events (lib/health.mjs)
 //   GET|POST /api/state               shared house state (lib/houseState.mjs)
 //   GET  /api/schoolcal               SPS calendar (lib/schoolData.mjs)
 //   GET  /api/lunch?school=<slug>     MealViewer lunch (lib/schoolData.mjs)
@@ -73,10 +76,13 @@ import { loadEnvFile } from './lib/env.mjs'
 import { acceptStatePost, composeState } from './lib/houseState.mjs'
 import { createTravelDefault } from './lib/travelDefault.mjs'
 import { createFlags } from './lib/flags.mjs'
+import { MAX_REPORT_BYTES, createHealth } from './lib/health.mjs'
 import { calendarSettings, createGoogleCalendar, eventsForDays, publicEvent } from './lib/googleCalendar.mjs'
 import { buildCountdowns } from './lib/countdowns.mjs'
 import { ART_EXTS, createCountdownArt } from './lib/countdownArt.mjs'
 import { createAirQuality } from './lib/airQuality.mjs'
+import { getForecast, startWeatherRefresher, weatherHealth } from './lib/hubWeather.mjs'
+import { alertsHealth, getAlerts, startAlertsRefresher, weatherAlertsFor } from './lib/nwsAlerts.mjs'
 import { headlineFor } from './lib/headline.mjs'
 import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
 import { createTmdb } from './lib/tmdb.mjs'
@@ -406,6 +412,8 @@ function recordLayoutHistory(id, before, after) {
 
 const cachedSchool = initSchoolData({ dir: ROOT })
 const flags = createFlags(FLAGS_FILE)
+// Screens' heartbeats and the power events they raise (lib/health.mjs).
+const health = createHealth({ dir: ROOT })
 const travel = createTravelDefault({ dir: ROOT, getShared: () => readRegistry().shared })
 
 // --- Entry board: calendar, countdown art, air quality (docs/designs/entry-board.md)
@@ -481,9 +489,14 @@ function currentState(now = new Date()) {
     travelDefault: travel.current(now),
   })
   // The Entry board's line, the same on every screen: headline.mjs over every
-  // cached event (60 days; it needs today's and tomorrow's), and the air
-  // quality chip (null without a reading from the last 6 hours).
-  state.headline = headlineFor({ now, events: calendar.snapshot(registry.shared).events })
+  // cached event (60 days; it needs today's and tomorrow's), the hub's own
+  // forecast and the NWS alerts (lib/hubWeather.mjs, lib/nwsAlerts.mjs); the
+  // alerts in force, most severe first, at most 3; and the air quality chip
+  // (null without a reading from the last 6 hours).
+  const forecast = getForecast(now)
+  const alerts = getAlerts(now)
+  state.headline = headlineFor({ now, events: calendar.snapshot(registry.shared).events, forecast, alerts })
+  state.weatherAlerts = weatherAlertsFor(alerts, now)
   state.airQuality = air.current(now)
   return state
 }
@@ -781,12 +794,15 @@ async function handle(req, res) {
       refreshRunning: running,
       app: appDeployed(),
       sonosUpstream: SONOS_UPSTREAM,
+      health: health.brief(),
       state: {
         timerActive: state.timer.active,
         travelDefault: state.travelDefault ? state.travelDefault.mode : null,
       },
       calendar: { connected: cal.connected, events: cal.events.length, fetchedAt: cal.fetchedAt, error: cal.error },
       countdownArt: { items: artStatus.items.length, syncedAt: artStatus.syncedAt },
+      weather: weatherHealth(),
+      alerts: alertsHealth(),
       airQuality: state.airQuality ? state.airQuality.label : null,
       plex: { ...plex.health(), tmdb: tmdb.configured() },
     })
@@ -829,6 +845,7 @@ async function handle(req, res) {
     return json(res, 200, {
       devices: Object.entries(reg.devices).map(([id, d]) => ({
         id, ...d, lastSeenAt: lastSeen.get(id) ?? null, screen: screenOf(id),
+        health: health.healthFor(id) ?? undefined,
       })),
       shared: reg.shared,
     })
@@ -885,6 +902,40 @@ async function handle(req, res) {
   if (devHist && req.method === 'GET') {
     const all = readJsonFile(LAYOUT_HISTORY_FILE, {})
     return json(res, 200, Array.isArray(all[devHist[1]]) ? all[devHist[1]] : [])
+  }
+
+  // A screen's heartbeat (pi/kiosk-server.py, every minute) and what the hub
+  // made of it; registered screens only, like /config. lib/health.mjs.
+  const devHealth = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})\/health$/)
+  if (devHealth) {
+    const id = devHealth[1]
+    if (!readRegistry().devices[id]) return json(res, 404, { error: `unknown device: ${id}` })
+    if (req.method === 'GET') {
+      const h = health.healthFor(id)
+      return h ? json(res, 200, h) : json(res, 404, { error: `no heartbeat from ${id} yet` })
+    }
+    if (req.method !== 'POST') return json(res, 405, { error: 'GET or POST' })
+    // A report is ~500 bytes. One that declares more than 1 KB is refused
+    // unread; readBody still stops one that does not declare its size.
+    if (Number(req.headers['content-length']) > MAX_REPORT_BYTES) {
+      return json(res, 413, { ok: false, error: `a report is at most ${MAX_REPORT_BYTES} bytes` })
+    }
+    let body
+    try {
+      body = await readBody(req)
+    } catch (e) {
+      return json(res, 400, { ok: false, error: String(e.message || e) })
+    }
+    const r = health.recordHealth(id, body)
+    if (!r.ok) return json(res, r.status, { ok: false, error: r.error })
+    cors(res)
+    res.writeHead(204, { 'Cache-Control': 'no-store' })
+    return res.end()
+  }
+
+  if (path === '/api/health/events') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, health.events(url.searchParams.get('limit')))
   }
 
   const devCfg = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})\/config$/)
@@ -1111,6 +1162,10 @@ const server = createServer((req, res) => {
 const restoredTravel = travel.start()
 const restoredCalendar = calendar.start()
 const restoredArt = art.start()
+// The headline's forecast and NWS alerts, for the air quality's location.
+const getLocation = () => getShared().location
+startWeatherRefresher(getLocation, { dir: ROOT })
+startAlertsRefresher(getLocation)
 const restoredAir = air.start()
 const restoredPlex = plex.start()
 

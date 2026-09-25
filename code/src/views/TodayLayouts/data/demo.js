@@ -142,13 +142,23 @@ export const DEMO_CALENDARS = [
   { id: 'sheena@example.com', label: 'Sheena', color: '#4a90e2' },
 ]
 
-// Fixed on purpose: it names the 5:00 pm soccer below, whatever the time.
-export const DEMO_HEADLINE = {
-  text: 'Vinny soccer at 5:00 pm',
-  kind: 'next',
-  eventId: 'demo-soccer',
-  until: null,
+// Fixed on purpose: the default names the 5:00 pm soccer below, whatever the
+// time. ?demo=1&demoHeadline=alert (or =weather) swaps in one of the weather
+// kinds the hub can send (docs/designs/entry-board.md), so the amber alert
+// line and the blue-grey weather dot can be seen without a storm.
+export const DEMO_HEADLINES = {
+  next: { text: 'Vinny soccer at 5:00 pm', kind: 'next', eventId: 'demo-soccer', until: null },
+  alert: { text: 'Wind Advisory until 9 pm', kind: 'alert', eventId: null, until: null },
+  weather: { text: 'Rain from 3 pm', kind: 'weather', eventId: null, until: null },
 }
+
+function pickDemoHeadline() {
+  if (typeof window === 'undefined') return DEMO_HEADLINES.next
+  const want = new URLSearchParams(window.location.search).get('demoHeadline')
+  return want && Object.hasOwn(DEMO_HEADLINES, want) ? DEMO_HEADLINES[want] : DEMO_HEADLINES.next
+}
+
+export const DEMO_HEADLINE = pickDemoHeadline()
 
 export const DEMO_AIR_QUALITY = { pm25: 17, aqi: 31, label: 'Good', fetchedAt: null }
 
