@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-24
-version: 6.9
+version: 7.0
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -86,6 +86,15 @@ refresh, resolve the flags. Full flow:
 ---
 
 ## Active design topics (in discussion)
+
+### Layout editor (DESIGN, 2026-09-24, waiting on Justin's go)
+
+A what-you-see-is-what-you-get editor for the boards, used from the MacBook,
+reached from each screen's card on the admin page. The real app renders in an
+iframe at the screen's exact resolution; handles and an inspector sit over it;
+Save writes a per-screen layout (percent positions, per-panel knobs, text and
+image blocks) into the registry. About five and a half agent days in four
+steps, usable after three. Design: `docs/designs/layout-editor.md`.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -500,6 +509,14 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-24 - A layout editor, on the MacBook, from the admin page.** Justin
+  wants to move and size the board's elements himself instead of describing
+  pixel changes. Decided: edited only on the MacBook, reached from each
+  screen's dashboard card, the real app in an iframe at the exact resolution
+  (no second renderer), percent positions so layouts port between the Echo
+  sizes, per-element properties (text size and more) not just containers, and
+  text and image blocks in the first usable cut. Design:
+  `docs/designs/layout-editor.md`. Not built yet.
 - **2026-09-24 - Every screen depends on the hub only; the Echo Show joins as
   the third screen.** Justin's calls: finish moving shared services (Sonos,
   `/api/state`, lunch, schoolcal, the flag queue) from the kitchen Pi to
