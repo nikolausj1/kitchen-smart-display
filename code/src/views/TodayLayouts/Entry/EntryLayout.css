@@ -1,30 +1,29 @@
 /* EntryLayout - the front-door board.
  *
  * Stacked layers, bottom to top: the full-bleed PhotoPanel, a flat black wash
- * at display.entryDim, Ambient's scrim across the lower third, then the grid.
- * With entryBackdrop 'black' only the grid is drawn, on black.
+ * at display.entryDim, Ambient's scrim across the lower third, then the canvas
+ * the layout spec's boxes are placed on. With entryBackdrop 'black' only the
+ * canvas is drawn, on black.
  *
- * THE GRID. Two columns, 58/42 after the gap, and three rows:
+ * THE BOXES. Where each panel sits, how big, and whether it is a card come
+ * from the layout spec (layoutSpec.js; DEFAULT_ENTRY_SPEC is the phase 1
+ * board), drawn by Entry/SpecPanel. This file holds the board's palette and
+ * the panel tweaks that belong to the Entry board whatever the arrangement.
  *
- *     clock   34fr  | the "outside" card: weather 48, what to wear 34,
- *     head    11fr  |                     air quality 18 (inner fr)
- *     agenda  55fr  | countdown tiles, or the departure panel
+ * Every box has a definite size (percent of the screen), so each panel body
+ * gets a definite size too: the bodies are size containers, and their type
+ * would collapse to its clamp floor in an auto-sized box.
  *
- * Every track is minmax(0, Nfr) of a fixed-size root, so each panel gets a
- * definite box: panel bodies are size containers, and an `auto` track would
- * collapse their type to its clamp floor. The top-right card spans the clock
- * and headline rows, so the agenda and the countdowns share one top edge.
- *
- * What that buys, content height after padding and gaps:
- *   1280x800   clock 246px, headline 80px, bottom row 398px
- *   1920x1080  clock 331px, headline 107px, bottom row 535px
- * The bottom row is what the agenda's six-row worst case is sized against
- * (see AgendaPanel.css).
+ * What the default spec gives, content height after padding (the bottom row
+ * is what the agenda's six-row worst case is sized against, AgendaPanel.css):
+ *   1280x800   clock 246px, headline 79px, bottom row 397px - 2 x padding
+ *   1920x1080  clock 331px, headline 107px, bottom row 536px - 2 x padding
  *
  * SURFACES. Over a photo every card is a translucent wash (--tl-entry-card),
  * never opaque, so the picture shows through; the clock and the headline have
  * no card at all and carry Ambient's soft shadow instead. On black the cards
- * lift a step off the page with a hairline, as on the Board. */
+ * lift a step off the page with a hairline, as on the Board. 'solid' cards
+ * (--tl-entry-solid) are the black board's card colour on either backdrop. */
 
 .tl-root.tl-entry {
   --tl-bg: #000;
@@ -32,10 +31,9 @@
   --tl-gap: clamp(10px, 1.1vw, 24px);
   --tl-radius: clamp(10px, 1.05vw, 22px);
   --tl-radius-sm: clamp(4px, 0.42vw, 10px);
-  --tl-entry-x: 2.4vw;
-  --tl-entry-y: 3vh;
   --tl-hud-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
   --tl-entry-card: rgba(8, 10, 12, 0.5);
+  --tl-entry-solid: #111417;
   --tl-entry-edge: rgba(255, 255, 255, 0.07);
   --tl-surface: var(--tl-entry-card);
   --tl-surface-2: rgba(255, 255, 255, 0.08);
@@ -96,67 +94,27 @@
   pointer-events: none;
 }
 
-/* --- Grid ----------------------------------------------------------------- */
+/* --- The canvas ------------------------------------------------------------- */
 
-.tl-entry__grid {
+/* The whole screen: box percentages resolve against it. Isolated, so the
+ * spec's z values order the boxes among themselves and never reach under the
+ * backdrop. */
+.tl-entry__canvas {
   position: absolute;
   inset: 0;
-  box-sizing: border-box;
-  padding: var(--tl-entry-y) var(--tl-entry-x);
-  display: grid;
-  grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
-  grid-template-rows: minmax(0, 34fr) minmax(0, 11fr) minmax(0, 55fr);
-  grid-template-areas:
-    "clock  side"
-    "head   side"
-    "agenda next";
-  gap: var(--tl-gap);
+  isolation: isolate;
 }
 
-/* One wrapper per region owns the placement; flex so the panel stretches to
- * the cell in both axes. */
-.tl-entry__cell {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-entry__cell > * {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-entry__cell--clock { grid-area: clock; }
-.tl-entry__cell--head { grid-area: head; }
-.tl-entry__cell--side { grid-area: side; }
-.tl-entry__cell--agenda { grid-area: agenda; }
-.tl-entry__cell--next { grid-area: next; }
-
-/* Cards that stand on the page get the hairline edge. */
-.tl-entry .tl-panel.tl-agenda,
-.tl-entry .tl-panel.tl-depart,
-.tl-entry__side {
-  box-shadow: inset 0 0 0 1px var(--tl-entry-edge);
-}
-
-/* --- Clock and headline: bare text on the backdrop ------------------------ */
-
-.tl-entry .tl-panel.tl-clock,
-.tl-entry .tl-panel.tl-headline {
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
+/* --- Bare text on the backdrop: the clock, the headline, text blocks ------ */
 
 .tl-entry--photos .tl-clock,
 .tl-entry--photos .tl-headline,
-.tl-entry--photos .tl-cd__empty {
+.tl-entry--photos .tl-cd__empty,
+.tl-entry--photos .tl-spec--bg-none .tl-textblock {
   text-shadow: var(--tl-hud-shadow);
 }
 
-/* Anchored to the top of its cell (the card beside it starts there too) and a
+/* Anchored to the top of its box (the card beside it starts there too) and a
  * notch smaller than the panel's own maximum: at 1920x1080 the default would
  * be a 245px numeral, which out-shouts the agenda the board exists for. */
 .tl-entry .tl-clock__body {
@@ -175,44 +133,10 @@
   font-weight: 400;
 }
 
-/* --- The "outside" card: weather, what to wear, air quality --------------- */
+/* --- Weather, what to wear, air quality ---------------------------------- */
 
-/* One translucent card; the three panels inside give up their own surfaces
- * and are divided by inset hairlines. */
-.tl-entry__side {
-  --tl-surface: transparent;
-  display: grid;
-  grid-template-rows: minmax(0, 48fr) minmax(0, 34fr) minmax(0, 18fr);
-  background: var(--tl-entry-card);
-  border-radius: var(--tl-radius);
-  overflow: hidden;
-}
-
-.tl-entry__slot {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-entry__slot > * {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-entry__slot + .tl-entry__slot::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: var(--tl-pad);
-  right: var(--tl-pad);
-  height: 1px;
-  background: var(--tl-rule);
-}
-
-/* Weather now, laid out for a wide, short slot: the temperature and icon on
- * the left at the slot's height, the description and the numbers beside them.
+/* Weather now, laid out for a wide, short box: the temperature and icon on
+ * the left at the box's height, the description and the numbers beside them.
  * The panel's own stack is tuned for a squarer Board cell and would leave its
  * lines at their clamp floors here. */
 .tl-entry .tl-wnow__body {
@@ -236,13 +160,13 @@
 .tl-entry .tl-wnow__desc {
   grid-column: 2;
   grid-row: 2;
-  font-size: clamp(13px, min(6.4cqw, 21cqh), 34px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(6.4cqw, 21cqh), 34px));
 }
 
 .tl-entry .tl-wnow__meta {
   grid-column: 2;
   grid-row: 3;
-  font-size: clamp(11px, min(4.6cqw, 15cqh), 24px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(4.6cqw, 15cqh), 24px));
 }
 
 .tl-entry .tl-wnow__empty {
@@ -262,7 +186,7 @@
 }
 
 .tl-entry .tl-wear__headline {
-  font-size: clamp(14px, min(6.4cqw, 34cqh), 38px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(14px, min(6.4cqw, 34cqh), 38px));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -271,19 +195,16 @@
 .tl-entry .tl-wear__detail {
   display: block;
   margin-top: 0.3em;
-  font-size: clamp(11px, min(4.2cqw, 22cqh), 24px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(4.2cqw, 22cqh), 24px));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* The chip needs less vertical padding than a panel: it has no label row. */
-.tl-entry .tl-panel.tl-aq {
-  padding-top: calc(var(--tl-pad) * 0.55);
-  padding-bottom: calc(var(--tl-pad) * 0.55);
-}
+/* The chip's thinner vertical padding is its type's padShape (layoutSpec.js),
+ * applied by its box. */
 
-/* --- Bottom right --------------------------------------------------------- */
+/* --- Countdowns ------------------------------------------------------------- */
 
 /* The tiles are the cards here (CountdownsPanel.css); keep their calendar
  * colour bar and add the page's hairline under it. */

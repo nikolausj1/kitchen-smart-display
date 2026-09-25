@@ -2,14 +2,14 @@
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
 modified: 2026-09-24
-version: 1.0
+version: 1.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show]
 ---
 
 # Layout editor
 
-**Status: designed 2026-09-24, not built.** Waiting on Justin's go.
+**Status: steps 1 and 2 built and deployed 2026-09-24.** Open a screen's card on the dashboard and press Edit layout, or go to `http://nuc.local:8095/editor/?device=echo-show15`. Steps 3 and 4 (per-panel schemas, sub-element selection, smart guides, history, day parts, Board) are open. Review shots: `_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
@@ -48,29 +48,15 @@ layouts of Entry phase 2.
 
 ## What is stored
 
-One object per screen per layout:
-
-```
-layouts: {
-  entry: {
-    version: 1,
-    canvas: { w: 1920, h: 1080 },          // what it was drawn on
-    backdrop: { photos, wash, blur, scrimTop, scrimBottom, intervalMs },
-    global:   { font, accent, text, surfaceOpacity, radius, grid },
-    panels: [
-      { id: 'clock', x, y, w, h,           // percent of the canvas
-        z, hidden, locked,
-        props: { textScale, opacity, padding, background, radius, align,
-                 ...panel-specific knobs } },
-      { id: 'text-1', kind: 'text', ..., props: { text, size, weight, color, align } },
-      { id: 'image-1', kind: 'image', ..., props: { src, fit } },
-    ],
-  },
-}
-```
-
-The built-in board is the default layout; Reset returns to it, and a tuned
-screen keeps its layout when the code's default changes.
+One object per screen per layout, `config.layouts.entry` in the device
+registry: the canvas it was drawn on, a global text scale, and the list of
+panels, each with its position and size in percent of the canvas, stacking
+order, visibility, lock, and its props (universal ones on every panel; text
+and image blocks carry their own). The exact shape is in Contract v1 below.
+The backdrop (photos behind the board, the wash) stays on the existing
+per-screen display settings, so the dashboard card and the editor edit the
+same thing. The built-in board is the default layout; Reset returns to it,
+and a tuned screen keeps its layout when the code's default changes.
 
 ## The controls
 
@@ -125,3 +111,182 @@ screen. Keyboard: Cmd-Z, Shift-Cmd-Z, Cmd-S, Delete hides, Esc deselects.
 
 Rearranging a panel's internals beyond its declared knobs; editing on the
 Echos or Pis; any login (the hub is LAN-only, like the dashboard).
+
+## Contract v1 (steps 1 and 2)
+
+Both halves are built against this. Changing it means changing both.
+
+### The spec
+
+Stored in the device registry at `config.layouts.entry` (DEVICE scope; the
+app adds `layouts` to `DEVICE_SCOPE` so it rides the normal 10 s poll).
+`null` or absent means "use the built-in default". Percent positions, canvas
+pixels only for readouts.
+
+```
+{
+  version: 1,
+  canvas: { w: 1920, h: 1080 },       // what it was drawn on (informational)
+  global: { textScale: 1 },           // multiplies every panel's text scale
+  panels: [
+    { id: 'clock', type: 'clock',     // functional panels: id === type
+      x: 2.4, y: 3, w: 56, h: 30,     // percent of the canvas, 2 decimals
+      z: 1, hidden: false, locked: false,
+      props: {                         // universal props, all optional
+        textScale: 1,                  // 0.5 .. 2
+        opacity: 1,                    // 0.1 .. 1
+        padding: 1,                    // 0 .. 3, multiplier of --tl-pad
+        background: 'none',            // 'none' | 'card' | 'solid'
+        radius: 1,                     // 0 .. 3, multiplier of --tl-radius
+        align: 'start',                // 'start' | 'center' | 'end' (text)
+      } },
+    { id: 'text-7f3a', type: 'text', x, y, w, h, z, hidden, locked,
+      props: { text: 'The Nikolaus House', size: 4, weight: 600,
+               color: '#f2f2f0', align: 'center', lineHeight: 1.15,
+               ...universal } },           // size = percent of canvas height
+    { id: 'image-9c21', type: 'image', x, y, w, h, z, hidden, locked,
+      props: { src: '/countdown-art/<file>' | 'https://...', fit: 'contain',
+               ...universal } },
+  ],
+}
+```
+
+Functional panel types in Entry: `clock`, `weather`, `wear`, `airquality`,
+`headline`, `agenda`, `countdowns` (shows the departure countdown inside the
+same box during a school morning, as today). Each appears at most once.
+Blocks (`text`, `image`) may appear any number of times, ids `text-<4 hex>` /
+`image-<4 hex>`. The backdrop stays on the existing per-screen settings
+(`display.entryBackdrop`, `display.entryDim`), edited by the dashboard card
+and by the editor's Backdrop section alike; the spec never duplicates it.
+
+The default spec (`DEFAULT_ENTRY_SPEC` in
+`code/src/views/TodayLayouts/layoutSpec.js`) reproduces the phase 1 board:
+the renderer draws the default and a saved spec through the same code path.
+`normalizeSpec(raw)` returns a valid spec from anything (unknown types
+dropped, numbers clamped, missing universal props filled), and is applied on
+read by the app and before save by the editor.
+
+Render rules: each panel is an absolutely positioned wrapper
+(`left/top/width/height` in %, `z-index`, `opacity`, padding and radius from
+the multipliers, background per the option) with `container-type: size` so
+the panels' container units track the box; `--tl-text-scale` on the wrapper =
+`global.textScale * props.textScale`, and every panel font size is multiplied
+by `var(--tl-text-scale, 1)`. Hidden panels are not rendered. Panels keep a
+minimum size below which they show a quiet "too small" instead of overflowing.
+
+### Edit mode in the app
+
+`?edit=1` on the app URL. The editor loads the app in an iframe at
+`/?device=<id>&layout=entry&edit=1&view=today` on its own origin. In edit
+mode the app:
+
+- never writes: no settings PATCH, no Sonos heal, no countdown POST, no photo
+  flag (`READ_ONLY` in settings.js). It still registers (never overwrites)
+  and polls, so it shows that screen's real settings and saved spec.
+- runs no kiosk behaviour: no EchoMode, no reload-on-deploy, no dim overlay
+  (forced awake), no menu pill, no boot Sonos override, view fixed to Today.
+- renders the draft spec the editor sends instead of the saved one, once one
+  has arrived.
+- marks every panel wrapper with `data-panel-id` and `data-panel-type`.
+
+Messages (`window.postMessage`, same origin; editor = parent):
+
+| direction | message |
+|---|---|
+| app -> editor | `{ type: 'sd-edit:ready', layoutId: 'entry', canvas: { w, h }, savedSpec: <spec or null>, defaultSpec, panelTypes: [...] }` on mount and whenever the saved spec changes on the hub |
+| editor -> app | `{ type: 'sd-edit:spec', spec }` render this draft |
+| editor -> app | `{ type: 'sd-edit:hover', id \| null }` subtle highlight |
+| editor -> app | `{ type: 'sd-edit:sample', on }` demo data on or off (fills empty states so there is something to lay out) |
+| editor -> app | `{ type: 'sd-edit:ping' }` reply with `sd-edit:ready` |
+| app -> editor | `{ type: 'sd-edit:rects', canvas: { w, h }, panels: [{ id, type, x, y, w, h }] }` in iframe pixels, after every render and resize, throttled to about 100 ms |
+
+`canvas` in these messages is the iframe's own `innerWidth` x `innerHeight`,
+which the editor sets to the screen's resolution.
+
+### The editor
+
+- `code/editor.html` + `code/src/editor/` (React), a second Vite entry in the
+  same bundle; the hub serves it at `/editor/` (`app/editor.html`, meta
+  injected like index.html) and the dashboard's screen card links
+  `Edit layout` to `/editor/?device=<id>`.
+- Screen size: the hub records each screen's viewport in memory from a
+  `?screen=WxH` query on the config poll (like `lastSeenAt`), exposed as
+  `screen: { w, h }` on `/api/devices`; the editor uses it, else the saved
+  spec's canvas, else a picker (1920x1080, 1280x800, 960x480, custom).
+- Writes: `PATCH /api/devices/<id>/config` with `{ layouts: { entry: spec } }`;
+  reset with `{ layouts: { entry: null } }`. Nothing writes while dragging.
+- Step 2 scope: stage with zoom (fit, 50%, 100%), selection, move, resize
+  (eight handles, Shift keeps aspect), grid snapping (toggle; 20 canvas px
+  default, adjustable), arrow nudges (1 px, Shift 10 px), x/y/w/h readouts
+  and fields, universal properties, text and image blocks (add, edit, remove),
+  layers list (order, eye, lock), undo and redo, Save, Revert to saved, Reset
+  to default, sample data toggle, screen picker, backdrop section (photos on
+  or off, wash), and the dashboard button.
+
+### As built (deviations from the draft contract, 2026-09-24)
+
+- Edit mode **reads** the screen's config; it never registers (registration
+  can rename or create) and never writes: no settings PATCH, no Sonos heal,
+  no countdown POST, no photo flag, no `layouts` write-back from the app.
+- Edit-mode polls carry `?edit=1` and no `screen`; the hub skips the
+  last-seen stamp and the viewport record for them, so an open editor cannot
+  make a dead screen look alive or overwrite its real size.
+- `sd-edit:ready` is sent after the first hub answer (at most 2 s), and again
+  only when the saved spec changes; a `sd-edit:ping` always gets an immediate
+  reply. Unchanged `sd-edit:rects` are not re-sent (the board re-renders every
+  second); they always follow a spec, a ping, a resize or a mount.
+- `sd-edit:spec` with `spec: null` drops the draft (back to the saved layout).
+- `sd-edit:display` `{ display: { entryBackdrop, entryDim } }` previews the
+  backdrop before Save; `null` clears the preview.
+- The editor saves only the half that changed (layout, backdrop, or both in
+  one PATCH). A draft identical to the built-in board saves as
+  `layouts.entry = null`.
+- Flush-stacked cards (same left edge and width, one's bottom on the other's
+  top, same background) render as one card with a divider, which is how the
+  phase 1 weather / what-to-wear / air-quality card is rebuilt from three
+  boxes.
+- Text scale: `em` sizes follow their parent; art does not scale (weather
+  icon, wear glyph, countdown art and emoji, calendar glyph); the air quality
+  square scales with its number. A functional panel missing from a saved
+  spec is simply not drawn. `align` affects the clock, the headline and text
+  blocks for now.
+- The default spec (percent): clock 2.4 / 3 / 54.58 / 30.63; headline
+  2.4 / 35.59 / 54.58 / 9.91; weather 58.08 / 3 / 39.52 / 20.4; wear
+  58.08 / 23.4 / 39.52 / 14.45; air quality 58.08 / 37.85 / 39.52 / 7.65;
+  agenda 2.4 / 47.45 / 54.58 / 49.55; countdowns 58.08 / 47.45 / 39.52 /
+  49.55. Pixel-identical to phase 1 at 1920x1080 within 0.3% of pixels; at
+  1280x800 every edge is within 2 px (the old grid's gaps were in `vw`, so
+  no single percentage fits both sizes exactly).
+- The hub also serves `/editor/<file>` (the page's relative asset URLs
+  resolve under `/editor/`) and `/editor.html`. In dev, `?app=<url>` points
+  the editor's iframe at another app origin.
+- The editor keeps its own copy of the normaliser for editing-time clamps
+  (it must write a valid spec whatever the app build in the iframe is) and
+  runs the app's `normalizeSpec` as the final pass before Save, so what is
+  saved is exactly what the app renders.
+- Also fixed on the way: a screen's self-registration no longer undoes a
+  rename made on the dashboard (the hub applies a rename only to a
+  `{ id, name }` body).
+
+### Known incident (2026-09-24) and the safety nets
+
+The very first live save from the editor (the Echo Show 15's board, one
+clock nudge) stored a layout in which six other panels had moved: the
+headline at the bottom, the cards gone, the countdown column narrowed. The
+Echo showed it for under a minute before the layout was reset to the default
+by hand. Six replays could not reproduce it: a fresh load, single and
+repeated nudges, the canvas switching from the picker to the screen's real
+size (which arrived from the hub mid-session that first time), clean and
+dirty drafts. What is in place now:
+
+- The hub keeps the previous `config.layouts` of a screen on every change,
+  ten deep, in `layout-history.json`: `GET /api/devices/<id>/layout-history`
+  (newest first); restore with `PATCH /api/devices/<id>/config` and
+  `{ "layouts": <entry.layouts> }`, or `{ "layouts": { "entry": null } }` for
+  the default. The editor's history menu (step 3) will sit on this.
+- The editor logs every action that changed the draft to
+  `window.__sdEditorLog` (last 200, with each panel's geometry before and
+  after) and warns on the console when one action moves more than one
+  panel's box, which is the signature of that save. If a board ever looks
+  rearranged after a save, open the editor's console before reloading.
+- Undo, Revert to saved and Reset to default were already there.

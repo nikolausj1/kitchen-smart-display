@@ -64,14 +64,14 @@
   font-family: var(--tl-font-display);
   font-weight: 700;
   letter-spacing: -0.045em;
-  font-size: clamp(44px, min(52cqh, 38cqw), 190px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(44px, min(52cqh, 38cqw), 190px));
   color: var(--tl-fg);
 }
 
 .tl-depart__unit {
   font-weight: 600;
   letter-spacing: -0.01em;
-  font-size: clamp(15px, min(15cqh, 11cqw), 46px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(15px, min(15cqh, 11cqw), 46px));
   color: var(--tl-fg-2);
 }
 
@@ -80,7 +80,7 @@
   font-family: var(--tl-font-display);
   font-weight: 700;
   letter-spacing: -0.04em;
-  font-size: clamp(36px, min(40cqh, 26cqw), 140px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(36px, min(40cqh, 26cqw), 140px));
   color: var(--tl-fg);
 }
 
@@ -89,7 +89,7 @@
   align-items: center;
   gap: 0.45em;
   margin-top: 0.5em;
-  font-size: clamp(13px, min(11cqh, 7cqw), 28px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(11cqh, 7cqw), 28px));
   color: var(--tl-fg-2);
   white-space: nowrap;
   overflow: hidden;
@@ -138,7 +138,7 @@
 }
 
 .tl-depart__option-label {
-  font-size: clamp(11px, min(10cqh, 6cqw), 20px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(10cqh, 6cqw), 20px));
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -153,7 +153,7 @@
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1;
-  font-size: clamp(20px, min(26cqh, 17cqw), 62px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(20px, min(26cqh, 17cqw), 62px));
   color: inherit;
   white-space: nowrap;
   overflow: hidden;
@@ -167,7 +167,7 @@
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  font-size: clamp(18px, min(22cqh, 13cqw), 54px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(18px, min(22cqh, 13cqw), 54px));
   color: var(--tl-fg-2);
 }
 
@@ -187,7 +187,7 @@
   border-radius: 100px;
   padding: 0.5em 1.1em;
   font-family: inherit;
-  font-size: clamp(11px, min(10cqh, 6cqw), 22px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(10cqh, 6cqw), 22px));
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;

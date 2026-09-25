@@ -311,11 +311,12 @@ async function loadDevices() {
 }
 
 // What the page was last rendered from, minus lastSeenAt (which moves on every
-// screen poll and is patched in place by updateAges).
+// screen poll and is patched in place by updateAges) and screen (the viewport a
+// screen reports for the layout editor; not shown here).
 let renderedSig = null
 function dataSig() {
   return JSON.stringify([
-    devices.map(({ lastSeenAt, ...rest }) => rest), shared,
+    devices.map(({ lastSeenAt, screen, ...rest }) => rest), shared,
     albums.map((x) => [x.id, x.name, x.count]),
   ])
 }
@@ -591,6 +592,22 @@ function renderDevice(dev) {
       show.appendChild(b)
     }
     p.appendChild(show)
+
+    // The layout editor (docs/designs/layout-editor.md), in a tab of its own:
+    // it is a desktop tool, and the dashboard stays where it was.
+    if (isWeb) {
+      const ed = document.createElement('div')
+      ed.className = 'toolbar'
+      const b = document.createElement('button')
+      b.className = 'action ghost'
+      b.textContent = 'Edit layout'
+      b.onclick = () => window.open(`/editor/?device=${encodeURIComponent(dev.id)}`, '_blank', 'noopener')
+      const note = document.createElement('span')
+      note.className = 'note'
+      note.textContent = "Move and size the Entry board's panels in a browser on your Mac."
+      ed.append(b, note)
+      p.appendChild(ed)
+    }
   }
 
   // --- albums ---

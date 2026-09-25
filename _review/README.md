@@ -12,6 +12,9 @@ How it works:
 Current residents:
 - `mockups/` — HTML design prototypes (jukebox grid, nav bar, transport buttons,
   today school data, vinyl spin). Reference for past design decisions.
+- `layout-editor/` — the layout editor and the data-driven Entry renderer
+  (2026-09-24), see its README.
+- `entry/` — the Entry board and its dashboard cards (2026-09-24).
 - `echo/` — Echo Show verification screenshots at 1280x800 (2026-09-24), see
   its README.
 - `settings-tweaker.html` — Mac-only scratchpad for iterating on Settings

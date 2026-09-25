@@ -34,7 +34,7 @@
 
 .tl-wear__headline {
   font-family: var(--tl-font-display);
-  font-size: clamp(1.7vh, min(8.4cqw, 22cqh), 4.4vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.7vh, min(8.4cqw, 22cqh), 4.4vh));
   font-weight: 600;
   line-height: 1.06;
   letter-spacing: -0.01em;
@@ -47,7 +47,7 @@
  * the point where it stops being glanceable from across the kitchen. */
 .tl-wear__detail {
   margin-top: 0.55em;
-  font-size: clamp(1.2vh, min(5cqw, 13cqh), 2.5vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.2vh, min(5cqw, 13cqh), 2.5vh));
   font-weight: 500;
   line-height: 1.25;
   color: var(--tl-fg-2);
@@ -59,6 +59,6 @@
 
 .tl-wear__empty {
   margin: auto 0;
-  font-size: clamp(1.4vh, min(6cqw, 12cqh), 2.8vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
   color: var(--tl-fg-3);
 }

@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -57,6 +58,15 @@ export default defineConfig({
     // `??=` would leave the Echo on a blank page. Runtime APIs are NOT
     // polyfilled by this - keep those Chrome 80-safe by hand.
     target: ['chrome80', 'safari14'],
+    // Two pages, one bundle: the app, and the layout editor the hub serves at
+    // /editor/ (docs/designs/layout-editor.md). Shared code (React, the
+    // fonts) lands in shared chunks, fetched once.
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        editor: fileURLToPath(new URL('./editor.html', import.meta.url)),
+      },
+    },
   },
   server: {
     fs: {

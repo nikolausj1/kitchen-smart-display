@@ -9,6 +9,10 @@
 // Sonos routing used to be rewritten here for the TV; every surface now goes
 // through the hub proxy (lib/hub.js), so there is nothing to rewrite.
 //
+// ?edit=1 is the layout editor's preview of a screen (docs/designs/
+// layout-editor.md): the editor page loads the app in an iframe with it. No
+// kiosk ever carries it.
+//
 // NOTE: settings.js and hub.js intentionally do NOT import this module (they
 // parse the kiosk flag themselves) so there is no import cycle.
 
@@ -19,7 +23,7 @@ const VALID_LAYOUTS = ['framed', 'board', 'briefing', 'ambient', 'entry']
 
 function parseParams() {
   if (typeof window === 'undefined') {
-    return { rawView: null, view: null, kioskTv: false, kioskEcho: false, layout: null }
+    return { rawView: null, view: null, kioskTv: false, kioskEcho: false, layout: null, edit: false }
   }
   const p = new URLSearchParams(window.location.search)
   const rawView = p.get('view')
@@ -30,6 +34,7 @@ function parseParams() {
     kioskTv: p.get('kiosk') === 'tv',
     kioskEcho: p.get('kiosk') === 'echo',
     layout: VALID_LAYOUTS.includes(rawLayout) ? rawLayout : null,
+    edit: p.get('edit') === '1',
   }
 }
 
@@ -49,6 +54,13 @@ export const KIOSK_ECHO = parsed.kioskEcho
 // the saved display.todayLayout setting without changing it, so a laptop can
 // preview a layout while the kitchen keeps its own.
 export const REQUESTED_LAYOUT = parsed.layout
+// The layout editor's preview (?edit=1): a picture of a screen, not a screen.
+// The shell runs no kiosk behaviour (no menu, no dimming, no Echo keep-alive,
+// no reload on deploy, no schedule or Sonos view switching; the view stays
+// Today), the settings store writes nothing (settings.js READ_ONLY, parsed
+// there on its own to keep that module free of this one), and the Entry board
+// talks to the editor (views/TodayLayouts/editBridge.js).
+export const EDIT_MODE = parsed.edit
 
 // --- Side effects, applied once at import. ESM runs after DOM parse, so
 // document.body is normally present; guard anyway for safety. -----------------

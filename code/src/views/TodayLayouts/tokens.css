@@ -52,9 +52,16 @@
 }
 
 /* Small-caps tracking used for every panel label, so the labels agree across
- * panels built by different hands. */
+ * panels built by different hands.
+ *
+ * --tl-text-scale: a layout drawn from a layout spec (the Entry board, see
+ * layoutSpec.js) sets it on each panel's box, and every absolute font size in
+ * the panels multiplies by it. Unset it is 1, so the other layouts render
+ * exactly as before. Sizes in em already follow their parent and are left
+ * alone; art (weather icons, the wear glyph, countdown art and its emoji) is
+ * not text and does not scale. */
 .tl-label {
-  font-size: clamp(11px, 0.95vw, 20px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 0.95vw, 20px));
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;

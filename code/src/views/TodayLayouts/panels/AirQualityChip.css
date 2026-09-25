@@ -2,7 +2,13 @@
  * chip's height (the body is a size container), so it is a chip in a thin band
  * and a small panel in a tall one. Colours are the --tl-aqi-* tokens; the ink
  * on the square flips dark on the light bands so the number always reads.
- * First font-size of each pair = the no-container-units fallback. */
+ *
+ * Every size is declared twice: a vh fallback in the rule, and the container
+ * unit size in the @supports block after it. The sizes carry
+ * var(--tl-text-scale) (tokens.css), and a declaration with var() is never
+ * dropped at parse time, so without @supports an engine lacking container
+ * units would lose the fallback too. The square holds the number, so it
+ * scales with the text. */
 
 .tl-aq__body {
   container-type: size;
@@ -59,12 +65,17 @@
   line-height: 1;
   letter-spacing: -0.02em;
   text-shadow: none;
-  width: clamp(26px, 5vh, 64px);
-  height: clamp(26px, 5vh, 64px);
-  font-size: clamp(11px, 2vh, 26px);
-  width: clamp(26px, 92cqh, 76px);
-  height: clamp(26px, 92cqh, 76px);
-  font-size: clamp(11px, 38cqh, 30px);
+  width: calc(var(--tl-text-scale, 1) * clamp(26px, 5vh, 64px));
+  height: calc(var(--tl-text-scale, 1) * clamp(26px, 5vh, 64px));
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 2vh, 26px));
+}
+
+@supports (height: 1cqh) {
+  .tl-aq__square {
+    width: calc(var(--tl-text-scale, 1) * clamp(26px, 92cqh, 76px));
+    height: calc(var(--tl-text-scale, 1) * clamp(26px, 92cqh, 76px));
+    font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 38cqh, 30px));
+  }
 }
 
 .tl-aq__text {
@@ -88,12 +99,20 @@
 .tl-aq__word {
   font-weight: 600;
   color: var(--tl-fg);
-  font-size: clamp(12px, 1.9vh, 24px);
-  font-size: clamp(12px, min(34cqh, 6cqw), 26px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.9vh, 24px));
 }
 
 .tl-aq__detail {
   color: var(--tl-fg-2);
-  font-size: clamp(10px, 1.5vh, 19px);
-  font-size: clamp(10px, min(27cqh, 4.8cqw), 20px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, 1.5vh, 19px));
+}
+
+@supports (height: 1cqh) {
+  .tl-aq__word {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(34cqh, 6cqw), 26px));
+  }
+
+  .tl-aq__detail {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(27cqh, 4.8cqw), 20px));
+  }
 }

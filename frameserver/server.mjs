@@ -10,6 +10,8 @@
 //
 //   GET  / , /index.html              the web app (Vite build in APP_DIR),
 //                                     with the hub marker meta injected
+//   GET  /editor/                     the layout editor (editor.html, same
+//                                     marker); ?device=<id>
 //   GET  /assets/*, /icons/*, ...     the rest of the build
 //   GET  /stub-photos/manifest.json   the manifest, no-store
 //   GET  /stub-photos/<file>          a derivative JPEG
@@ -307,7 +309,11 @@ function registerDevice({ id, name, kind, config, shared, seedFrom }) {
     }
     reg.devices[id] = entry
     changed = true
-  } else if (name && existing.name !== name) {
+  } else if (name && existing.name !== name && kind == null && config == null) {
+    // A rename from the dashboard reuses this route with only { id, name }.
+    // A screen's own self-registration always carries kind and config and
+    // sends name = its id, and must not undo a rename made on the dashboard
+    // (it did, on every page load, until 2026-09-24).
     existing.name = name
     changed = true
   }
@@ -330,7 +336,47 @@ function registerDevice({ id, name, kind, config, shared, seedFrom }) {
 // within one poll interval (10 s web, 30 s TV).
 const lastSeen = new Map()
 const markSeen = (id) => lastSeen.set(id, new Date().toISOString())
-const deviceView = (id, d, shared) => ({ id, ...d, lastSeenAt: lastSeen.get(id) ?? null, shared })
+
+// Each web screen's viewport in CSS pixels, from the ?screen=WxH its config
+// poll carries: the layout editor draws that screen's canvas at this size
+// (docs/designs/layout-editor.md). In memory only, like lastSeen, and for the
+// same reason; it refills within one poll after a restart. A missing or
+// malformed value leaves the last good one in place.
+const screens = new Map()
+function noteScreen(id, raw) {
+  const m = /^(\d{1,4})x(\d{1,4})$/i.exec(String(raw ?? ''))
+  if (!m) return
+  const w = Number(m[1])
+  const h = Number(m[2])
+  if (w >= 1 && w <= 8192 && h >= 1 && h <= 8192) screens.set(id, { w, h })
+}
+const screenOf = (id) => screens.get(id) ?? null
+const deviceView = (id, d, shared) => ({
+  id, ...d, lastSeenAt: lastSeen.get(id) ?? null, screen: screenOf(id), shared,
+})
+
+// --- layout history --------------------------------------------------------------
+// Every change to a screen's config.layouts (the layout editor's Save and
+// Reset) keeps the PREVIOUS value here, ten per screen, so a bad save is one
+// PATCH away from undone until the editor grows a history menu (step 3 of
+// docs/designs/layout-editor.md):
+//   GET /api/devices/<id>/layout-history -> [{ at, layouts }] newest first
+//   PATCH /api/devices/<id>/config with { layouts: <entry.layouts> } restores.
+const LAYOUT_HISTORY_FILE = join(ROOT, 'layout-history.json')
+const LAYOUT_HISTORY_MAX = 10
+
+function recordLayoutHistory(id, before, after) {
+  if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return
+  const all = readJsonFile(LAYOUT_HISTORY_FILE, {})
+  const list = Array.isArray(all[id]) ? all[id] : []
+  list.unshift({ at: new Date().toISOString(), layouts: before ?? null })
+  all[id] = list.slice(0, LAYOUT_HISTORY_MAX)
+  try {
+    writeJsonFileAtomic(LAYOUT_HISTORY_FILE, all, true)
+  } catch (e) {
+    console.warn(`[layouts] could not write history: ${e.message}`)
+  }
+}
 
 // --- house state, school data, flags -----------------------------------------
 
@@ -564,12 +610,13 @@ function injectHubMeta(html) {
   return `${HUB_META}\n${html}`
 }
 
-function serveAppIndex(req, res) {
+// index.html, or editor.html for the layout editor at /editor/.
+function serveAppIndex(req, res, file = 'index.html') {
   let html
   try {
-    html = readFileSync(join(APP_DIR, 'index.html'), 'utf8')
+    html = readFileSync(join(APP_DIR, file), 'utf8')
   } catch {
-    return json(res, 404, { error: 'app not deployed', appDir: APP_DIR })
+    return json(res, 404, { error: 'app not deployed', appDir: APP_DIR, file })
   }
   const buf = Buffer.from(injectHubMeta(html))
   cors(res)
@@ -726,7 +773,7 @@ async function handle(req, res) {
     const reg = readRegistry()
     return json(res, 200, {
       devices: Object.entries(reg.devices).map(([id, d]) => ({
-        id, ...d, lastSeenAt: lastSeen.get(id) ?? null,
+        id, ...d, lastSeenAt: lastSeen.get(id) ?? null, screen: screenOf(id),
       })),
       shared: reg.shared,
     })
@@ -773,9 +820,16 @@ async function handle(req, res) {
     delete reg.devices[devDel[1]]
     writeRegistry(reg)
     lastSeen.delete(devDel[1])
+    screens.delete(devDel[1])
     // A deleted device that reconnects re-registers and seeds itself again from
     // whatever it still has cached locally, so this is recoverable, not fatal.
     return json(res, 200, { ok: true, removed: devDel[1] })
+  }
+
+  const devHist = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})\/layout-history$/)
+  if (devHist && req.method === 'GET') {
+    const all = readJsonFile(LAYOUT_HISTORY_FILE, {})
+    return json(res, 200, Array.isArray(all[devHist[1]]) ? all[devHist[1]] : [])
   }
 
   const devCfg = path.match(/^\/api\/devices\/([A-Za-z0-9._-]{1,64})\/config$/)
@@ -785,13 +839,23 @@ async function handle(req, res) {
     if (!reg.devices[id]) return json(res, 404, { error: `unknown device: ${id}` })
 
     if (req.method === 'GET') {
-      markSeen(id)
+      // The layout editor's preview iframe polls as the screen it is editing
+      // (edit=1). That is a laptop, not the screen: it must not make a dead
+      // screen look alive on the dashboard, nor overwrite the screen's real
+      // viewport with the laptop's.
+      if (url.searchParams.get('edit') !== '1') {
+        markSeen(id)
+        noteScreen(id, url.searchParams.get('screen'))
+      }
       return json(res, 200, deviceView(id, reg.devices[id], reg.shared))
     }
     if (req.method === 'PATCH' || req.method === 'POST') {
       try {
-        reg.devices[id].config = deepMerge(reg.devices[id].config || {}, await readBody(req))
+        const body = await readBody(req)
+        const before = reg.devices[id].config?.layouts
+        reg.devices[id].config = deepMerge(reg.devices[id].config || {}, body)
         writeRegistry(reg)
+        if (isDict(body) && 'layouts' in body) recordLayoutHistory(id, before, reg.devices[id].config?.layouts)
         return json(res, 200, deviceView(id, reg.devices[id], reg.shared))
       } catch (e) {
         return json(res, 400, { error: String(e.message || e) })
@@ -911,6 +975,15 @@ async function handle(req, res) {
       if (!appDeployed()) return json(res, 404, { error: 'app not deployed', appDir: APP_DIR })
       return serveAppIndex(req, res)
     }
+    // The layout editor (docs/designs/layout-editor.md), the build's second
+    // page, with the same hub marker so it talks to whoever served it.
+    if (path === '/editor' || path === '/editor/' || path === '/editor/index.html' || path === '/editor.html') {
+      return serveAppIndex(req, res, 'editor.html')
+    }
+    // Served at /editor/, the page's relative asset URLs (base './') arrive
+    // as /editor/assets/...: the same build files as /assets/..., with the
+    // same checks.
+    if (path.startsWith('/editor/')) return serveAppFile(req, res, path.slice('/editor'.length))
     return serveAppFile(req, res, path)
   }
 

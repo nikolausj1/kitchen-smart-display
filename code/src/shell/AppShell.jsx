@@ -15,7 +15,7 @@ import useReloadOnDeploy from './useReloadOnDeploy.js'
 import { getHomeView } from './homeView.js'
 import useSchoolCalendar, { getCachedCalendar } from '../hooks/useSchoolCalendar.js'
 import { isNoSchoolToday } from '../lib/schoolDay.js'
-import { AUTO_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
+import { AUTO_MODE, EDIT_MODE, KIOSK_ECHO, KIOSK_TV, REQUESTED_VIEW } from '../lib/kioskMode.js'
 
 // --- Boot-time view selection -----------------------------------------------
 //
@@ -59,7 +59,10 @@ function computeInitialView(now = new Date()) {
 // Resolve the initial view at boot. An explicit ?view=today|photos|music|
 // settings wins outright (deep-links, or the TV launching into a known view).
 // Otherwise fall back to the time-of-day heuristic above (?view=auto / none).
+// The layout editor's preview (?edit=1) is always Today: it is there to show
+// a screen's board, and nothing in it may navigate away.
 function resolveInitialView() {
+  if (EDIT_MODE) return 'today'
   if (REQUESTED_VIEW) return REQUESTED_VIEW
   return computeInitialView()
 }
@@ -114,7 +117,8 @@ function isInsideInteractive(target, stopNode) {
 }
 
 function CurrentView() {
-  const { view } = useView()
+  const { view: chosen } = useView()
+  const view = EDIT_MODE ? 'today' : chosen
   switch (view) {
     case 'today':
       return <TodayLayoutSwitch />
@@ -129,18 +133,49 @@ function CurrentView() {
   }
 }
 
+// The deploy watcher as a component, so edit mode can simply not mount it.
+function ReloadOnDeploy() {
+  useReloadOnDeploy()
+  return null
+}
+
+// The night-mode schedule (dim, off, wake; the Pi's real backlight over DDC/CI
+// where there is a panel) and its overlay. A component for the same reason:
+// the editor's preview is always awake and must never drive a panel. The
+// legacy web TV runs the schedule but draws no overlay, as before.
+function NightMode({ showOverlay, nightFace }) {
+  const display = useDisplaySchedule()
+  if (!showOverlay) return null
+  // The kitchen and the Echo. On the Echo there is no panel, so this is the
+  // only dimmer, and 'off' shows the night face (the faint clock).
+  return (
+    <DimOverlay
+      actualMode={display.actualMode}
+      hardwareDim={display.hardwareDim}
+      wakeBrightness={display.wakeBrightness}
+      eveningBrightness={display.eveningBrightness}
+      nightFace={nightFace}
+    />
+  )
+}
+
+// The layout editor's preview (?edit=1, lib/kioskMode.js EDIT_MODE) is a
+// picture of a screen, not a screen. It runs none of the kiosk behaviour
+// below: no menu pill, no dim overlay (always awake), no Echo keep-alive, no
+// reload on deploy, no pixel shift, no boot Sonos override, no schedule
+// watchers, no remote-control hooks, and the view stays Today. Hub commands
+// never reach it (settings.js drops them in edit mode).
 function Shell({ initialView }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { view, setView } = useView()
-  const display = useDisplaySchedule()
-  // Only these two display flags are read here; the schedule state above owns
-  // the rest of the display behaviour.
+  // Only these two display flags are read here; the schedule (<NightMode />
+  // below) owns the rest of the display behaviour.
   const displaySettings = useSettings().display
   const pixelShift = displaySettings?.pixelShift === true
   const nightFace = displaySettings?.nightFace || 'black'
 
-  // Reload when a new bundle is deployed (polls the hub's /build.json).
-  useReloadOnDeploy()
+  // Reload when a new bundle is deployed (polls the hub's /build.json): the
+  // <ReloadOnDeploy /> below, not mounted in edit mode.
 
   // Keep the school-calendar cache warm. Nothing here reads the result, but
   // getCachedCalendar() does - the boot view, the morning watchers below and
@@ -159,8 +194,8 @@ function Shell({ initialView }) {
   // never boots into Now Playing just because the Sonos is on: the board is
   // its job, the same way a school-morning Today wins on the TV.
   const sonosBootOverrideAllowed =
-    AUTO_MODE && !(KIOSK_TV && initialView === 'today') && getHomeView() !== 'today'
-  const runScheduleWatchers = AUTO_MODE && !KIOSK_TV
+    !EDIT_MODE && AUTO_MODE && !(KIOSK_TV && initialView === 'today') && getHomeView() !== 'today'
+  const runScheduleWatchers = !EDIT_MODE && AUTO_MODE && !KIOSK_TV
 
   // Imperative navigation for the tvOS shell (and any external driver).
   // Accepts a concrete view id, or 'next'/'prev' to cycle the TV-reachable
@@ -173,6 +208,7 @@ function Shell({ initialView }) {
     viewRef.current = view
   }, [view])
   useEffect(() => {
+    if (EDIT_MODE) return undefined
     const ORDER = ['today', 'photos', 'music']
     window.appNav = (target) => {
       if (target === 'next' || target === 'prev') {
@@ -236,6 +272,7 @@ function Shell({ initialView }) {
   // because a person asking to see a view expects to see it, the same as if
   // they had touched the panel.
   useEffect(() => {
+    if (EDIT_MODE) return undefined
     function onShowView(e) {
       const target = e?.detail?.view
       if (!['today', 'photos', 'music', 'settings'].includes(target)) return
@@ -370,6 +407,7 @@ function Shell({ initialView }) {
   // the Apple TV; the kitchen used to POST its own answer to the Pi.)
 
   function onShellClick(e) {
+    if (EDIT_MODE) return
     const tag = e.target.tagName
     const cls = (e.target.className && typeof e.target.className === 'string')
       ? e.target.className.split(/\s+/).slice(0, 2).join('.')
@@ -390,23 +428,14 @@ function Shell({ initialView }) {
 
   return (
     <div className="app-shell" onClick={onShellClick}>
-      <PixelShift enabled={pixelShift}>
+      <PixelShift enabled={pixelShift && !EDIT_MODE}>
         <CurrentView />
       </PixelShift>
-      <MenuPill open={menuOpen} onClose={closeMenu} />
-      {/* The kitchen and the Echo. On the Echo there is no panel, so this is
-        * the only dimmer, and 'off' shows the night face (the faint clock). */}
-      {!KIOSK_TV && (
-        <DimOverlay
-          actualMode={display.actualMode}
-          hardwareDim={display.hardwareDim}
-          wakeBrightness={display.wakeBrightness}
-          eveningBrightness={display.eveningBrightness}
-          nightFace={nightFace}
-        />
-      )}
+      {!EDIT_MODE && <MenuPill open={menuOpen} onClose={closeMenu} />}
+      {!EDIT_MODE && <NightMode showOverlay={!KIOSK_TV} nightFace={nightFace} />}
       {/* Keep-alive audio, fullscreen and the tap-to-start overlay for Silk. */}
-      {KIOSK_ECHO && <EchoMode />}
+      {KIOSK_ECHO && !EDIT_MODE && <EchoMode />}
+      {!EDIT_MODE && <ReloadOnDeploy />}
       <DebugHud />
     </div>
   )

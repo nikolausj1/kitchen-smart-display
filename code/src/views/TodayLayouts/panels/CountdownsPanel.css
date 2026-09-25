@@ -5,7 +5,11 @@
  * Every tile stacks the same four rows: art (the flexible one), a two-line
  * title box of fixed height, the number, the unit. The fixed title box is what
  * keeps the numbers on one line across tiles when one title wraps and another
- * does not. First declaration of each size = the no-container-units fallback. */
+ * does not. First declaration of each size = the no-container-units fallback.
+ * The text sizes carry var(--tl-text-scale), so their container-unit versions
+ * sit in @supports blocks (see AirQualityChip.css for why). The art, the emoji
+ * that stands in for it and the calendar glyph are pictures, not text: they
+ * take what the tile has left and do not follow the text scale. */
 
 /* The frame gives up its own card: the tiles are the cards. --tl-cd-bar is
  * the calendar-colour edge along each tile's top (a layout that restyles the
@@ -99,11 +103,16 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  font-size: clamp(12px, 1.8vh, 26px);
-  font-size: clamp(12px, min(10cqw, 5.2cqh), 30px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.8vh, 26px));
   font-weight: 600;
   line-height: 1.18;
   color: var(--tl-fg);
+}
+
+@supports (height: 1cqh) {
+  .tl-cd__title {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(10cqw, 5.2cqh), 30px));
+  }
 }
 
 .tl-cd__title-text {
@@ -130,8 +139,13 @@
   letter-spacing: -0.03em;
   color: var(--tl-fg);
   white-space: nowrap;
-  font-size: clamp(28px, 7vh, 110px);
-  font-size: clamp(28px, min(34cqw, 16cqh), 150px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(28px, 7vh, 110px));
+}
+
+@supports (height: 1cqh) {
+  .tl-cd__num {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(28px, min(34cqw, 16cqh), 150px));
+  }
 }
 
 /* The day itself: the word takes the number's box at half its size (it has
@@ -152,8 +166,13 @@
   text-transform: uppercase;
   color: var(--tl-fg-2);
   white-space: nowrap;
-  font-size: clamp(10px, 1.3vh, 20px);
-  font-size: clamp(10px, min(7cqw, 3.4cqh), 22px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, 1.3vh, 20px));
+}
+
+@supports (height: 1cqh) {
+  .tl-cd__unit {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(7cqw, 3.4cqh), 22px));
+  }
 }
 
 /* --- Empty ---------------------------------------------------------------- */
@@ -162,6 +181,11 @@
 .tl-cd__empty {
   margin: auto;
   color: var(--tl-fg-3);
-  font-size: clamp(12px, 1.6vh, 22px);
-  font-size: clamp(12px, min(3.4cqw, 5cqh), 24px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.6vh, 22px));
+}
+
+@supports (height: 1cqh) {
+  .tl-cd__empty {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(3.4cqw, 5cqh), 24px));
+  }
 }

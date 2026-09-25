@@ -1,0 +1,190 @@
+/* SpecPanel - one box of a layout spec (SpecPanel.jsx, layoutSpec.js).
+ *
+ * Position, size, z, opacity, padding and radius arrive inline from the spec.
+ * This file owns what the options mean: the backgrounds, joined cards, the
+ * panel inside giving up its own chrome, alignment, the editor's hover
+ * outline, and the "Too small" state.
+ *
+ * Colours are the Entry board's tokens (EntryLayout.css): --tl-entry-card
+ * (translucent over a photo, dark on black), --tl-entry-solid, --tl-entry-edge
+ * and --tl-rule. */
+
+.tl-spec {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  /* The panels' container units keep resolving against their own bodies; this
+   * container is for the blocks and the Too small queries below. */
+  container-type: size;
+  container-name: tl-spec;
+}
+
+.tl-spec__content {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tl-spec__content > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* --- Backgrounds ---------------------------------------------------------- */
+
+/* A card lifts off the page with a hairline edge, as on the phase 1 board. */
+.tl-spec--bg-card {
+  background: var(--tl-entry-card);
+  box-shadow: inset 0 0 0 1px var(--tl-entry-edge);
+}
+
+.tl-spec--bg-solid {
+  background: var(--tl-entry-solid);
+  box-shadow: inset 0 0 0 1px var(--tl-entry-edge);
+}
+
+/* Cards stacked flush read as one card (cardJoins in layoutSpec.js): the
+ * edge runs round the outside of the stack only, and each joint gets the
+ * divider the phase 1 card drew between its slots, inset by the padding. The
+ * square corners at a joint come inline, with the radius. */
+.tl-spec--join-bottom {
+  box-shadow:
+    inset 1px 0 0 0 var(--tl-entry-edge),
+    inset -1px 0 0 0 var(--tl-entry-edge),
+    inset 0 1px 0 0 var(--tl-entry-edge);
+}
+
+.tl-spec--join-top {
+  box-shadow:
+    inset 1px 0 0 0 var(--tl-entry-edge),
+    inset -1px 0 0 0 var(--tl-entry-edge),
+    inset 0 -1px 0 0 var(--tl-entry-edge);
+}
+
+.tl-spec--join-top.tl-spec--join-bottom {
+  box-shadow:
+    inset 1px 0 0 0 var(--tl-entry-edge),
+    inset -1px 0 0 0 var(--tl-entry-edge);
+}
+
+.tl-spec--join-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--tl-spec-pad-x);
+  right: var(--tl-spec-pad-x);
+  height: 1px;
+  background: var(--tl-rule);
+  pointer-events: none;
+}
+
+/* --- The panel inside ------------------------------------------------------ */
+
+/* The box is the card: the panel's own surface, padding and radius go. */
+.tl-spec > .tl-spec__content > .tl-panel {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Except the departure panel in a box with no background: like the countdown
+ * tiles it stands in for, it is its own card (the phase 1 look). */
+.tl-spec--bg-none > .tl-spec__content > .tl-panel.tl-depart {
+  background: var(--tl-entry-card);
+  padding: var(--tl-pad);
+  border-radius: var(--tl-radius);
+  box-shadow: inset 0 0 0 1px var(--tl-entry-edge);
+}
+
+/* --- Alignment (the universal `align`) -------------------------------------- */
+
+.tl-spec--align-center .tl-clock__body {
+  align-items: center;
+  text-align: center;
+}
+
+.tl-spec--align-end .tl-clock__body {
+  align-items: flex-end;
+  text-align: end;
+}
+
+.tl-spec--align-center .tl-headline__line {
+  justify-content: center;
+}
+
+.tl-spec--align-end .tl-headline__line {
+  justify-content: flex-end;
+}
+
+/* --- The layout editor's hover ------------------------------------------ */
+
+.tl-spec[data-hover] {
+  outline: 1px solid rgba(77, 163, 255, 0.95);
+  outline-offset: -1px;
+}
+
+/* --- Too small ------------------------------------------------------------ */
+
+/* Shown instead of the panel when its content box is under the type's minPx
+ * (layoutSpec.js; the numbers below must match it). Quiet on purpose: on a
+ * wall it says "this box needs to be bigger" without shouting. */
+.tl-spec > .tl-panel--small {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: inherit;
+  color: var(--tl-fg-3);
+  font-size: clamp(9px, 1.1vh, 14px);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+@container tl-spec (width < 110px) or (height < 40px) {
+  .tl-spec--clock > .tl-spec__content { display: none; }
+  .tl-spec--clock > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 150px) or (height < 52px) {
+  .tl-spec--weather > .tl-spec__content { display: none; }
+  .tl-spec--weather > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 140px) or (height < 40px) {
+  .tl-spec--wear > .tl-spec__content { display: none; }
+  .tl-spec--wear > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 90px) or (height < 22px) {
+  .tl-spec--airquality > .tl-spec__content { display: none; }
+  .tl-spec--airquality > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 110px) or (height < 20px) {
+  .tl-spec--headline > .tl-spec__content { display: none; }
+  .tl-spec--headline > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 300px) or (height < 90px) {
+  .tl-spec--agenda > .tl-spec__content { display: none; }
+  .tl-spec--agenda > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 140px) or (height < 110px) {
+  .tl-spec--countdowns > .tl-spec__content { display: none; }
+  .tl-spec--countdowns > .tl-panel--small { display: flex; }
+}

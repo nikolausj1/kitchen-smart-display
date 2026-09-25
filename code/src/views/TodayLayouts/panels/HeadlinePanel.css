@@ -2,8 +2,9 @@
  *
  * Sized against the body (a size container): 56cqh fills a short band, 5cqw
  * keeps a 35-character line ("Tomorrow: Sheena Chicago at 10:00 am") inside the
- * width. Anything longer ends in an ellipsis rather than wrapping. The first
- * font-size is the no-container-units fallback. */
+ * width. Anything longer ends in an ellipsis rather than wrapping. The rule's
+ * font-size is the no-container-units fallback; the @supports block holds the
+ * real one (see AirQualityChip.css for why the fallback needs the block). */
 
 .tl-headline__body {
   container-type: size;
@@ -20,8 +21,13 @@
   line-height: 1.12;
   letter-spacing: -0.012em;
   color: var(--tl-fg);
-  font-size: clamp(16px, 4.4vh, 60px);
-  font-size: clamp(16px, min(56cqh, 5cqw), 76px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(16px, 4.4vh, 60px));
+}
+
+@supports (height: 1cqh) {
+  .tl-headline__line {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(16px, min(56cqh, 5cqw), 76px));
+  }
 }
 
 .tl-headline__text {

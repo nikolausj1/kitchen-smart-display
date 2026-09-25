@@ -21,6 +21,7 @@ import { moonPhase } from '../lib/sun.js'
 import { decideWear } from '../lib/wear.js'
 import { buildAgendaDays, countdownsFor } from '../lib/agenda.js'
 import useDailyForecast from './useDailyForecast.js'
+import { useDemoMode } from './demoMode.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
 import {
   DEMO_AIR_QUALITY,
@@ -58,12 +59,12 @@ import {
 
 // URL params, parsed ONCE at module load the way lib/kioskMode.js does.
 // Reading window.location in a render body trips the React Compiler purity
-// rule, and these flags never change for the life of the page anyway.
+// rule, and this flag never changes for the life of the page anyway. Demo mode
+// is NOT here: ?demo=1 seeds a store (demoMode.js) the layout editor can flip.
 function readFlags() {
-  if (typeof window === 'undefined') return { demo: false, forceNoSchool: false }
+  if (typeof window === 'undefined') return { forceNoSchool: false }
   const p = new URLSearchParams(window.location.search)
   return {
-    demo: p.get('demo') === '1',
     forceNoSchool: p.get('noschool') === '1',
   }
 }
@@ -101,14 +102,19 @@ export default function useTodayData() {
     return () => clearInterval(id)
   }, [])
 
-  // Demo values that depend on when the page was opened are frozen once, in a
-  // state initialiser, so the fixture does not slide forward every second.
-  const [demoTarget] = useState(() =>
-    FLAGS.demo ? new Date(Date.now() + DEMO_TIMER_MINUTES * 60_000) : null
+  // Demo mode: ?demo=1, or the layout editor's "sample data" switch. Values
+  // that depend on the clock are anchored to the moment it turned on (`since`,
+  // set by the store, outside render), so the fixture does not slide forward
+  // every second.
+  const { on: demo, since: demoSince } = useDemoMode()
+  const demoTarget = useMemo(
+    () => (demo && demoSince != null ? new Date(demoSince + DEMO_TIMER_MINUTES * 60_000) : null),
+    [demo, demoSince]
   )
-  const [demoFetchedAt] = useState(() => (FLAGS.demo ? Date.now() : null))
-  const [demoCalendarData] = useState(() =>
-    FLAGS.demo ? demoCalendar(startOfDay(new Date())) : null
+  const demoFetchedAt = demo ? demoSince : null
+  const demoCalendarData = useMemo(
+    () => (demo && demoSince != null ? demoCalendar(startOfDay(new Date(demoSince))) : null),
+    [demo, demoSince]
   )
 
   const settings = useSettings()
@@ -152,12 +158,12 @@ export default function useTodayData() {
   const hourlyNowTempF = hourlyNow?.tempF ?? null
   const hourlyNowCode = hourlyNow?.code ?? null
 
-  const demoWeatherView = useMemo(() => (FLAGS.demo ? demoWeather(today) : null), [today])
+  const demoWeatherView = useMemo(() => (demo ? demoWeather(today) : null), [demo, today])
 
   // The demo weather fixture is a last resort: real data always wins, so a demo
   // screenshot taken on the wall shows the real sky outside the window.
   const haveLiveForecast = !!(daily.current || daily.days.length)
-  const usingDemoWeather = FLAGS.demo && !haveLiveForecast
+  const usingDemoWeather = demo && !haveLiveForecast
   const source = usingDemoWeather ? demoWeatherView : daily
 
   const liveFetchedAt = daily.fetchedAt ?? weather.fetchedAt ?? null
@@ -246,15 +252,15 @@ export default function useTodayData() {
     // ?noschool=1 is an explicit request, so it wins even over the demo fixture.
     const noSchool = FLAGS.forceNoSchool
       ? true
-      : FLAGS.demo
+      : demo
         ? DEMO_SCHOOL.noSchool
         : isNoSchoolToday(schoolSettings, calendar, today)
 
     return {
       noSchool,
-      entree: FLAGS.demo ? DEMO_SCHOOL.entree : lunchEntreeForToday(lunch, today),
-      grab: FLAGS.demo ? DEMO_SCHOOL.grab : grabForToday(lunch, today),
-      activities: FLAGS.demo
+      entree: demo ? DEMO_SCHOOL.entree : lunchEntreeForToday(lunch, today),
+      grab: demo ? DEMO_SCHOOL.grab : grabForToday(lunch, today),
+      activities: demo
         ? DEMO_SCHOOL.activities
         : activitiesForToday(schoolSettings, today),
       departTimes: {
@@ -266,7 +272,7 @@ export default function useTodayData() {
       // countdown tiles for the departure panel inside it).
       autoShowAt: schoolSettings?.autoShowAt ?? null,
     }
-  }, [schoolSettings, calendar, lunch, today])
+  }, [demo, schoolSettings, calendar, lunch, today])
 
   const wear = useMemo(
     () =>
@@ -284,7 +290,7 @@ export default function useTodayData() {
   // handed us, so a panel button drives the real, house-shared countdown.
   const timer = useMemo(
     () =>
-      FLAGS.demo
+      demo
         ? { ...DEMO_TIMER, target: demoTarget, actions: timerState.actions }
         : {
             mode: timerState.mode,
@@ -303,13 +309,14 @@ export default function useTodayData() {
       timerState.band,
       timerState.target,
       timerState.actions,
+      demo,
       demoTarget,
     ]
   )
 
   const musicRoom = settings.sonos?.room || 'Main'
   const music = useMemo(() => {
-    if (FLAGS.demo) {
+    if (demo) {
       return { ...DEMO_MUSIC, room: musicRoom, fetchedAt: demoFetchedAt }
     }
     return {
@@ -335,6 +342,7 @@ export default function useTodayData() {
     sonos.fetchedAt,
     sonos.error,
     musicRoom,
+    demo,
     demoFetchedAt,
   ])
 
@@ -363,7 +371,7 @@ export default function useTodayData() {
   // weather): the headline fixture names one of its events, and a design shot
   // should not depend on, or publish, whatever the family has on this week.
   const calendarOut = useMemo(() => {
-    if (!FLAGS.demo) return liveCalendar
+    if (!demo) return liveCalendar
     return {
       ...demoCalendarData,
       connected: true,
@@ -371,7 +379,7 @@ export default function useTodayData() {
       error: null,
       stale: false,
     }
-  }, [liveCalendar, demoCalendarData, demoFetchedAt])
+  }, [demo, liveCalendar, demoCalendarData, demoFetchedAt])
 
   const agendaDays = useMemo(
     () => buildAgendaDays(calendarOut.events, today),
@@ -387,14 +395,14 @@ export default function useTodayData() {
   // into this morning by a hub that went down overnight, would be wrong in a
   // way nobody would notice. Same guard useTimer puts on noSchoolToday.
   const houseToday = house.fetchedAt != null && dateKey(new Date(house.fetchedAt)) === todayKey
-  const headline = FLAGS.demo ? DEMO_HEADLINE : houseToday ? house.headline : null
+  const headline = demo ? DEMO_HEADLINE : houseToday ? house.headline : null
   // Air quality follows the weather's demo rule: a live reading wins.
   const liveAir = houseToday ? house.airQuality : null
-  const airQuality = liveAir || (FLAGS.demo ? DEMO_AIR_QUALITY : null)
+  const airQuality = liveAir || (demo ? DEMO_AIR_QUALITY : null)
 
   return {
     now,
-    demo: FLAGS.demo,
+    demo,
     greeting: greetingFor(now),
     settings,
     weather: weatherOut,

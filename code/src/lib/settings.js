@@ -35,8 +35,15 @@ const STORAGE_DEVICE_KEY = 'kitchenDisplaySettingsDevice'
 const LAST_COMMAND_KEY = 'kitchenDisplayLastCommandTs'
 
 // House-wide vs per-screen. Anything not listed here stays local-only.
+//
+// layouts: the screen's layout specs from the layout editor (config.layouts
+// .entry, views/TodayLayouts/layoutSpec.js), read on the normal poll. Only the
+// editor writes them, straight to the hub, so they are left out of what a
+// screen writes back (DEVICE_WRITE_SCOPE): a setting changed on a panel can
+// then never push that panel's older copy over a layout just saved.
 const SHARED_SCOPE = ['location', 'school', 'timerThresholds', 'weatherSlots']
-const DEVICE_SCOPE = ['slideshow', 'display', 'sonos']
+const DEVICE_SCOPE = ['slideshow', 'display', 'sonos', 'layouts']
+const DEVICE_WRITE_SCOPE = DEVICE_SCOPE.filter((k) => k !== 'layouts')
 
 // Which kiosk surface this is, parsed directly from the URL (not via
 // kioskMode.js) to avoid an import cycle.
@@ -52,6 +59,18 @@ const IS_TV = KIOSK === 'tv'
 // kitchen.
 const IS_ECHO = KIOSK === 'echo'
 
+// The layout editor's preview of a screen (?edit=1; lib/kioskMode.js
+// EDIT_MODE, parsed here on its own for the same reason as KIOSK). It shows
+// that screen's real settings and must never change them, so in this mode the
+// store writes nothing anywhere: no settings PATCH, no Sonos heal, no photo
+// flag, no one-shot hub commands, and nothing in this browser's storage (not
+// even the remembered ?device=, or the Mac would wake up as the Echo it last
+// edited). It reads its settings with a plain GET instead of registering, and
+// still polls. Exported for the other stores (lib/houseState.js's countdown
+// POST should check it too).
+export const READ_ONLY =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') === '1'
+
 // Identity comes from the kiosk URL (?device=living-room), extending the
 // existing ?kiosk=tv pattern, and is remembered so a reload without the param
 // keeps the same identity. The hub assigns nothing - devices name themselves,
@@ -66,7 +85,9 @@ function resolveDeviceId() {
   if (typeof window === 'undefined') return 'kitchen'
   const q = new URLSearchParams(window.location.search).get('device')
   if (q) {
-    try { localStorage.setItem(DEVICE_ID_KEY, q) } catch { /* storage disabled */ }
+    if (!READ_ONLY) {
+      try { localStorage.setItem(DEVICE_ID_KEY, q) } catch { /* storage disabled */ }
+    }
     return q
   }
   try {
@@ -119,17 +140,52 @@ const STALE_SONOS_BASES = [
   /:8080\/api\/sonos\/?$/i,                          // the Pi's proxy (the old TV route)
 ]
 
-function isStaleSonosBase(value) {
+// This page's own host name, and the host of a stored URL ('' if it is not
+// one). An IP address is four dotted numbers, or IPv6 (bracketed in a URL).
+const PAGE_HOST =
+  typeof window !== 'undefined' && window.location ? String(window.location.hostname || '') : ''
+
+function isIpHost(host) {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || /^\[[0-9a-f:.]+\]$/i.test(host) || host.indexOf(':') >= 0
+}
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+// Is a stored Sonos base dead on this page? Pure, for the tests; the store
+// calls it with this page's facts (isStaleSonosBase below).
+export function sonosBaseIsStale(value, { servedByHub, hubSonosBase, pageHost }) {
   if (typeof value !== 'string' || !value.trim()) return true
   const v = value.trim()
   if (STALE_SONOS_BASES.some((re) => re.test(v))) return true
-  // A page FrameServer served is on the hub's own origin, and that origin is the
-  // one name for the hub this browser is known to resolve (Silk on the Echo
-  // cannot resolve nuc.local). Any other host's /api/sonos is stale here too.
-  if (SERVED_BY_HUB && /\/api\/sonos\/?$/i.test(v) && v.replace(/\/+$/, '') !== HUB_SONOS_BASE) {
-    return true
-  }
-  return false
+  // The Silk case, and only that. The Echo loads the app from the hub by IP
+  // because Silk cannot resolve nuc.local, so on a page FrameServer served
+  // from an IP a stored nuc.local /api/sonos is dead and moves to this origin.
+  // Nothing else is judged stale: a page opened as http://nuc.local:8095/ (the
+  // Mac, the layout editor) holding an Echo's IP-based value must leave it
+  // alone, or it would write nuc.local back into the Echo's config and take
+  // the Echo's music with it. (The price: if the hub's IP ever changed, an
+  // Echo's stored old-IP value would need fixing by hand.)
+  return !!(
+    servedByHub &&
+    /\/api\/sonos\/?$/i.test(v) &&
+    v.replace(/\/+$/, '') !== hubSonosBase &&
+    /\.local$/.test(hostOf(v)) &&
+    isIpHost(String(pageHost || '').toLowerCase())
+  )
+}
+
+function isStaleSonosBase(value) {
+  return sonosBaseIsStale(value, {
+    servedByHub: SERVED_BY_HUB,
+    hubSonosBase: HUB_SONOS_BASE,
+    pageHost: PAGE_HOST,
+  })
 }
 
 // Returns the SAME object when nothing needed fixing, so callers can tell.
@@ -154,6 +210,18 @@ function pick(obj, keys) {
 // deliberate: a hub outage must never stop someone changing a setting on the
 // panel in front of them.
 
+// Settles once the first answer from the hub is in (registration or the first
+// poll, success or failure), so a caller can wait for the hub's settings
+// rather than act on the cache or the defaults: the layout editor's bridge
+// announces the saved layout only then. Resolves at once without a hub.
+let settleHub = () => {}
+const hubSettled = new Promise((resolve) => {
+  settleHub = resolve
+})
+export function whenHubSettled() {
+  return hubSettled
+}
+
 let lastLocalWriteAt = 0
 let patchTimer = null
 let queuedDevice = {}
@@ -165,7 +233,7 @@ let queuedShared = {}
 // POST works against both the old and the fixed hub, so a screen keeps saving
 // settings whichever half is deployed first.
 function hubPatch(path, body) {
-  if (!HUB || typeof fetch === 'undefined') return
+  if (!HUB || READ_ONLY || typeof fetch === 'undefined') return
   fetch(hubUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -188,8 +256,8 @@ function flushPatches() {
 }
 
 function syncToHub(next) {
-  if (!HUB) return
-  Object.assign(queuedDevice, pick(next, DEVICE_SCOPE))
+  if (!HUB || READ_ONLY) return
+  Object.assign(queuedDevice, pick(next, DEVICE_WRITE_SCOPE))
   Object.assign(queuedShared, pick(next, SHARED_SCOPE))
   lastLocalWriteAt = Date.now()
   if (patchTimer) clearTimeout(patchTimer)
@@ -222,6 +290,8 @@ function readLastCommandTs() {
 let lastCommandTs = readLastCommandTs()
 
 function handleHubCommand(cmd) {
+  // The editor's preview is not the screen the command was meant for.
+  if (READ_ONLY) return
   if (!cmd || typeof cmd !== 'object') return
   const ts = Number(cmd.ts) || 0
   if (!ts || ts === lastCommandTs) return
@@ -287,7 +357,7 @@ function applyFromHub(payload) {
   }
   // Checked even when nothing changed locally: our cached value may already be
   // right while the registry still holds the stale one.
-  if (healSonos && !sonosHealQueued) {
+  if (healSonos && !sonosHealQueued && !READ_ONLY) {
     sonosHealQueued = true
     syncToHub({ sonos: currentValue.sonos })   // device scope only
   }
@@ -303,7 +373,7 @@ function applyFromHub(payload) {
 // seedFrom (see resolveSeedFrom) asks the hub to start a NEW entry from another
 // device's slideshow, Sonos room and display schedule instead.
 async function registerWithHub() {
-  if (!HUB || typeof fetch === 'undefined') return
+  if (!HUB || READ_ONLY || typeof fetch === 'undefined') return
   try {
     const res = await fetch(hubUrl('/api/devices/register'), {
       method: 'POST',
@@ -321,6 +391,8 @@ async function registerWithHub() {
     if (res.ok) applyFromHub(await res.json())
   } catch {
     // Hub unreachable: keep running on the localStorage cache.
+  } finally {
+    settleHub()
   }
 }
 
@@ -330,17 +402,38 @@ async function registerWithHub() {
 // button that takes half a minute to do anything reads as broken. The payload is
 // a few hundred bytes on a LAN.
 const HUB_POLL_MS = 10 * 1000
+
+// The config poll's query. A screen sends ?screen=WxH, its viewport in CSS
+// pixels, which the hub keeps in memory (like lastSeenAt) so the layout editor
+// can draw at the screen's real size. The editor's preview sends ?edit=1
+// instead: the hub then leaves lastSeenAt alone (an open editor must not make
+// a dead screen look alive), and there is no size to report, because that
+// frame is sized FROM this number and echoing it back would let a guessed
+// size overwrite the real one. A hub that predates both ignores the query.
+function pollQuery() {
+  if (typeof window === 'undefined') return ''
+  if (READ_ONLY) return '?edit=1'
+  const w = Math.round(window.innerWidth || 0)
+  const h = Math.round(window.innerHeight || 0)
+  return w > 0 && h > 0 ? `?screen=${w}x${h}` : ''
+}
+
 async function pollHub() {
   if (!HUB || typeof fetch === 'undefined') return
   if (Date.now() - lastLocalWriteAt < 5000) return
   try {
-    const res = await fetch(hubUrl(`/api/devices/${encodeURIComponent(DEVICE_ID)}/config`), {
-      cache: 'no-store',
-    })
+    const res = await fetch(
+      hubUrl(`/api/devices/${encodeURIComponent(DEVICE_ID)}/config${pollQuery()}`),
+      { cache: 'no-store' }
+    )
     if (res.ok) applyFromHub(await res.json())
-    else if (res.status === 404) registerWithHub() // device was removed; re-seed
+    // The device was removed: re-seed it. Not from the editor's preview, which
+    // must not create a device by looking at it.
+    else if (res.status === 404 && !READ_ONLY) registerWithHub()
   } catch {
     // Hub unreachable: keep the cache.
+  } finally {
+    settleHub()
   }
 }
 
@@ -349,7 +442,7 @@ async function pollHub() {
 // flags-review.mjs / flags-apply.mjs. Any screen may flag except the legacy web
 // TV surface - the Echo included. Silent on failure.
 export function postPhotoFlag(assetId, wrongCaption) {
-  if (IS_TV) return
+  if (IS_TV || READ_ONLY) return
   if (typeof fetch === 'undefined') return
   if (!assetId) return
   try {
@@ -581,6 +674,7 @@ function readStored() {
 }
 
 function writeCache(value) {
+  if (READ_ONLY) return
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
     localStorage.setItem(STORAGE_DEVICE_KEY, DEVICE_ID)
@@ -592,10 +686,15 @@ const listeners = new Set()
 
 // Register with the hub and start polling for dashboard-side changes. Both are
 // no-ops without a hub URL, which keeps samplePhotos dev mode and the rollback
-// path working unchanged.
+// path working unchanged. The editor's preview reads instead of registering:
+// registration can write (it renames the entry to the id, and creates one that
+// is missing), while a GET of the config returns the same payload and cannot.
 if (HUB && typeof window !== 'undefined') {
-  registerWithHub()
+  if (READ_ONLY) pollHub()
+  else registerWithHub()
   setInterval(pollHub, HUB_POLL_MS)
+} else {
+  settleHub()
 }
 
 function subscribe(fn) {
@@ -622,10 +721,12 @@ export function updateSettings(updater) {
 
 export function resetSettings() {
   currentValue = DEFAULTS
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // no-op
+  if (!READ_ONLY) {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // no-op
+    }
   }
   listeners.forEach((fn) => fn())
 }

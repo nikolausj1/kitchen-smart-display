@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { hubUrl } from './hub.js'
 import { dateKey, normalizeDecisions } from './countdown.js'
-import { DEVICE_ID, deepEqual } from './settings.js'
+import { DEVICE_ID, READ_ONLY, deepEqual } from './settings.js'
 
 // houseState - the house-wide STATE every screen shares through the hub.
 //
@@ -253,6 +253,10 @@ async function poll() {
 // stands until a poll succeeds, and the hub's copy then wins, exactly like a
 // failed settings PATCH.
 export function postCountdown(nextDecisions) {
+  // The layout editor's preview (edit mode) is a laptop looking at a screen's
+  // board, never a writer: a stray tap on its departure toggle must not
+  // change the house countdown.
+  if (READ_ONLY) return Promise.resolve(false)
   const countdown = { ...(nextDecisions || {}), by: DEVICE_ID }
   lastLocalWriteAt = Date.now()
   const seq = ++writeSeq

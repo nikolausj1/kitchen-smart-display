@@ -11,7 +11,9 @@
  * font is capped at 4.9cqh of the list, so 19.8em is at most 97cqh and the
  * worst day still fits; overflow: hidden is only the belt. The first
  * declaration of each size is the fallback for an engine without container
- * units (the declaration using them is dropped whole there). */
+ * units (the declaration using them is dropped whole there). The font sizes
+ * carry var(--tl-text-scale), which would stop that drop, so their container
+ * unit versions sit in @supports blocks instead (see AirQualityChip.css). */
 
 .tl-agenda__body {
   container-type: size;
@@ -40,8 +42,13 @@
   min-width: 0;
   padding-bottom: 0.45em;
   border-bottom: 1px solid var(--tl-rule);
-  font-size: clamp(12px, 1.5vh, 24px);
-  font-size: clamp(12px, min(2.3cqw, 6.2cqh), 26px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.5vh, 24px));
+}
+
+@supports (height: 1cqh) {
+  .tl-agenda__head {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(2.3cqw, 6.2cqh), 26px));
+  }
 }
 
 .tl-agenda__label {
@@ -80,8 +87,13 @@
   flex-direction: column;
   gap: 0.3em;
   min-width: 0;
-  font-size: clamp(12px, 1.9vh, 28px);
-  font-size: clamp(12px, min(7.4cqw, 4.9cqh), 30px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.9vh, 28px));
+}
+
+@supports (height: 1cqh) {
+  .tl-agenda__items {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(7.4cqw, 4.9cqh), 30px));
+  }
 }
 
 /* Bar, time, title. The time column is fixed so titles line up down the day
@@ -169,6 +181,11 @@
   align-self: center;
   justify-self: center;
   color: var(--tl-fg-2);
-  font-size: clamp(14px, 2.2vh, 30px);
-  font-size: clamp(14px, min(3cqw, 9cqh), 34px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(14px, 2.2vh, 30px));
+}
+
+@supports (height: 1cqh) {
+  .tl-agenda__message {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(14px, min(3cqw, 9cqh), 34px));
+  }
 }

@@ -1,0 +1,37 @@
+/* TextBlock - vertically centred in its box, aligned per `align`, wrapping.
+ * `safe center` keeps the first line in view when the text is taller than the
+ * box (an engine without it ignores the line and keeps plain centring). */
+
+.tl-textblock {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  justify-content: safe center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tl-textblock__text {
+  min-width: 0;
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-textblock-size, 4vh));
+  letter-spacing: -0.01em;
+  color: var(--tl-fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tl-textblock--start {
+  text-align: start;
+}
+
+.tl-textblock--center {
+  text-align: center;
+}
+
+.tl-textblock--end {
+  text-align: end;
+}

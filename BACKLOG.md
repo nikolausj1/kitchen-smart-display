@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-24
-version: 7.0
+version: 7.1
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,14 +87,19 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Layout editor (DESIGN, 2026-09-24, waiting on Justin's go)
+### Layout editor (STEPS 1 AND 2 BUILT 2026-09-24; steps 3 and 4 open)
 
 A what-you-see-is-what-you-get editor for the boards, used from the MacBook,
-reached from each screen's card on the admin page. The real app renders in an
-iframe at the screen's exact resolution; handles and an inspector sit over it;
-Save writes a per-screen layout (percent positions, per-panel knobs, text and
-image blocks) into the registry. About five and a half agent days in four
-steps, usable after three. Design: `docs/designs/layout-editor.md`.
+reached from each screen's card on the admin page (`/editor/?device=<id>`).
+The real app renders in an iframe at the screen's exact resolution; handles
+and an inspector sit over it; Save writes a per-screen layout (percent
+positions, universal properties, text and image blocks) into the registry.
+Built: the spec and data-driven Entry renderer, edit mode, the editor with
+move, resize, snap, nudge, layers, undo and redo, save, revert, reset, the
+backdrop section, sample data. Open (step 3): per-panel schemas and the full
+inspector, sub-element selection, smart guides, save history, copy layout to
+another screen. Open (step 4): day-part tabs (Entry phase 2), the Board
+layout. Design: `docs/designs/layout-editor.md`.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -766,6 +771,18 @@ Newest first.
   deleted. Verified end to end at 1280x800 against the live hub from the Mac;
   the on-device Silk check is Justin's. Design:
   `docs/designs/echo-show-and-hub.md`.
+- **2026-09-24 - Layout editor, steps 1 and 2** (`feature/echo-hub`, deployed).
+  The Entry board is now rendered from a per-screen layout spec
+  (`config.layouts.entry`, percent positions, universal props, text and image
+  blocks; the built-in board is the default), the app has an edit mode
+  (`?edit=1`: read-only, no kiosk behaviour, a postMessage bridge reporting
+  panel rectangles), and the hub serves a React editor at `/editor/` with the
+  real app in an iframe at the screen's resolution: select, drag, resize,
+  grid snap, nudge, layers with reorder / hide / lock, add text and image
+  blocks, undo and redo, Save, Revert, Reset, backdrop section, sample data,
+  screen picker. Dashboard: Edit layout on each web screen's card; the hub
+  records each screen's viewport for the canvas size. Design and the as-built
+  contract: `docs/designs/layout-editor.md`.
 - **2026-09-24 - Entry board, phase 1: the front-door DAKboard replacement**
   (`feature/echo-hub`, deployed; the Echo Show 15 runs it as its home view).
   Hub: Google Calendar through a service account (JWT signed with Node's
