@@ -23,6 +23,12 @@
 #
 # rsync is not available on Windows, so the FrameServer half uses scp.
 #
+# Test gate: every target below (hub, pi, migrate, all) first runs the pure
+# library suite, `node --test` over frameserver/test/ (node:test, no network,
+# no writes outside the OS temp dir). A red run dies before anything is
+# touched. SKIP_TESTS=1 ./deploy.sh ... bypasses the gate, with a printed
+# warning; do not ship on a red run you have not looked at.
+#
 # Usage:  ./deploy.sh [all | hub | pi | migrate]
 #           all       hub, then pi (the default)
 #           hub       FrameServer: build scripts + inputs, the web app, server
@@ -32,6 +38,7 @@
 #                     photo-flag queue to the hub, compare the shared settings,
 #                     repoint stale Sonos bases in the registry. Only reads
 #                     from the Pi.
+#           SKIP_TESTS=1 ./deploy.sh ...   ship without running the test gate
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -71,7 +78,32 @@ build_bundle() {
   BUILT=1
 }
 
+TESTED=
+# node --test frameserver/test/ would be the obvious spelling, but Node's
+# test runner does not accept a bare directory as an argument (it tries to
+# require() it and fails); the glob is the working equivalent, still scoped
+# to this one directory. Runs once per invocation even though `all` reaches
+# this from both the hub and the pi blocks below.
+run_hub_tests() {
+  [ -n "$TESTED" ] && return 0
+  if [ "${SKIP_TESTS:-}" = 1 ]; then
+    echo "==> Hub tests: SKIPPED (SKIP_TESTS=1); deploying without a green run" >&2
+    TESTED=1
+    return 0
+  fi
+  echo "==> Hub tests: node --test frameserver/test/"
+  local out status=0
+  out=$(node --test 'frameserver/test/**/*.test.mjs' 2>&1) || status=$?
+  grep -E '^# (tests|pass|fail)' <<<"$out" | sed 's/^/    /' || true
+  if [ "$status" -ne 0 ]; then
+    echo "$out"
+    die "hub test suite failed; fix frameserver/test/ or the libraries before deploying (or SKIP_TESTS=1 to bypass, not recommended)"
+  fi
+  TESTED=1
+}
+
 if [ "$TARGET" = all ] || [ "$TARGET" = hub ]; then
+  run_hub_tests
   build_bundle
   # Check the whole app is there before touching the hub: its assets dir is
   # cleared below, so a half-shipped app would leave the Echo broken.
@@ -135,6 +167,7 @@ print("    GET /api/state is JSON, timer = %s" % json.dumps(d["timer"]))
 fi
 
 if [ "$TARGET" = all ] || [ "$TARGET" = pi ]; then
+  run_hub_tests
   build_bundle
 
   echo "==> Kitchen Pi: app bundle"
@@ -158,6 +191,7 @@ if [ "$TARGET" = all ] || [ "$TARGET" = pi ]; then
 fi
 
 if [ "$TARGET" = migrate ]; then
+  run_hub_tests
   # One-time move of the Pi's shared data to the hub. Safe to re-run: only
   # flags the hub does not have yet are imported, the settings check only
   # reads, and only devices still holding the stale Sonos base are patched.
