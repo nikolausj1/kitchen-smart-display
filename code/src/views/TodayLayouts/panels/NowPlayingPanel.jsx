@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import { fmtMinutes } from '../lib/format.js'
 import './NowPlayingPanel.css'
 
@@ -9,6 +10,9 @@ import './NowPlayingPanel.css'
 // the last payload would sit still and then jump. We advance elapsed locally
 // from the layout's 1 Hz `now` instead, clamped to the track length so it never
 // overruns the end of a song while we wait for the next poll.
+//
+// knobs (a spec layout, panels/schemas.js 'nowplaying'): size (the words;
+// the album art is art and keeps the box's size), showArt, showProgress.
 
 // Album art placeholder: a plain note glyph, drawn rather than shipped, so a
 // missing or unreachable art URL still leaves a square of the right shape.
@@ -29,10 +33,13 @@ function NoteGlyph() {
   )
 }
 
-export default function NowPlayingPanel({ music, now, compact = false }) {
+export default function NowPlayingPanel({ music, now, compact = false, knobs }) {
   // Remember the art URL that failed rather than a bare boolean, so the next
   // track's art is tried again without needing an effect to reset the flag.
   const [artFailed, setArtFailed] = useState(null)
+  const k = panelKnobs('nowplaying', knobs)
+  const rootClass = `tl-np${compact ? ' tl-np--compact' : ''}${k ? ' tl-knobs' : ''}`
+  const rootStyle = k ? { '--tl-np-size': String(k.size) } : undefined
 
   const track = music?.track || null
   const playing = !!music?.playing
@@ -42,9 +49,16 @@ export default function NowPlayingPanel({ music, now, compact = false }) {
 
   if (idle) {
     return (
-      <PanelFrame title="Now playing" className="tl-np" bodyClassName="tl-np__body">
+      <PanelFrame
+        title="Now playing"
+        className={`tl-np${k ? ' tl-knobs' : ''}`}
+        bodyClassName="tl-np__body"
+        style={rootStyle}
+      >
         <div className="tl-np__idle">
-          <div className="tl-np__idle-line">Nothing playing</div>
+          <div className="tl-np__idle-line" data-edit="title" data-edit-label="Title">
+            Nothing playing
+          </div>
           {room && <div className="tl-np__idle-room">{room}</div>}
         </div>
       </PanelFrame>
@@ -67,34 +81,40 @@ export default function NowPlayingPanel({ music, now, compact = false }) {
   const artUrl = track.albumArtUrl || ''
   const artOk = !!artUrl && artFailed !== artUrl
   const source = music?.sourceLabel || music?.stationName || ''
-  const showProgress = !compact && durationMs > 0
+  const showProgress = !compact && durationMs > 0 && (k ? !!k.showProgress : true)
   const showAlbum = !compact && !!track.album
+  const showArt = k ? !!k.showArt : true
 
   return (
     <PanelFrame
       title="Now playing"
       aside={room}
-      className={`tl-np${compact ? ' tl-np--compact' : ''}`}
+      className={rootClass}
       bodyClassName="tl-np__body"
+      style={rootStyle}
     >
       <div className="tl-np__row">
-        <div className="tl-np__art">
-          {artOk ? (
-            <img
-              src={artUrl}
-              alt=""
-              draggable="false"
-              onError={() => setArtFailed(artUrl)}
-            />
-          ) : (
-            <div className="tl-np__art-empty">
-              <NoteGlyph />
-            </div>
-          )}
-        </div>
+        {showArt && (
+          <div className="tl-np__art" data-edit="art" data-edit-label="Album art">
+            {artOk ? (
+              <img
+                src={artUrl}
+                alt=""
+                draggable="false"
+                onError={() => setArtFailed(artUrl)}
+              />
+            ) : (
+              <div className="tl-np__art-empty">
+                <NoteGlyph />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="tl-np__text">
-          <div className="tl-np__title">{track.title || 'Untitled'}</div>
+          <div className="tl-np__title" data-edit="title">
+            {track.title || 'Untitled'}
+          </div>
           {track.artist && <div className="tl-np__artist">{track.artist}</div>}
           {showAlbum && <div className="tl-np__album">{track.album}</div>}
           {(paused || source) && (

@@ -116,3 +116,52 @@
     font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(27cqh, 4.8cqw), 20px));
   }
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+/* The square with its number and the words together: the square is sized in
+ * the text scale already. */
+.tl-knobs .tl-aq__body {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-aq-size, 1));
+}
+
+/* One line: the number in a small pill at the words' height, then the word
+ * and the PM2.5 reading after it, for a thin band. */
+.tl-aq--inline .tl-aq__text {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: calc(var(--tl-gap) * 0.5);
+}
+
+.tl-aq--inline .tl-aq__word {
+  flex: 0 1 auto;
+}
+
+.tl-aq--inline .tl-aq__detail {
+  flex: 0 1 auto;
+}
+
+.tl-aq--inline .tl-aq__detail::before {
+  content: '\00B7';
+  margin-right: calc(var(--tl-gap) * 0.5);
+  color: var(--tl-fg-3);
+}
+
+.tl-aq--inline .tl-aq__square {
+  width: auto;
+  min-width: 2.2em;
+  height: 1.45em;
+  padding: 0 0.35em;
+  border-radius: 0.4em;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 1.9vh, 24px));
+}
+
+@supports (height: 1cqh) {
+  .tl-aq--inline .tl-aq__square {
+    width: auto;
+    height: 1.45em;
+    font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(34cqh, 6cqw), 26px));
+  }
+}
+

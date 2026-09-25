@@ -4,8 +4,11 @@ import './SpecPanel.css'
 // SpecPanel - one box of a layout spec (layoutSpec.js), drawn exactly where the
 // spec says: left / top / width / height in percent of the screen, its z,
 // opacity, padding and corner radius as multiples of the layout's --tl-pad and
-// --tl-radius, a background per the spec ('none', 'card', 'solid'), and
-// --tl-text-scale for every font size inside (tokens.css).
+// --tl-radius (which the root's global radius already scales, tokens.css), a
+// background per the spec ('none', 'card', 'solid'), and --tl-text-scale for
+// every font size inside (tokens.css). Used by SpecBoard for both spec
+// layouts (the Entry board and the Board); each layout's root names its card
+// colours (--tl-spec-card, --tl-spec-edge; SpecPanel.css).
 //
 // The box is a size container (container-name tl-spec): the panel inside sizes
 // its type against its own body as before, and below the type's minPx the
@@ -20,6 +23,10 @@ import './SpecPanel.css'
 // loses the corners and edge where they meet and gains a hairline divider, so
 // the stack reads as one card (the phase 1 "outside" card).
 //
+// borrowed: the box is showing the departure countdown in place of its own
+// panel (SpecBoard's rule for the countdowns and now-playing boxes), so the
+// departure panel's "Too small" threshold applies.
+//
 // data-panel-id / data-panel-type mark the box for the layout editor, which
 // reads each box's rectangle (editBridge.js). data-hover is the editor's
 // hover highlight: a 1 px inset outline and nothing else.
@@ -28,7 +35,7 @@ function r3(n) {
   return Math.round(n * 1000) / 1000
 }
 
-export default function SpecPanel({ panel, textScale = 1, join = null, hover = false, children }) {
+export default function SpecPanel({ panel, textScale = 1, join = null, hover = false, borrowed = false, children }) {
   const { id, type, x, y, w, h, z, props } = panel
   const t = panelType(type)
   const shape = t && t.padShape ? t.padShape : [1, 1]
@@ -50,12 +57,14 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
     width: `${w}%`,
     height: `${h}%`,
     zIndex: z,
-    opacity: props.opacity,
     padding: `calc(var(--tl-pad) * ${padY}) calc(var(--tl-pad) * ${padX})`,
     '--tl-spec-pad-x': `calc(var(--tl-pad) * ${padX})`,
     '--tl-text-scale': String(textScale),
   }
   if (rounded) style.borderRadius = `${top} ${top} ${bottom} ${bottom}`
+  // Only below 1: an opacity property at all, even 1, makes Chrome raster the
+  // box's content differently (a photo tile's pixels change).
+  if (props.opacity < 1) style.opacity = props.opacity
 
   const cls = [
     'tl-spec',
@@ -64,6 +73,7 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
     `tl-spec--align-${props.align}`,
     join && join.top ? 'tl-spec--join-top' : '',
     join && join.bottom ? 'tl-spec--join-bottom' : '',
+    borrowed ? 'tl-spec--departure-host' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -77,7 +87,7 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
       data-hover={hover ? '' : undefined}
     >
       <div className="tl-spec__content">{children}</div>
-      {t && t.minPx && (
+      {t && (t.minPx || borrowed) && (
         <div className="tl-panel--small" aria-hidden="true">
           Too small
         </div>

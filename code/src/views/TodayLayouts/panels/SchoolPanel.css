@@ -1,4 +1,5 @@
-/* SchoolPanel - one "name . value" row per thing happening at school today. */
+/* SchoolPanel - one "name . value" row per thing happening at school today.
+ * The type carries var(--tl-text-scale) (tokens.css). */
 
 .tl-school__body {
   container-type: size;
@@ -25,7 +26,7 @@
   gap: 0.42em;
   min-width: 0;
   line-height: 1.2;
-  font-size: clamp(14px, min(15cqh, 5.2cqw), 32px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(14px, min(15cqh, 5.2cqw), 32px));
 }
 
 /* Left term stays full strength, the value sits back one step: the pair reads
@@ -56,6 +57,13 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  font-size: clamp(14px, min(16cqh, 5.4cqw), 34px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(14px, min(16cqh, 5.4cqw), 34px));
   color: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-school__body {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-school-size, 1));
+}
+

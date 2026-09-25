@@ -1,41 +1,31 @@
 /* BoardLayout - the dark bento board.
  *
- * Twelve columns by six rows of tiles: the clock anchors the top left, the
- * photo is the single largest element, and the only edge anywhere on the page
- * is a 1px inset hairline. Everything else is surface, gap and type.
+ * Every panel is a tile: a card with the Board's padding and radius, and the
+ * only edge anywhere on the page is a 1px inset hairline. Everything else is
+ * surface, gap and type. Where the tiles sit comes from the layout spec
+ * (layoutSpec.js DEFAULT_BOARD_SPEC, drawn by Entry/SpecBoard and
+ * Entry/SpecPanel): the 12 x 6 grid this file used to hold, as percent boxes.
  *
- * Two things the grid is not allowed to get wrong:
+ * THE GRID IT CAME FROM. Twelve columns by six rows, rows
+ * repeat(5, minmax(0, 1fr)) minmax(0, 1.3fr), --tl-gap gaps inside a --tl-pad
+ * margin:
  *
- * 1. Every panel body is a `container-type: size` container, and a size
- *    container contributes no intrinsic height. An `auto` track holding one
- *    would collapse to zero and take every cq-sized numeral with it. So each
- *    track is definite (`minmax(0, Nfr)`) and each cell carries min-width and
- *    min-height: 0 so a long string cannot inflate its column.
- * 2. The grid IS the root, which is `position: fixed; inset: 0`. It has to be
- *    border-box so the padding lives inside the viewport box instead of
- *    pushing the last row off the bottom.
- *
- * ARRANGEMENT. The brief offered two. This is the one that keeps Sun & moon in
- * a two-row cell:
- *
- *     Clock       cols 1-4   rows 1-3      Photo     cols 9-12  rows 1-4
- *     WeatherNow  cols 5-8   rows 1-3      Departure cols 9-12  rows 5-6
- *     Forecast    cols 1-4   rows 4-6      (SchoolPanel there on a no-school day)
- *     Sun & moon  cols 5-8   rows 4-5
+ *     Clock       cols 1-4   rows 1-3      Photo       cols 9-12  rows 1-4
+ *     WeatherNow  cols 5-8   rows 1-3      Now playing cols 9-12  rows 5-6
+ *     Forecast    cols 1-4   rows 4-6      (the departure countdown there
+ *     Sun & moon  cols 5-8   rows 4-5       while one runs)
  *     What to wear cols 5-8  row  6
  *
- * The alternative put Now playing in the left column and pushed Sun & moon into
- * the single bottom band. That band is about 74px of panel body at 1280x800 and
- * 86px at 1920x1080 once the panel padding and the label row are out, which is
- * less than the sun arc's own minimum plus the sunrise/sunset block: it clips,
- * and the two times fall to their clamp floors (10-14px) where they are
- * unreadable from across a kitchen. What to wear is the panel that can live in
- * a short band, because it is a headline over one sentence.
+ * The slightly deeper sixth row is for What to wear: an exact sixth leaves it
+ * ~50px of body at 1920x1080, enough to clip its sentence and drive both its
+ * lines to their clamp floors; at 1.3fr it gets ~86px there and ~74px at
+ * 1280x800, a headline you can read across the room with the detail under
+ * it. Sun & moon keeps a two-row tile: in the single bottom band the arc and
+ * the sunrise/sunset block do not fit.
  *
- * The cost of this choice is that Now playing does not appear on the Board.
- * Briefing and Ambient both carry it; if it has to be here, the honest fix is a
- * grid with a different row count, not a thinner tile.
- */
+ * spec.global's variables (tile opacity, radius, colours, font) are picked up
+ * in tokens.css "Spec layouts": the tiles are opaque from surfaceOpacity 0.5
+ * (the default) up. */
 
 .tl-root.tl-board {
   /* Palette: the dark defaults from tokens.css, one step deeper in the
@@ -44,90 +34,45 @@
   --tl-bg: #0b0d0f;
   --tl-surface: #15181b;
   --tl-rule: rgba(255, 255, 255, 0.07);
+  /* The spec boxes' card and its edge (Entry/SpecPanel.css): the tile. */
+  --tl-spec-card: var(--tl-surface);
+  --tl-spec-edge: var(--tl-rule);
 
   /* A few percent of lift towards the bottom, so a wall of black tiles reads
    * as a considered surface rather than a switched-off panel. Subtle on
    * purpose: at kitchen distance you should feel it, not see it. */
   background: linear-gradient(180deg, #0b0d0f 0%, #101316 100%);
-
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  /* Five equal rows and a slightly deeper sixth. The bottom band carries a
-   * whole panel on its own, and an exact sixth leaves it ~50px of body at
-   * 1920x1080 - enough to clip What to wear's sentence and drive both its
-   * lines to their clamp floors. At 1.3fr it gets ~86px there and ~74px at
-   * 1280x800, which is a headline you can read across the room with the
-   * detail under it. Revert to repeat(6, minmax(0, 1fr)) for exact sixths. */
-  grid-template-rows: repeat(5, minmax(0, 1fr)) minmax(0, 1.3fr);
-  grid-template-areas:
-    "clock clock clock clock wnow  wnow  wnow  wnow  photo photo photo photo"
-    "clock clock clock clock wnow  wnow  wnow  wnow  photo photo photo photo"
-    "clock clock clock clock wnow  wnow  wnow  wnow  photo photo photo photo"
-    "fcast fcast fcast fcast sunm  sunm  sunm  sunm  photo photo photo photo"
-    "fcast fcast fcast fcast sunm  sunm  sunm  sunm  next  next  next  next"
-    "fcast fcast fcast fcast wear  wear  wear  wear  next  next  next  next";
-  gap: var(--tl-gap);
-  padding: var(--tl-pad);
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
 }
 
-/* One wrapper per tile: it owns the grid placement so the panels stay the
- * placement-agnostic components they were built as. Flex rather than a bare
- * block so the panel stretches to the cell in both axes without depending on
- * a percentage height resolving against a grid item. */
-.tl-board__cell {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-board__cell > * {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.tl-board__cell--clock { grid-area: clock; }
-.tl-board__cell--weather { grid-area: wnow; }
-.tl-board__cell--photo { grid-area: photo; }
-.tl-board__cell--forecast { grid-area: fcast; }
-.tl-board__cell--sunmoon { grid-area: sunm; }
-.tl-board__cell--wear { grid-area: wear; }
-.tl-board__cell--next { grid-area: next; }
-
-/* The only border on the board. An inset hairline instead of a drawn edge
- * keeps the tiles from cutting the page into boxes at a distance. The photo
- * paints over its own inset shadow, which is the right outcome: the one tile
- * that is all image needs no ring around it, and its rounded corners already
- * say "tile". */
-.tl-board .tl-panel {
-  box-shadow: inset 0 0 0 1px var(--tl-rule);
+/* The tile's content may use the tile's padding (the grid's panels clipped at
+ * their card's edge, not inside its padding); the box clips there now. */
+.tl-board .tl-spec > .tl-spec__content > .tl-panel {
+  overflow: visible;
 }
 
 /* --- What to wear: the bottom band --------------------------------------- */
 
-/* The panel's own sizes are tuned for a squarer cell, where the cqh caps have
+/* The panel's own sizes are tuned for a squarer tile, where the cqh caps have
  * room to work. In a band a sixth of the board tall they bottom out, so the
- * Board re-sizes both lines against this cell and holds each to one line: the
- * detail wraps to three lines by default, and two of them would not fit. */
-.tl-board__cell--wear .tl-wear__body {
-  /* The grid track is definite, so the panel's guard against an indefinite
-   * cell is not needed here and would only force a 1px clip. */
+ * Board re-sizes both lines against this tile and holds each to one line: the
+ * detail wraps to three lines by default, and two of them would not fit. The
+ * sizes follow the text scale (the box's, and the size knob's). */
+.tl-board .tl-spec--wear .tl-wear__body {
+  /* The box is definite, so the panel's guard against an indefinite cell is
+   * not needed here and would only force a 1px clip. */
   min-height: 0;
 }
 
-.tl-board__cell--wear .tl-wear__headline {
-  font-size: clamp(15px, min(7cqw, 38cqh), 38px);
+.tl-board .tl-spec--wear .tl-wear__headline {
+  font-size: calc(var(--tl-text-scale, 1) * clamp(15px, min(7cqw, 38cqh), 38px));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.tl-board__cell--wear .tl-wear__detail {
+.tl-board .tl-spec--wear .tl-wear__detail {
   display: block;
-  font-size: clamp(12px, min(4.6cqw, 25cqh), 24px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(4.6cqw, 25cqh), 24px));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

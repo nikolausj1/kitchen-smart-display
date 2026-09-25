@@ -88,3 +88,83 @@
   font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
   color: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-wnow__temp {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-wnow-temp, 1));
+}
+
+/* The icon is art: it follows its own knob, not the text scale. */
+.tl-knobs .tl-wnow__icon {
+  width: calc(var(--tl-wnow-big) * 1.02 * var(--tl-wnow-icon, 1));
+  height: calc(var(--tl-wnow-big) * 1.02 * var(--tl-wnow-icon, 1));
+}
+
+/* The two arrangements. Each sets every property a layout's own arrangement
+ * of this panel sets (the Entry board's, Entry/EntryLayout.css), and the
+ * three-class selectors out-rank those, so the knob decides in any layout.
+ *
+ * Side by side, for a wide, short box: the temperature and icon on the left
+ * at the box's height, the description and the numbers beside them (the
+ * Entry board's card, value for value). */
+.tl-panel.tl-wnow--horizontal .tl-wnow__body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr);
+  column-gap: calc(var(--tl-gap) * 1.2);
+  row-gap: 0.4vh;
+  align-items: center;
+  min-height: 0;
+  --tl-wnow-big: clamp(26px, min(26cqw, 76cqh), 150px);
+}
+
+.tl-panel.tl-wnow--horizontal .tl-wnow__top {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  justify-content: flex-start;
+  gap: calc(var(--tl-gap) * 0.7);
+}
+
+.tl-panel.tl-wnow--horizontal .tl-wnow__desc {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(6.4cqw, 21cqh), 34px));
+}
+
+.tl-panel.tl-wnow--horizontal .tl-wnow__meta {
+  grid-column: 2;
+  grid-row: 3;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(4.6cqw, 15cqh), 24px));
+}
+
+.tl-panel.tl-wnow--horizontal .tl-wnow__empty {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+/* Stacked, for a squarer box: this panel's own arrangement above, restated
+ * so a layout's side-by-side rules cannot reach it. */
+.tl-panel.tl-wnow--stacked .tl-wnow__body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 0.7vh;
+  min-height: 6vh;
+  --tl-wnow-big: clamp(3vh, min(24cqw, 44cqh), 11vh);
+}
+
+.tl-panel.tl-wnow--stacked .tl-wnow__top {
+  justify-content: space-between;
+  gap: var(--tl-gap);
+}
+
+.tl-panel.tl-wnow--stacked .tl-wnow__desc {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-wnow-big) * 0.27);
+}
+
+.tl-panel.tl-wnow--stacked .tl-wnow__meta {
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.2vh, min(4.2cqw, 9cqh), 2.4vh));
+}
+

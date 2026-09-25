@@ -601,10 +601,18 @@ function renderDevice(dev) {
       const b = document.createElement('button')
       b.className = 'action ghost'
       b.textContent = 'Edit layout'
-      b.onclick = () => window.open(`/editor/?device=${encodeURIComponent(dev.id)}`, '_blank', 'noopener')
+      // Opens on the Today layout the screen shows when the editor edits it
+      // (Entry board or Board), else on the Entry board. Read at click time:
+      // the device list refreshes every 10 s, the card only when idle.
+      b.onclick = () => {
+        const cur = devices.find((d) => d.id === dev.id) || dev
+        const lay = ((cur.config || {}).display || {}).todayLayout
+        const q = lay === 'entry' || lay === 'board' ? `&layout=${lay}` : ''
+        window.open(`/editor/?device=${encodeURIComponent(dev.id)}${q}`, '_blank', 'noopener')
+      }
       const note = document.createElement('span')
       note.className = 'note'
-      note.textContent = "Move and size the Entry board's panels in a browser on your Mac."
+      note.textContent = "Move and size this screen's Entry board or Board in a browser on your Mac."
       ed.append(b, note)
       p.appendChild(ed)
     }
@@ -720,7 +728,7 @@ function renderDevice(dev) {
     const t = card('Today screen', 'Which Today layout this screen shows. Takes effect within about 10 seconds.')
     row(t, 'Layout', 'Framed is the original. Board, Briefing and Ambient are the 2026-09 layouts; Entry board is the front-door calendar board.',
       select([['framed', 'Framed (original)'], ['board', 'Board'], ['briefing', 'Briefing'], ['ambient', 'Ambient'],
-        ['entry', 'Entry board']],
+        ['entry', 'Entry board'], ['clock', 'Flip clock']],
         disp.todayLayout || 'framed',
         (v) => patchDevice(dev.id, { display: { todayLayout: v } })))
     row(t, 'Pixel shift', 'Nudge the whole picture a pixel or two every few minutes. Recommended with Board.',

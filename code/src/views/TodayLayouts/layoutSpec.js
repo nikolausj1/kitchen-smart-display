@@ -1,28 +1,70 @@
-// layoutSpec.js - the layout spec a screen's Entry board is drawn from
-// (docs/designs/layout-editor.md, "Contract v1"). Pure: no React, no DOM, no
-// clock. The app's renderer (Entry/EntryLayout.jsx) and the editor
-// (code/src/editor/) both import it, so a spec means the same thing on both
-// sides of the iframe.
+// layoutSpec.js - the layout spec a screen's spec-drawn Today layouts (the
+// Entry board and the Board) are drawn from (docs/designs/layout-editor.md,
+// "Contract v1" and "Contract v2"). Pure: no React, no DOM, no clock. The
+// app's renderer (Entry/SpecBoard.jsx) and the editor (code/src/editor/) both
+// import it, so a spec means the same thing on both sides of the iframe.
 //
-// A spec, as stored in the device registry at config.layouts.entry:
+// A spec, as stored in the device registry at config.layouts.<layoutId>
+// (entry, board):
 //
-//   { version: 1,
+//   { version: 2,
 //     canvas: { w, h },            what it was drawn on (informational)
-//     global: { textScale },       multiplies every panel's text scale
-//     panels: [ { id, type, x, y, w, h, z, hidden, locked, props } ] }
+//     global: { textScale, font, accent, text, surfaceOpacity, radius },
+//     panels: [ { id, type, x, y, w, h, z, hidden, locked, props } ],
+//     eveningFrom: 18,             hour the evening variant starts (12..23)
+//     variants: {                  optional, each optional (Entry phase 2)
+//       morning: { panels, global? },
+//       evening: { panels, global? },
+//       weekend: { panels, global? } } }
 //
-// x, y, w, h are PERCENT of the canvas (2 decimals), so a layout drawn at
-// 1920x1080 lands in the same place at 1280x800. Canvas pixels are for
-// readouts only. null or absent in the registry means "the built-in default".
+// The base panels and global are the "day" layout. A variant's global, when
+// it has one, replaces the base's (normalised full, missing keys taken from
+// the base); without one it follows the base's.
+//
+// x, y, w, h are PERCENT of the canvas, so a layout drawn at 1920x1080 lands
+// in the same place at 1280x800. The editor writes 2 decimals; the normaliser
+// keeps up to 3 (POSITION_PLACES), which is what lets a built-in board sit on
+// the 1/64 px its CSS grid used to (see the Board below). Canvas pixels are
+// for readouts only. null or absent in the registry means "the built-in
+// default".
+// Version 1 specs (no knobs, no v2 globals, no variants) read unchanged and are
+// written back as version 2.
 //
 // Runtime rule for this file: it runs on every screen, and Silk on the Echo
 // may be as old as Chrome 80 (vite.config.js lowers syntax, not APIs). So no
 // Array.prototype.at, Object.hasOwn, structuredClone, String replaceAll.
 
-export const SPEC_VERSION = 1
-export const ENTRY_LAYOUT_ID = 'entry'
+import { GLOBAL_SCHEMA, PANEL_SCHEMAS, knobDefaults } from './panels/schemas.js'
+import * as Schemas from './panels/schemas.js'
 
-// --- Panel types ---------------------------------------------------------------
+export const SPEC_VERSION = 2
+export const ENTRY_LAYOUT_ID = 'entry'
+export const BOARD_LAYOUT_ID = 'board'
+// The Today layouts drawn from a spec (and so editable in the layout editor).
+export const LAYOUT_IDS_SPEC = Object.freeze([ENTRY_LAYOUT_ID, BOARD_LAYOUT_ID])
+
+export function isSpecLayout(id) {
+  return LAYOUT_IDS_SPEC.indexOf(id) >= 0
+}
+
+// 'board' for the Board, 'entry' for anything else.
+function layoutIdOf(id) {
+  return id === BOARD_LAYOUT_ID ? BOARD_LAYOUT_ID : ENTRY_LAYOUT_ID
+}
+
+// --- Day parts -----------------------------------------------------------------
+
+// 'day' is the base (spec.panels / spec.global); the others are variants.
+export const DAYPARTS = Object.freeze(['day', 'morning', 'evening', 'weekend'])
+export const VARIANT_DAYPARTS = Object.freeze(['morning', 'evening', 'weekend'])
+export const EVENING_FROM_DEFAULT = 18
+export const EVENING_FROM_RANGE = Object.freeze({ min: 12, max: 23 })
+
+function isVariantKey(k) {
+  return VARIANT_DAYPARTS.indexOf(k) >= 0
+}
+
+// --- Panel types -----------------------------------------------------------------
 //
 // kind 'panel': a functional panel, at most once per spec, id === type.
 // kind 'block': free content, any number, ids 'text-<4 hex>' / 'image-<4 hex>'.
@@ -34,15 +76,23 @@ export const ENTRY_LAYOUT_ID = 'entry'
 //          "Too small" instead of overflowing (Entry/SpecPanel.css holds the
 //          same numbers as container queries; keep the two in step). null: the
 //          content copes at any size (text wraps and clips, an image scales).
-//          The default board clears every one of them down to 960x480.
+//          Both default boards clear every one of them down to 960x480.
 // padShape [y, x] factors of --tl-pad that `padding: 1` means for this type.
 //          Every type is [1, 1] except the air quality chip, whose phase 1 card
 //          had a thinner vertical padding (0.55) than the panels above it.
+// box      where the type lands (percent) in a layout whose default has no
+//          such panel (the editor's "Add panel"), and props what it starts
+//          with there. A layout's own default panel wins over both.
+
+const CARD = { background: 'card', padding: 1 }
+const BARE = { background: 'none', padding: 0 }
 
 const TYPE_TABLE = [
-  { type: 'clock', label: 'Clock', kind: 'panel', min: { w: 6, h: 4 }, minPx: { w: 110, h: 40 } },
-  { type: 'weather', label: 'Weather', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 150, h: 52 } },
-  { type: 'wear', label: 'What to wear', kind: 'panel', min: { w: 10, h: 5 }, minPx: { w: 140, h: 40 } },
+  { type: 'clock', label: 'Clock', kind: 'panel', min: { w: 6, h: 4 }, minPx: { w: 110, h: 40 }, box: { x: 30, y: 30, w: 40, h: 30 }, props: CARD },
+  { type: 'weather', label: 'Weather', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 150, h: 52 }, box: { x: 35, y: 35, w: 30, h: 26 }, props: CARD },
+  { type: 'forecast', label: 'Forecast', kind: 'panel', min: { w: 12, h: 10 }, minPx: { w: 180, h: 100 }, box: { x: 32, y: 30, w: 36, h: 40 }, props: CARD },
+  { type: 'sunmoon', label: 'Sun and moon', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 160, h: 90 }, box: { x: 34, y: 34, w: 32, h: 32 }, props: CARD },
+  { type: 'wear', label: 'What to wear', kind: 'panel', min: { w: 10, h: 5 }, minPx: { w: 140, h: 40 }, box: { x: 32, y: 41, w: 36, h: 18 }, props: CARD },
   {
     type: 'airquality',
     label: 'Air quality',
@@ -50,14 +100,22 @@ const TYPE_TABLE = [
     min: { w: 6, h: 3 },
     minPx: { w: 90, h: 22 },
     padShape: [0.55, 1],
+    box: { x: 35, y: 45, w: 30, h: 10 },
+    props: CARD,
   },
-  { type: 'headline', label: 'Headline', kind: 'panel', min: { w: 6, h: 2.5 }, minPx: { w: 110, h: 20 } },
-  { type: 'agenda', label: 'Agenda', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 300, h: 90 } },
+  { type: 'headline', label: 'Headline', kind: 'panel', min: { w: 6, h: 2.5 }, minPx: { w: 110, h: 20 }, box: { x: 20, y: 44, w: 60, h: 12 }, props: CARD },
+  { type: 'agenda', label: 'Agenda', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 300, h: 90 }, box: { x: 20, y: 25, w: 60, h: 50 }, props: CARD },
   // Also the departure countdown's box during a school morning (as on the phase
-  // 1 board), so its minimum covers that panel too.
-  { type: 'countdowns', label: 'Countdowns', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 110 } },
-  { type: 'text', label: 'Text', kind: 'block', min: { w: 2, h: 2 }, minPx: null },
-  { type: 'image', label: 'Image', kind: 'block', min: { w: 2, h: 2 }, minPx: null },
+  // 1 board), so its minimum covers that panel too. The tiles are the cards.
+  { type: 'countdowns', label: 'Countdowns', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 110 }, box: { x: 30, y: 30, w: 40, h: 40 }, props: BARE },
+  { type: 'departure', label: 'Departure', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 100 }, box: { x: 35, y: 30, w: 30, h: 40 }, props: CARD },
+  // Also the departure countdown's box while one runs (the Board's rule).
+  { type: 'nowplaying', label: 'Now playing', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 160, h: 70 }, box: { x: 34, y: 34, w: 32, h: 32 }, props: CARD },
+  // A tile: the Entry board's full-bleed backdrop is a screen setting, not this.
+  { type: 'photo', label: 'Photo', kind: 'panel', min: { w: 6, h: 6 }, minPx: null, box: { x: 30, y: 25, w: 40, h: 50 }, props: { background: 'card', padding: 0 } },
+  { type: 'school', label: 'School', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 140, h: 50 }, box: { x: 35, y: 35, w: 30, h: 30 }, props: CARD },
+  { type: 'text', label: 'Text', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 30, y: 44, w: 40, h: 12 }, props: null },
+  { type: 'image', label: 'Image', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 40, y: 32, w: 20, h: 36 }, props: null },
 ]
 
 function deepFreeze(o) {
@@ -68,7 +126,81 @@ function deepFreeze(o) {
   return o
 }
 
-// The list, as sent to the editor in sd-edit:ready (panelTypes).
+// A deep copy of plain JSON data (schemas, specs): the copies handed out are
+// never the panel worker's frozen objects, nor each other's.
+function cloneJson(v) {
+  return v === undefined ? undefined : JSON.parse(JSON.stringify(v))
+}
+
+function has(o, k) {
+  return o != null && Object.prototype.hasOwnProperty.call(o, k)
+}
+
+function isDict(v) {
+  return v != null && typeof v === 'object' && !Array.isArray(v)
+}
+
+// --- Schemas ---------------------------------------------------------------------
+//
+// A functional panel's knobs are its schema's fields (panels/schemas.js,
+// PANEL_SCHEMAS); the blocks' schemas are their own props, declared here.
+// Universal props (UNIVERSAL_DEFAULTS) are never knobs: a field that repeats
+// one is ignored by the normaliser.
+
+// The text and image blocks' own props as schema fields, for the editor's
+// inspector. Ranges are PROP_RANGES below (the normaliser's own).
+const BLOCK_SCHEMAS = {
+  text: {
+    fields: [
+      { key: 'text', label: 'Text', type: 'text', multiline: true, default: '' },
+      { key: 'size', label: 'Size', type: 'number', min: 0.5, max: 50, step: 0.1, unit: '%', default: 4, hint: '% of the height' },
+      { key: 'weight', label: 'Weight', type: 'select', options: [[300, 'Light'], [400, 'Regular'], [600, 'Semibold'], [700, 'Bold']], default: 600 },
+      { key: 'color', label: 'Colour', type: 'color', default: '#f2f2f0' },
+      { key: 'align', label: 'Align', type: 'select', options: [['start', 'Left'], ['center', 'Centre'], ['end', 'Right']], default: 'center' },
+      { key: 'lineHeight', label: 'Line height', type: 'number', min: 0.8, max: 3, step: 0.05, default: 1.15 },
+    ],
+  },
+  image: {
+    fields: [
+      { key: 'src', label: 'URL', type: 'text', default: '', placeholder: '/countdown-art/... or https://...' },
+      { key: 'fit', label: 'Fit', type: 'select', options: [['contain', 'Contain'], ['cover', 'Cover']], default: 'contain' },
+    ],
+  },
+}
+
+const PANEL_ELEMENTS = isDict(Schemas.PANEL_ELEMENTS) ? Schemas.PANEL_ELEMENTS : {}
+
+function schemaSource(type) {
+  if (has(PANEL_SCHEMAS, type) && isDict(PANEL_SCHEMAS[type])) return PANEL_SCHEMAS[type]
+  if (has(BLOCK_SCHEMAS, type)) return BLOCK_SCHEMAS[type]
+  return null
+}
+
+// The field list of a type (functional knobs, or a block's props), [] for none.
+function fieldsOf(type) {
+  const s = schemaSource(type)
+  return s && Array.isArray(s.fields) ? s.fields.filter((f) => isDict(f) && typeof f.key === 'string' && f.key) : []
+}
+
+// { fields, elements } as sent to the editor, or null for a type with neither.
+function schemaFor(type) {
+  const fields = fieldsOf(type)
+  const elements = has(PANEL_ELEMENTS, type) && Array.isArray(PANEL_ELEMENTS[type]) ? PANEL_ELEMENTS[type] : []
+  if (!fields.length && !elements.length) return null
+  return cloneJson({ fields, elements })
+}
+
+function globalFields() {
+  const g = isDict(GLOBAL_SCHEMA) && Array.isArray(GLOBAL_SCHEMA.fields) ? GLOBAL_SCHEMA.fields : []
+  return g.filter((f) => isDict(f) && typeof f.key === 'string' && f.key && f.key !== 'textScale')
+}
+
+// The global schema as sent to the editor (sd-edit:ready globalSchema).
+export const GLOBAL_SCHEMA_COPY = deepFreeze({ fields: cloneJson(globalFields()) })
+
+// The list, as sent to the editor in sd-edit:ready (panelTypes). schema is
+// { fields, elements } (the same shape as PANEL_SCHEMAS[type], with the
+// type's data-edit sub-elements), or null.
 export const PANEL_TYPE_LIST = deepFreeze(
   TYPE_TABLE.map((t) => ({
     type: t.type,
@@ -78,6 +210,7 @@ export const PANEL_TYPE_LIST = deepFreeze(
     min: { ...t.min },
     minPx: t.minPx ? { ...t.minPx } : null,
     padShape: t.padShape ? t.padShape.slice() : [1, 1],
+    schema: schemaFor(t.type),
   }))
 )
 
@@ -90,14 +223,24 @@ export const PANEL_TYPES = deepFreeze(
   }, {})
 )
 
+// { type: { fields, elements } } for every type that has a schema, as sent to
+// the editor in sd-edit:ready (schemas).
+export const PANEL_SCHEMA_TABLE = deepFreeze(
+  PANEL_TYPE_LIST.reduce((acc, t) => {
+    if (t.schema) acc[t.type] = t.schema
+    return acc
+  }, {})
+)
+
 export const FUNCTIONAL_TYPES = deepFreeze(
   PANEL_TYPE_LIST.filter((t) => t.kind === 'panel').map((t) => t.type)
 )
 export const BLOCK_TYPES = deepFreeze(PANEL_TYPE_LIST.filter((t) => t.kind === 'block').map((t) => t.type))
 
-function has(o, k) {
-  return Object.prototype.hasOwnProperty.call(o, k)
-}
+const TYPE_EXTRAS = TYPE_TABLE.reduce((acc, t) => {
+  acc[t.type] = t
+  return acc
+}, {})
 
 // The type's entry from PANEL_TYPES, or null for anything else.
 export function panelType(type) {
@@ -108,7 +251,8 @@ function isBlockType(type) {
   return type === 'text' || type === 'image'
 }
 
-// A spec is polled by every screen every 10 s: a runaway one stops here.
+// A spec is polled by every screen every 10 s: a runaway one stops here (per
+// panel list: the base and each variant).
 export const MAX_PANELS = 100
 
 // --- Props -------------------------------------------------------------------
@@ -141,9 +285,9 @@ export const SRC_MAX_LENGTH = 2048
 //   background 'none' | 'card' (the translucent card over a photo, the dark
 //              card on black) | 'solid' (the dark card, over a photo too)
 //   radius     multiplier of --tl-radius (drawn when there is a background,
-//              and always on an image block)
+//              and always on an image block); times global.radius
 //   align      'start' | 'center' | 'end': text alignment (the clock, the
-//              headline and text blocks honour it in v1)
+//              headline and text blocks honour it)
 export const UNIVERSAL_DEFAULTS = deepFreeze({
   textScale: 1,
   opacity: 1,
@@ -152,6 +296,8 @@ export const UNIVERSAL_DEFAULTS = deepFreeze({
   radius: 1,
   align: 'start',
 })
+
+const UNIVERSAL_KEYS = Object.keys(UNIVERSAL_DEFAULTS)
 
 // A text block. size = percent of the canvas height.
 export const TEXT_DEFAULTS = deepFreeze({
@@ -201,8 +347,9 @@ export const IMAGE_DEFAULTS = deepFreeze({
 //
 // weather, wear and airquality are three cards stacked flush: the renderer
 // joins flush cards into one (cardJoins below, Entry/SpecPanel), which is the
-// phase 1 look of a single card divided by hairlines.
-const DEFAULT_PANELS = [
+// phase 1 look of a single card divided by hairlines. Every knob is its
+// schema default (panels/schemas.js: the defaults are this board).
+const ENTRY_PANELS = [
   {
     id: 'clock', type: 'clock', x: 2.4, y: 3, w: 54.58, h: 30.63, z: 1,
     props: { background: 'none', padding: 0 },
@@ -235,20 +382,99 @@ const DEFAULT_PANELS = [
   },
 ]
 
-// Where a block lands when nothing says otherwise: centred, clear of the edges.
-const BLOCK_BOXES = {
-  text: { x: 30, y: 44, w: 40, h: 12 },
-  image: { x: 40, y: 32, w: 20, h: 36 },
+// --- The default Board ---------------------------------------------------------
+//
+// The dark bento Board (Board/BoardLayout.css before the editor): a 12 x 6 grid
+// inside a --tl-pad margin (clamp(12px, 1.6vw, 34px)) with --tl-gap gaps
+// (clamp(10px, 1.2vw, 26px)), rows repeat(5, 1fr) 1.3fr. Clock 1-4 / 1-3,
+// weather 5-8 / 1-3, photo 9-12 / 1-4, forecast 1-4 / 4-6, sun and moon 5-8 /
+// 4-5, what to wear 5-8 / 6, and bottom right (9-12 / 5-6) now playing, which
+// shows the departure countdown while one runs. Measured in Chrome (x, y  w x
+// h, CSS px):
+//
+//               1280x800                      1920x1080
+//   clock       20.5,  20.5  402.8 x 355.6     30.7,  30.7  604.2 x 476.3
+//   weather    438.6,  20.5  402.8 x 355.6    657.9,  30.7  604.2 x 476.3
+//   photo      856.8,  20.5  402.8 x 479.3   1285.1,  30.7  604.2 x 642.7
+//   forecast    20.5, 391.4  402.8 x 388.1     30.7, 530.0  604.2 x 519.3
+//   sunmoon    438.6, 391.4  402.8 x 232.0    657.9, 530.0  604.2 x 309.8
+//   wear       438.6, 638.7  402.8 x 140.8    657.9, 862.9  604.2 x 186.4
+//   next       856.8, 515.1  402.8 x 264.4   1285.1, 696.4  604.2 x 352.8
+//
+// Horizontally proportional again (pad and gap in vw): x and w are the same
+// percentages at every size. Vertically the vw gaps are a larger share of 800
+// than of 1080, so, as for Entry, one screen is exact and the other close. The
+// numbers are the 1280x800 grid (the Echo Show 10), to three decimals: Chrome
+// floors a percentage to 1/64 px, and every edge lands on the grid's own 1/64
+// px there, so that screen draws exactly as before (two decimals missed by up
+// to 4/64 px, enough to move text by a subpixel). At 1920x1080 every x edge is
+// within 0.02 px, the tops of rows 1, 4, 5 and 6 sit 3.08, 1.58, 1.08 and 0.58
+// px higher, and the bottoms at most 3.08 px lower.
+//
+// Every box is a card with the Board's padding (the photo fills its card).
+// Knobs the Board sets against the schema defaults (which are the Entry
+// board's): the clock in 600 with the greeting as its label, the weather
+// stacked, four days of forecast.
+const BOARD_PANELS = [
+  {
+    id: 'clock', type: 'clock', x: 1.6, y: 2.56, w: 31.468, h: 44.45, z: 1,
+    props: { background: 'card', padding: 1, weight: 600, showGreeting: true },
+  },
+  {
+    id: 'weather', type: 'weather', x: 34.267, y: 2.56, w: 31.468, h: 44.45, z: 2,
+    props: { background: 'card', padding: 1, layout: 'stacked' },
+  },
+  {
+    id: 'photo', type: 'photo', x: 66.934, y: 2.56, w: 31.468, h: 59.907, z: 3,
+    props: { background: 'card', padding: 0 },
+  },
+  {
+    id: 'forecast', type: 'forecast', x: 1.6, y: 48.928, w: 31.468, h: 48.512, z: 4,
+    props: { background: 'card', padding: 1, days: 4 },
+  },
+  {
+    id: 'sunmoon', type: 'sunmoon', x: 34.267, y: 48.928, w: 31.468, h: 28.995, z: 5,
+    props: { background: 'card', padding: 1 },
+  },
+  {
+    id: 'wear', type: 'wear', x: 34.267, y: 79.842, w: 31.468, h: 17.598, z: 6,
+    props: { background: 'card', padding: 1 },
+  },
+  {
+    id: 'nowplaying', type: 'nowplaying', x: 66.934, y: 64.385, w: 31.468, h: 33.055, z: 7,
+    props: { background: 'card', padding: 1 },
+  },
+]
+
+// Per layout: its default panels, the canvas it was measured on, and any
+// global value it sets over GLOBAL_SCHEMA's defaults. None today: the schema's
+// defaults are both boards' looks (surfaceOpacity 0.5 is the Entry board's
+// translucent card, and the opaque cards, the Board's tiles among them, are at
+// full strength from 0.5 up; tokens.css "Spec layouts").
+const LAYOUTS = {
+  entry: { panels: ENTRY_PANELS, canvas: { w: 1920, h: 1080 }, global: {} },
+  board: { panels: BOARD_PANELS, canvas: { w: 1280, h: 800 }, global: {} },
 }
 
-// Blocks added by the editor sit above the built-in panels (z 1..7).
-const BLOCK_Z = 10
+const DEFAULT_BY_LAYOUT = Object.keys(LAYOUTS).reduce((acc, id) => {
+  acc[id] = LAYOUTS[id].panels.reduce((m, p) => {
+    m[p.type] = p
+    return m
+  }, {})
+  return acc
+}, {})
+
+// Blocks and panels added by the editor sit above the built-in panels (z 1..7).
+const ADDED_Z = 10
+
+// Decimals kept on x, y, w, h. Chrome floors a percentage to 1/64 px; two
+// decimals of a percent are 0.128 px steps across 1280 px, so a grid line
+// can be missed by up to 4/64 px, which is enough to move text by a subpixel
+// and container-unit type by a hair. Three decimals reach every 1/64 px on
+// screens up to 1920 px. The editor's 2-decimal values read unchanged.
+export const POSITION_PLACES = 3
 
 // --- Small helpers ---------------------------------------------------------
-
-function isDict(v) {
-  return v != null && typeof v === 'object' && !Array.isArray(v)
-}
 
 function toNum(v) {
   if (typeof v === 'number') return v
@@ -275,6 +501,17 @@ function num(v, lo, hi, fallback, places = 2) {
 
 function oneOf(v, allowed, fallback) {
   return allowed.indexOf(v) >= 0 ? v : fallback
+}
+
+// Decimal places of a number as written (0.05 -> 2, 5000 -> 0), at most 4.
+// The same rule as the editor's (code/src/editor/util.js decimalsOf).
+function decimalsOf(n) {
+  if (!Number.isFinite(n)) return 0
+  const s = String(n)
+  const i = s.indexOf('.')
+  if (i >= 0) return Math.min(4, s.length - i - 1)
+  const m = /e-(\d+)$/.exec(s)
+  return m ? Math.min(4, Number(m[1])) : 0
 }
 
 const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
@@ -333,38 +570,116 @@ function repairedBlockId(type, seed, taken) {
   return `${type}-0000` // 65536 blocks of one type: not a real spec
 }
 
-// --- Defaults per type -------------------------------------------------------
+// --- Knob values ---------------------------------------------------------------
 
-const DEFAULT_BY_TYPE = DEFAULT_PANELS.reduce((acc, p) => {
-  acc[p.type] = p
-  return acc
-}, {})
-
-// The full default props for a type: what a missing prop is filled with. A
-// functional panel's defaults are its props on the default board (the agenda
-// is a card, the clock bare text), so a hand-written spec that says less still
-// looks like the board it came from.
-export function defaultPropsFor(type) {
-  if (type === 'text') return { ...UNIVERSAL_DEFAULTS, ...TEXT_DEFAULTS }
-  if (type === 'image') return { ...UNIVERSAL_DEFAULTS, ...IMAGE_DEFAULTS }
-  const d = has(DEFAULT_BY_TYPE, type) ? DEFAULT_BY_TYPE[type] : null
-  return { ...UNIVERSAL_DEFAULTS, ...(d ? d.props : null) }
+// The option of a select field matching v (3 matches '3'), or undefined.
+function optionValue(field, v) {
+  const opts = Array.isArray(field.options) ? field.options : []
+  let loose
+  for (let i = 0; i < opts.length; i++) {
+    const o = opts[i]
+    const value = Array.isArray(o) ? o[0] : isDict(o) ? o.value : o
+    if (value === v) return value
+    if (loose === undefined && v != null && typeof v !== 'object' && String(value) === String(v)) loose = value
+  }
+  return loose
 }
 
-function defaultBoxFor(type) {
-  if (has(DEFAULT_BY_TYPE, type)) {
-    const d = DEFAULT_BY_TYPE[type]
-    return { x: d.x, y: d.y, w: d.w, h: d.h, z: d.z }
+// A valid value for one schema field (a panel knob, a global): v when it is
+// one (clamped and rounded to the step for a number), else the fallback (the
+// layout's own default), else the field's default. The rules match the
+// editor's cleanKnob (code/src/editor/schema.js), so the two sides agree.
+function fieldValue(field, v, fallback) {
+  const def = fallback === undefined ? field.default : fallback
+  switch (field.type) {
+    case 'number': {
+      const lo = Number.isFinite(field.min) ? field.min : -Infinity
+      const hi = Number.isFinite(field.max) ? field.max : Infinity
+      const places = Number.isFinite(field.step) && field.step > 0
+        ? Math.max(decimalsOf(field.step), decimalsOf(field.min), decimalsOf(field.max))
+        : 4
+      const n = toNum(v)
+      const base = Number.isFinite(n) ? n : toNum(def)
+      if (!Number.isFinite(base)) return Number.isFinite(field.default) ? field.default : null
+      return round(clamp(base, lo, hi), places)
+    }
+    case 'select': {
+      const hit = optionValue(field, v)
+      if (hit !== undefined) return hit
+      const back = optionValue(field, def)
+      if (back !== undefined) return back
+      const own = optionValue(field, field.default)
+      if (own !== undefined) return own
+      const first = Array.isArray(field.options) && field.options.length ? field.options[0] : null
+      return Array.isArray(first) ? first[0] : isDict(first) ? first.value : first
+    }
+    case 'toggle':
+      if (typeof v === 'boolean') return v
+      return typeof def === 'boolean' ? def : field.default === true
+    case 'color':
+      return color(v, color(def, color(field.default, '#000000')))
+    case 'text': {
+      const max = Number.isFinite(field.maxLength) ? field.maxLength : TEXT_MAX_LENGTH
+      if (typeof v === 'string') return v.length > max ? v.slice(0, max) : v
+      if (typeof v === 'number' && Number.isFinite(v)) return String(v)
+      return typeof def === 'string' ? def : ''
+    }
+    default:
+      // A field type this build does not know: keep a JSON primitive.
+      if (typeof v === 'boolean' || typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v))) return v
+      return def === undefined ? null : def
   }
-  const b = has(BLOCK_BOXES, type) ? BLOCK_BOXES[type] : { x: 10, y: 10, w: 20, h: 20 }
-  return { ...b, z: BLOCK_Z }
+}
+
+// A functional panel's knob fields, universal keys left out.
+function knobFieldsOf(type) {
+  if (isBlockType(type)) return []
+  return fieldsOf(type).filter((f) => UNIVERSAL_KEYS.indexOf(f.key) < 0)
+}
+
+// --- Defaults per type -------------------------------------------------------
+
+function layoutDefaultPanel(type, layoutId) {
+  const table = DEFAULT_BY_LAYOUT[layoutIdOf(layoutId)]
+  return has(table, type) ? table[type] : null
+}
+
+// The full default props for a type in a layout: what a missing prop is filled
+// with. A functional panel's defaults are its props on that layout's default
+// board (the Entry agenda is a card, its clock bare text; the Board's clock
+// carries the greeting), over its knob defaults (panels/schemas.js); a type
+// that board lacks starts as a card. So a hand-written spec that says less
+// still looks like the board it came from.
+export function defaultPropsFor(type, layoutId) {
+  if (type === 'text') return { ...UNIVERSAL_DEFAULTS, ...TEXT_DEFAULTS }
+  if (type === 'image') return { ...UNIVERSAL_DEFAULTS, ...IMAGE_DEFAULTS }
+  const d = layoutDefaultPanel(type, layoutId)
+  const extra = has(TYPE_EXTRAS, type) ? TYPE_EXTRAS[type].props : null
+  return { ...UNIVERSAL_DEFAULTS, ...knobDefaults(type), ...(d ? d.props : extra) }
+}
+
+function defaultBoxFor(type, layoutId) {
+  const d = layoutDefaultPanel(type, layoutId)
+  if (d) return { x: d.x, y: d.y, w: d.w, h: d.h, z: d.z }
+  const b = has(TYPE_EXTRAS, type) ? TYPE_EXTRAS[type].box : { x: 10, y: 10, w: 20, h: 20 }
+  return { ...b, z: ADDED_Z }
+}
+
+// The default global of a layout: textScale 1, GLOBAL_SCHEMA's defaults, and
+// the layout's own values over them.
+function layoutGlobalDefaults(layoutId) {
+  const out = { textScale: 1 }
+  globalFields().forEach((f) => {
+    out[f.key] = f.default
+  })
+  return { ...out, ...LAYOUTS[layoutIdOf(layoutId)].global }
 }
 
 // --- Normalizing ---------------------------------------------------------------
 
-function normProps(raw, type) {
+function normProps(raw, type, layoutId) {
   const r = isDict(raw) ? raw : {}
-  const d = defaultPropsFor(type)
+  const d = defaultPropsFor(type, layoutId)
   const out = {
     textScale: num(r.textScale, PROP_RANGES.textScale.min, PROP_RANGES.textScale.max, d.textScale),
     opacity: num(r.opacity, PROP_RANGES.opacity.min, PROP_RANGES.opacity.max, d.opacity),
@@ -383,21 +698,27 @@ function normProps(raw, type) {
   } else if (type === 'image') {
     out.src = imageSrc(r.src)
     out.fit = oneOf(r.fit, FITS, d.fit)
+  } else {
+    // The knobs: every field of the type's schema, validated; anything else
+    // in the stored props is dropped.
+    knobFieldsOf(type).forEach((f) => {
+      out[f.key] = fieldValue(f, r[f.key], d[f.key])
+    })
   }
   return out
 }
 
 // One panel, or null when it cannot be one (unknown type). The id is decided
 // by the caller (functional: the type; block: validated or repaired).
-function normPanel(raw, type, id) {
+function normPanel(raw, type, id, layoutId) {
   const t = panelType(type)
-  const box = defaultBoxFor(type)
+  const box = defaultBoxFor(type, layoutId)
   // Size first, so the position can be clamped to keep the whole box on the
   // canvas: 0 <= x, x + w <= 100, and the same vertically.
-  const w = num(raw.w, t.min.w, 100, box.w)
-  const h = num(raw.h, t.min.h, 100, box.h)
-  const x = num(raw.x, 0, round(100 - w, 2), box.x)
-  const y = num(raw.y, 0, round(100 - h, 2), box.y)
+  const w = num(raw.w, t.min.w, 100, box.w, POSITION_PLACES)
+  const h = num(raw.h, t.min.h, 100, box.h, POSITION_PLACES)
+  const x = num(raw.x, 0, round(100 - w, POSITION_PLACES), box.x, POSITION_PLACES)
+  const y = num(raw.y, 0, round(100 - h, POSITION_PLACES), box.y, POSITION_PLACES)
   return {
     id,
     type,
@@ -408,43 +729,13 @@ function normPanel(raw, type, id) {
     z: num(raw.z, PROP_RANGES.z.min, PROP_RANGES.z.max, box.z, 0),
     hidden: raw.hidden === true,
     locked: raw.locked === true,
-    props: normProps(raw.props, type),
+    props: normProps(raw.props, type, layoutId),
   }
 }
 
-function normCanvas(raw, fallback) {
-  const r = isDict(raw) ? raw : {}
-  const f = isDict(fallback) ? fallback : { w: 1920, h: 1080 }
-  const lo = PROP_RANGES.canvas.min
-  const hi = PROP_RANGES.canvas.max
-  return {
-    w: num(r.w, lo, hi, num(f.w, lo, hi, 1920, 0), 0),
-    h: num(r.h, lo, hi, num(f.h, lo, hi, 1080, 0), 0),
-  }
-}
-
-// normalizeSpec(raw, { defaultSpec }) -> a valid spec, from anything.
-//
-//   - not an object, or no panels array: a fresh copy of defaultSpec
-//     (DEFAULT_ENTRY_SPEC unless given; pass null to get null back instead)
-//   - version forced to 1; canvas and global filled and clamped
-//   - panels: unknown types dropped; a functional type kept once (the first),
-//     its id forced to its type; a block whose id is malformed or already
-//     taken gets a fresh, deterministic 'text-xxxx' / 'image-xxxx'
-//   - every number clamped to the contract's range and rounded (positions to 2
-//     decimals), each box kept on the canvas at no less than its type's
-//     minimum size; missing props filled from the type's defaults; unknown
-//     keys dropped
-//
-// Pure and deterministic, and idempotent: normalizeSpec(normalizeSpec(x))
-// equals normalizeSpec(x). Always returns new objects (callers may mutate).
-export function normalizeSpec(raw, options) {
-  const defaultSpec = isDict(options) && has(options, 'defaultSpec') ? options.defaultSpec : DEFAULT_ENTRY_SPEC
-  if (!isDict(raw) || !Array.isArray(raw.panels)) {
-    return defaultSpec ? normalizeSpec(defaultSpec, { defaultSpec: null }) : null
-  }
-
-  const source = raw.panels.slice(0, MAX_PANELS)
+// A panel list (the base's or a variant's).
+function normPanels(list, layoutId) {
+  const source = list.slice(0, MAX_PANELS)
   const panels = []
   const seenFunctional = new Set()
   // Valid block ids are claimed first, so a repaired id can never steal one
@@ -472,33 +763,121 @@ export function normalizeSpec(raw, options) {
       takenIds.add(id)
     }
     if (t.kind === 'block') usedBlockIds.add(id)
-    panels.push(normPanel(p, type, id))
+    panels.push(normPanel(p, type, id, layoutId))
   })
+  return panels
+}
 
-  const g = isDict(raw.global) ? raw.global : {}
+// A full global: textScale plus every GLOBAL_SCHEMA field, each the stored
+// value when valid, else from `defaults` (the layout's, or for a variant the
+// base's own global).
+function normGlobal(raw, defaults) {
+  const g = isDict(raw) ? raw : {}
+  const out = {
+    textScale: num(g.textScale, PROP_RANGES.textScale.min, PROP_RANGES.textScale.max, defaults.textScale),
+  }
+  globalFields().forEach((f) => {
+    out[f.key] = fieldValue(f, g[f.key], defaults[f.key])
+  })
+  return out
+}
+
+function normCanvas(raw, fallback) {
+  const r = isDict(raw) ? raw : {}
+  const f = isDict(fallback) ? fallback : { w: 1920, h: 1080 }
+  const lo = PROP_RANGES.canvas.min
+  const hi = PROP_RANGES.canvas.max
   return {
-    version: SPEC_VERSION,
-    canvas: normCanvas(raw.canvas, defaultSpec && defaultSpec.canvas),
-    global: {
-      textScale: num(g.textScale, PROP_RANGES.textScale.min, PROP_RANGES.textScale.max, 1),
-    },
-    panels,
+    w: num(r.w, lo, hi, num(f.w, lo, hi, 1920, 0), 0),
+    h: num(r.h, lo, hi, num(f.h, lo, hi, 1080, 0), 0),
   }
 }
 
-// The built-in board, normalized (every prop present) and frozen: copy it
-// (normalizeSpec(DEFAULT_ENTRY_SPEC) returns a fresh copy) before editing.
-export const DEFAULT_ENTRY_SPEC = deepFreeze(
-  normalizeSpec(
-    {
-      version: SPEC_VERSION,
-      canvas: { w: 1920, h: 1080 },
-      global: { textScale: 1 },
-      panels: DEFAULT_PANELS,
-    },
-    { defaultSpec: null }
+function normVariants(raw, layoutId, baseGlobal) {
+  if (!isDict(raw)) return null
+  const out = {}
+  VARIANT_DAYPARTS.forEach((k) => {
+    const v = has(raw, k) ? raw[k] : null
+    if (!isDict(v) || !Array.isArray(v.panels)) return
+    const part = { panels: normPanels(v.panels, layoutId) }
+    if (isDict(v.global)) part.global = normGlobal(v.global, baseGlobal)
+    out[k] = part
+  })
+  return Object.keys(out).length ? out : null
+}
+
+// normalizeSpec(raw, { defaultSpec, layoutId }) -> a valid spec, from anything.
+//
+//   layoutId     'entry' (the default) or 'board': whose defaults fill what is
+//                missing (boxes, props, knobs, globals, canvas)
+//   defaultSpec  what a raw value that is not a spec becomes: the layout's
+//                built-in default unless given; pass null to get null back
+//
+//   - not an object, or no panels array: a fresh copy of defaultSpec
+//   - version forced to 2; canvas and global filled and clamped (global gains
+//     font, accent, text, surfaceOpacity, radius: GLOBAL_SCHEMA's fields)
+//   - panels: unknown types dropped; a functional type kept once (the first),
+//     its id forced to its type; a block whose id is malformed or already
+//     taken gets a fresh, deterministic 'text-xxxx' / 'image-xxxx'
+//   - every number clamped to the contract's range and rounded (positions to
+//     POSITION_PLACES decimals), each box kept on the canvas at no less than its type's
+//     minimum size; missing props filled from the type's defaults in that
+//     layout; a functional panel's props gain every knob of its schema,
+//     clamped to the schema's range; unknown keys dropped
+//   - eveningFrom: a whole hour 12..23, default 18
+//   - variants (morning, evening, weekend): each kept when it has a panels
+//     array, its panels normalised like the base's, its global (when given)
+//     filled from the base's; absent when there are none
+//
+// Pure and deterministic, and idempotent: normalizeSpec(normalizeSpec(x))
+// equals normalizeSpec(x). Always returns new objects (callers may mutate).
+export function normalizeSpec(raw, options) {
+  const o = isDict(options) ? options : {}
+  const layoutId = layoutIdOf(o.layoutId)
+  const defaultSpec = has(o, 'defaultSpec') ? o.defaultSpec : defaultSpecFor(layoutId)
+  if (!isDict(raw) || !Array.isArray(raw.panels)) {
+    return defaultSpec ? normalizeSpec(defaultSpec, { defaultSpec: null, layoutId }) : null
+  }
+
+  const global = normGlobal(raw.global, layoutGlobalDefaults(layoutId))
+  const out = {
+    version: SPEC_VERSION,
+    canvas: normCanvas(raw.canvas, (defaultSpec && defaultSpec.canvas) || LAYOUTS[layoutId].canvas),
+    global,
+    panels: normPanels(raw.panels, layoutId),
+    eveningFrom: num(raw.eveningFrom, EVENING_FROM_RANGE.min, EVENING_FROM_RANGE.max, EVENING_FROM_DEFAULT, 0),
+  }
+  const variants = normVariants(raw.variants, layoutId, global)
+  if (variants) out.variants = variants
+  return out
+}
+
+function buildDefault(layoutId) {
+  const l = LAYOUTS[layoutId]
+  return deepFreeze(
+    normalizeSpec(
+      {
+        version: SPEC_VERSION,
+        canvas: l.canvas,
+        global: { textScale: 1, ...l.global },
+        panels: l.panels,
+      },
+      { defaultSpec: null, layoutId }
+    )
   )
-)
+}
+
+// The built-in boards, normalized (every prop present) and frozen: copy them
+// (normalizeSpec(DEFAULT_ENTRY_SPEC) returns a fresh copy) before editing.
+export const DEFAULT_ENTRY_SPEC = buildDefault(ENTRY_LAYOUT_ID)
+export const DEFAULT_BOARD_SPEC = buildDefault(BOARD_LAYOUT_ID)
+
+// The built-in default spec of a spec layout ('entry', 'board'), else null.
+export function defaultSpecFor(layoutId) {
+  if (layoutId === BOARD_LAYOUT_ID) return DEFAULT_BOARD_SPEC
+  if (layoutId === ENTRY_LAYOUT_ID || layoutId == null) return DEFAULT_ENTRY_SPEC
+  return null
+}
 
 // --- Building and comparing ------------------------------------------------
 
@@ -535,6 +914,25 @@ export function newBlock(type, overrides, takenIds) {
   )
 }
 
+// newPanel(type, overrides, { layoutId }) -> a normalized functional panel
+// (id === type) for the editor's "Add panel": its box and props are that
+// layout's default for the type, or the type's own starting box (centred, above
+// the built-in panels) and a card. overrides may set any panel field and any
+// props. null for a type that is not a functional panel.
+export function newPanel(type, overrides, options) {
+  const t = panelType(type)
+  if (!t || t.kind !== 'panel') return null
+  const o = isDict(overrides) ? overrides : {}
+  const layoutId = layoutIdOf(isDict(options) ? options.layoutId : null)
+  const box = defaultBoxFor(type, layoutId)
+  return normPanel(
+    { ...box, hidden: false, locked: false, ...o, props: isDict(o.props) ? o.props : {} },
+    type,
+    type,
+    layoutId
+  )
+}
+
 // Structural equality: same keys, same values, arrays in order. For "has the
 // draft changed since the last save", normalize both sides first.
 export function specEquals(a, b) {
@@ -557,16 +955,153 @@ export function specEquals(a, b) {
 }
 
 // The effective text scale of one panel: global x its own. Both default to 1.
+// `spec` may be a spec or variantPanels()'s { panels, global }.
 export function layoutTextScale(spec, panel) {
   const g = toNum(spec && spec.global && spec.global.textScale)
   const p = toNum(panel && panel.props && panel.props.textScale)
   return round((Number.isFinite(g) ? g : 1) * (Number.isFinite(p) ? p : 1), 4)
 }
 
+// --- Day-part variants ------------------------------------------------------------
+
+// Does the spec carry that variant (with a panel list)? 'day' always does.
+export function hasVariant(spec, daypart) {
+  if (daypart === 'day') return true
+  if (!isVariantKey(daypart) || !spec || !isDict(spec.variants)) return false
+  const v = has(spec.variants, daypart) ? spec.variants[daypart] : null
+  return isDict(v) && Array.isArray(v.panels)
+}
+
+function minutesOf(hm) {
+  return isDict(hm) && typeof hm.hour === 'number' && Number.isFinite(hm.hour)
+    ? hm.hour * 60 + (typeof hm.minute === 'number' && Number.isFinite(hm.minute) ? hm.minute : 0)
+    : null
+}
+
+// The school-morning window of a school settings object ({ autoShowAt,
+// morningEndsAt }, as in settings.school): [start, end) in minutes of the
+// day, start 5:00 and end 8:00 when unset (the shell's own floors).
+const MORNING_START_MIN = 5 * 60
+const MORNING_END_MIN = 8 * 60
+
+// Is `now` inside the school-morning window? The window only: whether today
+// is a school day is the caller's question.
+export function inSchoolMorning(now, school) {
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) return false
+  const start = minutesOf(school && school.autoShowAt)
+  const end = minutesOf(school && school.morningEndsAt)
+  const m = now.getHours() * 60 + now.getMinutes()
+  return m >= (start == null ? MORNING_START_MIN : start) && m < (end == null ? MORNING_END_MIN : end)
+}
+
+// A school day: not flagged no-school, and a school weekday when the settings
+// list them (settings.school.schoolDays, 0 = Sunday).
+function isSchoolDay(now, school, noSchoolToday) {
+  if (noSchoolToday === true) return false
+  const days = school && Array.isArray(school.schoolDays) ? school.schoolDays : null
+  return days ? days.indexOf(now.getDay()) >= 0 : true
+}
+
+// resolveDaypart({ now, school, noSchoolToday, spec }) -> 'day' | 'morning' |
+// 'evening' | 'weekend': which of the spec's layouts to draw at `now`.
+//
+//   weekend  Saturday and Sunday, when the spec has that variant; else
+//   morning  inside the school-morning window (school.autoShowAt until
+//            school.morningEndsAt) on a school day, when it has that variant;
+//            else
+//   evening  from spec.eveningFrom (18 unless set) until midnight, when it has
+//            that variant; else
+//   day      the base.
+//
+// school is the school settings (settings.school: autoShowAt, morningEndsAt,
+// schoolDays); noSchoolToday the house's flag for today (true on a holiday,
+// and on a weekend). Pure: `now` is the only clock.
+export function resolveDaypart(args) {
+  const a = isDict(args) ? args : {}
+  const now = a.now
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) return 'day'
+  const spec = a.spec
+  const weekday = now.getDay()
+  if ((weekday === 0 || weekday === 6) && hasVariant(spec, 'weekend')) return 'weekend'
+  if (hasVariant(spec, 'morning') && isSchoolDay(now, a.school, a.noSchoolToday) && inSchoolMorning(now, a.school)) {
+    return 'morning'
+  }
+  if (hasVariant(spec, 'evening')) {
+    const from = num(spec && spec.eveningFrom, EVENING_FROM_RANGE.min, EVENING_FROM_RANGE.max, EVENING_FROM_DEFAULT, 0)
+    if (now.getHours() >= from) return 'evening'
+  }
+  return 'day'
+}
+
+// variantPanels(spec, daypart) -> { panels, global, daypart }: what to draw for
+// a day part. A variant the spec lacks (or 'day', or anything else) is the
+// base; a variant's own global replaces the base's (merged over it, so a
+// partial one still draws), else the base's applies. daypart is the one
+// actually drawn.
+export function variantPanels(spec, daypart) {
+  const basePanels = spec && Array.isArray(spec.panels) ? spec.panels : []
+  const baseGlobal = spec && isDict(spec.global) ? spec.global : { textScale: 1 }
+  if (daypart === 'day' || !hasVariant(spec, daypart)) {
+    return { panels: basePanels, global: baseGlobal, daypart: 'day' }
+  }
+  const v = spec.variants[daypart]
+  return {
+    panels: v.panels,
+    global: isDict(v.global) ? { ...baseGlobal, ...v.global } : baseGlobal,
+    daypart,
+  }
+}
+
+// withVariant(spec, daypart, panels?, global?) -> a new spec with that day
+// part's layout set: for 'morning' / 'evening' / 'weekend' the variant (made
+// if missing), for 'day' the base. Without panels a missing variant starts as
+// a copy of the base's panels ("Create Morning from Day") and an existing one
+// keeps its own. global: undefined keeps what is there, null drops a variant's
+// own global (it follows the base again), an object sets it. The input is not
+// changed and nothing is normalised (run normalizeSpec before saving); the
+// panel lists are copies, so editing the variant never edits the base.
+export function withVariant(spec, daypart, panels, global) {
+  if (!isDict(spec)) return spec
+  const out = { ...spec }
+  if (daypart === 'day') {
+    if (Array.isArray(panels)) out.panels = cloneJson(panels)
+    if (isDict(global)) out.global = cloneJson(global)
+    return out
+  }
+  if (!isVariantKey(daypart)) return out
+  const variants = isDict(spec.variants) ? { ...spec.variants } : {}
+  const current = hasVariant(spec, daypart) ? spec.variants[daypart] : null
+  const part = {
+    panels: cloneJson(
+      Array.isArray(panels) ? panels : current ? current.panels : Array.isArray(spec.panels) ? spec.panels : []
+    ),
+  }
+  if (isDict(global)) part.global = cloneJson(global)
+  else if (global === undefined && current && isDict(current.global)) part.global = cloneJson(current.global)
+  variants[daypart] = part
+  out.variants = variants
+  return out
+}
+
+// withoutVariant(spec, daypart) -> a new spec without that variant (that day
+// part draws the base again); `variants` goes when it is empty. 'day' cannot
+// be removed: the spec comes back as a copy.
+export function withoutVariant(spec, daypart) {
+  if (!isDict(spec)) return spec
+  const out = { ...spec }
+  if (!isVariantKey(daypart) || !isDict(spec.variants)) return out
+  const variants = { ...spec.variants }
+  delete variants[daypart]
+  if (Object.keys(variants).length) out.variants = variants
+  else delete out.variants
+  return out
+}
+
 // --- Rendering helpers (pure) ------------------------------------------------
 
 // The panels to draw, bottom to top: hidden ones dropped, sorted by z with the
-// spec's own order breaking ties (so DOM order is paint order).
+// spec's own order breaking ties (so DOM order is paint order). `spec` may be
+// a spec or variantPanels()'s { panels, global }.
 export function visiblePanels(spec) {
   const list = spec && Array.isArray(spec.panels) ? spec.panels : []
   return list
@@ -597,5 +1132,19 @@ export function cardJoins(panels) {
       out[b.id] = { ...(out[b.id] || { top: false, bottom: false }), top: true }
     }
   }
+  return out
+}
+
+// A panel's knob values: every knob of its type, the stored value where there
+// is one, else the schema default. {} for a block. What the renderer hands a
+// functional panel as its `knobs` prop.
+export function knobsOf(panel) {
+  const type = panel && panel.type
+  const out = {}
+  if (typeof type !== 'string') return out
+  const props = panel.props && typeof panel.props === 'object' ? panel.props : {}
+  knobFieldsOf(type).forEach((f) => {
+    out[f.key] = has(props, f.key) && props[f.key] != null ? props[f.key] : f.default
+  })
   return out
 }

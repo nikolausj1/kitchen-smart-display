@@ -18,7 +18,7 @@ export default function TextBlock({ text = '', size = 4, weight = 600, color, al
   if (color) style.color = color
   return (
     <div className={`tl-textblock tl-textblock--${align}`}>
-      <div className="tl-textblock__text" style={style}>
+      <div className="tl-textblock__text" style={style} data-edit="text">
         {text}
       </div>
     </div>

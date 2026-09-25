@@ -80,7 +80,7 @@ function toSnapshot(payload) {
       windMph: roundOrNull(cur.wind_speed_10m),
       isDay: cur.is_day == null ? null : !!cur.is_day,
     },
-    days: times.slice(0, 5).map((iso, i) => ({
+    days: times.slice(0, 7).map((iso, i) => ({
       dateIso: iso,
       code: numOrNull(daily.weather_code?.[i]),
       highF: roundOrNull(daily.temperature_2m_max?.[i]),
@@ -165,7 +165,7 @@ export default function useDailyForecast() {
       url.searchParams.set('timezone', location.timezone)
       url.searchParams.set('temperature_unit', 'fahrenheit')
       url.searchParams.set('wind_speed_unit', 'mph')
-      url.searchParams.set('forecast_days', '5')
+      url.searchParams.set('forecast_days', '7')
       url.searchParams.set(
         'current',
         'temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m'

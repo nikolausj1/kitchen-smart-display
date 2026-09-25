@@ -7,8 +7,10 @@
  *
  * THE BOXES. Where each panel sits, how big, and whether it is a card come
  * from the layout spec (layoutSpec.js; DEFAULT_ENTRY_SPEC is the phase 1
- * board), drawn by Entry/SpecPanel. This file holds the board's palette and
- * the panel tweaks that belong to the Entry board whatever the arrangement.
+ * board), drawn by Entry/SpecBoard and Entry/SpecPanel. This file holds the
+ * board's palette and the panel tweaks that belong to the Entry board whatever
+ * the arrangement. spec.global's variables (card opacity, radius, colours,
+ * font) are picked up in tokens.css "Spec layouts".
  *
  * Every box has a definite size (percent of the screen), so each panel body
  * gets a definite size too: the bodies are size containers, and their type
@@ -38,6 +40,9 @@
   --tl-surface: var(--tl-entry-card);
   --tl-surface-2: rgba(255, 255, 255, 0.08);
   --tl-rule: rgba(255, 255, 255, 0.14);
+  /* The spec boxes' card and its edge (Entry/SpecPanel.css). */
+  --tl-spec-card: var(--tl-entry-card);
+  --tl-spec-edge: var(--tl-entry-edge);
   background: var(--tl-bg);
 }
 
@@ -62,8 +67,9 @@
   inset: 0;
 }
 
-/* The photo is the page here: no card, no radius, no padding. */
-.tl-entry .tl-panel.tl-photo {
+/* The photo is the page here: no card, no radius, no padding. Scoped to the
+ * backdrop: a photo panel on the board is a tile, drawn by its box. */
+.tl-entry__photo .tl-panel.tl-photo {
   background: transparent;
   border-radius: 0;
   padding: 0;
@@ -73,7 +79,7 @@
 /* With no photos (none selected, or the manifest still loading) the backdrop
  * is simply black. The panel's own "No photos" would land mid-screen behind
  * the agenda; the backdrop is decoration, not data, so it owes no message. */
-.tl-entry .tl-photo__empty {
+.tl-entry__photo .tl-photo__empty {
   display: none;
 }
 
@@ -96,14 +102,7 @@
 
 /* --- The canvas ------------------------------------------------------------- */
 
-/* The whole screen: box percentages resolve against it. Isolated, so the
- * spec's z values order the boxes among themselves and never reach under the
- * backdrop. */
-.tl-entry__canvas {
-  position: absolute;
-  inset: 0;
-  isolation: isolate;
-}
+/* The whole screen, over the backdrop: .tl-spec-canvas (Entry/SpecPanel.css). */
 
 /* --- Bare text on the backdrop: the clock, the headline, text blocks ------ */
 
@@ -135,44 +134,9 @@
 
 /* --- Weather, what to wear, air quality ---------------------------------- */
 
-/* Weather now, laid out for a wide, short box: the temperature and icon on
- * the left at the box's height, the description and the numbers beside them.
- * The panel's own stack is tuned for a squarer Board cell and would leave its
- * lines at their clamp floors here. */
-.tl-entry .tl-wnow__body {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr);
-  column-gap: calc(var(--tl-gap) * 1.2);
-  row-gap: 0.4vh;
-  align-items: center;
-  min-height: 0;
-  --tl-wnow-big: clamp(26px, min(26cqw, 76cqh), 150px);
-}
-
-.tl-entry .tl-wnow__top {
-  grid-column: 1;
-  grid-row: 1 / -1;
-  justify-content: flex-start;
-  gap: calc(var(--tl-gap) * 0.7);
-}
-
-.tl-entry .tl-wnow__desc {
-  grid-column: 2;
-  grid-row: 2;
-  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(6.4cqw, 21cqh), 34px));
-}
-
-.tl-entry .tl-wnow__meta {
-  grid-column: 2;
-  grid-row: 3;
-  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(4.6cqw, 15cqh), 24px));
-}
-
-.tl-entry .tl-wnow__empty {
-  grid-column: 1 / -1;
-  grid-row: 1 / -1;
-}
+/* Weather now: its layout knob (panels/schemas.js 'weather', default side by
+ * side) arranges it, WeatherNowPanel.css; the Entry board's wide, short card
+ * was the model for 'horizontal'. */
 
 /* What to wear as a band: glyph, then a one-line headline over a one-line
  * detail (the Board's treatment of its bottom band, for the same reason). */

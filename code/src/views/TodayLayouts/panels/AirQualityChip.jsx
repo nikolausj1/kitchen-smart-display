@@ -1,4 +1,5 @@
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import './AirQualityChip.css'
 
 // AirQualityChip - a coloured square holding the US AQI number, then the word
@@ -9,6 +10,10 @@ import './AirQualityChip.css'
 // a label it does not recognise falls back to the AQI number's band, so an
 // unexpected string never paints the wrong colour. null: a grey square and
 // "No reading yet", never an invented number.
+//
+// knobs (a spec layout, panels/schemas.js 'airquality'): style ('chip': the
+// square beside two lines; 'inline': one line, the number in a small pill),
+// size (the square with its number, and the words), showPm25.
 
 const LEVELS = [
   { key: 'good', max: 50, label: 'Good' },
@@ -33,7 +38,8 @@ function levelForAqi(aqi) {
   return LEVELS.find((l) => aqi <= l.max) || null
 }
 
-export default function AirQualityChip({ airQuality }) {
+export default function AirQualityChip({ airQuality, knobs }) {
+  const k = panelKnobs('airquality', knobs)
   const aqi = Number.isFinite(airQuality?.aqi) ? Math.round(airQuality.aqi) : null
   const pm25 = Number.isFinite(airQuality?.pm25) ? Math.round(airQuality.pm25) : null
   const hasReading = aqi != null || pm25 != null
@@ -42,25 +48,43 @@ export default function AirQualityChip({ airQuality }) {
     (typeof airQuality?.label === 'string' && airQuality.label.trim()) ||
     level?.label ||
     'Air quality'
+  // With PM2.5 off, a reading needs no second line; "No reading yet" stays,
+  // it is the honest empty state.
+  const showPm25 = k ? !!k.showPm25 : true
+  const detail = !hasReading
+    ? 'No reading yet'
+    : !showPm25
+      ? null
+      : pm25 != null
+        ? `PM2.5 ${pm25} µg/m³`
+        : 'US AQI'
+  const cls = [
+    'tl-aq',
+    `tl-aq--${hasReading && level ? level.key : 'none'}`,
+    k ? 'tl-knobs' : '',
+    k && k.style === 'inline' ? 'tl-aq--inline' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <PanelFrame
       title={null}
-      className={`tl-aq tl-aq--${hasReading && level ? level.key : 'none'}`}
+      className={cls}
       bodyClassName="tl-aq__body"
+      style={k ? { '--tl-aq-size': String(k.size) } : undefined}
     >
-      <div className="tl-aq__square tl-num" aria-hidden={aqi == null ? 'true' : undefined}>
+      <div
+        className="tl-aq__square tl-num"
+        aria-hidden={aqi == null ? 'true' : undefined}
+        data-edit="number"
+        data-edit-label="AQI"
+      >
         {aqi == null ? '--' : aqi}
       </div>
-      <div className="tl-aq__text">
+      <div className="tl-aq__text" data-edit="label">
         <div className="tl-aq__word">{hasReading ? word : 'Air quality'}</div>
-        <div className="tl-aq__detail tl-num">
-          {!hasReading
-            ? 'No reading yet'
-            : pm25 != null
-              ? `PM2.5 ${pm25} µg/m³`
-              : 'US AQI'}
-        </div>
+        {detail && <div className="tl-aq__detail tl-num">{detail}</div>}
       </div>
     </PanelFrame>
   )

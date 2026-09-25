@@ -5,7 +5,8 @@
  *
  * --tl-fc-col is the width of a single column. Everything in a column is sized
  * against it, which is what lets the same panel show four days in a narrow
- * cell and five across a wide one. */
+ * cell and five across a wide one. The type carries var(--tl-text-scale)
+ * (tokens.css); the icons are art and do not. */
 
 .tl-fc__body {
   min-height: 0;
@@ -54,7 +55,7 @@
   display: flex;
   align-items: baseline;
   gap: 0.34em;
-  font-size: var(--tl-fc-temp);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-fc-temp));
   line-height: 1.05;
   white-space: nowrap;
 }
@@ -80,7 +81,7 @@
  * around. Empty cells keep the row aligned and collapse to nothing when no day
  * has rain. */
 .tl-fc__pop {
-  font-size: calc(var(--tl-fc-temp) * 0.66);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-fc-temp) * 0.66);
   font-weight: 600;
   line-height: 1.1;
   color: var(--tl-accent);
@@ -89,6 +90,14 @@
 
 .tl-fc__empty {
   margin: auto 0;
-  font-size: clamp(1.4vh, 1.1vw, 2.8vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, 1.1vw, 2.8vh));
   color: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-fc__grid,
+.tl-knobs .tl-fc__empty {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-fc-size, 1));
+}
+

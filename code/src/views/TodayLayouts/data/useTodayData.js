@@ -51,7 +51,10 @@ import {
 //               calendars, connected, fetchedAt, error, stale }
 //   agendaDays  [{ dateKey, date, label: 'Today' | 'Tomorrow' | weekday,
 //               events: [{ key, id, title, allDay, start, end, color, tint,
-//               calendarLabel }] }] for today and the next two days
+//               calendarLabel }] }] for today and the next AGENDA_DAYS_MAX - 1
+//               days: the agenda's knobs (days 1..5 from today or tomorrow,
+//               panels/schemas.js) pick their columns from these
+//               (AgendaPanel.jsx sliceAgendaDays)
 //   countdowns  calendar.countdowns with daysLeft recounted against today
 //   headline    the hub's { text, kind, eventId, until }, or null when the hub
 //               has not said so today (the layout decides the fallback)
@@ -69,6 +72,12 @@ function readFlags() {
   }
 }
 const FLAGS = readFlags()
+
+// Days of agenda handed to the layouts: the agenda's widest setting, five
+// columns starting tomorrow, needs six. Keep it in step with the days the
+// calendar hook asks the hub for (hooks/useCalendar.js DAYS, also 6): a day
+// past those would read "Nothing scheduled" whatever the calendar holds.
+const AGENDA_DAYS_MAX = 6
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -382,7 +391,7 @@ export default function useTodayData() {
   }, [demo, liveCalendar, demoCalendarData, demoFetchedAt])
 
   const agendaDays = useMemo(
-    () => buildAgendaDays(calendarOut.events, today),
+    () => buildAgendaDays(calendarOut.events, today, AGENDA_DAYS_MAX),
     [calendarOut.events, today]
   )
   const countdowns = useMemo(

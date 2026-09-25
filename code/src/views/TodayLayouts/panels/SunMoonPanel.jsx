@@ -1,10 +1,14 @@
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import { fmtClock } from '../lib/format.js'
 import './SunMoonPanel.css'
 
 // Where the sun is in the day, and what the moon is doing tonight. The arc is
 // the shape of the daylight, not a chart: a dashed path from sunrise to sunset
 // with a lit dot sitting on today's position.
+//
+// knobs (a spec layout, panels/schemas.js 'sunmoon'): size (the words and
+// times; the arc and the moon are art), showMoon.
 
 // The dashed track is a quadratic Bezier through the two horizon points. The
 // same three points are used by the SVG path below and by the dot maths, so
@@ -62,12 +66,13 @@ function moonLitPath(phase, cx, cy, r) {
   return `M${top} A${r} ${r} 0 0 ${limbSweep} ${bottom} A${rx.toFixed(3)} ${r} 0 0 ${termSweep} ${top} Z`
 }
 
-export default function SunMoonPanel({ now, sunrise, sunset, moon }) {
+export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
+  const k = panelKnobs('sunmoon', knobs)
   const riseMs = msOf(sunrise)
   const setMs = msOf(sunset)
   const nowMs = msOf(now)
   const hasSun = riseMs != null || setMs != null
-  const hasMoon = moon != null && (moon.label || Number.isFinite(moon.phase))
+  const hasMoon = moon != null && (moon.label || Number.isFinite(moon.phase)) && (k ? !!k.showMoon : true)
 
   const fraction = daylightFraction(now, sunrise, sunset)
   let dot = null
@@ -85,7 +90,12 @@ export default function SunMoonPanel({ now, sunrise, sunset, moon }) {
     : null
 
   return (
-    <PanelFrame title="Sun & moon" className="tl-sun" bodyClassName="tl-sun__body">
+    <PanelFrame
+      title="Sun & moon"
+      className={`tl-sun${k ? ' tl-knobs' : ''}`}
+      bodyClassName="tl-sun__body"
+      style={k ? { '--tl-sun-size': String(k.size) } : undefined}
+    >
       {!hasSun && !hasMoon ? (
         <div className="tl-sun__empty">No sun data yet</div>
       ) : (

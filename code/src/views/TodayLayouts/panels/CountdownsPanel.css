@@ -189,3 +189,76 @@
     font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(3.4cqw, 5cqh), 24px));
   }
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") --------------------------
+ *
+ * The tile's card is three knobs and a style, set as classes on the panel
+ * root. Their rules name the panel twice (.tl-panel.tl-cd--...) so they
+ * out-rank a layout's own tile rule (the Entry board adds a hairline to the
+ * tile's shadow): the knob decides in any layout. */
+
+.tl-knobs .tl-cd__row {
+  gap: calc(var(--tl-gap) * var(--tl-cd-gap, 1));
+}
+
+.tl-knobs .tl-cd__tile {
+  border-radius: calc(var(--tl-radius) * var(--tl-cd-radius, 1));
+}
+
+.tl-knobs .tl-cd__title {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-title, 1));
+}
+
+.tl-knobs .tl-cd__num,
+.tl-knobs .tl-cd__unit {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-num, 1));
+}
+
+/* The art: a share of the room the text leaves it (imageSize, up to 1). */
+.tl-knobs .tl-cd__img {
+  max-width: calc(100% * var(--tl-cd-art, 1));
+  max-height: calc(100% * var(--tl-cd-art, 1));
+}
+
+.tl-knobs .tl-cd__emoji {
+  font-size: calc(var(--tl-cd-art, 1) * clamp(28px, 7vh, 110px));
+}
+
+.tl-knobs .tl-cd__glyph {
+  width: calc(var(--tl-cd-art, 1) * clamp(28px, 6vh, 90px));
+  height: calc(var(--tl-cd-art, 1) * clamp(28px, 6vh, 90px));
+}
+
+@supports (height: 1cqh) {
+  .tl-knobs .tl-cd__emoji {
+    font-size: calc(var(--tl-cd-art, 1) * clamp(28px, min(52cqw, 30cqh), 160px));
+  }
+
+  .tl-knobs .tl-cd__glyph {
+    width: calc(var(--tl-cd-art, 1) * clamp(28px, min(40cqw, 24cqh), 120px));
+    height: calc(var(--tl-cd-art, 1) * clamp(28px, min(40cqw, 24cqh), 120px));
+  }
+}
+
+/* Background. 'card' is the tile as drawn above (and by the layout); the
+ * edge knob works through the colour itself: 'none' hands the tile no
+ * calendar colour, so the bar has nothing to paint. */
+.tl-panel.tl-cd--bg-solid .tl-cd__tile {
+  background: var(--tl-surface-solid);
+}
+
+/* No surface: no hairline either, only the calendar bar if the edge asks. */
+.tl-panel.tl-cd--bg-none .tl-cd__tile {
+  background: transparent;
+  box-shadow: inset 0 var(--tl-cd-bar) 0 0 var(--tl-cd-color, transparent);
+}
+
+/* Bare: the art, title and number and nothing around them. Last, so it wins
+ * over any background. The padding stays, so nothing moves when the card
+ * goes. */
+.tl-panel.tl-cd--style-bare .tl-cd__tile {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+

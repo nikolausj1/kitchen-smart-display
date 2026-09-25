@@ -1,4 +1,5 @@
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import { fmtClock } from '../lib/format.js'
 import './DeparturePanel.css'
 
@@ -8,6 +9,9 @@ import './DeparturePanel.css'
 // timer UI (set, cancel, the picker); this is its quiet sibling for the Board,
 // Briefing and Ambient layouts. Band colours come from the same tokens as
 // TimerPanel so "green means go" reads identically on every screen.
+//
+// knobs (a spec layout, panels/schemas.js 'departure'): numberSize (the
+// minutes and their unit, or the two depart times), showToggle.
 
 const TRAVEL_LABEL = { driving: 'Driving', walking: 'Walking' }
 
@@ -42,7 +46,8 @@ function DepartOption({ label, time, chosen, past }) {
   )
 }
 
-export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
+export default function DeparturePanel({ timer, school, now, onToggleTravel, knobs }) {
+  const k = panelKnobs('departure', knobs)
   const noSchool = !!school?.noSchool
   const mode = timer?.mode || 'no-timer'
   const travelMode = timer?.travelMode === 'walking' ? 'walking' : 'driving'
@@ -53,7 +58,7 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
   // The toggle is the only control in any Today-layout panel. <button> already
   // exempts it from the shell's "tap the background opens the menu" rule;
   // data-interactive is the documented belt and braces.
-  const showToggle = typeof onToggleTravel === 'function' && !noSchool
+  const showToggle = typeof onToggleTravel === 'function' && !noSchool && (k ? !!k.showToggle : true)
 
   const driving = atTime(school?.departTimes?.driving, now)
   const walking = atTime(school?.departTimes?.walking, now)
@@ -71,7 +76,7 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
     const target = timer?.target instanceof Date ? fmtClock(timer.target) : null
     body = (
       <div className="tl-depart__count-wrap">
-        <div className="tl-depart__count">
+        <div className="tl-depart__count" data-edit="number" data-edit-label="Countdown">
           {expired ? (
             <span className="tl-depart__now">Now</span>
           ) : (
@@ -97,7 +102,7 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
     )
   } else {
     body = (
-      <div className="tl-depart__options">
+      <div className="tl-depart__options" data-edit="number" data-edit-label="Depart times">
         <DepartOption
           label="Driving"
           time={driving ? fmtClock(driving) : null}
@@ -117,8 +122,9 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
   return (
     <PanelFrame
       title={noSchool ? 'No school' : 'Leave by'}
-      className={`tl-depart tl-depart--band-${band || 'none'}`}
+      className={`tl-depart tl-depart--band-${band || 'none'}${k ? ' tl-knobs' : ''}`}
       bodyClassName="tl-depart__body"
+      style={k ? { '--tl-depart-num': String(k.numberSize) } : undefined}
     >
       {/* Band edge: a colour stripe rather than a whole coloured panel, so the
         * board stays calm while the urgency still reads from across the room. */}
@@ -129,6 +135,8 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel }) {
           type="button"
           className="tl-depart__toggle"
           data-interactive="true"
+          data-edit="toggle"
+          data-edit-label="Walk or drive"
           onClick={() => onToggleTravel()}
         >
           {travelMode === 'driving' ? 'Walk instead' : 'Drive instead'}

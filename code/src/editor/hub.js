@@ -11,14 +11,14 @@
 //   3. PHOTOS.baseUrl          the compiled default (nuc.local:8095).
 //
 // The preview iframe is the app on the hub's origin:
-//   <hub>/?device=<id>&layout=entry&edit=1&view=today
+//   <hub>/?device=<id>&layout=<entry|board>&edit=1&view=today
 // which is the editor's own origin when the hub served the editor. For
 // development, ?app=<url> points the iframe at another page instead (the Vite
 // dev server's app, a mock); its own query is kept, and device, layout, edit
 // and view are set on top.
 
 import { PHOTOS } from '../config.js'
-import { LAYOUT_ID } from './spec.js'
+import { isLayoutId } from './spec.js'
 
 const strip = (u) => String(u || '').trim().replace(/\/+$/, '')
 
@@ -46,11 +46,11 @@ export const hubUrl = (path) => `${HUB}${path.startsWith('/') ? path : `/${path}
 
 const APP_OVERRIDE = new URLSearchParams(window.location.search).get('app')
 
-// The app in edit mode, for one screen. `origin` is what its messages must
-// come from; `target` is the postMessage targetOrigin: the exact origin when
-// the app shares the editor's origin (the hub serves both), '*' only across
-// origins, which happens in development only (?hub= or ?app=).
-export function appFrame(deviceId) {
+// The app in edit mode, for one screen and one layout. `origin` is what its
+// messages must come from; `target` is the postMessage targetOrigin: the
+// exact origin when the app shares the editor's origin (the hub serves both),
+// '*' only across origins, which happens in development only (?hub= or ?app=).
+export function appFrame(deviceId, layoutId) {
   let url
   try {
     url = APP_OVERRIDE ? new URL(APP_OVERRIDE, window.location.href) : new URL('/', `${HUB}/`)
@@ -58,7 +58,7 @@ export function appFrame(deviceId) {
     url = new URL('/', window.location.href)
   }
   url.searchParams.set('device', deviceId)
-  url.searchParams.set('layout', LAYOUT_ID)
+  url.searchParams.set('layout', layoutId)
   url.searchParams.set('edit', '1')
   url.searchParams.set('view', 'today')
   const sameOrigin = url.origin === window.location.origin
@@ -71,16 +71,21 @@ export function appFrame(deviceId) {
   }
 }
 
-// This page for another screen: same hub/app overrides, new device. Absolute,
-// so history.replaceState cannot resolve it against anything else.
-export function editorUrlFor(deviceId) {
+// This page for another screen or layout: same hub/app overrides. Absolute,
+// so history.replaceState cannot resolve it against anything else. A null
+// layout leaves ?layout= out (the screen's own Today layout decides).
+export function editorUrlFor(deviceId, layoutId) {
   const u = new URL(window.location.href)
   u.searchParams.set('device', deviceId)
-  u.searchParams.set('layout', LAYOUT_ID)
+  if (layoutId) u.searchParams.set('layout', layoutId)
+  else u.searchParams.delete('layout')
   return u.href
 }
 
-export const REQUESTED_DEVICE = new URLSearchParams(window.location.search).get('device') || null
+const QUERY = new URLSearchParams(window.location.search)
+export const REQUESTED_DEVICE = QUERY.get('device') || null
+// ?layout=entry|board; anything else is ignored.
+export const REQUESTED_LAYOUT = isLayoutId(QUERY.get('layout')) ? QUERY.get('layout') : null
 
 // --- API ----------------------------------------------------------------------
 
@@ -122,6 +127,10 @@ export const fetchDevices = () => request('/api/devices')
 
 export const patchDeviceConfig = (id, patch) =>
   request(`/api/devices/${encodeURIComponent(id)}/config`, { method: 'PATCH', body: patch })
+
+// The screen's config.layouts as it was before each of its last ten changes,
+// newest first: [{ at, layouts }] (frameserver/server.mjs, layout history).
+export const fetchLayoutHistory = (id) => request(`/api/devices/${encodeURIComponent(id)}/layout-history`)
 
 export const fetchCountdownArt = () => request('/api/countdown-art')
 

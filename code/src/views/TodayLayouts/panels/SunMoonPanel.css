@@ -1,5 +1,7 @@
 /* SunMoonPanel - a dashed daylight arc with the sun on it, the two horizon
- * times underneath, and the moon standing quietly to the right. */
+ * times underneath, and the moon standing quietly to the right. The type
+ * carries var(--tl-text-scale) (tokens.css); the arc, the sun and the moon
+ * are art and do not. */
 
 .tl-sun__body {
   container-type: size;
@@ -92,7 +94,7 @@
 }
 
 .tl-sun__clock {
-  font-size: clamp(1.3vh, min(5cqw, 11cqh), 2.7vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.3vh, min(5cqw, 11cqh), 2.7vh));
   font-weight: 600;
   line-height: 1.1;
   color: var(--tl-fg);
@@ -131,7 +133,7 @@
 }
 
 .tl-sun__moon-label {
-  font-size: clamp(1.1vh, min(5.6cqw, 9cqh), 2.1vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.1vh, min(5.6cqw, 9cqh), 2.1vh));
   font-weight: 500;
   line-height: 1.15;
   color: var(--tl-fg);
@@ -139,13 +141,20 @@
 }
 
 .tl-sun__moon-lit-pct {
-  font-size: clamp(1vh, min(4.6cqw, 7.5cqh), 1.8vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1vh, min(4.6cqw, 7.5cqh), 1.8vh));
   color: var(--tl-fg-3);
   white-space: nowrap;
 }
 
 .tl-sun__empty {
   margin: auto 0;
-  font-size: clamp(1.4vh, min(6cqw, 12cqh), 2.8vh);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
   color: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-sun__body {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-sun-size, 1));
+}
+

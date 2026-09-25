@@ -7,7 +7,7 @@ import { deepEqual } from '../lib/settings.js'
 // FrameServer reads Google Calendar through a service account and serves the
 // result normalized (docs/designs/entry-board.md, "GET /api/calendar"):
 //
-//   GET hubUrl('/api/calendar?days=3') ->
+//   GET hubUrl('/api/calendar?days=6') ->
 //   { connected, error, fetchedAt, days,
 //     calendars:  [{ id, label, color }],
 //     events:     [{ id, calendarId, calendarLabel, color, title, description,
@@ -43,7 +43,7 @@ const CACHE_MAX_AGE_MS = 48 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 15 * 1000
 // Collapses StrictMode's double subscribe and a burst of visibility changes.
 const MIN_POLL_GAP_MS = 5 * 1000
-const DAYS = 3
+const DAYS = 6
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 

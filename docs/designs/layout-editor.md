@@ -1,15 +1,15 @@
 ---
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
-modified: 2026-09-24
-version: 1.4
+modified: 2026-09-25
+version: 1.5
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show]
 ---
 
 # Layout editor
 
-**Status: steps 1 and 2 built and deployed 2026-09-24.** Open a screen's card on the dashboard and press Edit layout, or go to `http://nuc.local:8095/editor/?device=echo-show15`. Steps 3 and 4 (per-panel schemas, sub-element selection, smart guides, history, day parts, Board) are open. Review shots: `_review/layout-editor/`.
+**Status: steps 1 and 2 built and deployed 2026-09-24; steps 3 and 4 in build (2026-09-25).** Open a screen's card on the dashboard and press Edit layout, or go to `http://nuc.local:8095/editor/?device=echo-show15`. Steps 3 and 4 (per-panel schemas, sub-element selection, smart guides, history, day parts, Board) are open. Review shots: `_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
@@ -290,3 +290,124 @@ dirty drafts. What is in place now:
   panel's box, which is the signature of that save. If a board ever looks
   rearranged after a save, open the editor's console before reloading.
 - Undo, Revert to saved and Reset to default were already there.
+
+## Contract v2 (steps 3 and 4)
+
+Adds to v1; nothing in v1 changes shape except `version` becoming 2 (the app
+and the editor read v1 unchanged and write v2).
+
+### Panel knobs and schemas
+
+Every functional panel declares its knobs in `views/TodayLayouts/panels/schemas.js`
+(pure data, no React):
+
+```
+export const PANEL_SCHEMAS = {
+  clock: { fields: [
+    { key: 'timeSize',  label: 'Time size',  type: 'number', min: 0.5, max: 2.5, step: 0.05, default: 1, unit: 'x', element: 'time' },
+    { key: 'dateSize',  label: 'Date size',  type: 'number', min: 0.5, max: 2.5, step: 0.05, default: 1, unit: 'x', element: 'date' },
+    { key: 'weight',    label: 'Weight',     type: 'select', options: [[300, 'Light'], [400, 'Regular'], [600, 'Semibold'], [700, 'Bold']], default: 300, element: 'time' },
+    { key: 'showDate',  label: 'Date',       type: 'toggle', default: true, element: 'date' },
+    { key: 'dateStyle', label: 'Date style', type: 'select', options: [['long', 'Thursday, September 24'], ['short', 'Thu, Sep 24']], default: 'long', element: 'date' },
+    { key: 'showSeconds', label: 'Seconds',  type: 'toggle', default: false, element: 'time' },
+    { key: 'showGreeting', label: 'Greeting', type: 'toggle', default: false, element: 'greeting' },
+  ] },
+  ...
+}
+export const GLOBAL_SCHEMA = { fields: [ font, accent, text, surfaceOpacity, radius ] }
+```
+
+Field types: `number` (min, max, step, unit; a slider with a typed field),
+`select` (options as `[value, label]`; a segmented control up to four options,
+else a dropdown), `toggle`, `color` (hex), `text`. `element` names the
+sub-element the field belongs to (a `data-edit` key inside the panel), so
+selecting that element in the editor scrolls to and highlights its fields.
+Knob values live in the panel's `props` next to the universal ones; the
+schema's `default` fills a missing value. Knobs per panel:
+
+- clock: as above.
+- weather: tempSize, iconSize, layout (horizontal | stacked), showHighLow, showRain, showDescription.
+- forecast: days (3..7), size, showHighLow, showIcons.
+- sunmoon: size, showMoon.
+- wear: size, showIcon, lines (1 | 2).
+- airquality: style (chip | inline), size, showPm25.
+- headline: size, weight, showDot, maxLines (1..3).
+- agenda: days (1..5), startDay (today | tomorrow), rowsPerDay (2..10), rowSize, headerSize, timeFormat (12h | 24h), showAllDayLabel, dimPast, columnGap, showColorBars.
+- countdowns: maxTiles (1..4), tileStyle (card | bare | imageOnly), tileBorder (color | none), tileBackground (card | none | solid), tileRadius (0..3), imageSize, titleSize, numberSize, showUnit, gap, prefer (art | emoji).
+- departure: numberSize, showToggle.
+- nowplaying: size, showArt, showProgress.
+- photo: intervalMs (15 s .. 10 min), fit (cover | contain), showCaption, showCounter.
+- school: size, showLunch, showActivities.
+- text, image: their existing props are their schema.
+
+Global (`spec.global`): `textScale` (v1), plus `font` (inter | fraunces, the
+display sizes), `accent` (hex), `text` (hex), `surfaceOpacity` (0.1..1, the
+translucent card), `radius` (0..3 multiplier). Applied as CSS variables on the
+layout root.
+
+The countdown tiles' border, background and radius are knobs (Justin's
+report: they could not be changed in v1); `tileStyle: bare` gives naked
+art, title and number.
+
+### Sub-elements
+
+Panels mark their inner elements with `data-edit="<key>"` (optional
+`data-edit-label`). The bridge reports them in `sd-edit:rects` as
+`elements: [{ panelId, key, label, x, y, w, h }]`. `sd-edit:hover` accepts
+`{ id, element }` and the app highlights that element. Sub-elements are not
+positionable; selecting one focuses its knobs.
+
+### Panel type registry (every layout)
+
+clock, weather, forecast, sunmoon, wear, airquality, headline, agenda,
+countdowns, departure, nowplaying, photo, school, text, image. Functional
+types are unique per layout and may be absent; the editor's "Add panel" lists
+the missing ones. `countdowns` shows the departure countdown during a school
+morning unless the layout has its own `departure` panel; `nowplaying` does
+the same (the Board's rule). `photo` is the Board's tile; the Entry board's
+full-bleed backdrop stays a backdrop, not a panel.
+
+### Day-part variants (Entry phase 2)
+
+```
+layouts.entry = {
+  version: 2, canvas, global, panels,           // the base: "Day"
+  eveningFrom: 18,                              // hour, per layout
+  variants: {                                   // each optional
+    morning: { panels, global? },
+    evening: { panels, global? },
+    weekend: { panels, global? },
+  },
+}
+```
+
+`resolveDaypart({ now, school, noSchoolToday, spec })`, pure, in
+`layoutSpec.js`: `weekend` on Saturday and Sunday when that variant exists;
+else `morning` inside the school-morning window on a school day when it
+exists; else `evening` from `eveningFrom` until midnight when it exists; else
+`day`. The app renders the resolved variant's panels (its `global` overriding
+the base's when present). A variant is created in the editor as a copy of the
+base ("Create Morning from Day") and removed to fall back to the base.
+`sd-edit:daypart { daypart: 'day' | 'morning' | 'evening' | 'weekend' | null }`
+forces the preview (null follows the clock). `sd-edit:ready` gains `schemas`
+(per type), `globalSchema`, `dayparts` (the list) and `layoutId`.
+
+### The Board
+
+`layoutId: 'board'` is spec-rendered by the same machinery with a default
+spec measured from its 12x6 grid (clock 1-4/1-3, weather 5-8/1-3, photo
+9-12/1-4, forecast 1-4/4-6, sunmoon 5-8/4-5, wear 5-8/6, nowplaying 9-12/5-6),
+its root keeping the `tl-board` palette. Stored at `config.layouts.board`.
+The editor's layout picker offers Entry board and Board; the iframe carries
+`&layout=<id>`; the dashboard's Edit layout button opens whichever Today
+layout the screen is on.
+
+### Editor additions
+
+Schema-driven inspector; click-into sub-elements (breadcrumb Clock > Date);
+smart guides to other panels' edges and centres with distance labels;
+"Add panel" for missing functional types; day-part tabs (Day, Morning,
+Evening, Weekend) with create / remove and the preview message; History
+(from `GET /api/devices/<id>/layout-history`, load an entry as the draft);
+Copy layout to another screen (PATCH that screen's `layouts.<id>`, with a
+confirm naming both screens); Global section from `GLOBAL_SCHEMA`.

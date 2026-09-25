@@ -30,14 +30,14 @@ export default function ImageBlock({ src, fit = 'contain' }) {
 
   if (!url || failedUrl === url) {
     return (
-      <div className="tl-imageblock tl-imageblock--empty">
+      <div className="tl-imageblock tl-imageblock--empty" data-edit="image">
         <span className="tl-imageblock__empty">{url ? 'Image not found' : 'No image'}</span>
       </div>
     )
   }
 
   return (
-    <div className="tl-imageblock">
+    <div className="tl-imageblock" data-edit="image">
       <img
         className={`tl-imageblock__img tl-imageblock__img--${fit === 'cover' ? 'cover' : 'contain'}`}
         src={url}

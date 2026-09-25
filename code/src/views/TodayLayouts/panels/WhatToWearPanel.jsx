@@ -1,9 +1,14 @@
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import './WhatToWearPanel.css'
 
 // One sentence of advice with a drawing of the thing you should put on. The
 // glyphs are line art on a 24 x 24 grid, stroked in currentColor so they take
 // the panel's foreground on either theme.
+//
+// knobs (a spec layout, panels/schemas.js 'wear'): size (the words; the glyph
+// is art and keeps the box's size), showIcon, lines (1: the advice alone, 2:
+// the advice and its detail).
 const GLYPHS = {
   shorts: (
     <>
@@ -76,27 +81,43 @@ function WearGlyph({ name }) {
   )
 }
 
-export default function WhatToWearPanel({ wear }) {
+export default function WhatToWearPanel({ wear, knobs }) {
+  const k = panelKnobs('wear', knobs)
   const headline = wear?.headline || null
-  const detail = wear?.detail || null
+  // One line keeps the advice and drops its detail, unless the advice is all
+  // there is to say it with.
+  const detail = wear?.detail && !(k && Number(k.lines) === 1 && headline) ? wear.detail : null
   // An unknown icon name draws nothing rather than the wrong garment; the
   // words still carry the advice.
-  const hasGlyph = !!(wear?.icon && GLYPHS[wear.icon])
+  const hasGlyph = !!(wear?.icon && GLYPHS[wear.icon]) && (k ? !!k.showIcon : true)
 
   return (
-    <PanelFrame title="What to wear" className="tl-wear" bodyClassName="tl-wear__body">
+    <PanelFrame
+      title="What to wear"
+      className={`tl-wear${k ? ' tl-knobs' : ''}`}
+      bodyClassName="tl-wear__body"
+      style={k ? { '--tl-wear-size': String(k.size) } : undefined}
+    >
       {!headline && !detail ? (
         <div className="tl-wear__empty">Forecast not in yet</div>
       ) : (
         <div className="tl-wear__row">
           {hasGlyph && (
-            <div className="tl-wear__glyph">
+            <div className="tl-wear__glyph" data-edit="icon">
               <WearGlyph name={wear.icon} />
             </div>
           )}
           <div className="tl-wear__text">
-            {headline && <div className="tl-wear__headline">{headline}</div>}
-            {detail && <div className="tl-wear__detail">{detail}</div>}
+            {headline && (
+              <div className="tl-wear__headline" data-edit="label" data-edit-label="Advice">
+                {headline}
+              </div>
+            )}
+            {detail && (
+              <div className="tl-wear__detail" data-edit="detail">
+                {detail}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,59 +1,79 @@
-// Editor - the layout editor page (docs/designs/layout-editor.md, Contract
-// v1, steps 1 and 2): layers on the left, the live preview in the middle,
-// the inspector on the right, document and view controls on top.
+// Editor - the layout editor page (docs/designs/layout-editor.md, Contracts
+// v1 and v2): layers on the left, the live preview in the middle with the
+// day-part tabs above it (Entry board), the inspector on the right, document
+// and view controls on top.
 //
-// Nothing is written to the hub until Save, which sends ONE
+// One document at a time: a screen and one of its layouts (?layout=entry or
+// board; without it, the Today layout the screen shows when the editor can
+// edit it, else entry). Nothing is written to the hub until Save, which sends
+// ONE
 //   PATCH /api/devices/<id>/config
-//     { layouts: { entry: <normalized spec> | null }, display: { entryBackdrop?, entryDim? } }
+//     { layouts: { <layoutId>: <spec> | null }, display: { entryBackdrop?, entryDim? } }
 // with each half only when it changed; null when the draft is the built-in
-// board (Reset), so an untuned screen follows the code's default.
+// layout (Reset), so an untuned screen follows the code's default. The spec
+// carries explicit nulls for whatever the stored copy has and the draft no
+// longer does (a removed day part), because the hub deep-merges the PATCH
+// (withRemovals in spec.js). Copy layout to… writes another screen's
+// layouts.<layoutId> with this screen's SAVED layout the same way.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import Dayparts from './Dayparts.jsx'
 import Inspector from './Inspector.jsx'
 import Layers from './Layers.jsx'
 import Stage from './Stage.jsx'
 import TopBar, { StatusLine } from './TopBar.jsx'
+import { Dialog } from './menus.jsx'
 import useAppBridge from './useAppBridge.js'
 import useEditorState from './useEditorState.js'
+import { finalSpec, newPanel, sameLayout, withVariant, withoutVariant } from './appSpec.js'
+import { addPanel, editGlobal, editPanels, followDayGlobal, mapPanel, removePanel, setEveningFrom, withBox, withFields, withProps } from './edits.js'
 import { nudgeRect } from './geometry.js'
-// The app's own normaliser runs LAST before Save, so what is stored is exactly
-// what the board renders. The editor's spec.js keeps its own copy for
-// editing-time clamps (it must write a valid spec whatever app build the
-// iframe shows); this is the belt to that pair of braces.
-import { normalizeSpec as appNormalizeSpec } from '../views/TodayLayouts/layoutSpec.js'
 import {
   HUB,
   HUB_SOURCE,
   REQUESTED_DEVICE,
+  REQUESTED_LAYOUT,
   appFrame,
   editorUrlFor,
   fetchCountdownArt,
   fetchDevices,
+  fetchLayoutHistory,
   isWebScreen,
   patchDeviceConfig,
 } from './hub.js'
+import { elementLabel, knobDefaultsFor, knobFields, registerFromReady } from './schema.js'
 import {
-  LAYOUT_ID,
+  DAYPART_LABELS,
   MAX_PANELS,
-  TYPE_LABELS,
+  VARIANT_PARTS,
   clamp,
+  hasPart,
+  isDict,
+  layoutMeta,
   makeBlock,
+  makePanel,
   minPctFor,
   newBlockId,
   normalizeCanvas,
   normalizeColor,
-  normalizeSpec,
   normalizeSrc,
+  partPanels,
+  partWhen,
   pctToPx,
   pctToPxRound,
   pxToPctKeeping,
+  registerPanelTypes,
   restack,
   round2,
+  typeLabel,
+  withRemovals,
 } from './spec.js'
+import { ago } from './util.js'
 
 const PREFS_KEY = 'layoutEditorPrefs'
 const DEFAULT_PREFS = { zoom: 'fit', grid: true, gridSize: 20, sample: false }
 const REFRESH_MS = 15_000
+const TOAST_MS = 6000
 
 // Per-viewer conveniences only; the page works the same without storage.
 function readPrefs() {
@@ -79,50 +99,65 @@ function writePrefs(p) {
   }
 }
 
-// --- pure spec edits (recipes for actions.update) -------------------------
-
-function mapPanel(spec, id, fn) {
-  let changed = false
-  const panels = spec.panels.map((p) => {
-    if (p.id !== id) return p
-    const n = fn(p)
-    if (n !== p) changed = true
-    return n
-  })
-  return changed ? { ...spec, panels } : spec
+const clock = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const nameOf = (d, id) => d?.name || id
+const storedLayout = (device, layoutId) => {
+  const l = device?.config?.layouts
+  return isDict(l) && l[layoutId] != null ? l[layoutId] : null
 }
 
-const same = (obj, patch) => Object.keys(patch).every((k) => obj[k] === patch[k])
-const withBox = (box) => (p) => (same(p, box) ? p : { ...p, ...box })
-const withFields = (patch) => (p) => (same(p, patch) ? p : { ...p, ...patch })
-const withProps = (patch) => (p) => (same(p.props, patch) ? p : { ...p, props: { ...p.props, ...patch } })
+// Every block id in the spec, all day parts, so a new one is unique across
+// the layout.
+function allIds(spec) {
+  const ids = new Set((spec?.panels || []).map((p) => p.id))
+  for (const part of VARIANT_PARTS) for (const p of spec?.variants?.[part]?.panels || []) ids.add(p.id)
+  return ids
+}
 
-const clock = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+// "7 panels · Morning, Evening" for a stored layout, "Default layout" for none.
+function describe(raw) {
+  if (!isDict(raw) || !Array.isArray(raw.panels)) return 'Default layout'
+  const n = raw.panels.length
+  const parts = VARIANT_PARTS.filter((p) => isDict(raw.variants?.[p]) && Array.isArray(raw.variants[p].panels)).map((p) => DAYPART_LABELS[p])
+  return `${n} panel${n === 1 ? '' : 's'}${parts.length ? ` · ${parts.join(', ')}` : ''}`
+}
 
 export default function Editor() {
-  const [deviceId, setDeviceId] = useState(REQUESTED_DEVICE)
   const [devices, setDevices] = useState(null)
   const [devicesError, setDevicesError] = useState(null)
-  const ed = useEditorState(deviceId)
+  const ed = useEditorState(REQUESTED_DEVICE, REQUESTED_LAYOUT)
   const { state, canvas, actions } = ed
+  const deviceId = state.deviceId
+  const layoutId = state.layoutId
+  const meta = layoutMeta(layoutId)
   const [prefs, setPrefsState] = useState(readPrefs)
   const [frameKey, setFrameKey] = useState(0)
   const [rects, setRects] = useState(null)
-  const [hoverId, setHoverId] = useState(null)
+  const [hover, setHover] = useState(null) // { id, element } | null
   const [notice, setNotice] = useState(null)
+  const [toast, setToast] = useState(null)
   const [saving, setSaving] = useState(false)
   const [art, setArt] = useState(null)
-  const [focusTextSeq, setFocusTextSeq] = useState(0)
+  const [focusText, setFocusText] = useState(null) // { id }: focus that text block's text
+  const [history, setHistory] = useState(null) // { deviceId, items, loading, error }
+  const [copyAsk, setCopyAsk] = useState(null) // { targetId }
+  const [copying, setCopying] = useState(false)
   const iframeRef = useRef(null)
   // Bumped around every save, so a background refresh that started before
   // the save cannot land after it with the old copy.
   const saveEpoch = useRef(0)
 
-  const frame = useMemo(() => appFrame(deviceId || ''), [deviceId])
+  const frame = useMemo(() => appFrame(deviceId || '', layoutId || meta.id), [deviceId, layoutId, meta.id])
   const spec = state.draft?.spec ?? null
-  const selected = spec?.panels.find((p) => p.id === state.selectedId) ?? null
+  // The Board has no day parts.
+  const part = meta.variants ? state.daypart : 'day'
+  const panels = partPanels(spec, part)
+  const hasVariant = !spec || !!panels
+  const selected = panels?.find((p) => p.id === state.selectedId) ?? null
   const device = devices?.find((d) => d.id === deviceId) ?? null
   const screens = useMemo(() => (devices || []).filter(isWebScreen), [devices])
+  const copyTargets = useMemo(() => screens.filter((d) => d.id !== deviceId), [screens, deviceId])
+  const effectiveSaved = state.saved ? state.saved.spec ?? state.defaults : null
 
   // --- the hub: screens, this screen's saved copy and size ---------------------
   useEffect(() => {
@@ -138,11 +173,7 @@ export default function Editor() {
           if (!deviceId) {
             // No ?device=: the first web screen.
             const first = list.find(isWebScreen)
-            if (first) {
-              window.history.replaceState(null, '', editorUrlFor(first.id))
-              actions.switchDevice(first.id)
-              setDeviceId(first.id)
-            }
+            if (first) actions.switchTo(first.id, REQUESTED_LAYOUT)
             return
           }
           const dev = list.find((d) => d.id === deviceId)
@@ -160,6 +191,13 @@ export default function Editor() {
     }
   }, [deviceId, actions])
 
+  // The address bar names the document, so a reload opens the same one.
+  useEffect(() => {
+    if (!deviceId || !layoutId) return
+    const url = editorUrlFor(deviceId, layoutId)
+    if (url !== window.location.href) window.history.replaceState(null, '', url)
+  }, [deviceId, layoutId])
+
   const loadArt = useCallback(() => {
     fetchCountdownArt()
       .then((d) => setArt({ items: Array.isArray(d?.items) ? d.items : [], error: null }))
@@ -169,8 +207,30 @@ export default function Editor() {
     loadArt()
   }, [loadArt])
 
+  const loadHistory = useCallback(() => {
+    if (!deviceId) return
+    setHistory((h) => ({ deviceId, items: h?.deviceId === deviceId ? h.items : null, loading: true, error: null }))
+    fetchLayoutHistory(deviceId)
+      .then((list) => setHistory({ deviceId, items: Array.isArray(list) ? list : [], loading: false, error: null }))
+      .catch((e) => setHistory((h) => ({ deviceId, items: h?.deviceId === deviceId ? h.items : null, loading: false, error: e.message })))
+  }, [deviceId])
+
+  useEffect(() => {
+    if (!toast) return undefined
+    const t = setTimeout(() => setToast(null), TOAST_MS)
+    return () => clearTimeout(t)
+  }, [toast])
+
   // --- the app in the iframe ------------------------------------------------------
-  const onReady = useCallback((m) => actions.appReady(m), [actions])
+  const onReady = useCallback(
+    (m) => {
+      // Schemas and types first: the reducer normalises with them.
+      registerFromReady(m)
+      registerPanelTypes(m.panelTypes)
+      actions.appReady(m)
+    },
+    [actions]
+  )
   const onRects = useCallback((m, key) => {
     const byId = {}
     for (const r of Array.isArray(m.panels) ? m.panels : []) {
@@ -178,80 +238,182 @@ export default function Editor() {
         byId[r.id] = { x: r.x, y: r.y, w: r.w, h: r.h }
       }
     }
-    setRects({ key, canvas: normalizeCanvas(m.canvas), byId })
+    const elements = {}
+    for (const el of Array.isArray(m.elements) ? m.elements : []) {
+      if (!isDict(el) || typeof el.panelId !== 'string' || typeof el.key !== 'string' || !el.key) continue
+      if (![el.x, el.y, el.w, el.h].every(Number.isFinite) || el.w <= 0 || el.h <= 0) continue
+      ;(elements[el.panelId] ||= []).push({
+        key: el.key,
+        label: typeof el.label === 'string' && el.label ? el.label : null,
+        x: el.x,
+        y: el.y,
+        w: el.w,
+        h: el.h,
+      })
+    }
+    setRects({
+      key,
+      canvas: normalizeCanvas(m.canvas),
+      byId,
+      elements,
+      // What the app drew them for (v2 rects say; older ones do not).
+      layoutId: typeof m.layoutId === 'string' ? m.layoutId : null,
+      daypart: typeof m.daypart === 'string' ? m.daypart : null,
+    })
   }, [])
   const bridge = useAppBridge({
     iframeRef,
     frame,
     frameKey,
+    layoutId: layoutId || meta.id,
     spec,
     canvas,
     sample: prefs.sample,
-    hoverId,
-    display: state.draft?.backdrop ?? null,
+    hover,
+    daypart: part,
+    display: meta.backdrop ? state.draft?.backdrop ?? null : null,
     onReady,
     onRects,
   })
   const appState = bridge.ready ? 'ready' : bridge.gaveUp ? 'gave-up' : 'waiting'
-  const liveRects = rects && rects.key === frameKey ? rects : null
+  // Rects from this iframe load, for this layout and the day part it draws
+  // now (a part with no layout of its own draws Day): right after a tab
+  // switch the last ones are the old part's.
+  const drawnPart = panels ? part : 'day'
+  const liveRects =
+    rects &&
+    rects.key === frameKey &&
+    (rects.layoutId == null || rects.layoutId === layoutId) &&
+    (rects.daypart == null || rects.daypart === drawnPart)
+      ? rects
+      : null
+
+  // What the app calls the selected panel's sub-elements (data-edit-label):
+  // a key's label when all its instances share one that is not just the key.
+  const reportedLabels = useMemo(() => {
+    const seen = {}
+    for (const el of liveRects?.elements?.[state.selectedId] || []) {
+      if (el.label && el.label !== el.key) (seen[el.key] ||= new Set()).add(el.label)
+    }
+    const out = {}
+    for (const [k, set] of Object.entries(seen)) if (set.size === 1) out[k] = [...set][0]
+    return out
+  }, [liveRects, state.selectedId])
 
   // --- edits ------------------------------------------------------------------------
-  const onGeometry = useCallback((id, box, opts) => actions.update((s) => mapPanel(s, id, withBox(box)), opts), [actions])
+  // Every recipe is (spec, part) => spec: the reducer applies it to the day
+  // part it holds.
+  const onGeometry = useCallback(
+    (id, box, opts) => actions.update((s, p) => mapPanel(s, p, id, withBox(box)), opts),
+    [actions]
+  )
 
   // A typed X, Y, W or H (canvas px). Only that field changes.
   function onBoxField(id, key, value) {
-    actions.update((s) =>
-      mapPanel(s, id, (p) => {
-        const cur = pctToPx(p, canvas)
-        const min = minPctFor(p.type, state.mins)
+    actions.update((s, p) =>
+      mapPanel(s, p, id, (panel) => {
+        const cur = pctToPx(panel, canvas)
+        const min = minPctFor(panel.type, state.mins)
         const minW = Math.ceil((min.w * canvas.w) / 100)
         const minH = Math.ceil((min.h * canvas.h) / 100)
-        const box = { x: p.x, y: p.y, w: p.w, h: p.h }
+        const box = { x: panel.x, y: panel.y, w: panel.w, h: panel.h }
         if (key === 'x') box.x = round2((clamp(value, 0, canvas.w - cur.w) / canvas.w) * 100)
         if (key === 'y') box.y = round2((clamp(value, 0, canvas.h - cur.h) / canvas.h) * 100)
         if (key === 'w') box.w = round2((clamp(value, minW, canvas.w - cur.x) / canvas.w) * 100)
         if (key === 'h') box.h = round2((clamp(value, minH, canvas.h - cur.y) / canvas.h) * 100)
-        return withBox(box)(p)
+        return withBox(box)(panel)
       })
     )
   }
 
+  // Props, universal or knobs. `field`: coalesce a stream of changes to it
+  // (a slider run, typing) into one undo step.
   function onProps(id, patch, field) {
+    const panel = panels?.find((x) => x.id === id)
+    if (!panel) return
+    const fields = knobFields(panel.type)
     const clean = { ...patch }
-    if ('color' in clean) {
-      const c = normalizeColor(clean.color, null)
-      if (!c) return setNotice({ kind: 'warn', text: 'Colours are hex: #rgb or #rrggbb.' })
-      clean.color = c
+    for (const k of Object.keys(clean)) {
+      const f = fields.find((x) => x.key === k)
+      if (f?.type === 'color' || (panel.type === 'text' && k === 'color')) {
+        const c = normalizeColor(clean[k], null)
+        if (!c) return setNotice({ kind: 'warn', text: 'Colours are hex: #rgb or #rrggbb.' })
+        clean[k] = c
+      }
     }
-    if ('src' in clean) {
+    if (panel.type === 'image' && 'src' in clean) {
       const src = normalizeSrc(clean.src)
       if (String(clean.src || '').trim() && !src) {
         return setNotice({ kind: 'warn', text: 'An image is a Countdown Art picture or an http(s) URL.' })
       }
       clean.src = src
     }
-    const opts = field ? { coalesce: `props:${id}:${field}`, windowMs: field === 'text' ? 2000 : 1000 } : {}
-    actions.update((s) => mapPanel(s, id, withProps(clean)), opts)
+    const opts = field ? { coalesce: `props:${part}:${id}:${field}`, windowMs: field === 'text' ? 2000 : 1000 } : {}
+    actions.update((s, p) => mapPanel(s, p, id, withProps(clean)), opts)
   }
 
-  const onPanel = (id, patch) => actions.update((s) => mapPanel(s, id, withFields(patch)))
-  const onToggle = (id, key) => {
-    const p = spec?.panels.find((x) => x.id === id)
-    if (p) onPanel(id, { [key]: !p[key] })
+  function onResetKnobs(id) {
+    const panel = panels?.find((x) => x.id === id)
+    if (!panel) return
+    const defaults = knobDefaultsFor(panel.type)
+    if (!Object.keys(defaults).length) return
+    actions.update((s, p) => mapPanel(s, p, id, withProps(defaults)))
+    setNotice({ kind: 'info', text: `${typeLabel(panel.type, state.labels)}: every setting back to its default.` })
   }
-  const onRemove = (id) => actions.update((s) => ({ ...s, panels: s.panels.filter((p) => p.id !== id) }))
-  const onReorder = (frontFirstIds) => actions.update((s) => ({ ...s, panels: restack(s.panels, frontFirstIds) }))
+
+  const onPanel = (id, patch) => actions.update((s, p) => mapPanel(s, p, id, withFields(patch)))
+  const onToggle = (id, key) => {
+    const panel = panels?.find((x) => x.id === id)
+    if (panel) onPanel(id, { [key]: !panel[key] })
+  }
+  function onRemove(id) {
+    const panel = panels?.find((x) => x.id === id)
+    actions.update((s, p) => removePanel(s, p, id))
+    if (panel && panel.type !== 'text' && panel.type !== 'image') {
+      setNotice({ kind: 'info', text: `${typeLabel(panel.type, state.labels)} is off this layout; Add panel brings it back.` })
+    }
+  }
+  const onReorder = (frontFirstIds) => actions.update((s, p) => editPanels(s, p, (list) => restack(list, frontFirstIds)))
   const onBackdrop = (patch, field) => actions.backdrop(patch, field ? { coalesce: `backdrop:${field}`, windowMs: 1000 } : {})
   const onGlobal = (patch, field) =>
-    actions.update((s) => ({ ...s, global: { ...s.global, ...patch } }), { coalesce: `global:${field}`, windowMs: 1000 })
+    actions.update((s, p) => editGlobal(s, p, patch), field ? { coalesce: `global:${part}:${field}`, windowMs: 1000 } : {})
+  // Day: the layout's own global (font, colours, sizes); a variant: Day's.
+  const onResetGlobal = () =>
+    actions.update((s, p) =>
+      p === 'day' ? { ...s, global: state.defaults ? { ...state.defaults.global } : { textScale: 1 } } : followDayGlobal(s, p)
+    )
+  const onFollowDay = () => actions.update((s, p) => followDayGlobal(s, p))
+  const onEveningFrom = (hour) => actions.update((s) => setEveningFrom(s, hour))
 
   function onAdd(type) {
-    if (!spec || spec.panels.length >= MAX_PANELS) return
-    const id = newBlockId(type, new Set(spec.panels.map((p) => p.id)))
-    actions.update((s) => ({ ...s, panels: [...s.panels, makeBlock(type, s, id)] }))
+    if (!panels || panels.length >= MAX_PANELS) return
+    const id = newBlockId(type, allIds(spec))
+    actions.update((s, p) => addPanel(s, p, makeBlock(type, partPanels(s, p) || [], id)))
     actions.select(id)
-    if (type === 'text') setFocusTextSeq((n) => n + 1)
-    setNotice({ kind: 'info', text: `Added ${TYPE_LABELS[type].toLowerCase()} block ${id}.` })
+    if (type === 'text') setFocusText({ id })
+    setNotice({ kind: 'info', text: `Added ${typeLabel(type, state.labels).toLowerCase()} block ${id}.` })
+  }
+
+  // Functional panels this part does not have, in the app's order.
+  const addable = useMemo(
+    () => (panels ? state.types.filter((t) => t.unique && !panels.some((p) => p.type === t.type)) : []),
+    [panels, state.types]
+  )
+
+  // Where the layout's own default has the panel, it goes back there with
+  // its default look; a panel the default lacks starts in the middle (the
+  // app's newPanel). Either way in front, and selected.
+  function onAddPanel(type) {
+    if (!panels || panels.length >= MAX_PANELS || panels.some((p) => p.type === type)) return
+    actions.update((s, p) => {
+      const list = partPanels(s, p)
+      if (!list || list.some((x) => x.type === type)) return s
+      const z = Math.min(999, list.reduce((m, x) => Math.max(m, x.z), 0) + 1)
+      const made = newPanel(type, layoutId, z) || makePanel(type, list, state.mins)
+      return addPanel(s, p, made)
+    })
+    actions.select(type)
+    setNotice({ kind: 'info', text: `Added ${typeLabel(type, state.labels)}.` })
   }
 
   function deleteSelected() {
@@ -262,40 +424,70 @@ export default function Editor() {
 
   function nudge(dx, dy) {
     if (!selected || selected.locked || selected.hidden) return
+    const id = selected.id
     actions.update(
-      (s) =>
-        mapPanel(s, selected.id, (p) => {
-          const start = pctToPxRound(p, canvas)
-          return withBox(pxToPctKeeping(p, start, nudgeRect(start, dx, dy, canvas), canvas))(p)
+      (s, p) =>
+        mapPanel(s, p, id, (panel) => {
+          const start = pctToPxRound(panel, canvas)
+          return withBox(pxToPctKeeping(panel, start, nudgeRect(start, dx, dy, canvas), canvas))(panel)
         }),
-      { coalesce: `nudge:${selected.id}`, windowMs: 1000 }
+      { coalesce: `nudge:${part}:${id}`, windowMs: 1000 }
     )
   }
 
+  // --- day parts --------------------------------------------------------------------
+  function onCreatePart() {
+    if (part === 'day' || hasPart(spec, part)) return
+    actions.update((s, p) => withVariant(s, p))
+    setNotice({
+      kind: 'info',
+      text: `${DAYPART_LABELS[part]} is its own layout now, a copy of Day. The screen shows it ${partWhen(part, spec?.eveningFrom)}.`,
+    })
+  }
+
+  function onRemovePart() {
+    if (part === 'day' || !hasPart(spec, part)) return
+    actions.update((s, p) => withoutVariant(s, p))
+    setNotice({ kind: 'info', text: `Removed ${DAYPART_LABELS[part]}: the screen shows Day then. Undo brings it back.` })
+  }
+
   // --- document -----------------------------------------------------------------------
+  // The stored copy of a screen's layout as the hub has it now (for the
+  // PATCH's removals), else what the last read said.
+  async function freshStored(id, fallback) {
+    try {
+      const data = await fetchDevices()
+      const list = Array.isArray(data?.devices) ? data.devices : []
+      setDevices(list)
+      const dev = list.find((d) => d.id === id)
+      return dev ? storedLayout(dev, layoutId) : fallback
+    } catch {
+      return fallback
+    }
+  }
+
   async function save() {
-    if (!state.draft || !ed.dirty || saving || !deviceId || !state.saved) return
+    if (!state.draft || !ed.dirty || saving || !deviceId || !state.saved || !layoutId) return
     const submitted = state.draft
-    const body = {}
-    if (ed.specDirty) {
-      body.layouts = {
-        [LAYOUT_ID]: ed.isDefault
-          ? null
-          : appNormalizeSpec(
-              normalizeSpec({ ...submitted.spec, canvas: { w: canvas.w, h: canvas.h } }),
-              { defaultSpec: null },
-            ),
-      }
-    }
-    if (ed.backdropDirty) {
-      const d = {}
-      if (submitted.backdrop.entryBackdrop !== state.saved.backdrop.entryBackdrop) d.entryBackdrop = submitted.backdrop.entryBackdrop
-      if (submitted.backdrop.entryDim !== state.saved.backdrop.entryDim) d.entryDim = submitted.backdrop.entryDim
-      body.display = d
-    }
     setSaving(true)
     saveEpoch.current += 1
     try {
+      const body = {}
+      if (ed.specDirty) {
+        if (ed.isDefault) {
+          body.layouts = { [layoutId]: null }
+        } else {
+          const stored = await freshStored(deviceId, state.saved.raw)
+          const spec2 = finalSpec({ ...submitted.spec, canvas: { w: canvas.w, h: canvas.h } }, layoutId)
+          body.layouts = { [layoutId]: withRemovals(stored, spec2) }
+        }
+      }
+      if (ed.backdropDirty) {
+        const d = {}
+        if (submitted.backdrop.entryBackdrop !== state.saved.backdrop.entryBackdrop) d.entryBackdrop = submitted.backdrop.entryBackdrop
+        if (submitted.backdrop.entryDim !== state.saved.backdrop.entryDim) d.entryDim = submitted.backdrop.entryDim
+        body.display = d
+      }
       const patched = await patchDeviceConfig(deviceId, body)
       // The saved copy, read back. The list rather than the config GET: see
       // fetchDevices in hub.js. The PATCH answer is the same copy if that fails.
@@ -311,10 +503,12 @@ export default function Editor() {
       actions.saved(dev, submitted)
       setNotice({
         kind: 'ok',
-        text: `${body.layouts && body.layouts[LAYOUT_ID] === null ? 'Saved as the default layout' : 'Saved'} at ${clock()}. ${
-          device?.name || deviceId
-        } picks it up within about 10 seconds.`,
+        text: `${body.layouts && body.layouts[layoutId] === null ? 'Saved as the default layout' : 'Saved'} at ${clock()}. ${nameOf(
+          device,
+          deviceId
+        )} picks it up within about 10 seconds.`,
       })
+      loadHistory()
     } catch (e) {
       setNotice({ kind: 'error', text: `Save failed: ${e.message}` })
     } finally {
@@ -323,18 +517,94 @@ export default function Editor() {
     }
   }
 
-  function onSwitch(id) {
-    if (!id || id === deviceId) return
-    if (ed.dirty && !window.confirm('Discard the unsaved changes to this screen?')) return
-    window.history.replaceState(null, '', editorUrlFor(id))
-    actions.switchDevice(id)
+  // Another screen gets this screen's SAVED layout (not the draft).
+  async function copyTo() {
+    const target = devices?.find((d) => d.id === copyAsk?.targetId)
+    if (!target || !state.saved || !layoutId || copying) return
+    setCopying(true)
+    try {
+      const source = state.saved.spec
+      let value = null
+      if (source) {
+        const stored = await freshStored(target.id, storedLayout(target, layoutId))
+        value = withRemovals(stored, finalSpec(source, layoutId))
+      }
+      await patchDeviceConfig(target.id, { layouts: { [layoutId]: value } })
+      setToast({
+        kind: 'ok',
+        text: `Copied to ${nameOf(target, target.id)}: its ${meta.label} is now ${nameOf(device, deviceId)}'s${
+          source ? '' : ' (the default)'
+        }. It picks it up within about 10 seconds.`,
+      })
+      fetchDevices()
+        .then((data) => setDevices(Array.isArray(data?.devices) ? data.devices : []))
+        .catch(() => {})
+    } catch (e) {
+      setToast({ kind: 'error', text: `Copy to ${nameOf(target, target.id)} failed: ${e.message}` })
+    } finally {
+      setCopying(false)
+      setCopyAsk(null)
+    }
+  }
+
+  // History rows for this layout: the stored copy before each save, newest
+  // first, one row per distinct copy in a row (a save of another layout
+  // leaves this one's unchanged).
+  const historyRows = useMemo(() => {
+    if (!history || history.deviceId !== deviceId || !history.items) return null
+    const rows = []
+    let prev
+    history.items.forEach((it, i) => {
+      if (!isDict(it)) return
+      const raw = isDict(it.layouts) && it.layouts[layoutId] != null ? it.layouts[layoutId] : null
+      const key = JSON.stringify(raw)
+      if (key === prev) return
+      prev = key
+      const t = Date.parse(it.at)
+      const asSpec = raw ?? state.defaults
+      rows.push({
+        key: `${i}:${it.at}`,
+        raw,
+        when: ago(it.at),
+        whenTitle: Number.isFinite(t) ? `Replaced ${new Date(t).toLocaleString()}` : '',
+        detail: describe(raw),
+        current: !!asSpec && !!effectiveSaved && sameLayout(asSpec, effectiveSaved, layoutId),
+      })
+    })
+    return rows
+  }, [history, deviceId, layoutId, state.defaults, effectiveSaved])
+
+  function onLoadHistory(row) {
+    if (row.raw == null && !state.defaults) return
+    actions.load(row.raw)
+    setNotice({
+      kind: 'info',
+      text: `Loaded ${row.raw == null ? 'the default layout' : 'the layout'} from before the save ${row.when} as a draft. Save puts it back; Undo drops it.`,
+    })
+  }
+
+  function confirmDiscard() {
+    return !ed.dirty || window.confirm('Discard the unsaved changes to this layout?')
+  }
+
+  function openDocument(id, layout) {
+    actions.switchTo(id, layout)
     const dev = devices?.find((d) => d.id === id)
     if (dev) actions.hubLoaded(dev)
-    setDeviceId(id)
     setFrameKey((n) => n + 1)
     setRects(null)
-    setHoverId(null)
+    setHover(null)
     setNotice(null)
+  }
+
+  function onSwitch(id) {
+    if (!id || id === deviceId || !confirmDiscard()) return
+    openDocument(id, layoutId)
+  }
+
+  function onLayout(id) {
+    if (!id || id === layoutId || !confirmDiscard()) return
+    openDocument(deviceId, id)
   }
 
   function onPrefs(patch) {
@@ -350,7 +620,7 @@ export default function Editor() {
 
   function onReset() {
     actions.reset()
-    setNotice({ kind: 'info', text: 'The built-in board. Save stores it as "use the default".' })
+    setNotice({ kind: 'info', text: `The built-in ${meta.label}. Save stores it as "use the default".` })
   }
 
   function onReload() {
@@ -358,8 +628,12 @@ export default function Editor() {
     setRects(null)
   }
 
+  const onTextFocused = useCallback(() => setFocusText(null), [])
+  const onStageHover = useCallback((id) => setHover(id ? { id, element: null } : null), [])
+
   // --- keyboard -------------------------------------------------------------------------
   function onKeyDown(e) {
+    if (copyAsk) return // the dialog has the keys
     const mod = e.metaKey || e.ctrlKey
     const key = e.key
     if (mod && (key === 's' || key === 'S')) {
@@ -385,7 +659,11 @@ export default function Editor() {
     }
     if (mod || e.altKey) return
     if (key === 'Escape') {
-      if (state.selectedId) {
+      // Up one level: the part of a panel, the panel, nothing.
+      if (state.selectedElement) {
+        e.preventDefault()
+        actions.selectElement(null)
+      } else if (state.selectedId) {
         e.preventDefault()
         actions.select(null)
       }
@@ -399,7 +677,7 @@ export default function Editor() {
     }
     if (key === 'Enter' && selected.type === 'text') {
       e.preventDefault()
-      setFocusTextSeq((n) => n + 1)
+      setFocusText({ id: selected.id })
       return
     }
     const step = e.shiftKey ? 10 : 1
@@ -438,10 +716,13 @@ export default function Editor() {
   else if (devices && deviceId && !device) problem = `No screen called "${deviceId}" on the hub.`
   else if (device && !isWebScreen(device)) problem = `${device.name || deviceId} is not a web screen; the editor lays out the web app's boards.`
 
+  const elName = selected && state.selectedElement ? elementLabel(selected.type, state.selectedElement, reportedLabels) : null
   const selPx = selected ? pctToPxRound(selected, canvas) : null
   const selectionText = selected
-    ? `${selected.id}: ${selPx.x}, ${selPx.y}, ${selPx.w} x ${selPx.h} px`
+    ? `${part !== 'day' ? `${DAYPART_LABELS[part]} · ` : ''}${selected.id}${elName ? ` › ${elName}` : ''}: ${selPx.x}, ${selPx.y}, ${selPx.w} x ${selPx.h} px`
     : null
+  const has = Object.fromEntries(VARIANT_PARTS.map((p) => [p, hasPart(spec, p)]))
+  const copyTarget = copyAsk ? devices?.find((d) => d.id === copyAsk.targetId) : null
 
   return (
     <div className="ed-app">
@@ -449,6 +730,13 @@ export default function Editor() {
         screens={screens}
         deviceId={deviceId}
         onSwitch={onSwitch}
+        layoutId={layoutId}
+        onLayout={onLayout}
+        history={historyRows ? { rows: historyRows, loading: history?.loading, error: history?.error } : history}
+        onOpenHistory={loadHistory}
+        onLoadHistory={onLoadHistory}
+        copyTargets={copyTargets}
+        onCopy={(id) => setCopyAsk({ targetId: id })}
         canvas={canvas}
         onPickCanvas={actions.pickCanvas}
         prefs={prefs}
@@ -469,57 +757,94 @@ export default function Editor() {
         hasDraft={!!state.draft}
       />
       <Layers
-        panels={spec?.panels}
+        panels={panels}
         selectedId={state.selectedId}
-        hoverId={hoverId}
+        hoverId={hover?.id ?? null}
         labels={state.labels}
-        disabled={!spec}
-        canAdd={!!spec && spec.panels.length < MAX_PANELS}
+        disabled={!panels}
+        readOnlyNote={
+          spec && !panels
+            ? `${DAYPART_LABELS[part]} shows the Day layout. Create ${DAYPART_LABELS[part]} from Day to change it.`
+            : null
+        }
+        canAdd={!!panels && panels.length < MAX_PANELS}
+        addable={addable}
         onSelect={actions.select}
-        onHover={setHoverId}
+        onHover={onStageHover}
         onToggle={onToggle}
         onReorder={onReorder}
         onAdd={onAdd}
+        onAddPanel={onAddPanel}
       />
       <main className="ed-main">
-        {problem ? (
-          <div className="ed-problem" role="alert">
-            {problem}
-          </div>
-        ) : deviceId && state.loaded ? (
-          // Mounted once the hub has answered, so the app loads at the
-          // screen's size rather than at a guess and then resizes.
-          <Stage
-            frame={frame}
-            frameKey={frameKey}
-            iframeRef={iframeRef}
-            onFrameLoad={bridge.ping}
-            canvas={canvas}
-            zoom={prefs.zoom}
-            grid={prefs.grid}
-            gridSize={prefs.gridSize}
-            spec={spec}
-            rects={liveRects}
-            selectedId={state.selectedId}
-            hoverId={hoverId}
-            labels={state.labels}
-            mins={state.mins}
-            appState={appState}
-            onSelect={actions.select}
-            onHover={setHoverId}
-            onGeometry={onGeometry}
-            onAbandon={actions.abandon}
-            onEditText={(id) => {
-              actions.select(id)
-              setFocusTextSeq((n) => n + 1)
-            }}
+        {meta.variants && spec && !problem && (
+          <Dayparts
+            parts={state.dayparts}
+            active={part}
+            has={has}
+            eveningFrom={spec.eveningFrom}
+            onPick={actions.daypart}
+            onCreate={onCreatePart}
+            onRemove={onRemovePart}
           />
-        ) : (
-          <div className="ed-problem">{deviceId ? 'Reading the screen from the hub…' : 'Loading the screens…'}</div>
         )}
+        <div className="ed-stagewrap">
+          {problem ? (
+            <div className="ed-problem" role="alert">
+              {problem}
+            </div>
+          ) : deviceId && state.loaded ? (
+            // Mounted once the hub has answered, so the app loads at the
+            // screen's size rather than at a guess and then resizes.
+            <Stage
+              frame={frame}
+              frameKey={frameKey}
+              iframeRef={iframeRef}
+              onFrameLoad={bridge.ping}
+              canvas={canvas}
+              zoom={prefs.zoom}
+              grid={prefs.grid}
+              gridSize={prefs.gridSize}
+              spec={spec}
+              panels={panels}
+              readOnly={!!spec && !panels}
+              rects={liveRects}
+              selectedId={state.selectedId}
+              selectedElement={state.selectedElement}
+              hoverId={hover?.id ?? null}
+              labels={state.labels}
+              mins={state.mins}
+              appState={appState}
+              elementName={(key) => (selected ? elementLabel(selected.type, key, reportedLabels) : key)}
+              onSelect={actions.select}
+              onSelectElement={actions.selectElement}
+              onHover={onStageHover}
+              onGeometry={onGeometry}
+              onAbandon={actions.abandon}
+              onEditText={(id) => {
+                actions.select(id)
+                setFocusText({ id })
+              }}
+            />
+          ) : (
+            <div className="ed-problem">{deviceId ? 'Reading the screen from the hub…' : 'Loading the screens…'}</div>
+          )}
+          {toast && (
+            <div className={`ed-toast is-${toast.kind}`} role="status">
+              <span>{toast.text}</span>
+              <button type="button" className="ed-icon" aria-label="Dismiss" onClick={() => setToast(null)}>
+                ×
+              </button>
+            </div>
+          )}
+        </div>
       </main>
       <Inspector
         draft={state.draft}
+        spec={spec}
+        part={part}
+        layoutId={layoutId || meta.id}
+        hasVariant={hasVariant}
         panel={selected}
         canvas={canvas}
         labels={state.labels}
@@ -530,9 +855,20 @@ export default function Editor() {
         onProps={onProps}
         onPanel={onPanel}
         onRemove={onRemove}
+        onResetKnobs={onResetKnobs}
         onBackdrop={onBackdrop}
         onGlobal={onGlobal}
-        focusTextSeq={focusTextSeq}
+        onResetGlobal={onResetGlobal}
+        onFollowDay={onFollowDay}
+        onEveningFrom={onEveningFrom}
+        onCreatePart={onCreatePart}
+        defaultGlobal={state.defaults?.global ?? null}
+        focusTextFor={focusText?.id ?? null}
+        onTextFocused={onTextFocused}
+        selectedElement={state.selectedElement}
+        onSelectElement={actions.selectElement}
+        reportedLabels={reportedLabels}
+        onFieldHover={setHover}
       />
       <StatusLine
         hub={HUB}
@@ -544,6 +880,28 @@ export default function Editor() {
         notice={devicesError && devices ? { kind: 'warn', text: `Hub refresh failed: ${devicesError}` } : notice}
         selection={selectionText}
       />
+      {copyAsk && copyTarget && (
+        <Dialog
+          title={`Replace ${nameOf(copyTarget, copyTarget.id)}'s ${meta.label} with this layout?`}
+          confirmLabel="Replace"
+          danger
+          busy={copying}
+          onConfirm={copyTo}
+          onCancel={() => !copying && setCopyAsk(null)}
+        >
+          <p>
+            {nameOf(copyTarget, copyTarget.id)} gets the {meta.label} saved on {nameOf(device, deviceId)} (
+            {state.saved?.spec ? describe(state.saved.spec).toLowerCase() : 'the default layout'}). What it has now stays in
+            its history, so it can be put back from there.
+          </p>
+          {ed.specDirty && (
+            <p className="ed-dialog__warn">
+              This copies the layout as last saved, not your unsaved changes. Save first to include them.
+            </p>
+          )}
+          {meta.backdrop && <p className="ed-note">The backdrop (photos, darkening) stays each screen's own.</p>}
+        </Dialog>
+      )}
     </div>
   )
 }

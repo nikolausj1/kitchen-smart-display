@@ -1,10 +1,13 @@
-// Layers - the left-hand column: every panel and block, front to back (the
-// top row is drawn in front). Click selects, the eye hides, the lock stops
-// drag and resize, drag a row (or use the arrows) to restack. Add text / Add
-// image put a new block in the middle of the canvas, in front.
+// Layers - the left-hand column: every panel and block of the day part on
+// show, front to back (the top row is drawn in front). Click selects, the eye
+// hides, the lock stops drag and resize, drag a row (or use the arrows) to
+// restack. Add text / Add image put a new block in the middle of the canvas,
+// in front; Add panel lists the functional panels this part does not have
+// (each appears at most once per layout) and puts the one chosen there too.
 
 import { useState } from 'react'
 import { DownIcon, EyeIcon, EyeOffIcon, ImageIcon, LockIcon, PanelIcon, TextIcon, UnlockIcon, UpIcon } from './icons.jsx'
+import { Menu, MenuItem, MenuNote } from './menus.jsx'
 import { frontToBack, panelLabel } from './spec.js'
 
 function TypeIcon({ type }) {
@@ -13,7 +16,22 @@ function TypeIcon({ type }) {
   return <PanelIcon />
 }
 
-export default function Layers({ panels, selectedId, hoverId, labels, disabled, canAdd, onSelect, onHover, onToggle, onReorder, onAdd }) {
+export default function Layers({
+  panels,
+  selectedId,
+  hoverId,
+  labels,
+  disabled,
+  readOnlyNote,
+  canAdd,
+  addable,
+  onSelect,
+  onHover,
+  onToggle,
+  onReorder,
+  onAdd,
+  onAddPanel,
+}) {
   const ordered = panels ? frontToBack(panels) : []
   const ids = ordered.map((p) => p.id)
   // While a row is dragged: which one, and where it would land.
@@ -52,7 +70,30 @@ export default function Layers({ panels, selectedId, hoverId, labels, disabled, 
         <button type="button" className="ed-btn" disabled={!canAdd} onClick={() => onAdd('image')}>
           <ImageIcon /> Add image
         </button>
+        <Menu
+          className="ed-layers__addpanel"
+          disabled={!canAdd}
+          title="Put a panel this layout does not have on it"
+          label={
+            <>
+              <PanelIcon /> Add panel
+            </>
+          }
+        >
+          {(close) =>
+            addable.length ? (
+              addable.map((t) => (
+                <MenuItem key={t.type} close={close} onSelect={() => onAddPanel(t.type)}>
+                  {t.label}
+                </MenuItem>
+              ))
+            ) : (
+              <MenuNote>Every panel is on this layout already. A hidden one comes back with its eye.</MenuNote>
+            )
+          }
+        </Menu>
       </div>
+      {readOnlyNote && <p className="ed-side__empty">{readOnlyNote}</p>}
       <ul className="ed-layers__list" aria-label="Layers, front to back">
         {ordered.map((p, i) => {
           const cls = ['ed-layer']

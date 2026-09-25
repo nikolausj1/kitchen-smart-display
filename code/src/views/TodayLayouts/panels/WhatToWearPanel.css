@@ -62,3 +62,13 @@
   font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
   color: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+/* The words, through the text scale, so a layout's own sizes for these lines
+ * follow the knob too, as long as they multiply by --tl-text-scale (the Entry
+ * board's do). The glyph is art. */
+.tl-knobs .tl-wear__body {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-wear-size, 1));
+}
+

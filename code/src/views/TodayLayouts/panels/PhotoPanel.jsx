@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import './PhotoPanel.css'
 
 // PhotoPanel - the slideshow, as a tile on the Board and full-bleed in Ambient.
@@ -18,8 +19,16 @@ import './PhotoPanel.css'
 //
 // Crossfade technique is borrowed from views/PhotoSlideshow: two stacked layers
 // that both stay mounted, with the active one at opacity 1.
+//
+// knobs (a spec layout, panels/schemas.js 'photo'): intervalMs, fit,
+// showCaption, showCounter. They win over the props of the same name, except
+// knobs.intervalMs 0 ("Screen setting"): then the intervalMs prop rules, and
+// the layout passes the screen's own slideshow interval there (bounded to
+// 15 s..10 min, as the Board always did).
 
 const FADE_MS = 1200 // keep in step with the transition in PhotoPanel.css
+// "Screen setting" with no screen interval handed in: the Board's fallback.
+const SCREEN_FALLBACK_MS = 20000
 const TALL_CELL_VH = 0.4 // art facts only appear on a cell at least this tall
 
 // mulberry32: a tiny deterministic PRNG, so buildRun stays pure for a seed.
@@ -63,13 +72,27 @@ function buildRun(photos, count, preferLandscape, seed) {
 
 function PhotoPanel({
   photos,
-  intervalMs = 20000,
+  intervalMs: intervalProp = 20000,
   count = 12,
-  fit = 'cover',
-  showCounter = true,
-  showCaption = true,
+  fit: fitProp = 'cover',
+  showCounter: counterProp = true,
+  showCaption: captionProp = true,
   className = '',
+  knobs,
 }) {
+  // The knobs stand in for the props of the same name. An interval knob of 0
+  // is the screen's setting, the prop; a layout that hands no usable prop gets
+  // the old default rather than a parked slideshow.
+  const k = panelKnobs('photo', knobs)
+  const knobInterval = k ? Number(k.intervalMs) : NaN
+  let intervalMs = intervalProp
+  if (k) {
+    if (Number.isFinite(knobInterval) && knobInterval > 0) intervalMs = knobInterval
+    else if (!(intervalProp > 0)) intervalMs = SCREEN_FALLBACK_MS
+  }
+  const fit = k ? (k.fit === 'contain' ? 'contain' : 'cover') : fitProp
+  const showCounter = k ? !!k.showCounter : counterProp
+  const showCaption = k ? !!k.showCaption : captionProp
   // Impure only here, which the purity rule allows: a lazy state initializer.
   const [seed, setSeed] = useState(() => (Math.random() * 0xffffffff) >>> 0)
   // Measured cell, from a ResizeObserver. `tall` gates the art-fact line.
@@ -222,7 +245,7 @@ function PhotoPanel({
         )}
 
         {hasCaption && (
-          <div className="tl-photo__caption">
+          <div className="tl-photo__caption" data-edit="caption">
             {location && <div className="tl-photo__caption-line">{location}</div>}
             {date && <div className="tl-photo__caption-sub">{date}</div>}
             {fact && <div className="tl-photo__caption-fact">{fact}</div>}
@@ -231,6 +254,15 @@ function PhotoPanel({
       </div>
     </PanelFrame>
   )
+}
+
+// Knobs by value: a layout may build a fresh knobs object on every tick.
+function knobsEqual(a, b) {
+  if (a === b) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+  const ak = Object.keys(a)
+  if (ak.length !== Object.keys(b).length) return false
+  return ak.every((key) => Object.prototype.hasOwnProperty.call(b, key) && a[key] === b[key])
 }
 
 // The parent re-renders every second. Compare photos by identity (the manifest
@@ -244,7 +276,8 @@ function propsEqual(prev, next) {
     prev.fit === next.fit &&
     prev.showCounter === next.showCounter &&
     prev.showCaption === next.showCaption &&
-    prev.className === next.className
+    prev.className === next.className &&
+    knobsEqual(prev.knobs, next.knobs)
   )
 }
 

@@ -1,39 +1,58 @@
-import { useEffect, useSyncExternalStore } from 'react'
-import { EDIT_MODE } from '../../lib/kioskMode.js'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { EDIT_MODE, REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import { getSettings, whenHubSettled } from '../../lib/settings.js'
 import { setDemoMode } from './data/demoMode.js'
 import {
-  DEFAULT_ENTRY_SPEC,
-  ENTRY_LAYOUT_ID,
+  DAYPARTS,
+  GLOBAL_SCHEMA_COPY,
+  PANEL_SCHEMA_TABLE,
   PANEL_TYPE_LIST,
+  SPEC_VERSION,
+  defaultSpecFor,
+  isSpecLayout,
   normalizeSpec,
   specEquals,
 } from './layoutSpec.js'
 
 // editBridge - the app's half of the layout editor's message channel
-// (docs/designs/layout-editor.md, "Contract v1"). The editor page loads this
-// app in an iframe at the screen's resolution with ?edit=1 and talks to it
-// with window.postMessage, same origin both ways.
+// (docs/designs/layout-editor.md, "Contract v1" and "Contract v2"). The editor
+// page loads this app in an iframe at the screen's resolution with ?edit=1
+// and &layout=<id>, and talks to it with window.postMessage, same origin both
+// ways. The layout on screen (Entry or Board, both drawn by Entry/SpecBoard)
+// is the one being edited: its id is `layoutId` below.
 //
 //   app -> editor  sd-edit:ready   { layoutId, canvas, savedSpec, defaultSpec,
-//                                    panelTypes }
+//                                    panelTypes, schemas, globalSchema,
+//                                    dayparts, specVersion }
 //                                  once the first hub answer is in (or 2 s
 //                                  passed), whenever the saved spec changes on
 //                                  the hub, and in reply to a ping
-//                  sd-edit:rects   { canvas, panels: [{ id, type, x, y, w, h }] }
-//                                  every box's rectangle in iframe pixels,
-//                                  after a render or a resize that moved one,
-//                                  throttled to ~100 ms with a trailing call
-//   editor -> app  sd-edit:spec    { spec }  render this draft (normalized on
-//                                  receipt); spec: null drops the draft and
-//                                  goes back to the saved layout
-//                  sd-edit:hover   { id | null }  outline that box
+//                  sd-edit:rects   { layoutId, daypart, canvas,
+//                                    panels: [{ id, type, x, y, w, h }],
+//                                    elements: [{ panelId, key, label,
+//                                                 x, y, w, h }] }
+//                                  every box's rectangle and every marked
+//                                  sub-element's ([data-edit] inside a box) in
+//                                  iframe pixels, after a render or a resize
+//                                  that moved one, throttled to ~100 ms with a
+//                                  trailing call
+//   editor -> app  sd-edit:spec    { spec, layoutId? }  render this draft
+//                                  (normalized for the layout on screen);
+//                                  spec: null drops the draft and goes back to
+//                                  the saved layout; a layoutId that is not
+//                                  the one on screen is ignored
+//                  sd-edit:hover   { id | null, element? }  outline that box,
+//                                  and inside it every element whose data-edit
+//                                  is `element` (data-edit-hover)
+//                  sd-edit:daypart { daypart }  draw that day part's layout
+//                                  ('day' | 'morning' | 'evening' | 'weekend';
+//                                  a variant the spec lacks draws the base);
+//                                  null follows the clock again
 //                  sd-edit:sample  { on }  demo data on or off
 //                  sd-edit:ping    reply with ready (and fresh rects)
 //                  sd-edit:display { display: { entryBackdrop, entryDim } }
-//                                  the editor's draft backdrop (an addition
-//                                  to the v1 table, proposed by the editor):
-//                                  previewed until saved; null clears it
+//                                  the editor's draft backdrop: previewed
+//                                  until saved; null clears it
 //
 // Only active in edit mode AND inside a frame. Every message in is checked
 // for this page's own origin and for coming from the frame's parent.
@@ -44,10 +63,21 @@ export const EDIT_BRIDGE_ACTIVE =
 const ORIGIN = typeof window !== 'undefined' ? window.location.origin : ''
 const RECTS_MS = 100
 const READY_FALLBACK_MS = 2000
+// Sub-elements per rects message: a board has a few dozen; these caps only
+// stop a runaway panel (an agenda of a hundred rows) flooding the channel.
+const MAX_ELEMENTS = 400
+const MAX_ELEMENTS_PER_PANEL = 60
 
-// --- The draft and hover store (read by the Entry layout) --------------------
+// --- The draft, hover and day-part store (read by the spec layouts) ---------
 
-let state = { draft: null, hoverId: null, display: null }
+let state = {
+  draftRaw: null,
+  draftLayoutId: null,
+  hoverId: null,
+  hoverElement: null,
+  display: null,
+  daypart: null,
+}
 const listeners = new Set()
 
 function setState(patch) {
@@ -60,20 +90,37 @@ function subscribe(fn) {
   return () => listeners.delete(fn)
 }
 
-// The editor's draft spec (normalized), or null until one has arrived.
-export function useEditDraft() {
-  return useSyncExternalStore(subscribe, () => state.draft, () => null)
+const getDraftRaw = () => state.draftRaw
+const getDraftLayoutId = () => state.draftLayoutId
+const getNull = () => null
+
+// The editor's draft spec for `layoutId`, normalized with that layout's
+// defaults, or null until one has arrived (or when the draft was sent for
+// another layout).
+export function useEditDraft(layoutId) {
+  const raw = useSyncExternalStore(subscribe, getDraftRaw, getNull)
+  const forId = useSyncExternalStore(subscribe, getDraftLayoutId, getNull)
+  return useMemo(() => {
+    if (raw == null || (forId != null && forId !== layoutId)) return null
+    return normalizeSpec(raw, { layoutId })
+  }, [raw, forId, layoutId])
 }
 
 // The id of the box the editor is pointing at, or null.
 export function useEditHover() {
-  return useSyncExternalStore(subscribe, () => state.hoverId, () => null)
+  return useSyncExternalStore(subscribe, () => state.hoverId, getNull)
+}
+
+// The day part the editor is previewing ('day', 'morning', ...), or null to
+// follow the clock.
+export function useEditDaypart() {
+  return useSyncExternalStore(subscribe, () => state.daypart, getNull)
 }
 
 // The editor's draft backdrop settings ({ entryBackdrop?, entryDim? }, only
 // the valid ones), or null: they win over the screen's saved display settings.
 export function useEditDisplay() {
-  return useSyncExternalStore(subscribe, () => state.display, () => null)
+  return useSyncExternalStore(subscribe, () => state.display, getNull)
 }
 
 function displayDraft(d) {
@@ -82,6 +129,20 @@ function displayDraft(d) {
   if (d.entryBackdrop === 'photos' || d.entryBackdrop === 'black') out.entryBackdrop = d.entryBackdrop
   if (typeof d.entryDim === 'number' && Number.isFinite(d.entryDim)) out.entryDim = d.entryDim
   return Object.keys(out).length ? out : null
+}
+
+// --- Which layout is being edited -------------------------------------------------
+
+// Set by the mounted spec layout (useEditBridge); until one mounts, the layout
+// this page was asked for (?layout=) or the screen's own choice.
+let activeLayoutId = null
+// The day part the mounted layout last drew (for rects).
+let drawnDaypart = null
+
+function currentLayoutId() {
+  if (activeLayoutId) return activeLayoutId
+  const id = REQUESTED_LAYOUT || getSettings()?.display?.todayLayout || null
+  return isSpecLayout(id) ? id : null
 }
 
 // --- Out -------------------------------------------------------------------
@@ -98,38 +159,53 @@ function canvasSize() {
   return { w: window.innerWidth, h: window.innerHeight }
 }
 
-// The saved spec last announced (normalized; null = the built-in default),
-// and whether any ready has gone out yet.
+function savedSpecOf(layoutId) {
+  const raw = getSettings()?.layouts?.[layoutId] ?? null
+  return normalizeSpec(raw, { defaultSpec: null, layoutId })
+}
+
+// The layout and saved spec last announced (normalized; null = the built-in
+// default), and whether any ready has gone out yet.
 let announced = false
+let announcedLayoutId = null
 let announcedSaved = null
 
 function sendReady() {
-  const raw = getSettings()?.layouts?.entry ?? null
-  const savedSpec = normalizeSpec(raw, { defaultSpec: null })
+  const layoutId = currentLayoutId()
+  // No spec layout on screen (Framed, Briefing...): nothing to edit, no ready.
+  if (!layoutId) return
+  const savedSpec = savedSpecOf(layoutId)
   announced = true
+  announcedLayoutId = layoutId
   announcedSaved = savedSpec
   post({
     type: 'sd-edit:ready',
-    layoutId: ENTRY_LAYOUT_ID,
+    layoutId,
     canvas: canvasSize(),
     savedSpec,
-    defaultSpec: DEFAULT_ENTRY_SPEC,
+    defaultSpec: defaultSpecFor(layoutId),
     panelTypes: PANEL_TYPE_LIST,
+    schemas: PANEL_SCHEMA_TABLE,
+    globalSchema: GLOBAL_SCHEMA_COPY,
+    dayparts: DAYPARTS,
+    specVersion: SPEC_VERSION,
   })
 }
 
-// Only when the saved spec really changed: a hub poll that changed some other
-// setting hands the store a new, equal layouts object.
+// Only when the layout or its saved spec really changed: a hub poll that
+// changed some other setting hands the store a new, equal layouts object.
 function sendReadyIfSavedChanged() {
-  const raw = getSettings()?.layouts?.entry ?? null
-  if (announced && specEquals(normalizeSpec(raw, { defaultSpec: null }), announcedSaved)) return
+  const layoutId = currentLayoutId()
+  if (!layoutId) return
+  if (announced && layoutId === announcedLayoutId && specEquals(savedSpecOf(layoutId), announcedSaved)) return
   sendReady()
 }
 
 // Rectangles. Measured when the timer fires, so a burst of renders costs one
 // measurement of the final layout. Unchanged rectangles are not re-sent (the
 // clock re-renders the board every second) unless forced: after a spec from
-// the editor, a ping, a resize or a mount, the editor always hears back.
+// the editor, a day part, a ping, a resize or a mount, the editor always
+// hears back.
 let rootEl = null
 let rectTimer = null
 let lastRectsAt = -Infinity
@@ -140,23 +216,59 @@ function r2(n) {
   return Math.round(n * 100) / 100
 }
 
-function flushRects() {
-  rectTimer = null
-  lastRectsAt = Date.now()
-  if (!rootEl) return
-  const panels = []
-  rootEl.querySelectorAll('[data-panel-id]').forEach((el) => {
+// A box's marked sub-elements: drawn (a zero rectangle is display: none, e.g.
+// a box showing "Too small") and at least partly inside the box.
+function elementsOf(box, id, boxRect, out) {
+  let n = 0
+  const els = box.querySelectorAll('[data-edit]')
+  for (let i = 0; i < els.length; i++) {
+    if (n >= MAX_ELEMENTS_PER_PANEL || out.length >= MAX_ELEMENTS) return
+    const el = els[i]
+    const key = el.getAttribute('data-edit')
+    if (!key) continue
     const r = el.getBoundingClientRect()
-    panels.push({
-      id: el.getAttribute('data-panel-id'),
-      type: el.getAttribute('data-panel-type'),
+    if (r.width <= 0 || r.height <= 0) continue
+    if (r.right <= boxRect.left || r.left >= boxRect.right || r.bottom <= boxRect.top || r.top >= boxRect.bottom) continue
+    out.push({
+      panelId: id,
+      key,
+      label: el.getAttribute('data-edit-label') || key,
       x: r2(r.left),
       y: r2(r.top),
       w: r2(r.width),
       h: r2(r.height),
     })
+    n += 1
+  }
+}
+
+function flushRects() {
+  rectTimer = null
+  lastRectsAt = Date.now()
+  if (!rootEl) return
+  const panels = []
+  const elements = []
+  rootEl.querySelectorAll('[data-panel-id]').forEach((box) => {
+    const r = box.getBoundingClientRect()
+    const id = box.getAttribute('data-panel-id')
+    panels.push({
+      id,
+      type: box.getAttribute('data-panel-type'),
+      x: r2(r.left),
+      y: r2(r.top),
+      w: r2(r.width),
+      h: r2(r.height),
+    })
+    if (elements.length < MAX_ELEMENTS) elementsOf(box, id, r, elements)
   })
-  const msg = { type: 'sd-edit:rects', canvas: canvasSize(), panels }
+  const msg = {
+    type: 'sd-edit:rects',
+    layoutId: activeLayoutId,
+    daypart: drawnDaypart,
+    canvas: canvasSize(),
+    panels,
+    elements,
+  }
   const json = JSON.stringify(msg)
   if (json === lastRectsJson && !forceRects) return
   lastRectsJson = json
@@ -172,6 +284,30 @@ function scheduleRects(force) {
   rectTimer = setTimeout(flushRects, wait)
 }
 
+// The editor's sub-element hover: data-edit-hover on every element of the
+// hovered box whose data-edit is the hovered key, and on nothing else. Set on
+// the DOM directly (the panels are not told), so it is re-applied after every
+// commit of the layout, which may have replaced a marked element.
+function applyElementHover() {
+  if (!rootEl) return
+  const id = state.hoverId
+  const key = state.hoverElement
+  rootEl.querySelectorAll('[data-edit-hover]').forEach((el) => {
+    const box = el.closest('[data-panel-id]')
+    const keep = !!key && !!box && box.getAttribute('data-panel-id') === id && el.getAttribute('data-edit') === key
+    if (!keep) el.removeAttribute('data-edit-hover')
+  })
+  if (!id || !key) return
+  rootEl.querySelectorAll('[data-panel-id]').forEach((box) => {
+    if (box.getAttribute('data-panel-id') !== id) return
+    box.querySelectorAll('[data-edit]').forEach((el) => {
+      if (el.getAttribute('data-edit') === key && !el.hasAttribute('data-edit-hover')) {
+        el.setAttribute('data-edit-hover', '')
+      }
+    })
+  })
+}
+
 // --- In ----------------------------------------------------------------------
 
 function onMessage(event) {
@@ -181,15 +317,28 @@ function onMessage(event) {
   if (!data || typeof data !== 'object' || typeof data.type !== 'string') return
   switch (data.type) {
     case 'sd-edit:spec': {
-      const next = data.spec == null ? null : normalizeSpec(data.spec)
+      const raw = data.spec == null || typeof data.spec !== 'object' ? null : data.spec
+      const forId = typeof data.layoutId === 'string' && data.layoutId ? data.layoutId : null
       // A drag sends the same spec many times; only a real change re-renders.
-      if (!specEquals(next, state.draft)) setState({ draft: next })
+      if (!specEquals(raw, state.draftRaw) || forId !== state.draftLayoutId) {
+        setState({ draftRaw: raw, draftLayoutId: forId })
+      }
       scheduleRects(true)
       break
     }
     case 'sd-edit:hover': {
       const id = typeof data.id === 'string' && data.id ? data.id : null
-      if (id !== state.hoverId) setState({ hoverId: id })
+      const element = id && typeof data.element === 'string' && data.element ? data.element : null
+      if (id !== state.hoverId || element !== state.hoverElement) {
+        setState({ hoverId: id, hoverElement: element })
+        applyElementHover()
+      }
+      break
+    }
+    case 'sd-edit:daypart': {
+      const d = DAYPARTS.indexOf(data.daypart) >= 0 ? data.daypart : null
+      if (d !== state.daypart) setState({ daypart: d })
+      scheduleRects(true)
       break
     }
     case 'sd-edit:sample':
@@ -217,12 +366,13 @@ if (EDIT_BRIDGE_ACTIVE) {
 
 // --- The hook ------------------------------------------------------------------
 
-// useEditBridge(rootRef, savedRaw) - called once by the Entry layout with its
-// root element and the saved spec as the settings store holds it. A no-op
-// outside edit mode.
-export function useEditBridge(rootRef, savedRaw) {
+// useEditBridge(rootRef, savedRaw, layoutId, daypart) - called once by the
+// spec layout on screen (Entry/SpecBoard.jsx) with its root element, the saved
+// spec as the settings store holds it, its layout id and the day part it
+// drew. A no-op outside edit mode.
+export function useEditBridge(rootRef, savedRaw, layoutId, daypart) {
   // Ready once the first hub answer is in (so savedSpec is the hub's, not a
-  // guess), then again whenever the saved spec changes.
+  // guess), then again whenever the saved spec (or the layout) changes.
   useEffect(() => {
     if (!EDIT_BRIDGE_ACTIVE) return undefined
     let cancelled = false
@@ -233,13 +383,14 @@ export function useEditBridge(rootRef, savedRaw) {
     return () => {
       cancelled = true
     }
-  }, [savedRaw])
+  }, [savedRaw, layoutId])
 
-  // The root, and anything that resizes it.
+  // The root and the layout it draws, and anything that resizes it.
   useEffect(() => {
     if (!EDIT_BRIDGE_ACTIVE) return undefined
     const el = rootRef.current
     rootEl = el
+    activeLayoutId = isSpecLayout(layoutId) ? layoutId : null
     const onResize = () => scheduleRects(true)
     window.addEventListener('resize', onResize)
     let ro = null
@@ -251,12 +402,19 @@ export function useEditBridge(rootRef, savedRaw) {
     return () => {
       window.removeEventListener('resize', onResize)
       if (ro) ro.disconnect()
-      if (rootEl === el) rootEl = null
+      if (rootEl === el) {
+        rootEl = null
+        activeLayoutId = null
+      }
     }
-  }, [rootRef])
+  }, [rootRef, layoutId])
 
-  // After every commit: a new draft, a hover, a panel swapping content.
+  // After every commit: a new draft, a hover, a day part, a panel swapping
+  // content.
   useEffect(() => {
-    if (EDIT_BRIDGE_ACTIVE) scheduleRects(false)
+    if (!EDIT_BRIDGE_ACTIVE) return
+    drawnDaypart = daypart || null
+    applyElementHover()
+    scheduleRects(false)
   })
 }

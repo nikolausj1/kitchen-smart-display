@@ -65,3 +65,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-clock__time {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock-time, 1));
+}
+
+.tl-knobs .tl-clock__date {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock-date, 1));
+}
+
+/* Seconds need a numeral no wider than 21cqw whatever size the layout gave
+ * the clock: a layout's own --tl-clock-size (the Entry board's) out-ranks
+ * .tl-clock__body--seconds above, so the guard sits on the time itself. */
+.tl-knobs .tl-clock__body--seconds .tl-clock__time {
+  font-size: calc(var(--tl-text-scale, 1) * min(var(--tl-clock-size), 21cqw));
+}
+

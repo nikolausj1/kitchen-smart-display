@@ -1,4 +1,5 @@
 import PanelFrame from './PanelFrame.jsx'
+import { panelKnobs } from './schemas.js'
 import './SchoolPanel.css'
 
 // SchoolPanel - the day's lunch, Grab & Go, and per-kid activities.
@@ -9,12 +10,15 @@ import './SchoolPanel.css'
 //
 // The layout contract passes `now` as well, but nothing in this panel is time
 // dependent (school.js has already resolved today's rows), so it is not read.
+//
+// knobs (a spec layout, panels/schemas.js 'school'): size, showLunch (lunch
+// and Grab & Go), showActivities.
 
-function rowsFor(school) {
+function rowsFor(school, showLunch = true, showActivities = true) {
   const out = []
-  if (school?.entree) out.push({ key: 'lunch', name: 'Lunch', value: school.entree })
-  if (school?.grab) out.push({ key: 'grab', name: 'Grab & Go', value: school.grab })
-  const activities = Array.isArray(school?.activities) ? school.activities : []
+  if (showLunch && school?.entree) out.push({ key: 'lunch', name: 'Lunch', value: school.entree })
+  if (showLunch && school?.grab) out.push({ key: 'grab', name: 'Grab & Go', value: school.grab })
+  const activities = showActivities && Array.isArray(school?.activities) ? school.activities : []
   activities.forEach((a, i) => {
     if (!a || (!a.name && !a.label)) return
     out.push({ key: `act-${i}`, name: a.name || 'Today', value: a.label || '' })
@@ -22,8 +26,9 @@ function rowsFor(school) {
   return out
 }
 
-export default function SchoolPanel({ school }) {
-  const rows = rowsFor(school)
+export default function SchoolPanel({ school, knobs }) {
+  const k = panelKnobs('school', knobs)
+  const rows = k ? rowsFor(school, !!k.showLunch, !!k.showActivities) : rowsFor(school)
 
   let body
   if (school?.noSchool) {
@@ -45,7 +50,12 @@ export default function SchoolPanel({ school }) {
   }
 
   return (
-    <PanelFrame title="Today at school" className="tl-school" bodyClassName="tl-school__body">
+    <PanelFrame
+      title="Today at school"
+      className={`tl-school${k ? ' tl-knobs' : ''}`}
+      bodyClassName="tl-school__body"
+      style={k ? { '--tl-school-size': String(k.size) } : undefined}
+    >
       {body}
     </PanelFrame>
   )

@@ -13,14 +13,25 @@
   --tl-bg: #0b0d0f;
   --tl-surface: #16191c;
   --tl-surface-2: #1e2226;
+  /* The opaque card, whatever the palette's own card is (a countdown tile's
+   * 'solid' background). The spec layouts map it below. */
+  --tl-surface-solid: #16191c;
   --tl-fg: #f2f2f0;
-  --tl-fg-2: rgba(242, 242, 240, 0.68);
-  --tl-fg-3: rgba(242, 242, 240, 0.42);
+  /* The text colour's channels: the secondary and tertiary inks derive from
+   * them, so a layout that sets the text colour (spec.global.text) sets both
+   * --tl-fg and --tl-fg-rgb and all three inks follow. */
+  --tl-fg-rgb: 242, 242, 240;
+  --tl-fg-2: rgba(var(--tl-fg-rgb), 0.68);
+  --tl-fg-3: rgba(var(--tl-fg-rgb), 0.42);
   --tl-accent: #d9a066;
   --tl-rule: rgba(255, 255, 255, 0.08);
   --tl-radius: 1.4vw;
   --tl-radius-sm: 0.6vw;
-  --tl-font-display: 'Inter', -apple-system, system-ui, sans-serif;
+  --tl-font-inter: 'Inter', -apple-system, system-ui, sans-serif;
+  /* The variable cut the Briefing ships (@fontsource-variable/fraunces), so
+   * opsz follows the size on its own. */
+  --tl-font-fraunces: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  --tl-font-display: var(--tl-font-inter);
   --tl-font-body: 'Inter', -apple-system, system-ui, sans-serif;
   --tl-font-mono: ui-monospace, Menlo, Consolas, monospace;
   --tl-pad: clamp(12px, 1.6vw, 34px);
@@ -41,6 +52,10 @@
   --tl-aqi-ink-dark: #101214;
   --tl-aqi-ink-light: #ffffff;
   --tl-scrim: rgba(0, 0, 0, 0.55);
+  /* spec.global (docs/designs/layout-editor.md, Contract v2), defaults. See
+   * "Spec layouts" below. */
+  --tl-surface-alpha: 0.5;
+  --tl-radius-scale: 1;
 
   position: fixed;
   inset: 0;
@@ -70,4 +85,102 @@
 
 .tl-num {
   font-variant-numeric: tabular-nums;
+}
+
+/* --- Panel knobs (panels/schemas.js) -------------------------------------------
+ *
+ * A panel handed `knobs` (a spec layout) carries .tl-knobs on its root and its
+ * size knobs as variables in its root's style ('--tl-clock-time': 1.2). A size
+ * knob reaches its text by redefining --tl-text-scale on the element it tunes:
+ *
+ *   .tl-knobs .tl-clock__time {
+ *     --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock-time, 1));
+ *   }
+ *
+ * --tl-panel-text-scale is the box's text scale, captured on the panel root:
+ * a property cannot read its own inherited value, so the element multiplies
+ * this copy instead. Every font size under the element already multiplies by
+ * --tl-text-scale, a layout's own font sizes for it included (the Entry
+ * board's what-to-wear lines), so the knob needs no layout's help. Each
+ * element starts from the box's scale, never from another knob's, so knobs
+ * never compound. Without knobs nothing here applies. */
+.tl-knobs {
+  --tl-panel-text-scale: var(--tl-text-scale, 1);
+}
+
+/* --- The layout editor ----------------------------------------------------------
+ *
+ * Panels mark their inner elements with data-edit="<key>" (the `element` of
+ * their schema fields); the editor's bridge (editBridge.js) reports their
+ * rectangles and sets data-edit-hover on the one the editor points at. */
+[data-edit][data-edit-hover] {
+  outline: 1px dashed var(--tl-accent);
+  outline-offset: 2px;
+}
+
+/* --- Spec layouts: spec.global as variables on the layout root ------------------
+ *
+ * A layout drawn from a layout spec (Entry board, Board) sets these on its
+ * root element from spec.global (panels/schemas.js GLOBAL_SCHEMA). Unset, each
+ * keeps the look it has always had, so a spec without them renders as before.
+ *
+ *   --tl-font-display   font: 'inter' -> var(--tl-font-inter) (the default),
+ *                       'fraunces' -> var(--tl-font-fraunces). Display sizes
+ *                       only (time, temperature, headline, numbers); body text
+ *                       stays Inter.
+ *   --tl-accent         accent: the hex, as is.
+ *   --tl-fg, --tl-fg-rgb  text: the hex, and its channels ('242, 242, 240');
+ *                       --tl-fg-2 and --tl-fg-3 derive from the channels.
+ *   --tl-surface-alpha  surfaceOpacity, 0.1..1 (0.5): the translucent card over
+ *                       a photo takes it as its alpha. The opaque cards (the
+ *                       Entry board on black, the Board) keep full strength
+ *                       from 0.5 up and fade below it (alpha x 2).
+ *   --tl-radius-scale   radius, 0..3 (1): multiplies --tl-radius and
+ *                       --tl-radius-sm under the root, whatever the palette
+ *                       set them to.
+ *
+ * The rules below are where the spec layouts' palettes (Entry/EntryLayout.css,
+ * Board/BoardLayout.css) pick the variables up. The card colours out-rank the
+ * palette's own declaration and repeat its channels; at the default alpha
+ * each is exactly the palette's colour. Fold them into the palettes whenever
+ * convenient. */
+
+.tl-root.tl-entry.tl-entry--photos {
+  --tl-entry-card: rgba(8, 10, 12, var(--tl-surface-alpha, 0.5));
+}
+
+/* calc() in a colour: an engine without it keeps the palette's opaque card. */
+@supports (color: rgba(0, 0, 0, calc(0.5 * 2))) {
+  .tl-root.tl-entry.tl-entry--black {
+    --tl-entry-card: rgba(17, 20, 23, calc(var(--tl-surface-alpha, 0.5) * 2));
+  }
+
+  /* The doubled class out-ranks the palette's .tl-root.tl-board. */
+  .tl-root.tl-board.tl-board {
+    --tl-surface: rgba(21, 24, 27, calc(var(--tl-surface-alpha, 0.5) * 2));
+  }
+}
+
+/* The opaque card of each palette, for a countdown tile's 'solid'. */
+.tl-root.tl-entry {
+  --tl-surface-solid: var(--tl-entry-solid);
+}
+
+.tl-root.tl-board {
+  --tl-surface-solid: #15181b;
+}
+
+/* The radius scale: the palette's radii are captured on the root, and every
+ * child of the root redefines the two radii from them, so everything below
+ * (the boxes, the panels, the countdown tiles, the agenda rows) follows. */
+.tl-root.tl-entry,
+.tl-root.tl-board {
+  --tl-radius-base: var(--tl-radius);
+  --tl-radius-sm-base: var(--tl-radius-sm);
+}
+
+.tl-root.tl-entry > *,
+.tl-root.tl-board > * {
+  --tl-radius: calc(var(--tl-radius-base) * var(--tl-radius-scale, 1));
+  --tl-radius-sm: calc(var(--tl-radius-sm-base) * var(--tl-radius-scale, 1));
 }

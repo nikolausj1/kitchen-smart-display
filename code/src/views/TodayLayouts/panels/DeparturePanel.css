@@ -196,3 +196,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-depart__count,
+.tl-knobs .tl-depart__option-time {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-depart-num, 1));
+}
+

@@ -1,6 +1,7 @@
 /* PhotoPanel - the photo fills the whole cell, so the panel drops the chrome
  * padding entirely. The double class beats .tl-panel's own padding whatever
- * order the stylesheets land in. */
+ * order the stylesheets land in. The overlays' font sizes carry
+ * var(--tl-text-scale) (tokens.css); the photo is not text. */
 
 .tl-panel.tl-photo {
   padding: 0;
@@ -64,7 +65,7 @@
   border-radius: 100px;
   background: var(--tl-scrim);
   color: var(--tl-fg);
-  font-size: clamp(10px, min(5cqh, 3cqw), 22px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(5cqh, 3cqw), 22px));
   line-height: 1.25;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -102,12 +103,12 @@
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.15;
-  font-size: clamp(13px, min(8cqh, 4.4cqw), 44px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(8cqh, 4.4cqw), 44px));
   color: var(--tl-fg);
 }
 
 .tl-photo__caption-sub {
-  font-size: clamp(11px, min(6cqh, 3.4cqw), 32px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, min(6cqh, 3.4cqw), 32px));
   color: var(--tl-fg-2);
 }
 
@@ -115,7 +116,7 @@
  * third line without crowding the picture. */
 .tl-photo__caption-fact {
   margin-top: 0.25em;
-  font-size: clamp(10px, min(4.6cqh, 2.7cqw), 26px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(4.6cqh, 2.7cqw), 26px));
   color: var(--tl-fg-2);
   opacity: 0.8;
 }
@@ -129,5 +130,5 @@
   align-items: center;
   justify-content: center;
   color: var(--tl-fg-3);
-  font-size: clamp(13px, min(9cqh, 5cqw), 34px);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(9cqh, 5cqw), 34px));
 }

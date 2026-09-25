@@ -1,11 +1,14 @@
-// TopBar - document controls on the first row (screen, layout, undo and
-// redo, revert, reset, save), view controls on the second (canvas size, zoom,
-// grid, sample data, reload). StatusLine is the strip along the bottom.
+// TopBar - document controls on the first row (screen, layout, history,
+// copy to another screen, undo and redo, revert, reset, save), view controls
+// on the second (canvas size, zoom, grid, sample data, reload). StatusLine is
+// the strip along the bottom.
 
 import { useState } from 'react'
 import { NumberField, Segmented, Toggle } from './fields.jsx'
 import { RedoIcon, UndoIcon } from './icons.jsx'
 import { kindLabel } from './hub.js'
+import { Menu, MenuItem, MenuNote } from './menus.jsx'
+import { LAYOUTS } from './spec.js'
 import { CANVAS_PRESETS } from './useEditorState.js'
 
 const ZOOMS = [
@@ -15,10 +18,19 @@ const ZOOMS = [
 ]
 const GRID_SIZES = [10, 20, 40]
 
+const screenName = (d) => (d.name && d.name !== d.id ? `${d.name} (${d.id})` : d.id)
+
 export default function TopBar({
   screens,
   deviceId,
   onSwitch,
+  layoutId,
+  onLayout,
+  history,
+  onOpenHistory,
+  onLoadHistory,
+  copyTargets,
+  onCopy,
   canvas,
   onPickCanvas,
   prefs,
@@ -49,7 +61,7 @@ export default function TopBar({
             {!known && <option value={deviceId || ''}>{deviceId ? `${deviceId} (not on the hub)` : 'Choose a screen'}</option>}
             {screens.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.name && d.name !== d.id ? `${d.name} (${d.id})` : d.id}
+                {screenName(d)}
                 {d.kind ? ` · ${kindLabel(d.kind)}` : ''}
               </option>
             ))}
@@ -57,12 +69,45 @@ export default function TopBar({
         </label>
         <label className="ed-field">
           <span>Layout</span>
-          <select value="entry" disabled aria-label="Layout">
-            <option value="entry">Entry board</option>
+          <select value={layoutId || ''} onChange={(e) => onLayout(e.target.value)} disabled={!layoutId} aria-label="Layout">
+            {!layoutId && <option value="">…</option>}
+            {LAYOUTS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label}
+              </option>
+            ))}
           </select>
         </label>
 
         <span className="ed-spacer" />
+
+        <div className="ed-group">
+          <Menu
+            label="History"
+            title="This screen's layout before each of its last ten saves"
+            disabled={!hasDraft}
+            align="end"
+            onOpen={onOpenHistory}
+          >
+            {(close) => <HistoryItems history={history} close={close} onLoad={onLoadHistory} />}
+          </Menu>
+          <Menu label="Copy layout to…" title="Put this screen's saved layout on another screen" disabled={!canSave} align="end">
+            {(close) =>
+              copyTargets.length ? (
+                <>
+                  <MenuNote>The saved layout, onto:</MenuNote>
+                  {copyTargets.map((d) => (
+                    <MenuItem key={d.id} close={close} onSelect={() => onCopy(d.id)}>
+                      {screenName(d)}
+                    </MenuItem>
+                  ))}
+                </>
+              ) : (
+                <MenuNote>No other web screens on the hub.</MenuNote>
+              )
+            }
+          </Menu>
+        </div>
 
         <div className="ed-group">
           <button type="button" className="ed-btn ed-btn--icon" onClick={onUndo} disabled={!canUndo} title="Undo (⌘Z)" aria-label="Undo">
@@ -123,6 +168,27 @@ export default function TopBar({
         </button>
       </div>
     </header>
+  )
+}
+
+// history: { loading, error, rows: [{ key, when, whenTitle, detail, current }] }
+function HistoryItems({ history, close, onLoad }) {
+  if (!history || (history.loading && !history.rows)) return <MenuNote>Loading…</MenuNote>
+  if (history.error && !history.rows) return <MenuNote>Could not read the history: {history.error}</MenuNote>
+  if (!history.rows.length) return <MenuNote>No saves yet. Each save keeps the layout it replaced here.</MenuNote>
+  return (
+    <>
+      <MenuNote>The layout as it was before each save. Choosing one loads it as a draft; Save puts it back.</MenuNote>
+      {history.rows.map((r) => (
+        <MenuItem key={r.key} close={close} title={r.whenTitle} onSelect={() => onLoad(r)}>
+          <span className="ed-hist__when">{r.when}</span>
+          <span className="ed-hist__what">
+            {r.detail}
+            {r.current ? ' · as saved now' : ''}
+          </span>
+        </MenuItem>
+      ))}
+    </>
   )
 }
 

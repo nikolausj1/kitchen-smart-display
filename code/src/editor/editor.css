@@ -19,6 +19,8 @@
   --ed-danger: #f06b5f;
   --ed-ok: #5cc27e;
   --ed-stage: #0e0f11;
+  --ed-guide: #ff4f8b;
+  --ed-element: #7fd1ff;
   --ed-radius: 5px;
   color-scheme: dark;
   accent-color: var(--ed-accent);
@@ -83,8 +85,16 @@ textarea {
 .ed-main {
   grid-area: main;
   position: relative;
+  display: flex;
+  flex-direction: column;
   background: var(--ed-stage);
   min-width: 0;
+  min-height: 0;
+}
+
+.ed-stagewrap {
+  position: relative;
+  flex: 1;
   min-height: 0;
 }
 
@@ -279,6 +289,23 @@ select:disabled {
   cursor: pointer;
 }
 
+.ed-link:disabled {
+  color: var(--ed-faint);
+  cursor: default;
+}
+
+.ed-btn--danger-solid {
+  background: #c9463b;
+  border-color: #c9463b;
+  color: #fff;
+  font-weight: 600;
+  padding: 0 16px;
+}
+
+.ed-btn--danger-solid:hover:not(:disabled) {
+  background: var(--ed-danger);
+}
+
 /* --- fields ------------------------------------------------------------------ */
 
 .ed-num {
@@ -369,6 +396,18 @@ select:disabled {
   grid-template-columns: minmax(0, 1fr) 66px;
   gap: 8px;
   align-items: center;
+}
+
+.ed-sliderfield.is-wide {
+  grid-template-columns: minmax(0, 1fr) 90px;
+}
+
+.ed-row__hint {
+  grid-column: 1 / -1;
+  margin-top: -3px;
+  color: var(--ed-faint);
+  font-size: 10.5px;
+  line-height: 1.35;
 }
 
 .ed-seg {
@@ -652,12 +691,18 @@ select:disabled {
 
 /* --- inspector ------------------------------------------------------------- */
 
+/* Sticky, so the breadcrumb stays in view when a sub-element's group is
+ * scrolled to. */
 .ed-insp__head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
+  background: var(--ed-panel);
   border-bottom: 1px solid var(--ed-line);
 }
 
@@ -1040,4 +1085,473 @@ select:disabled {
   50% {
     opacity: 0.35;
   }
+}
+
+/* --- steps 3 and 4 -------------------------------------------------------- */
+
+/* A dropdown in the inspector (select fields with long or many options). */
+.ed-select {
+  width: 100%;
+  max-width: none;
+  height: 24px;
+}
+
+.ed-row--stack {
+  display: block;
+  padding-top: 4px;
+}
+
+.ed-row--stack .ed-row__label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ed-hoverable {
+  border-radius: 4px;
+}
+
+/* Breadcrumb: Clock › Date */
+.ed-crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.ed-crumbs strong {
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ed-crumb {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ed-accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ed-crumb:hover {
+  text-decoration: underline;
+}
+
+.ed-crumb__sep {
+  color: var(--ed-faint);
+}
+
+.ed-insp__actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.ed-insp__actions .ed-btn {
+  padding: 0 8px;
+}
+
+.ed-insp__note {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ed-line);
+}
+
+.ed-sec__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ed-sec__head h3 {
+  margin: 0;
+}
+
+.ed-note--top {
+  margin: 0 0 8px;
+}
+
+.ed-prompt {
+  margin: 0 0 10px;
+  color: var(--ed-ink);
+  line-height: 1.45;
+}
+
+/* Knobs, one group per sub-element; the selected one marked. */
+.ed-knobgroup {
+  margin: 0 -8px 6px;
+  padding: 4px 8px 4px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  scroll-margin: 64px 0 12px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ed-knobgroup.is-focus {
+  background: color-mix(in srgb, var(--ed-element) 9%, transparent);
+  border-color: color-mix(in srgb, var(--ed-element) 45%, transparent);
+}
+
+.ed-knobgroup h4 {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ed-faint);
+}
+
+.ed-knobgroup.is-focus h4,
+.ed-knobgroup.is-focus .ed-knobgroup__name {
+  color: var(--ed-element);
+}
+
+.ed-knobgroup__name {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ed-knobgroup__name:hover {
+  color: var(--ed-ink);
+}
+
+.ed-artpick {
+  margin-bottom: 6px;
+}
+
+/* --- day-part tabs above the stage ---------------------------------------- */
+
+.ed-parts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: 38px;
+  padding: 5px 12px;
+  background: var(--ed-panel);
+  border-bottom: 1px solid var(--ed-line);
+}
+
+.ed-parts__tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--ed-bg);
+  border: 1px solid var(--ed-line);
+}
+
+.ed-part {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ed-muted);
+  cursor: pointer;
+}
+
+.ed-part:hover:not(:disabled) {
+  color: var(--ed-ink);
+  background: var(--ed-panel-2);
+}
+
+.ed-part.is-empty {
+  color: var(--ed-faint);
+}
+
+.ed-part.is-on {
+  background: var(--ed-panel-3);
+  color: var(--ed-ink);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--ed-line-2);
+}
+
+.ed-part__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ed-accent);
+}
+
+.ed-parts__info {
+  color: var(--ed-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* --- menus ------------------------------------------------------------------ */
+
+.ed-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.ed-menu__caret {
+  opacity: 0.7;
+  margin-left: 1px;
+}
+
+.ed-menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 220px;
+  max-width: 340px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px;
+  border-radius: 7px;
+  background: var(--ed-panel-2);
+  border: 1px solid var(--ed-line-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ed-menu__list--start {
+  left: 0;
+}
+
+.ed-menu__list--end {
+  right: 0;
+}
+
+.ed-menu__item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-menu__item:hover:not(:disabled),
+.ed-menu__item:focus-visible {
+  background: var(--ed-accent-2);
+  color: #fff;
+  outline: none;
+}
+
+.ed-menu__item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ed-menu__note {
+  padding: 6px 8px;
+  color: var(--ed-muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.ed-hist__when {
+  min-width: 78px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-hist__what {
+  color: var(--ed-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ed-menu__item:hover .ed-hist__what,
+.ed-menu__item:focus-visible .ed-hist__what {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ed-layers__addpanel {
+  grid-column: 1 / -1;
+}
+
+.ed-layers__addpanel > .ed-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ed-layers__addpanel .ed-menu__list {
+  left: 0;
+  right: 0;
+  min-width: 0;
+}
+
+/* --- dialog, toast ------------------------------------------------------------ */
+
+.ed-dialog__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.ed-dialog {
+  width: min(460px, 100%);
+  padding: 18px 20px 16px;
+  border-radius: 10px;
+  background: var(--ed-panel);
+  border: 1px solid var(--ed-line-2);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.ed-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ed-dialog__body p {
+  margin: 0 0 10px;
+  color: var(--ed-muted);
+  line-height: 1.5;
+}
+
+.ed-dialog__warn {
+  color: var(--ed-warn) !important;
+}
+
+.ed-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.ed-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(640px, calc(100% - 32px));
+  padding: 8px 8px 8px 14px;
+  border-radius: 8px;
+  background: rgba(31, 33, 37, 0.96);
+  border: 1px solid var(--ed-line-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ed-toast.is-ok {
+  border-color: color-mix(in srgb, var(--ed-ok) 60%, transparent);
+}
+
+.ed-toast.is-error {
+  border-color: color-mix(in srgb, var(--ed-danger) 70%, transparent);
+  color: #ffd9d5;
+}
+
+/* --- stage: read-only part, sub-elements, smart guides -------------------- */
+
+.ed-overlay.is-readonly {
+  background: rgba(14, 15, 17, 0.12);
+}
+
+/* The panel box stays, quieter, while one of its parts is selected. */
+.ed-sel.is-parent {
+  border-color: color-mix(in srgb, var(--ed-accent) 55%, transparent);
+}
+
+.ed-el {
+  position: absolute;
+  pointer-events: none;
+}
+
+.ed-el.is-hover {
+  outline: 1px dashed color-mix(in srgb, var(--ed-element) 80%, transparent);
+  outline-offset: 1px;
+}
+
+.ed-el.is-selected {
+  outline: 1px solid var(--ed-element);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--ed-element) 10%, transparent);
+}
+
+.ed-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ed-guide {
+  position: absolute;
+  background: var(--ed-guide);
+  opacity: 0.9;
+}
+
+.ed-guide--v {
+  top: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+.ed-guide--h {
+  left: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+/* The measured gap: a stronger segment with its size in canvas px. */
+.ed-gap {
+  position: absolute;
+  background: var(--ed-guide);
+}
+
+.ed-gap--v {
+  width: 2px;
+  transform: translateX(-1px);
+}
+
+.ed-gap--h {
+  height: 2px;
+  transform: translateY(-1px);
+}
+
+.ed-gap span {
+  position: absolute;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--ed-guide);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ed-gap--v span {
+  top: 50%;
+  left: 6px;
+  transform: translateY(-50%);
+}
+
+.ed-gap--h span {
+  left: 50%;
+  bottom: 5px;
+  transform: translateX(-50%);
 }

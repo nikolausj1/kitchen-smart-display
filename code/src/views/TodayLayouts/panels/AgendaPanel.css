@@ -189,3 +189,33 @@
     font-size: calc(var(--tl-text-scale, 1) * clamp(14px, min(3cqw, 9cqh), 34px));
   }
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+/* The column count arrives inline (days); the gap between columns scales. */
+.tl-knobs .tl-agenda__grid {
+  column-gap: calc(var(--tl-gap) * 1.4 * var(--tl-agenda-gap, 1));
+}
+
+.tl-knobs .tl-agenda__head {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-head, 1));
+}
+
+.tl-knobs .tl-agenda__items {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-row, 1));
+}
+
+/* rowsPerDay: the height cap of the row size scales with the row budget
+ * (rowsFit in AgendaPanel.jsx), so the worst day of that many rows fits. */
+@supports (height: 1cqh) {
+  .tl-knobs .tl-agenda__items {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(7.4cqw, calc(4.9cqh * var(--tl-agenda-fit, 1))), 30px));
+  }
+}
+
+/* No colour bars: the bar keeps its column, so the times stay in line and an
+ * all-day wash keeps its lead-in. */
+.tl-agenda--nobars .tl-agenda__bar {
+  visibility: hidden;
+}
+

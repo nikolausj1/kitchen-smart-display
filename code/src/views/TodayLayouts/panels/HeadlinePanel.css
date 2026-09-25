@@ -74,3 +74,34 @@
 .tl-headline--outdated .tl-headline__dot {
   background: var(--tl-fg-3);
 }
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-headline__line {
+  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-headline-size, 1));
+}
+
+/* More than one line (maxLines): the text wraps and clamps (the count arrives
+ * inline), the dot sits on the first line, and the height share of the size
+ * steps down by --tl-headline-fit so the lines fit the box they had. */
+.tl-headline--wrap .tl-headline__line {
+  align-items: flex-start;
+}
+
+.tl-headline--wrap .tl-headline__dot {
+  margin-top: 0.39em;
+}
+
+.tl-headline--wrap .tl-headline__text {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+@supports (height: 1cqh) {
+  .tl-headline--wrap .tl-headline__line {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(16px, min(calc(56cqh * var(--tl-headline-fit, 1)), 5cqw), 76px));
+  }
+}
+
