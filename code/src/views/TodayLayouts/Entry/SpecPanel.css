@@ -385,6 +385,12 @@ body[data-kiosk='echo'] .tl-spec.tl-spec--blur {
   .tl-spec--countdowns > .tl-panel--small { display: flex; }
 }
 
+/* The single countdown. */
+@container tl-spec (width < 120px) or (height < 100px) {
+  .tl-spec--countdown > .tl-spec__content { display: none; }
+  .tl-spec--countdown > .tl-panel--small { display: flex; }
+}
+
 /* The departure panel: its own box, or a box it borrowed. */
 @container tl-spec (width < 140px) or (height < 100px) {
   .tl-spec--departure > .tl-spec__content,

@@ -2,7 +2,9 @@
 // code/: node --test src/views/TodayLayouts/panels/countdownParts.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { artUrl, dayCount, emojiOf, hasArt, titleOf } from './countdownParts.js'
+import { artUrl, dayCount, emojiOf, hasArt, pickCountdown, titleOf } from './countdownParts.js'
+
+const cd = (title, extra) => ({ id: title, title, daysLeft: 3, ...extra })
 
 test('artUrl: hub paths go to the hub, full URLs stay as they are', () => {
   assert.match(artUrl('/countdown-art/a.png'), /\/countdown-art\/a\.png$/)
@@ -31,4 +33,25 @@ test('dayCount: the number and its word, as the tiles have always shown them', (
   assert.deepEqual(dayCount({ daysLeft: -2 }), { days: 0, today: true, text: 'Today', unit: '' })
   assert.deepEqual(dayCount({}), { days: null, today: false, text: '--', unit: 'DAYS' })
   assert.deepEqual(dayCount(null), { days: null, today: false, text: '--', unit: 'DAYS' })
+})
+
+test('pickCountdown: next is the first, the soonest', () => {
+  const list = [cd('Fly to Minnesota'), cd('Last day of school')]
+  assert.equal(pickCountdown(list, 'next', '').title, 'Fly to Minnesota')
+  assert.equal(pickCountdown(list, 'anything', 'school').title, 'Fly to Minnesota')
+  assert.equal(pickCountdown([], 'next'), null)
+  assert.equal(pickCountdown(null, 'next'), null)
+  assert.equal(pickCountdown([null, 7, cd('Real')], 'next').title, 'Real')
+})
+
+test('pickCountdown: by title, any case, spaces folded, the first match', () => {
+  const list = [cd('Fly to Minnesota'), cd('Last day   of school'), cd('School picture day')]
+  assert.equal(pickCountdown(list, 'title', 'SCHOOL').title, 'Last day   of school')
+  assert.equal(pickCountdown(list, 'title', 'day of school').title, 'Last day   of school')
+  assert.equal(pickCountdown(list, 'title', '  minnesota ').title, 'Fly to Minnesota')
+  assert.equal(pickCountdown(list, 'title', 'dentist'), null)
+  // Nothing typed yet: nothing picked.
+  assert.equal(pickCountdown(list, 'title', ''), null)
+  assert.equal(pickCountdown(list, 'title', '   '), null)
+  assert.equal(pickCountdown(list, 'title', null), null)
 })

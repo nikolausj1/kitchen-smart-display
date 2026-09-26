@@ -1,0 +1,21 @@
+/* CountdownPanel - the single countdown (CountdownPanel.jsx). The card is
+ * CountdownCard.css's; this is the frame around it.
+ *
+ * Like the countdown tiles the frame gives up its own card: the countdown's
+ * card is the card. The body is a size container for the empty message
+ * (CountdownsPanel.css .tl-cd__empty, shared with the tiles), and the card
+ * fills it. */
+
+.tl-panel.tl-cd1 {
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.tl-cd1__body {
+  container-type: size;
+}
+
+.tl-cd1__body > .tl-cdc {
+  flex: 1 1 auto;
+}

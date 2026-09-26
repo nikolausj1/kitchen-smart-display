@@ -1,8 +1,9 @@
 import { hubUrl } from '../../../lib/hub.js'
 
 // countdownParts.js - what the countdown panels share, as plain functions:
-// the tiles (CountdownsPanel.jsx) and the art-above card (CountdownCard.jsx).
-// Pure, so Node can test it (countdownParts.test.mjs).
+// the tiles (CountdownsPanel.jsx), the art-above card (CountdownCard.jsx) and
+// the single countdown (CountdownPanel.jsx). Pure, so Node can test it
+// (countdownParts.test.mjs).
 //
 // A countdown is the hub's (GET /api/calendar, frameserver/lib/countdowns.mjs,
 // with daysLeft recounted by lib/agenda.js countdownsFor):
@@ -44,4 +45,25 @@ export function dayCount(countdown) {
   if (days == null) return { days, today: false, text: '--', unit: 'DAYS' }
   if (days === 0) return { days, today: true, text: 'Today', unit: '' }
   return { days, today: false, text: String(days), unit: days === 1 ? 'DAY' : 'DAYS' }
+}
+
+function folded(s) {
+  return s.replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+// pickCountdown(countdowns, pick, titleMatch) -> the one countdown the single
+// countdown panel shows, or null:
+//   'next'   (and anything else) the first, the soonest (the hub sorts them)
+//   'title'  the first whose title holds titleMatch, any case, spaces
+//            folded; none while titleMatch is empty
+// The title is the one the tile shows: an event's `label:` when it has one.
+export function pickCountdown(countdowns, pick, titleMatch) {
+  const list = (Array.isArray(countdowns) ? countdowns : []).filter((c) => c && typeof c === 'object')
+  if (pick !== 'title') return list.length ? list[0] : null
+  const q = typeof titleMatch === 'string' ? folded(titleMatch) : ''
+  if (!q) return null
+  for (let i = 0; i < list.length; i++) {
+    if (folded(titleOf(list[i])).indexOf(q) >= 0) return list[i]
+  }
+  return null
 }

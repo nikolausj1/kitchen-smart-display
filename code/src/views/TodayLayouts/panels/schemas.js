@@ -303,6 +303,60 @@ export const PANEL_SCHEMAS = deepFreeze({
     ],
   },
 
+  // One countdown, big, drawn as an art-above card (panels/CountdownPanel.jsx).
+  countdown: {
+    fields: [
+      select(
+        'pick',
+        'Show',
+        [
+          ['next', 'The next one'],
+          ['title', 'By title'],
+        ],
+        'next',
+        null,
+        'The next one: the soonest countdown'
+      ),
+      {
+        key: 'titleMatch',
+        label: 'Title contains',
+        type: 'text',
+        default: '',
+        maxLength: 80,
+        placeholder: 'e.g. Minnesota',
+        hint: 'By title: part of the countdown title, any case',
+      },
+      select(
+        'layout',
+        'Layout',
+        [
+          ['stacked', 'Art above'],
+          ['side', 'Art left'],
+        ],
+        'stacked'
+      ),
+      tileGradientField(null, 'The card runs from its colour to a darker shade'),
+      tileColorFromField(null, COLOR_FROM_HINT),
+      factor('tileRadius', 'Corner radius'),
+      artSizeField('Of the card: its width with the art above, its height with the art left'),
+      artOverlapField("How much of the art's height (its width, art left) dips into the card"),
+      size('titleSize', 'Title size', 'name'),
+      size('numberSize', 'Number size', 'number'),
+      toggle('showUnit', 'Days label', true, 'unit'),
+      select(
+        'prefer',
+        'Prefer',
+        [
+          ['art', 'Art'],
+          ['emoji', 'Emoji'],
+        ],
+        'art',
+        'image',
+        'Which one a countdown with both shows'
+      ),
+    ],
+  },
+
   departure: {
     fields: [size('numberSize', 'Number size', 'number'), toggle('showToggle', 'Walk or drive button', true, 'toggle')],
   },
@@ -436,6 +490,14 @@ export const PANEL_ELEMENTS = deepFreeze({
   countdowns: [
     TITLE,
     { key: 'tile', label: 'Tile' },
+    { key: 'image', label: 'Image' },
+    { key: 'name', label: 'Event name' },
+    { key: 'number', label: 'Number' },
+    { key: 'unit', label: 'Days label' },
+    EMPTY,
+  ],
+  countdown: [
+    TITLE,
     { key: 'image', label: 'Image' },
     { key: 'name', label: 'Event name' },
     { key: 'number', label: 'Number' },

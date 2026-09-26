@@ -8,6 +8,7 @@ import AirQualityChip from '../panels/AirQualityChip.jsx'
 import HeadlinePanel from '../panels/HeadlinePanel.jsx'
 import AgendaPanel, { sliceAgendaDays } from '../panels/AgendaPanel.jsx'
 import CountdownsPanel from '../panels/CountdownsPanel.jsx'
+import CountdownPanel from '../panels/CountdownPanel.jsx'
 import DeparturePanel from '../panels/DeparturePanel.jsx'
 import NowPlayingPanel from '../panels/NowPlayingPanel.jsx'
 import PhotoPanel from '../panels/PhotoPanel.jsx'
@@ -361,6 +362,8 @@ export default function SpecBoard({ d, layoutId, className, children }) {
         )
       case 'countdowns':
         return host === 'countdowns' ? departure(DEPARTURE_KNOBS) : <CountdownsPanel countdowns={d.countdowns} knobs={k} />
+      case 'countdown':
+        return <CountdownPanel countdowns={d.countdowns} knobs={k} />
       case 'departure':
         return departure(k)
       case 'nowplaying':
