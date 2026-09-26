@@ -2,7 +2,7 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-26
-version: 1.1
+version: 1.2
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, calendar, countdowns, home-assistant, echo-show, frameserver]
 ---
@@ -156,7 +156,30 @@ Shape and line blocks (fill, gradient, radius, blur), the flip clock as a
 panel, an analog clock, a second clock with its own time zone, a date-only
 block, week number and day X of Y.
 
-## Chunk 5: Home Assistant (when the inputs land)
+## Chunk 5: Home Assistant (inputs landed 2026-09-26)
+
+Received 2026-09-26: the LAN URL and a long-lived token from the dedicated
+local-only user `frameserver`, validated from the Mac and from the hub
+(`GET /api/` answers "API running"; the token reads states). Stored at
+`~/.config/smart-display/ha-token.txt` and `ha.env`, on the hub at
+`secrets/ha-token.txt` with `HA_URL` and `HA_TOKEN_FILE` in `.env`.
+
+Justin's first list, with the entity ids found in HA:
+
+- "Turn Off Downstairs": `light.turn_off` on the group `light.downstairs`
+  (no script or scene of that name exists; confirm).
+- House modes: `input_boolean.mode_away`, `mode_guest`, `mode_outside`,
+  `mode_vacation`, `mode_working_late`, as chips with toggle buttons.
+- Day part override picker: `input_select.day_part_override`, options Auto,
+  Morning, Day, Afternoon, Evening, Late Evening, Night, Overnight.
+- Guest and away: the two modes above, status plus buttons.
+- Garage: `cover.garage_door_controller`, indicator and hold-to-confirm
+  button. Front door: `lock.front_door_smart_code_with_home_connect_technology`
+  (lock by tap, unlock by hold) and `binary_sensor.front_door_contact_open`.
+- Basement light: `light.basement_basement` (the room group) or
+  `light.basement_light_switch` (the switch's own entity); confirm which.
+- Later candidates: `person.justin`, `person.sheena`, the doorbell cameras,
+  the Awair sensors, `todo.shopping_list`.
 
 Hub `lib/homeAssistant.mjs` with a long-lived token in `secrets/`, a
 dashboard whitelist of entities and actions, a WebSocket subscription folded

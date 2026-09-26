@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-26
-version: 7.5
+version: 7.6
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -97,7 +97,8 @@ vertical align, block titles, per-panel visibility rules; weather served by
 the hub from Open-Meteo or Apple WeatherKit with hourly, conditions,
 precipitation and alert panels; DAKboard-style countdown tiles with the art
 above a gradient card; Up next, Day list, Week grid and Month grid calendar
-views; shape and clock blocks; Home Assistant panels once the token lands.
+views; shape and clock blocks; Home Assistant panels (the URL and token landed 2026-09-26; the hub module is
+being built first, the panels follow chunk 1).
 Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`. The WeatherKit
 key and ids landed 2026-09-26 (validated against Apple: all five data sets,
 next-hour rain, attribution URL). Waiting on Justin: the go for chunk 1.
