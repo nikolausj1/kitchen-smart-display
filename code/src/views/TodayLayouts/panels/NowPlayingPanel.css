@@ -193,6 +193,7 @@
 /* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
 
 .tl-knobs .tl-np__body {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-np-size, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-np-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 

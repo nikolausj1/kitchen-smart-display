@@ -16,8 +16,12 @@
 //             change was made in, and undo or redo goes back to that tab
 //   coalesce  { key, at, windowMs } of the last change, so a drag, a slider
 //             run or a burst of typing is one undo step, not a hundred
-//   selectedId, selectedElement   a panel of the current part, and one of
-//             its sub-elements (data-edit key) or null
+//   selectedIds  the panels selected in the current part, in the order they
+//             were picked (the first is the reference for Match width and
+//             height); shift-click adds or removes one
+//   selectedId, selectedElement   the one selected panel (null when none or
+//             several are), and one of its sub-elements (data-edit key) or
+//             null
 //
 // The backdrop (display.entryBackdrop / entryDim) is part of the draft and of
 // the history but not of the spec: it is saved to the screen's display
@@ -62,6 +66,7 @@ function initialState(deviceId, layoutId, picked = CANVAS_PRESETS[0]) {
     future: [],
     coalesce: null,
     selectedId: null,
+    selectedIds: [],
     selectedElement: null,
     daypart: 'day',
     screen: null,
@@ -105,12 +110,25 @@ const isDirty = (s) => {
   return d.spec || d.backdrop
 }
 
-// The selection must be a panel of the part on show.
+// The selection as ids: one panel (with or without an element), several, or
+// none.
+function withSelection(s, ids, element = null) {
+  const list = [...new Set(ids.filter((x) => typeof x === 'string'))]
+  return {
+    ...s,
+    selectedIds: list,
+    selectedId: list.length === 1 ? list[0] : null,
+    selectedElement: list.length === 1 ? element : null,
+  }
+}
+
+// The selection must be panels of the part on show.
 function keepSelection(s) {
-  if (s.selectedId == null || !s.draft) return s
+  if (!s.selectedIds.length || !s.draft) return s
   const panels = partPanels(s.draft.spec, s.daypart)
-  if (panels && panels.some((p) => p.id === s.selectedId)) return s
-  return { ...s, selectedId: null, selectedElement: null }
+  const keep = s.selectedIds.filter((id) => panels && panels.some((p) => p.id === id))
+  if (keep.length === s.selectedIds.length) return s
+  return withSelection(s, keep, keep.length === 1 && keep[0] === s.selectedId ? s.selectedElement : null)
 }
 
 // Start the draft as soon as there is something to start it from.
@@ -254,11 +272,25 @@ function reducer(s, a) {
     }
 
     case 'select':
-      return s.selectedId === a.id && s.selectedElement == null ? s : { ...s, selectedId: a.id, selectedElement: null }
+      if (s.selectedId === a.id && s.selectedIds.length === (a.id ? 1 : 0) && s.selectedElement == null) return s
+      return withSelection(s, a.id ? [a.id] : [])
+
+    // Shift-click: in or out of the selection.
+    case 'toggleSelect': {
+      if (!a.id) return s
+      const ids = s.selectedIds.includes(a.id) ? s.selectedIds.filter((x) => x !== a.id) : [...s.selectedIds, a.id]
+      return withSelection(s, ids)
+    }
 
     case 'selectElement':
       if (s.selectedId == null || s.selectedElement === a.key) return s
       return { ...s, selectedElement: a.key ?? null }
+
+    // A panel and one of its elements at once (the layers' element tree).
+    case 'selectPath':
+      if (!a.id) return s
+      if (s.selectedId === a.id && s.selectedIds.length === 1 && s.selectedElement === (a.key ?? null)) return s
+      return withSelection(s, [a.id], a.key ?? null)
 
     case 'daypart':
       return s.daypart === a.part ? s : keepSelection({ ...s, daypart: a.part, selectedElement: null, coalesce: null })
@@ -299,6 +331,8 @@ function logAction(before, after, a) {
   const entry = {
     at: new Date().toISOString(),
     type: a.type,
+    label: a.label ?? null,
+    group: a.group === true,
     coalesce: a.coalesce ?? null,
     layout: after?.layoutId ?? null,
     part: after?.daypart ?? null,
@@ -309,7 +343,9 @@ function logAction(before, after, a) {
   const log = (window.__sdEditorLog ||= [])
   log.push(entry)
   if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX)
-  if (a.type === 'update' && moved.length > 1) {
+  // A group action (align, distribute, match, a multi-selection moved or
+  // nudged) moves several on purpose; it says so and is only logged.
+  if (a.type === 'update' && moved.length > 1 && a.group !== true) {
     console.warn('[layout editor] one action moved several panels', entry)
   }
 }
@@ -356,7 +392,8 @@ export default function useEditorState(deviceId, layoutId) {
       saved: (device, submitted) => dispatch({ type: 'saved', device, submitted }),
       appReady: (msg) =>
         dispatch({ type: 'appReady', defaultSpec: msg.defaultSpec, panelTypes: msg.panelTypes, dayparts: msg.dayparts }),
-      // recipe: (spec, part) => spec (pure). opts: { coalesce, windowMs }.
+      // recipe: (spec, part) => spec (pure). opts: { coalesce, windowMs,
+      // group: several panels on purpose, label: what the log calls it }.
       update: (recipe, opts = {}) => dispatch({ type: 'update', recipe, ...opts, at: performance.now() }),
       backdrop: (patch, opts = {}) => dispatch({ type: 'backdrop', patch, ...opts, at: performance.now() }),
       load: (spec) => dispatch({ type: 'load', spec }),
@@ -366,7 +403,9 @@ export default function useEditorState(deviceId, layoutId) {
       revert: () => dispatch({ type: 'revert' }),
       reset: () => dispatch({ type: 'reset' }),
       select: (id) => dispatch({ type: 'select', id }),
+      toggleSelect: (id) => dispatch({ type: 'toggleSelect', id }),
       selectElement: (key) => dispatch({ type: 'selectElement', key }),
+      selectPath: (id, key) => dispatch({ type: 'selectPath', id, key }),
       daypart: (part) => dispatch({ type: 'daypart', part }),
       pickCanvas: (w, h) => dispatch({ type: 'pick', w, h }),
     }),

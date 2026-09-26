@@ -1,4 +1,8 @@
+import { useMemo, useRef } from 'react'
 import { panelType } from '../layoutSpec.js'
+import { PanelTitleContext } from '../panels/panelTitle.js'
+import { boxLook, elementStylesCss, shrinkKeysOf } from './specStyles.js'
+import useFitText from './useFitText.js'
 import './SpecPanel.css'
 
 // SpecPanel - one box of a layout spec (layoutSpec.js), drawn exactly where the
@@ -29,7 +33,22 @@ import './SpecPanel.css'
 //
 // data-panel-id / data-panel-type mark the box for the layout editor, which
 // reads each box's rectangle (editBridge.js). data-hover is the editor's
-// hover highlight: a 1 px inset outline and nothing else.
+// hover highlight: a 1 px inset outline and nothing else. data-rule marks a
+// box with a visibility rule in the editor, which draws every box whatever
+// its rule says (rule, from SpecBoard).
+//
+// The editor foundations (docs/designs/panels-and-controls.md, chunk 1), all
+// drawn from specStyles.js and absent at their defaults:
+//   - props.elements: a stylesheet scoped to this box (data-box, the box's
+//     id) styling its marked elements, and a fitter for the ones that shrink
+//     to fit (useFitText, lib/fitText.js)
+//   - the box v2 look: a fill layer under the content (.tl-spec__fill), the
+//     border and the preset's hairline in a frame above it
+//     (.tl-spec--frame), a drop shadow, a backdrop blur (a tint on the Echo),
+//     a font and a text colour for the whole box, a vertical alignment
+//   - the title override, handed to the PanelFrame inside through
+//     PanelTitleContext; a text or image block (no PanelFrame) gets the
+//     header row here
 //
 // The scrim (the universal `scrim`, 'soft' or 'strong', on a box with no
 // background): the box gains a close text shadow on its text
@@ -84,7 +103,21 @@ export function SpecScrims({ panels }) {
   ))
 }
 
-export default function SpecPanel({ panel, textScale = 1, join = null, hover = false, borrowed = false, children }) {
+// The blocks draw no PanelFrame, so a custom title on one is drawn here.
+function isBlock(type) {
+  return type === 'text' || type === 'image'
+}
+
+export default function SpecPanel({
+  panel,
+  textScale = 1,
+  join = null,
+  hover = false,
+  borrowed = false,
+  rule = false,
+  children,
+}) {
+  const boxRef = useRef(null)
   const { id, type, x, y, w, h, z, props } = panel
   const t = panelType(type)
   const shape = t && t.padShape ? t.padShape : [1, 1]
@@ -93,10 +126,17 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
   const padX = r3(shape[1] * pad)
   const background = props.background
   const scrim = scrimOf(panel)
-  // Corners are drawn where there is something to round: a background, or an
-  // image. Bare text keeps square corners so a big clock numeral sitting in
-  // the box's corner is never clipped by an invisible radius.
-  const rounded = background !== 'none' || type === 'image'
+
+  // The editor foundations: nothing at all for a box that sets none.
+  const look = useMemo(() => boxLook(props, type), [props, type])
+  const css = useMemo(() => elementStylesCss(id, props.elements), [id, props.elements])
+  useFitText(boxRef, shrinkKeysOf(props.elements), panel)
+
+  // Corners are drawn where there is something to round: a background, an
+  // image, or a v2 surface. Bare text keeps square corners so a big clock
+  // numeral sitting in the box's corner is never clipped by an invisible
+  // radius.
+  const rounded = background !== 'none' || type === 'image' || look.rounded
   const radius = `calc(var(--tl-radius) * ${r3(props.radius)})`
   const top = join && join.top ? '0' : radius
   const bottom = join && join.bottom ? '0' : radius
@@ -110,8 +150,10 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
     padding: `calc(var(--tl-pad) * ${padY}) calc(var(--tl-pad) * ${padX})`,
     '--tl-spec-pad-x': `calc(var(--tl-pad) * ${padX})`,
     '--tl-text-scale': String(textScale),
+    ...look.style,
   }
   if (rounded) style.borderRadius = `${top} ${top} ${bottom} ${bottom}`
+  if (look.boxShadow) style.boxShadow = look.boxShadow
   // Only below 1: an opacity property at all, even 1, makes Chrome raster the
   // box's content differently (a photo tile's pixels change).
   if (props.opacity < 1) style.opacity = props.opacity
@@ -126,18 +168,48 @@ export default function SpecPanel({ panel, textScale = 1, join = null, hover = f
     join && join.bottom ? 'tl-spec--join-bottom' : '',
     borrowed ? 'tl-spec--departure-host' : '',
   ]
+    .concat(look.classes)
     .filter(Boolean)
     .join(' ')
 
+  const title = look.title
+  const blockTitle = isBlock(type) && title && title.mode === 'custom' && title.text ? title.text : null
+
   return (
     <div
+      ref={boxRef}
       className={cls}
       style={style}
       data-panel-id={id}
       data-panel-type={type}
+      data-box={id}
       data-hover={hover ? '' : undefined}
+      data-rule={rule ? '1' : undefined}
     >
-      <div className="tl-spec__content">{children}</div>
+      {css && <style>{css}</style>}
+      {look.fill && (
+        <div
+          className="tl-spec__fill"
+          style={{ background: look.fill.background, opacity: look.fill.opacity == null ? undefined : look.fill.opacity }}
+          aria-hidden="true"
+        />
+      )}
+      <PanelTitleContext.Provider value={title}>
+        <div className="tl-spec__content">
+          {blockTitle ? (
+            <div className="tl-spec__titled">
+              <header className="tl-panel__head">
+                <div className="tl-panel__title tl-label" data-edit="title" data-edit-label="Title">
+                  {blockTitle}
+                </div>
+              </header>
+              <div className="tl-spec__titled-body">{children}</div>
+            </div>
+          ) : (
+            children
+          )}
+        </div>
+      </PanelTitleContext.Provider>
       {t && (t.minPx || borrowed) && (
         <div className="tl-panel--small" aria-hidden="true">
           Too small

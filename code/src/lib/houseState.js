@@ -15,6 +15,8 @@ import { DEVICE_ID, READ_ONLY, deepEqual } from './settings.js'
 //                  departure-hour forecast, computed once, on the hub
 //   noSchoolToday  from the shared school settings + the hub's school calendar
 //   timer          the derived timer the hub publishes for the Apple TV
+//   weatherAlerts  [{ event, severity, until, headline }]: active NWS or
+//                  WeatherKit alerts, most severe first (up to three).
 //   headline       { text, kind, eventId, until }: the Entry board's one line,
 //                  computed on the hub (frameserver/lib/headline.mjs) so every
 //                  screen says the same thing. kind is 'now' | 'soon' | 'next'
@@ -47,7 +49,7 @@ const POLL_MS = 10 * 1000
 const LOCAL_WRITE_GRACE_MS = 5 * 1000
 const STALE_AFTER_MS = 60 * 1000
 
-const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer', 'headline', 'airQuality']
+const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer', 'headline', 'airQuality', 'weatherAlerts']
 
 function emptyState() {
   return {
@@ -57,6 +59,7 @@ function emptyState() {
     timer: null,
     headline: null,
     airQuality: null,
+    weatherAlerts: [],
     fetchedAt: null,
     error: null,
     stale: true,
@@ -94,6 +97,22 @@ function cleanHeadline(v) {
 }
 
 // A reading needs at least one number; a label on its own is not a reading.
+// The hub's active weather alerts (GET /api/state.weatherAlerts): NWS and
+// WeatherKit warnings, most severe first, at most three. Only the fields the
+// screens use; anything malformed reads as no alerts.
+function cleanWeatherAlerts(v) {
+  if (!Array.isArray(v)) return []
+  return v
+    .filter((a) => a && typeof a === 'object' && typeof a.event === 'string' && a.event)
+    .slice(0, 3)
+    .map((a) => ({
+      event: a.event,
+      severity: typeof a.severity === 'string' ? a.severity : null,
+      until: typeof a.until === 'string' ? a.until : null,
+      headline: typeof a.headline === 'string' ? a.headline : null,
+    }))
+}
+
 function cleanAirQuality(v) {
   if (!v || typeof v !== 'object') return null
   const pm25 = finiteOrNull(v.pm25)
@@ -137,6 +156,9 @@ function stateFrom(payload, base) {
   }
   if ('airQuality' in payload) {
     next.airQuality = keep(base.airQuality, cleanAirQuality(payload.airQuality))
+  }
+  if ('weatherAlerts' in payload) {
+    next.weatherAlerts = keep(base.weatherAlerts, cleanWeatherAlerts(payload.weatherAlerts))
   }
   return next
 }

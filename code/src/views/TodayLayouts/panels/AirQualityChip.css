@@ -122,7 +122,8 @@
 /* The square with its number and the words together: the square is sized in
  * the text scale already. */
 .tl-knobs .tl-aq__body {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-aq-size, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-aq-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 /* One line: the number in a small pill at the words' height, then the word

@@ -97,11 +97,13 @@ export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
       style={k ? { '--tl-sun-size': String(k.size) } : undefined}
     >
       {!hasSun && !hasMoon ? (
-        <div className="tl-sun__empty">No sun data yet</div>
+        <div className="tl-sun__empty" data-edit="empty">
+          No sun data yet
+        </div>
       ) : (
         <div className="tl-sun__row">
           <div className="tl-sun__arc">
-            <div className="tl-sun__sky">
+            <div className="tl-sun__sky" data-edit="arc" data-edit-label="Sun arc">
               {/* preserveAspectRatio="none" so the arc always spans the cell;
                   the dot is a real round element on top, so nothing that is
                   meant to be circular gets stretched with it. */}
@@ -128,24 +130,38 @@ export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
             </div>
             <div className="tl-sun__times">
               <div className="tl-sun__time">
-                <div className="tl-label">Sunrise</div>
-                <div className="tl-sun__clock tl-num">{riseMs == null ? '--' : fmtClock(sunrise)}</div>
+                <div className="tl-label" data-edit="labels" data-edit-label="Sunrise">
+                  Sunrise
+                </div>
+                <div className="tl-sun__clock tl-num" data-edit="times" data-edit-label="Sunrise time">
+                  {riseMs == null ? '--' : fmtClock(sunrise)}
+                </div>
               </div>
               <div className="tl-sun__time tl-sun__time--end">
-                <div className="tl-label">Sunset</div>
-                <div className="tl-sun__clock tl-num">{setMs == null ? '--' : fmtClock(sunset)}</div>
+                <div className="tl-label" data-edit="labels" data-edit-label="Sunset">
+                  Sunset
+                </div>
+                <div className="tl-sun__clock tl-num" data-edit="times" data-edit-label="Sunset time">
+                  {setMs == null ? '--' : fmtClock(sunset)}
+                </div>
               </div>
             </div>
           </div>
 
           {hasMoon && (
-            <div className="tl-sun__moon">
+            <div className="tl-sun__moon" data-edit="moon" data-edit-label="Moon">
               <svg className="tl-sun__moon-svg" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="tl-sun__moon-disc" cx="12" cy="12" r="10" />
                 {litPath && <path className="tl-sun__moon-lit" d={litPath} />}
               </svg>
-              <div className="tl-sun__moon-label">{moon.label || 'Moon'}</div>
-              {illum != null && <div className="tl-sun__moon-lit-pct tl-num">{illum}% lit</div>}
+              <div className="tl-sun__moon-label" data-edit="phase" data-edit-label="Moon phase">
+                {moon.label || 'Moon'}
+              </div>
+              {illum != null && (
+                <div className="tl-sun__moon-lit-pct tl-num" data-edit="phase" data-edit-label="Moon lit">
+                  {illum}% lit
+                </div>
+              )}
             </div>
           )}
         </div>

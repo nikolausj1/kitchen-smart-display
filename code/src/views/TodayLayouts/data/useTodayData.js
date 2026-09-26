@@ -45,8 +45,8 @@ import {
 // screens) cannot fight over what the TV shows.
 //
 // Returns { now, demo, greeting, settings, weather, moon, school, timer, wear,
-// music, photos, calendar, agendaDays, countdowns, headline, airQuality }. The
-// Entry board's five (docs/designs/entry-board.md):
+// music, photos, calendar, agendaDays, countdowns, headline, airQuality,
+// weatherAlerts }. The Entry board's five (docs/designs/entry-board.md):
 //   calendar    the hooks/useCalendar.js snapshot: { events, countdowns,
 //               calendars, connected, fetchedAt, error, stale }
 //   agendaDays  [{ dateKey, date, label: 'Today' | 'Tomorrow' | weekday,
@@ -59,6 +59,10 @@ import {
 //   headline    the hub's { text, kind, eventId, until }, or null when the hub
 //               has not said so today (the layout decides the fallback)
 //   airQuality  the hub's { pm25, aqi, label, fetchedAt }, or null
+// and weatherAlerts: the hub's NWS alerts in force ([{ event, severity, until,
+// headline }], /api/state), or null while the house state does not carry
+// them (lib/houseState.js keeps only the keys it knows; the layouts then read
+// an alert off the headline). The spec layouts' alertActive rule reads it.
 
 // URL params, parsed ONCE at module load the way lib/kioskMode.js does.
 // Reading window.location in a render body trips the React Compiler purity
@@ -408,6 +412,7 @@ export default function useTodayData() {
   // Air quality follows the weather's demo rule: a live reading wins.
   const liveAir = houseToday ? house.airQuality : null
   const airQuality = liveAir || (demo ? DEMO_AIR_QUALITY : null)
+  const weatherAlerts = !demo && houseToday && Array.isArray(house.weatherAlerts) ? house.weatherAlerts : null
 
   return {
     now,
@@ -426,5 +431,6 @@ export default function useTodayData() {
     countdowns,
     headline,
     airQuality,
+    weatherAlerts,
   }
 }

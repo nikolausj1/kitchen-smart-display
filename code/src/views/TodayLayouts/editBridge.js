@@ -3,10 +3,14 @@ import { EDIT_MODE, REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import { getSettings, whenHubSettled } from '../../lib/settings.js'
 import { setDemoMode } from './data/demoMode.js'
 import {
+  BOX_SCHEMA,
   DAYPARTS,
+  ELEMENT_STYLE_SCHEMA,
+  FONTS,
   GLOBAL_SCHEMA_COPY,
   PANEL_SCHEMA_TABLE,
   PANEL_TYPE_LIST,
+  RULE_KINDS,
   SPEC_VERSION,
   defaultSpecFor,
   isSpecLayout,
@@ -23,7 +27,13 @@ import {
 //
 //   app -> editor  sd-edit:ready   { layoutId, canvas, savedSpec, defaultSpec,
 //                                    panelTypes, schemas, globalSchema,
-//                                    dayparts, specVersion }
+//                                    dayparts, specVersion,
+//                                    elementStyleSchema, boxSchema, fonts,
+//                                    ruleKinds }
+//                                  (the last four: layoutSpec.js
+//                                  ELEMENT_STYLE_SCHEMA, BOX_SCHEMA, FONTS,
+//                                  RULE_KINDS; docs/designs/
+//                                  panels-and-controls.md, chunk 1)
 //                                  once the first hub answer is in (or 2 s
 //                                  passed), whenever the saved spec changes on
 //                                  the hub, and in reply to a ping
@@ -189,6 +199,10 @@ function sendReady() {
     globalSchema: GLOBAL_SCHEMA_COPY,
     dayparts: DAYPARTS,
     specVersion: SPEC_VERSION,
+    elementStyleSchema: ELEMENT_STYLE_SCHEMA,
+    boxSchema: BOX_SCHEMA,
+    fonts: FONTS,
+    ruleKinds: RULE_KINDS,
   })
 }
 

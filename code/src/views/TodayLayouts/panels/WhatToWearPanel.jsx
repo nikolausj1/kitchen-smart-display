@@ -99,7 +99,9 @@ export default function WhatToWearPanel({ wear, knobs }) {
       style={k ? { '--tl-wear-size': String(k.size) } : undefined}
     >
       {!headline && !detail ? (
-        <div className="tl-wear__empty">Forecast not in yet</div>
+        <div className="tl-wear__empty" data-edit="empty">
+          Forecast not in yet
+        </div>
       ) : (
         <div className="tl-wear__row">
           {hasGlyph && (

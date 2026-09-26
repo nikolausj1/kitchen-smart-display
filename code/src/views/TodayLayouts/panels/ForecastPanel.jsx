@@ -33,30 +33,35 @@ export default function ForecastPanel({ days, fetchedAt, now, count = 4, error, 
     <PanelFrame
       title="Forecast"
       aside={<FreshnessStamp fetchedAt={fetchedAt} now={now} error={error} />}
+      asideEdit="updated"
+      asideEditLabel="Updated"
       className={`tl-fc${k ? ' tl-knobs' : ''}`}
       bodyClassName="tl-fc__body"
       style={k ? { '--tl-fc-size': String(k.size) } : undefined}
     >
       {list.length === 0 ? (
-        <div className="tl-fc__empty">No forecast yet</div>
+        <div className="tl-fc__empty" data-edit="empty">
+          No forecast yet
+        </div>
       ) : (
-        <div className="tl-fc__grid" style={gridStyle}>
+        <div className={`tl-fc__grid${showIcons ? '' : ' tl-fc__grid--noicons'}`} style={gridStyle}>
           {list.map((day, i) => {
             const pop = day?.precipPct
             const showPop = pop != null && pop >= POP_FLOOR
             return (
               // Four children per day, always (three without icons, over three
-              // rows). They auto-place down one grid column, so a missing rain
-              // chance still has to occupy its cell or the next day would
-              // shift up into it.
+              // rows), each on its own row (ForecastPanel.css), so a day fills
+              // one grid column; a missing rain chance still occupies its cell.
               <Fragment key={`${day?.label ?? 'day'}-${i}`}>
-                <div className="tl-fc__day tl-label">{day?.label || '--'}</div>
+                <div className="tl-fc__day tl-label" data-edit="day">
+                  {day?.label || '--'}
+                </div>
                 {showIcons && (
-                  <div className="tl-fc__icon">
+                  <div className="tl-fc__icon" data-edit="icon">
                     {day?.iconName && <WeatherIcon name={day.iconName} />}
                   </div>
                 )}
-                <div className="tl-fc__temps">
+                <div className="tl-fc__temps" data-edit="temps" data-edit-label="Temperatures">
                   <span className="tl-fc__hi tl-num">
                     {day?.highF == null ? '--' : Math.round(day.highF)}
                     <span className="tl-fc__deg">&deg;</span>
@@ -68,7 +73,9 @@ export default function ForecastPanel({ days, fetchedAt, now, count = 4, error, 
                     </span>
                   )}
                 </div>
-                <div className="tl-fc__pop tl-num">{showPop ? `${Math.round(pop)}%` : ''}</div>
+                <div className="tl-fc__pop tl-num" data-edit="rain" data-edit-label="Rain chance">
+                  {showPop ? `${Math.round(pop)}%` : ''}
+                </div>
               </Fragment>
             )
           })}

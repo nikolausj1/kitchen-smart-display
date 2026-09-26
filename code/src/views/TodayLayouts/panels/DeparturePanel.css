@@ -201,6 +201,7 @@
 
 .tl-knobs .tl-depart__count,
 .tl-knobs .tl-depart__option-time {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-depart-num, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-depart-num, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 

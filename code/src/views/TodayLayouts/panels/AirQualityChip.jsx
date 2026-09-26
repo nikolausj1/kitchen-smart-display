@@ -84,7 +84,11 @@ export default function AirQualityChip({ airQuality, knobs }) {
       </div>
       <div className="tl-aq__text" data-edit="label">
         <div className="tl-aq__word">{hasReading ? word : 'Air quality'}</div>
-        {detail && <div className="tl-aq__detail tl-num">{detail}</div>}
+        {detail && (
+          <div className="tl-aq__detail tl-num" data-edit="detail">
+            {detail}
+          </div>
+        )}
       </div>
     </PanelFrame>
   )

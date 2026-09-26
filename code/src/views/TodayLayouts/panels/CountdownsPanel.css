@@ -206,12 +206,14 @@
 }
 
 .tl-knobs .tl-cd__title {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-title, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-title, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 .tl-knobs .tl-cd__num,
 .tl-knobs .tl-cd__unit {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-num, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-num, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 /* The art: a share of the room the text leaves it (imageSize, up to 1). */

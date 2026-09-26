@@ -262,15 +262,21 @@ function PhotoPanel({
           <div
             key={i}
             className={`tl-photo__layer${i === pos.active ? ' tl-photo__layer--active' : ''}`}
+            data-edit="image"
+            data-edit-label="Photo"
           >
             {photo?.src && <img src={photo.src} alt="" draggable="false" />}
           </div>
         ))}
 
-        {!hasPhotos && <div className="tl-photo__empty">No photos</div>}
+        {!hasPhotos && (
+          <div className="tl-photo__empty" data-edit="empty">
+            No photos
+          </div>
+        )}
 
         {hasPhotos && showCounter && (
-          <div className="tl-photo__counter tl-num">
+          <div className="tl-photo__counter tl-num" data-edit="counter">
             {idx + 1}/{run.length}
           </div>
         )}

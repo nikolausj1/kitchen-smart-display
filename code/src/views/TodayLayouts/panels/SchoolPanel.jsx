@@ -32,14 +32,22 @@ export default function SchoolPanel({ school, knobs }) {
 
   let body
   if (school?.noSchool) {
-    body = <div className="tl-school__empty">No school today</div>
+    body = (
+      <div className="tl-school__empty" data-edit="empty">
+        No school today
+      </div>
+    )
   } else if (rows.length === 0) {
-    body = <div className="tl-school__empty">Nothing on the schedule</div>
+    body = (
+      <div className="tl-school__empty" data-edit="empty">
+        Nothing on the schedule
+      </div>
+    )
   } else {
     body = (
       <ul className="tl-school__rows">
         {rows.map((r) => (
-          <li className="tl-school__row" key={r.key}>
+          <li className="tl-school__row" key={r.key} data-edit="rows" data-edit-label="Row">
             <span className="tl-school__name">{r.name}</span>
             <span className="tl-school__sep" aria-hidden="true">&middot;</span>
             <span className="tl-school__value">{r.value}</span>

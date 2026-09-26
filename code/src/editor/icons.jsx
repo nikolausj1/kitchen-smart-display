@@ -98,3 +98,57 @@ export function PanelIcon() {
     </svg>
   )
 }
+
+export function ChevronIcon({ open }) {
+  return (
+    <svg {...base} width={12} height={12} viewBox="0 0 12 12" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 0.12s' }}>
+      <path d="M4.5 3l3 3-3 3" />
+    </svg>
+  )
+}
+
+export function MoreIcon() {
+  return (
+    <svg {...base}>
+      <circle cx="3.5" cy="8" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="8" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="12.5" cy="8" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+// A rule: "shows only when". A small branching path.
+export function RuleIcon({ size = 16 }) {
+  return (
+    <svg {...base} width={size} height={size}>
+      <circle cx="4" cy="4" r="1.6" />
+      <circle cx="4" cy="12" r="1.6" />
+      <circle cx="12" cy="8" r="1.6" />
+      <path d="M4 5.6v4.8M5.4 4.8c3 0 3.6 3.2 5 3.2" />
+    </svg>
+  )
+}
+
+// Alignment: a bar for the edge, boxes against it.
+const ALIGN_PATHS = {
+  left: ['M2.5 2v12', 'M4.5 4h8v3h-8z', 'M4.5 9h5v3h-5z'],
+  centre: ['M8 2v12', 'M3.5 4h9v3h-9z', 'M5.5 9h5v3h-5z'],
+  right: ['M13.5 2v12', 'M3.5 4h8v3h-8z', 'M6.5 9h5v3h-5z'],
+  top: ['M2 2.5h12', 'M4 4.5v8h3v-8z', 'M9 4.5v5h3v-5z'],
+  middle: ['M2 8h12', 'M4 3.5v9h3v-9z', 'M9 5.5v5h3v-5z'],
+  bottom: ['M2 13.5h12', 'M4 3.5v8h3v-8z', 'M9 6.5v5h3v-5z'],
+  distributeX: ['M2 2.5v11', 'M14 2.5v11', 'M5.5 5h2v6h-2z', 'M9.5 4h2v8h-2z'],
+  distributeY: ['M2.5 2h11', 'M2.5 14h11', 'M5 5.5h6v2H5z', 'M4 9.5h8v2H4z'],
+  matchW: ['M2.5 4h11v3h-11z', 'M2.5 10.5h11', 'M2.5 9v3M13.5 9v3'],
+  matchH: ['M4 2.5v11h3v-11z', 'M10.5 2.5v11', 'M9 2.5h3M9 13.5h3'],
+}
+
+export function AlignIcon({ kind }) {
+  return (
+    <svg {...base}>
+      {(ALIGN_PATHS[kind] || []).map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  )
+}

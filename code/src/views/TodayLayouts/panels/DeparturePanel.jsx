@@ -67,10 +67,18 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel, kno
 
   let body
   if (noSchool) {
-    body = <div className="tl-depart__headline">No school today</div>
+    body = (
+      <div className="tl-depart__headline" data-edit="status">
+        No school today
+      </div>
+    )
   } else if (mode === 'set-timer') {
     // The Framed view owns the picker; here we only acknowledge the state.
-    body = <div className="tl-depart__headline tl-depart__headline--quiet">Setting timer...</div>
+    body = (
+      <div className="tl-depart__headline tl-depart__headline--quiet" data-edit="status">
+        Setting timer...
+      </div>
+    )
   } else if (isActive) {
     const expired = minutesLeft != null && minutesLeft <= 0
     const target = timer?.target instanceof Date ? fmtClock(timer.target) : null
@@ -88,7 +96,7 @@ export default function DeparturePanel({ timer, school, now, onToggleTravel, kno
             </>
           )}
         </div>
-        <div className="tl-depart__meta">
+        <div className="tl-depart__meta" data-edit="meta" data-edit-label="Details">
           <span className="tl-depart__dot" aria-hidden="true" />
           <span>{TRAVEL_LABEL[travelMode]}</span>
           {target && (

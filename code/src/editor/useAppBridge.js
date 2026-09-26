@@ -139,3 +139,22 @@ export default function useAppBridge({ iframeRef, frame, frameKey, layoutId, spe
 
   return { ready, gaveUp, appCanvas: ready ? link.appCanvas : null, ping }
 }
+
+// The panels the app marks as carrying a visibility rule (data-rule on the
+// box, Contract chunk 1), read from the preview's own DOM: a Set of panel ids,
+// or null when the preview is on another origin (development with ?app=) and
+// cannot be read. The rects message's own `rule` flags win when it has them.
+export function readRuleMarks(iframe) {
+  try {
+    const doc = iframe?.contentDocument
+    if (!doc) return null
+    const ids = new Set()
+    doc.querySelectorAll('[data-panel-id][data-rule]').forEach((el) => {
+      const v = el.getAttribute('data-rule')
+      if (v !== '0' && v !== 'false') ids.add(el.getAttribute('data-panel-id'))
+    })
+    return ids
+  } catch {
+    return null
+  }
+}

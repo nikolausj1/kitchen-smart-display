@@ -13,8 +13,16 @@
 // layout (Reset), so an untuned screen follows the code's default. The spec
 // carries explicit nulls for whatever the stored copy has and the draft no
 // longer does (a removed day part), because the hub deep-merges the PATCH
-// (withRemovals in spec.js). Copy layout to… writes another screen's
-// layouts.<layoutId> with this screen's SAVED layout the same way.
+// (withRemovals in spec.js), including inside a panel (a removed rule is
+// `when: null`, a removed element style `elements: { <key>: null }`); a panel
+// the save does not change goes back exactly as stored. Copy layout to…
+// writes another screen's layouts.<layoutId> with this screen's SAVED layout
+// the same way.
+//
+// Chunk 1 of panels and controls (docs/designs/panels-and-controls.md):
+// element styles (the inspector's Element section, the layers' element
+// tree), the box v2 props, visibility rules ("Show when"), several panels
+// selected at once (move, align, distribute, match), and copy and paste style.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Dayparts from './Dayparts.jsx'
@@ -23,10 +31,35 @@ import Layers from './Layers.jsx'
 import Stage from './Stage.jsx'
 import TopBar, { StatusLine } from './TopBar.jsx'
 import { Dialog } from './menus.jsx'
-import useAppBridge from './useAppBridge.js'
+import useAppBridge, { readRuleMarks } from './useAppBridge.js'
 import useEditorState from './useEditorState.js'
-import { finalSpec, newPanel, sameLayout, withVariant, withoutVariant } from './appSpec.js'
-import { addPanel, editGlobal, editPanels, followDayGlobal, mapPanel, removePanel, setEveningFrom, withBox, withFields, withProps } from './edits.js'
+import { finalSpec, newPanel, sameLayout, samePanel, withVariant, withoutVariant } from './appSpec.js'
+import {
+  addPanel,
+  alignPanels,
+  distributePanels,
+  editGlobal,
+  editPanels,
+  followDayGlobal,
+  mapPanel,
+  mapPanels,
+  matchPanels,
+  movePanels,
+  removePanel,
+  removePanels,
+  setEveningFrom,
+  styleOf,
+  unionPx,
+  withBox,
+  withElementStyle,
+  withFields,
+  withProps,
+  withPropPath,
+  withStyle,
+  withWhen,
+  withoutElementStyle,
+  withoutElementStyles,
+} from './edits.js'
 import { nudgeRect } from './geometry.js'
 import {
   HUB,
@@ -47,6 +80,8 @@ import {
   MAX_PANELS,
   VARIANT_PARTS,
   clamp,
+  elementAncestors,
+  elementStyleOf,
   hasPart,
   isDict,
   layoutMeta,
@@ -57,6 +92,8 @@ import {
   normalizeCanvas,
   normalizeColor,
   normalizeSrc,
+  normalizeWhen,
+  panelLabel,
   partPanels,
   partWhen,
   pctToPx,
@@ -142,6 +179,7 @@ export default function Editor() {
   const [history, setHistory] = useState(null) // { deviceId, items, loading, error }
   const [copyAsk, setCopyAsk] = useState(null) // { targetId }
   const [copying, setCopying] = useState(false)
+  const [styleClip, setStyleClip] = useState(null) // styleOf() + { label }: Copy style
   const iframeRef = useRef(null)
   // Bumped around every save, so a background refresh that started before
   // the save cannot land after it with the old copy.
@@ -154,6 +192,11 @@ export default function Editor() {
   const panels = partPanels(spec, part)
   const hasVariant = !spec || !!panels
   const selected = panels?.find((p) => p.id === state.selectedId) ?? null
+  // Several selected, in the order they were picked.
+  const group = useMemo(
+    () => (panels && state.selectedIds.length > 1 ? state.selectedIds.map((id) => panels.find((p) => p.id === id)).filter(Boolean) : []),
+    [panels, state.selectedIds]
+  )
   const device = devices?.find((d) => d.id === deviceId) ?? null
   const screens = useMemo(() => (devices || []).filter(isWebScreen), [devices])
   const copyTargets = useMemo(() => screens.filter((d) => d.id !== deviceId), [screens, deviceId])
@@ -251,11 +294,19 @@ export default function Editor() {
         h: el.h,
       })
     }
+    // The boxes the app marks as carrying a rule: its own `rule` flags when
+    // the rects have them, else data-rule read from the preview (same origin).
+    const list = Array.isArray(m.panels) ? m.panels : []
+    const flagged = list.some((r) => isDict(r) && 'rule' in r)
+    const rules = flagged
+      ? new Set(list.filter((r) => isDict(r) && r.rule && typeof r.id === 'string').map((r) => r.id))
+      : readRuleMarks(iframeRef.current)
     setRects({
       key,
       canvas: normalizeCanvas(m.canvas),
       byId,
       elements,
+      rules,
       // What the app drew them for (v2 rects say; older ones do not).
       layoutId: typeof m.layoutId === 'string' ? m.layoutId : null,
       daypart: typeof m.daypart === 'string' ? m.daypart : null,
@@ -299,6 +350,13 @@ export default function Editor() {
     for (const [k, set] of Object.entries(seen)) if (set.size === 1) out[k] = [...set][0]
     return out
   }, [liveRects, state.selectedId])
+
+  // The selected element with the elements it sits in, outermost first:
+  // ['tile', 'title'] for Countdowns › Tile › Title.
+  const elementPath = useMemo(() => {
+    if (!selected || !state.selectedElement) return []
+    return [...elementAncestors(selected.type, state.selectedElement, liveRects?.elements?.[selected.id]), state.selectedElement]
+  }, [selected, state.selectedElement, liveRects])
 
   // --- edits ------------------------------------------------------------------------
   // Every recipe is (spec, part) => spec: the reducer applies it to the day
@@ -373,6 +431,105 @@ export default function Editor() {
       setNotice({ kind: 'info', text: `${typeLabel(panel.type, state.labels)} is off this layout; Add panel brings it back.` })
     }
   }
+  // --- element styles, box v2, rules --------------------------------------------------
+  const colorOk = (v) => v === null || v === undefined || !!normalizeColor(v, null)
+  const badColor = () => setNotice({ kind: 'warn', text: 'Colours are hex: #rgb or #rrggbb.' })
+
+  function onElementStyle(id, key, patch, field) {
+    const clean = { ...patch }
+    if ('color' in clean) {
+      if (!colorOk(clean.color)) return badColor()
+      if (clean.color != null) clean.color = normalizeColor(clean.color, null)
+    }
+    const opts = field ? { coalesce: `el:${part}:${id}:${key}:${field}`, windowMs: 1000 } : {}
+    actions.update((s, p) => mapPanel(s, p, id, withElementStyle(key, clean)), { ...opts, label: 'element style' })
+  }
+
+  const onToggleElement = (id, key) => {
+    const panel = panels?.find((x) => x.id === id)
+    if (!panel) return
+    const hidden = elementStyleOf(panel, key).hidden === true
+    actions.update((s, p) => mapPanel(s, p, id, withElementStyle(key, { hidden: !hidden })), { label: 'element eye' })
+  }
+
+  const onResetElement = (id, key) => actions.update((s, p) => mapPanel(s, p, id, withoutElementStyle(key)), { label: 'reset element' })
+
+  function onResetElements(id) {
+    actions.update((s, p) => mapPanel(s, p, id, withoutElementStyles()), { label: 'reset element styles' })
+    setNotice({ kind: 'info', text: 'Every element style of the panel removed.' })
+  }
+
+  function onBoxProp(id, path, value, field, run) {
+    let v = value
+    if (field?.type === 'color') {
+      if (!colorOk(v)) return badColor()
+      if (v != null) v = normalizeColor(v, null)
+    }
+    const opts = run ? { coalesce: `box:${part}:${id}:${path.join('.')}`, windowMs: field?.type === 'text' ? 2000 : 1000 } : {}
+    actions.update((s, p) => mapPanel(s, p, id, withPropPath(path, v, field)), { ...opts, label: 'box' })
+  }
+
+  // A rule, validated against the rule registry; null or an empty one: always.
+  function onWhen(id, when, coalesce) {
+    const clean = normalizeWhen(when)
+    const opts = coalesce ? { coalesce, windowMs: 1000 } : {}
+    actions.update((s, p) => mapPanel(s, p, id, withWhen(clean)), { ...opts, label: 'rule' })
+  }
+
+  // --- copy and paste style --------------------------------------------------------------
+  function onCopyStyle() {
+    if (!selected) return
+    const label = `${panelLabel(selected, state.labels)}${part !== 'day' ? ` (${DAYPART_LABELS[part]})` : ''}`
+    setStyleClip({ ...styleOf(selected), label, part })
+    setNotice({ kind: 'info', text: `Copied ${label}'s style. Paste style (⌥⌘V) puts it on another panel.` })
+  }
+
+  function onPasteStyle() {
+    const targets = group.length > 1 ? group : selected ? [selected] : []
+    // Never onto the panel it came from (the same id in the same day part).
+    const ids = targets.map((p) => p.id).filter((id) => !(id === styleClip?.id && part === styleClip?.part))
+    if (!styleClip || !ids.length) return
+    actions.update((s, p) => mapPanels(s, p, ids, withStyle(styleClip)), { group: true, label: 'paste style' })
+    setNotice({
+      kind: 'info',
+      text: `Pasted ${styleClip.label}'s style onto ${ids.length === 1 ? targets.find((t) => t.id === ids[0])?.id : `${ids.length} panels`}. Undo takes it back.`,
+    })
+  }
+
+  // --- several panels -----------------------------------------------------------------------
+  const groupIds = group.map((p) => p.id)
+  const minPx = (type) => {
+    const m = minPctFor(type, state.mins)
+    return { w: Math.ceil((m.w * canvas.w) / 100), h: Math.ceil((m.h * canvas.h) / 100) }
+  }
+  const onGroupMove = useCallback(
+    (start, dx, dy, opts) => actions.update((s, p) => movePanels(s, p, start, dx, dy, canvas), { ...opts, group: true, label: 'move several' }),
+    [actions, canvas]
+  )
+  const onAlign = (kind) => actions.update((s, p) => alignPanels(s, p, groupIds, kind, canvas), { group: true, label: `align ${kind}` })
+  const onDistribute = (axis) =>
+    actions.update((s, p) => distributePanels(s, p, groupIds, axis, canvas), { group: true, label: `distribute ${axis}` })
+  const onMatch = (dim) =>
+    actions.update((s, p) => matchPanels(s, p, groupIds, groupIds[0], dim, canvas, minPx), { group: true, label: `match ${dim}` })
+
+  function nudgeGroup(dx, dy) {
+    const ids = groupIds
+    actions.update(
+      (s, p) => {
+        const members = (partPanels(s, p) || []).filter((x) => ids.includes(x.id) && !x.locked && !x.hidden)
+        if (!members.length) return s
+        const start = Object.fromEntries(members.map((x) => [x.id, { pct: { x: x.x, y: x.y, w: x.w, h: x.h }, px: pctToPxRound(x, canvas) }]))
+        const u = unionPx(Object.values(start).map((x) => x.px))
+        const to = nudgeRect(u, dx, dy, canvas)
+        return movePanels(s, p, start, to.x - u.x, to.y - u.y, canvas)
+      },
+      { coalesce: `nudge:${part}:${ids.join(',')}`, windowMs: 1000, group: true, label: 'nudge several' }
+    )
+  }
+
+  const onLayerSelect = (id, toggle) => (toggle ? actions.toggleSelect(id) : actions.select(id))
+  const onLayerHover = useCallback((id, element) => setHover(id ? { id, element: element || null } : null), [])
+
   const onReorder = (frontFirstIds) => actions.update((s, p) => editPanels(s, p, (list) => restack(list, frontFirstIds)))
   const onBackdrop = (patch, field) => actions.backdrop(patch, field ? { coalesce: `backdrop:${field}`, windowMs: 1000 } : {})
   const onGlobal = (patch, field) =>
@@ -417,12 +574,20 @@ export default function Editor() {
   }
 
   function deleteSelected() {
+    if (group.length > 1) {
+      // One step: blocks go, panels hide.
+      const blocks = group.filter((p) => p.type === 'text' || p.type === 'image').map((p) => p.id)
+      const rest = group.filter((p) => !blocks.includes(p.id)).map((p) => p.id)
+      actions.update((s, p) => removePanels(mapPanels(s, p, rest, withFields({ hidden: true })), p, blocks), { group: true, label: 'delete several' })
+      return
+    }
     if (!selected) return
     if (selected.type === 'text' || selected.type === 'image') onRemove(selected.id)
     else onPanel(selected.id, { hidden: true })
   }
 
   function nudge(dx, dy) {
+    if (group.length > 1) return nudgeGroup(dx, dy)
     if (!selected || selected.locked || selected.hidden) return
     const id = selected.id
     actions.update(
@@ -479,7 +644,7 @@ export default function Editor() {
         } else {
           const stored = await freshStored(deviceId, state.saved.raw)
           const spec2 = finalSpec({ ...submitted.spec, canvas: { w: canvas.w, h: canvas.h } }, layoutId)
-          body.layouts = { [layoutId]: withRemovals(stored, spec2) }
+          body.layouts = { [layoutId]: withRemovals(stored, spec2, { samePanel: (a, b) => samePanel(a, b, layoutId) }) }
         }
       }
       if (ed.backdropDirty) {
@@ -527,7 +692,7 @@ export default function Editor() {
       let value = null
       if (source) {
         const stored = await freshStored(target.id, storedLayout(target, layoutId))
-        value = withRemovals(stored, finalSpec(source, layoutId))
+        value = withRemovals(stored, finalSpec(source, layoutId), { samePanel: (a, b) => samePanel(a, b, layoutId) })
       }
       await patchDeviceConfig(target.id, { layouts: { [layoutId]: value } })
       setToast({
@@ -646,6 +811,13 @@ export default function Editor() {
     }
     const t = e.target
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+    // Option-Command-C / V: copy and paste style (e.code: Option changes e.key).
+    if (mod && e.altKey && (e.code === 'KeyC' || e.code === 'KeyV')) {
+      e.preventDefault()
+      if (e.code === 'KeyC') onCopyStyle()
+      else onPasteStyle()
+      return
+    }
     if (mod && (key === 'z' || key === 'Z')) {
       e.preventDefault()
       if (e.shiftKey) actions.redo()
@@ -663,19 +835,19 @@ export default function Editor() {
       if (state.selectedElement) {
         e.preventDefault()
         actions.selectElement(null)
-      } else if (state.selectedId) {
+      } else if (state.selectedIds.length) {
         e.preventDefault()
         actions.select(null)
       }
       return
     }
-    if (!selected) return
+    if (!selected && group.length < 2) return
     if (key === 'Delete' || key === 'Backspace') {
       e.preventDefault()
       deleteSelected()
       return
     }
-    if (key === 'Enter' && selected.type === 'text') {
+    if (key === 'Enter' && selected?.type === 'text') {
       e.preventDefault()
       setFocusText({ id: selected.id })
       return
@@ -716,11 +888,14 @@ export default function Editor() {
   else if (devices && deviceId && !device) problem = `No screen called "${deviceId}" on the hub.`
   else if (device && !isWebScreen(device)) problem = `${device.name || deviceId} is not a web screen; the editor lays out the web app's boards.`
 
-  const elName = selected && state.selectedElement ? elementLabel(selected.type, state.selectedElement, reportedLabels) : null
+  const elName = selected && state.selectedElement ? elementPath.map((k) => elementLabel(selected.type, k, reportedLabels)).join(' › ') : null
   const selPx = selected ? pctToPxRound(selected, canvas) : null
+  const partText = part !== 'day' ? `${DAYPART_LABELS[part]} · ` : ''
   const selectionText = selected
-    ? `${part !== 'day' ? `${DAYPART_LABELS[part]} · ` : ''}${selected.id}${elName ? ` › ${elName}` : ''}: ${selPx.x}, ${selPx.y}, ${selPx.w} x ${selPx.h} px`
-    : null
+    ? `${partText}${selected.id}${elName ? ` › ${elName}` : ''}: ${selPx.x}, ${selPx.y}, ${selPx.w} x ${selPx.h} px`
+    : group.length > 1
+      ? `${partText}${group.length} panels: ${groupIds.join(', ')}`
+      : null
   const has = Object.fromEntries(VARIANT_PARTS.map((p) => [p, hasPart(spec, p)]))
   const copyTarget = copyAsk ? devices?.find((d) => d.id === copyAsk.targetId) : null
 
@@ -755,10 +930,17 @@ export default function Editor() {
         saving={saving}
         canSave={!!state.saved}
         hasDraft={!!state.draft}
+        arrange={
+          group.length > 1 && !(spec && !panels)
+            ? { count: group.length, first: panelLabel(group[0], state.labels), onAlign, onDistribute, onMatch }
+            : null
+        }
       />
       <Layers
         panels={panels}
+        selectedIds={state.selectedIds}
         selectedId={state.selectedId}
+        selectedElement={state.selectedElement}
         hoverId={hover?.id ?? null}
         labels={state.labels}
         disabled={!panels}
@@ -769,9 +951,11 @@ export default function Editor() {
         }
         canAdd={!!panels && panels.length < MAX_PANELS}
         addable={addable}
-        onSelect={actions.select}
-        onHover={onStageHover}
+        onSelect={onLayerSelect}
+        onSelectElement={actions.selectPath}
+        onHover={onLayerHover}
         onToggle={onToggle}
+        onToggleElement={onToggleElement}
         onReorder={onReorder}
         onAdd={onAdd}
         onAddPanel={onAddPanel}
@@ -809,17 +993,21 @@ export default function Editor() {
               panels={panels}
               readOnly={!!spec && !panels}
               rects={liveRects}
+              ruleIds={liveRects?.rules ?? null}
               selectedId={state.selectedId}
+              selectedIds={state.selectedIds}
               selectedElement={state.selectedElement}
               hoverId={hover?.id ?? null}
               labels={state.labels}
               mins={state.mins}
               appState={appState}
-              elementName={(key) => (selected ? elementLabel(selected.type, key, reportedLabels) : key)}
+              elementName={(key) => (selected ? (key === state.selectedElement && elName) || elementLabel(selected.type, key, reportedLabels) : key)}
               onSelect={actions.select}
+              onToggleSelect={actions.toggleSelect}
               onSelectElement={actions.selectElement}
               onHover={onStageHover}
               onGeometry={onGeometry}
+              onGroupMove={onGroupMove}
               onAbandon={actions.abandon}
               onEditText={(id) => {
                 actions.select(id)
@@ -846,6 +1034,7 @@ export default function Editor() {
         layoutId={layoutId || meta.id}
         hasVariant={hasVariant}
         panel={selected}
+        group={group}
         canvas={canvas}
         labels={state.labels}
         mins={state.mins}
@@ -866,9 +1055,19 @@ export default function Editor() {
         focusTextFor={focusText?.id ?? null}
         onTextFocused={onTextFocused}
         selectedElement={state.selectedElement}
+        elementPath={elementPath}
         onSelectElement={actions.selectElement}
+        onSelect={actions.select}
         reportedLabels={reportedLabels}
         onFieldHover={setHover}
+        onElementStyle={onElementStyle}
+        onResetElement={onResetElement}
+        onResetElements={onResetElements}
+        onBoxProp={onBoxProp}
+        onWhen={onWhen}
+        styleClip={styleClip}
+        onCopyStyle={onCopyStyle}
+        onPasteStyle={onPasteStyle}
       />
       <StatusLine
         hub={HUB}

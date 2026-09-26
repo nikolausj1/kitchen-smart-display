@@ -99,7 +99,8 @@
 /* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
 
 .tl-knobs .tl-headline__line {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-headline-size, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-headline-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 /* More than one line (maxLines): the text wraps and clamps (the count arrives

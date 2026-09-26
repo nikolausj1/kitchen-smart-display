@@ -17,12 +17,22 @@
 // the grid and the smart guides snap unless Option is held; Esc mid-drag puts
 // it back. One drag is one undo step (coalesce key per gesture).
 //
+// Several panels: Shift-press adds the panel under the pointer to the
+// selection or takes it out (no drag from that press). With several selected,
+// dragging any of them moves them all, their bounds snapping as one box
+// (locked ones stay); a click on one without a drag selects just that one.
+//
+// A panel the app marks as carrying a visibility rule (data-rule, reported
+// in `ruleIds`) gets a small badge in its top right corner.
+//
 // readOnly: a day part with no layout of its own shows the Day layout, which
 // is not edited from there.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { unionPx } from './edits.js'
 import { HANDLES, HANDLE_AT, HANDLE_CURSOR, guideLines, guideLinesFor, guideTargets, moveRect, resizeRect } from './geometry.js'
-import { frontToBack, minPctFor, pctToPx, pctToPxRound, pxToPctKeeping, typeLabel } from './spec.js'
+import { RuleIcon } from './icons.jsx'
+import { frontToBack, minPctFor, pctToPx, pctToPxRound, pxToPctKeeping, typeLabel, whenSummary } from './spec.js'
 
 const FIT_PAD = 24 // stage px around the canvas
 const DRAG_THRESHOLD = 3 // screen px before a press becomes a drag
@@ -44,7 +54,9 @@ export default function Stage({
   panels,
   readOnly,
   rects,
+  ruleIds,
   selectedId,
+  selectedIds,
   selectedElement,
   hoverId,
   labels,
@@ -52,9 +64,11 @@ export default function Stage({
   appState,
   elementName,
   onSelect,
+  onToggleSelect,
   onSelectElement,
   onHover,
   onGeometry,
+  onGroupMove,
   onAbandon,
   onEditText,
 }) {
@@ -144,11 +158,49 @@ export default function Stage({
     return { w: Math.ceil((m.w * canvas.w) / 100), h: Math.ceil((m.h * canvas.h) / 100) }
   }
 
+  const multi = selectedIds.length > 1
+
+  // A press on one of several selected panels: a drag moves them all, a
+  // click selects that one alone.
+  function startGroup(e, target) {
+    overlayRef.current.focus({ preventScroll: true })
+    e.preventDefault()
+    overlayRef.current.setPointerCapture(e.pointerId)
+    gestureSeq.current += 1
+    const members = panels.filter((p) => selectedIds.includes(p.id) && !p.locked && !p.hidden)
+    const start = Object.fromEntries(
+      members.map((p) => [p.id, { pct: { x: p.x, y: p.y, w: p.w, h: p.h }, px: pctToPxRound(p, canvas) }])
+    )
+    const others = panels.filter((p) => !p.hidden && !selectedIds.includes(p.id)).map((p) => pctToPx(p, canvas))
+    gesture.current = {
+      group: true,
+      id: target.id,
+      kind: 'move',
+      start,
+      union: unionPx(Object.values(start).map((x) => x.px)),
+      sx: e.clientX,
+      sy: e.clientY,
+      key: `gesture:${gestureSeq.current}`,
+      moved: false,
+      pointerId: e.pointerId,
+      clickSingle: target.id,
+      targets: guideTargets(others, canvas),
+    }
+    setDragging({ id: target.id, kind: 'move', group: true })
+  }
+
   function onPointerDown(e) {
     if (e.button !== 0 || !panels || readOnly) return
     const handle = e.target instanceof Element ? e.target.closest('[data-handle]')?.getAttribute('data-handle') : null
-    const selected = panels.find((p) => p.id === selectedId)
+    const selected = multi ? null : panels.find((p) => p.id === selectedId)
     const pt = canvasPoint(e)
+    if (e.shiftKey && !handle) {
+      // In or out of the selection; nothing moves from this press.
+      const hit = hitTest(pt)
+      if (hit) onToggleSelect(hit.id)
+      overlayRef.current.focus({ preventScroll: true })
+      return
+    }
     let target
     let kind = 'move'
     // A press inside the panel already selected may pick a sub-element (on
@@ -159,6 +211,7 @@ export default function Stage({
       kind = handle
     } else {
       target = hitTest(pt)
+      if (multi && target && selectedIds.includes(target.id)) return startGroup(e, target)
       if (target && target.id === selectedId) clickEl = elementAt(pt)?.key ?? null
       else onSelect(target ? target.id : null)
       if (!target) return
@@ -212,6 +265,14 @@ export default function Stage({
     const free = e.altKey
     const snap = grid && !free ? gridSize : 0
     const targets = free ? null : g.targets
+    if (g.group) {
+      // The selection's bounds snap as one box; every member follows.
+      if (!g.union) return
+      const box = moveRect(g.union, dxs / k, dys / k, { snap, axisLock: e.shiftKey, canvas, guides: targets })
+      setGuides(targets ? guideLines(box, targets, guideLinesFor('move')) : null)
+      onGroupMove(g.start, box.x - g.union.x, box.y - g.union.y, { coalesce: g.key, windowMs: Infinity })
+      return
+    }
     const rect =
       g.kind === 'move'
         ? moveRect(g.start, dxs / k, dys / k, { snap, axisLock: e.shiftKey, canvas, guides: targets })
@@ -231,7 +292,9 @@ export default function Stage({
     }
     setDragging(null)
     setGuides(null)
-    if (e?.type === 'pointerup' && !g.moved && g.clickEl !== undefined) onSelectElement(g.clickEl)
+    if (e?.type !== 'pointerup' || g.moved) return
+    if (g.group) onSelect(g.clickSingle)
+    else if (g.clickEl !== undefined) onSelectElement(g.clickEl)
   }
 
   // Esc during a drag: undo just that drag, and keep the Esc from also
@@ -259,6 +322,8 @@ export default function Stage({
   }
 
   const sel = items.find((it) => it.p.id === selectedId) || null
+  const group = multi ? items.filter((it) => selectedIds.includes(it.p.id)) : []
+  const groupBox = group.length ? unionPx(group.map((it) => it.box)) : null
   const hovered = items.find((it) => it.p.id === hoverId) || null
   const showAll = (pointerIn || !!dragging) && !readOnly
   const cursor = readOnly
@@ -317,7 +382,7 @@ export default function Stage({
             onDoubleClick={onDoubleClick}
           >
             {items.map(({ p, box }) => {
-              if (p.hidden || p.id === selectedId || readOnly) return null
+              if (p.hidden || p.id === selectedId || selectedIds.includes(p.id) || readOnly) return null
               const isHover = p.id === hoverId
               const emptyImage = p.type === 'image' && !p.props.src
               if (!showAll && !isHover && !emptyImage) return null
@@ -331,6 +396,19 @@ export default function Stage({
                 </div>
               )
             })}
+            {ruleIds &&
+              items.map(({ p, box }) =>
+                !p.hidden && ruleIds.has(p.id) ? (
+                  <div
+                    key={`r-${p.id}`}
+                    className="ed-rulebadge"
+                    style={{ left: (box.x + box.w) * k, top: box.y * k }}
+                    title={whenSummary(p.when) || 'Shows only when its rule holds'}
+                  >
+                    <RuleIcon size={11} />
+                  </div>
+                ) : null
+              )}
             {guides && <Guides guides={guides} k={k} canvas={canvas} />}
             {hovEls.map((el, i) => (
               <div key={`h${i}`} className="ed-el is-hover" style={stagePx(el.box)} />
@@ -353,6 +431,16 @@ export default function Stage({
             {selEls.map((el, i) => (
               <div key={`s${i}`} className="ed-el is-selected" style={stagePx(el.box)} />
             ))}
+            {group.map((it) => (
+              <div
+                key={`m-${it.p.id}`}
+                className={`ed-sel ed-sel--member${it.p.locked ? ' is-locked' : ''}${it.p.hidden ? ' is-hidden' : ''}${it.p.id === selectedIds[0] ? ' is-first' : ''}`}
+                style={stagePx(it.box)}
+              />
+            ))}
+            {groupBox && (
+              <GroupBox box={stagePx(groupBox)} px={groupBox} count={group.length} dragging={!!dragging} canvas={canvas} k={k} />
+            )}
           </div>
           {appState !== 'ready' && (
             <div className="ed-stage__wait" role="status">
@@ -360,6 +448,20 @@ export default function Stage({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// The bounds of several selected panels, with their count and size.
+function GroupBox({ box, px, count, dragging, canvas, k }) {
+  const readoutInside = box.top + box.height + 24 > canvas.h * k
+  const r = { x: Math.round(px.x), y: Math.round(px.y), w: Math.round(px.w), h: Math.round(px.h) }
+  return (
+    <div className="ed-sel ed-sel--group" style={box}>
+      {!dragging && <div className={`ed-sel__label${box.top < 22 ? ' is-inside' : ''}`}>{count} panels</div>}
+      <div className={`ed-sel__readout${readoutInside ? ' is-inside' : ''}`}>
+        X {r.x}  Y {r.y}  W {r.w}  H {r.h}
       </div>
     </div>
   )

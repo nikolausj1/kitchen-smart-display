@@ -180,7 +180,9 @@ export default function AgendaPanel({
         ))}
 
         {unreachable ? (
-          <div className="tl-agenda__message">Calendar not connected</div>
+          <div className="tl-agenda__message" data-edit="message" data-edit-label="Not connected">
+            Calendar not connected
+          </div>
         ) : (
           list.map((day, i) => {
             const { shown, more } = visibleRows(day.events, nowMs, maxRows)

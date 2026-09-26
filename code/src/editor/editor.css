@@ -62,7 +62,7 @@ textarea {
 
 .ed-app {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 300px;
+  grid-template-columns: 264px minmax(0, 1fr) 300px;
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
     'top top top'
@@ -674,6 +674,14 @@ select:disabled {
 .ed-layer__tools {
   display: inline-flex;
   gap: 1px;
+}
+
+.ed-layer__tools .ed-icon {
+  width: 20px;
+}
+
+.ed-layer__tools .ed-restack {
+  width: 18px;
 }
 
 /* The restack arrows only when they are wanted; eye and lock stay. Their
@@ -1554,4 +1562,454 @@ select:disabled {
   left: 50%;
   bottom: 5px;
   transform: translateX(-50%);
+}
+
+/* --- panels and controls, chunk 1 --------------------------------------------
+ * The element tree in the layers, the Element section, box v2, Show when,
+ * several panels selected, copy and paste style. */
+
+/* Layers: one item per panel, its elements under it. */
+.ed-layer-item {
+  list-style: none;
+}
+
+/* A panel with a rule: its summary on a line of its own under the name. */
+.ed-layer.has-rule {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 28px;
+  padding-top: 2px;
+  padding-bottom: 3px;
+  row-gap: 0;
+}
+
+.ed-layer__chev {
+  flex: none;
+  width: 16px;
+  height: 20px;
+  margin-right: -4px;
+  color: var(--ed-faint);
+}
+
+.ed-layer__chev:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ed-ink);
+}
+
+.ed-layer__name {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: auto;
+  min-height: 24px;
+}
+
+.ed-layer__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-layer__rule {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 0 100%;
+  min-width: 0;
+  padding-left: 40px;
+  color: var(--ed-accent);
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.ed-layer__rule span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-layer__rule svg {
+  flex: none;
+}
+
+.ed-badge {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ed-element) 22%, transparent);
+  color: var(--ed-element);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-els {
+  list-style: none;
+  margin: 0 0 2px;
+  padding: 0;
+}
+
+.ed-elrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding-right: 4px;
+  border-radius: 4px;
+  cursor: default;
+  user-select: none;
+}
+
+.ed-elrow::before {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ed-line);
+}
+
+.ed-elrow:hover {
+  background: var(--ed-panel-2);
+}
+
+.ed-elrow.is-selected {
+  background: color-mix(in srgb, var(--ed-element) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ed-element) 45%, transparent);
+}
+
+.ed-elrow__name {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ed-muted);
+  text-align: left;
+  font-size: 11.5px;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-elrow.is-selected .ed-elrow__name {
+  color: var(--ed-element);
+}
+
+.ed-elrow.is-hidden .ed-elrow__name {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ed-muted) 50%, transparent);
+}
+
+.ed-elrow__mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ed-element);
+}
+
+/* The eye shows on hover; a hidden element keeps its dimmed, closed eye. */
+.ed-elrow__eye {
+  visibility: hidden;
+}
+
+.ed-elrow:hover .ed-elrow__eye,
+.ed-elrow.is-selected .ed-elrow__eye,
+.ed-elrow__eye:focus-visible {
+  visibility: visible;
+}
+
+.ed-elrow.is-hidden .ed-elrow__eye {
+  visibility: visible;
+  opacity: 0.55;
+}
+
+/* Inspector: the Element section and the breadcrumb. */
+.ed-crumb__step {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ed-crumbs {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.ed-elsec {
+  background: color-mix(in srgb, var(--ed-element) 5%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ed-element) 70%, transparent);
+}
+
+.ed-elsec h3 {
+  color: var(--ed-element);
+}
+
+.ed-elsec__more {
+  display: block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.ed-subhead {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ed-faint);
+}
+
+.ed-boxfield:first-of-type .ed-subhead {
+  margin-top: 0;
+}
+
+/* A colour that may be unset: well, hex, and the chip that unsets it. */
+.ed-color--nullable {
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.ed-color.is-unset input[type='color'] {
+  opacity: 0.35;
+}
+
+.ed-color .ed-text::placeholder {
+  color: var(--ed-faint);
+  font-style: italic;
+}
+
+.ed-chip {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--ed-line);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ed-muted);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ed-chip:hover {
+  color: var(--ed-ink);
+  border-color: var(--ed-line-2);
+}
+
+.ed-chip.is-on {
+  background: var(--ed-panel-3);
+  border-color: var(--ed-line-2);
+  color: var(--ed-ink);
+  cursor: default;
+}
+
+.ed-time {
+  height: 24px;
+  width: 100%;
+  padding: 0 6px;
+  background: var(--ed-panel-2);
+  border: 1px solid var(--ed-line);
+  border-radius: 4px;
+  color: var(--ed-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-time:focus {
+  border-color: var(--ed-accent);
+  outline: none;
+}
+
+.ed-time::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
+/* Show when. */
+.ed-rules__always {
+  margin: 0 0 8px;
+  color: var(--ed-muted);
+}
+
+.ed-rules__always strong {
+  color: var(--ed-ink);
+  font-weight: 600;
+}
+
+.ed-conds {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+
+.ed-cond {
+  position: relative;
+  margin: 0 0 6px;
+  padding: 6px 8px 4px;
+  border: 1px solid var(--ed-line);
+  border-radius: 6px;
+  background: var(--ed-panel-2);
+}
+
+.ed-cond.is-not {
+  border-color: color-mix(in srgb, var(--ed-warn) 45%, var(--ed-line));
+}
+
+.ed-cond__joiner {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--ed-panel);
+  color: var(--ed-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 14px;
+}
+
+.ed-cond__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.ed-cond__kind {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-cond__kind em {
+  font-style: normal;
+  color: var(--ed-warn);
+}
+
+.ed-cond__remove {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ed-cond .ed-row {
+  min-height: 28px;
+}
+
+.ed-rules__add > .ed-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ed-rules__add .ed-menu__list {
+  left: 0;
+  right: 0;
+  min-width: 0;
+}
+
+/* The header's menu (copy and paste style). */
+.ed-btn--menu {
+  width: auto;
+  padding: 0 4px 0 6px;
+  gap: 2px;
+}
+
+.ed-menu__grow {
+  flex: 1;
+}
+
+.ed-menu__item kbd {
+  color: var(--ed-faint);
+  font: 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+.ed-menu__item:hover kbd,
+.ed-menu__item:focus-visible kbd {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Several panels selected. */
+.ed-grouplist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ed-grouplist li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 3px 0;
+}
+
+.ed-grouplist__first {
+  color: var(--ed-faint);
+  font-size: 11px;
+}
+
+/* The arrange tools in the top bar's second row. */
+.ed-arrange {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--ed-line);
+}
+
+.ed-arrange__count {
+  color: var(--ed-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ed-arrange__group {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.ed-btn--tool {
+  width: 26px;
+  height: 24px;
+}
+
+/* Stage: several selected, and the rule badge. */
+.ed-sel--member {
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--ed-accent) 80%, transparent);
+  background: color-mix(in srgb, var(--ed-accent) 6%, transparent);
+}
+
+.ed-sel--member.is-first {
+  border-width: 2px;
+}
+
+.ed-sel--group {
+  border: 1px dashed var(--ed-accent);
+}
+
+.ed-rulebadge {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 4px 0 0 -22px;
+  border-radius: 9px;
+  background: rgba(14, 15, 17, 0.82);
+  color: var(--ed-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ed-accent) 60%, transparent);
 }

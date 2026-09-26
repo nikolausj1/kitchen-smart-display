@@ -16,9 +16,46 @@
 //   eveningFrom   hour the Evening variant starts
 //   variants      { morning | evening | weekend: { panels, global? } }
 // and the full panel type registry. The base panels and global are "Day".
+//
+// Panels and controls chunk 1 (docs/designs/panels-and-controls.md) adds,
+// all optional and all sparse (a missing key is the look as designed):
+//   props.elements  { <data-edit key>: { hidden, size, weight, color,
+//                   spaceAbove, spaceBelow, tracking, caps, fit } }, keys
+//                   from the type's element list, fields from the element
+//                   style schema
+//   props.bg, border, shadow, blur, font, color, valign, title   box v2,
+//                   fields from the box schema
+//   when            null | { all?: [cond], any?: [cond] } on the panel,
+//                   cond = { kind, not?, days?, from?, to?, daypart? }
+// An explicit null reads as absent everywhere, as the hub stores the nulls
+// the editor sends for removals (withRemovals below).
 
-import { cleanKnob, isPlainValue, knobFields, UNIVERSAL_KEYS } from './schema.js'
-import { clamp, colorForWell, deepEqual, isDict, normalizeColor as colorOr, round2, toNum } from './util.js'
+import {
+  boxFields,
+  boxFieldsFor,
+  cleanKnob,
+  cleanParamValue,
+  elementList,
+  elementStyleFields,
+  isPlainValue,
+  knobFields,
+  ruleKind,
+  ruleKinds,
+  UNIVERSAL_KEYS,
+} from './schema.js'
+import {
+  clamp,
+  colorForWell,
+  deepEqual,
+  getPath,
+  humanize,
+  isDict,
+  normalizeColor as colorOr,
+  round2,
+  setPath,
+  shortTime,
+  toNum,
+} from './util.js'
 
 export { clamp, colorForWell, deepEqual, isDict, round2 }
 
@@ -225,6 +262,8 @@ function normalizeProps(type, raw) {
   }
   const own = new Set([...UNIVERSAL_KEYS, ...(BLOCK_PROP_KEYS[type] || [])])
   const fields = knobFields(type)
+  // Box v2 keys and element styles are validated below, never copied raw.
+  const reserved = new Set(['elements', ...boxFields().map((b) => b.top)])
   if (fields.length) {
     for (const f of fields) {
       if (own.has(f.key)) continue
@@ -233,10 +272,98 @@ function normalizeProps(type, raw) {
     }
   } else {
     for (const k of Object.keys(p)) {
-      if (!own.has(k) && k.length <= 64 && isPlainValue(p[k])) out[k] = p[k]
+      if (!own.has(k) && !reserved.has(k) && k.length <= 64 && isPlainValue(p[k])) out[k] = p[k]
     }
   }
+  return normalizeElementsInto(type, p, normalizeBoxInto(type, p, out))
+}
+
+// Does the type declare this prop as its own (the text block's colour)? Then
+// it is the block's, not the box's.
+const ownsKey = (type, key) => (BLOCK_PROP_KEYS[type] || []).includes(key) || knobFields(type).some((f) => f.key === key)
+
+// A box v2 value worth storing: valid, and not null or an empty text.
+export function cleanBoxValue(field, v) {
+  const c = cleanKnob(field, v)
+  if (c === undefined || c === null) return undefined
+  if (field.type === 'text' && c === '') return undefined
+  return c
+}
+
+// Box v2 props (bg.color, border.width, shadow...) from `raw` onto `out`:
+// each one kept when valid, left out otherwise.
+function normalizeBoxInto(type, raw, out) {
+  let next = out
+  for (const b of boxFieldsFor(type)) {
+    if (ownsKey(type, b.top)) continue
+    const v = cleanBoxValue(b.field, getPath(raw, b.path))
+    if (v !== undefined) next = setPath(next, b.path, v)
+  }
+  return next
+}
+
+// One element's style: the valid, non-null fields; {} for none.
+export function cleanElementStyle(raw) {
+  const out = {}
+  if (!isDict(raw)) return out
+  for (const f of elementStyleFields()) {
+    const v = cleanKnob(f, raw[f.key])
+    if (v !== undefined && v !== null) out[f.key] = v
+  }
   return out
+}
+
+// props.elements: only the type's own element keys, only valid fields; an
+// element with nothing left goes, and so does an empty map.
+function normalizeElementsInto(type, raw, out) {
+  if (!isDict(raw.elements)) return out
+  const known = new Set(elementList(type).map((e) => e.key))
+  const els = {}
+  for (const key of Object.keys(raw.elements)) {
+    if (!known.has(key)) continue
+    const st = cleanElementStyle(raw.elements[key])
+    if (Object.keys(st).length) els[key] = st
+  }
+  return Object.keys(els).length ? { ...out, elements: els } : out
+}
+
+// --- visibility rules (panels[i].when) ----------------------------------------
+
+// Per list, as the app's MAX_RULE_CONDITIONS: a rule is a handful; this only
+// stops a runaway one.
+export const MAX_CONDITIONS = 20
+export const WHEN_MODES = ['all', 'any']
+
+// A condition with a kind the rule registry knows and valid parameters; a
+// missing one gets the kind's default (a condition just added), a bad one
+// drops the condition, as the app's normaliser does, so the editor never
+// shows a rule the screen would ignore. `not` only when true.
+export function normalizeCond(raw) {
+  if (!isDict(raw) || typeof raw.kind !== 'string') return null
+  const k = ruleKind(raw.kind)
+  if (!k) return null
+  const out = { kind: raw.kind }
+  if (raw.not === true) out.not = true
+  for (const param of k.params) {
+    const given = raw[param.key]
+    const v = given === undefined || given === null ? cleanParamValue(param, param.default) : cleanParamValue(param, given)
+    if (v === undefined) return null
+    out[param.key] = v
+  }
+  return out
+}
+
+// null (always shown) or { all?: [...], any?: [...] } with at least one
+// condition.
+export function normalizeWhen(raw) {
+  if (!isDict(raw) || !ruleKinds().length) return null
+  const out = {}
+  for (const mode of WHEN_MODES) {
+    if (!Array.isArray(raw[mode])) continue
+    const list = raw[mode].map(normalizeCond).filter(Boolean).slice(0, MAX_CONDITIONS)
+    if (list.length) out[mode] = list
+  }
+  return Object.keys(out).length ? out : null
 }
 
 // Percent geometry kept inside the canvas: w and h in [1, 100], x and y so
@@ -266,7 +393,7 @@ function normalizePanel(raw, index, taken) {
     return null // unknown type: dropped
   }
   const z = Math.round(num(raw.z, ...RANGES.z, index + 1))
-  return {
+  const out = {
     id,
     type,
     ...normalizeBox(raw),
@@ -275,6 +402,9 @@ function normalizePanel(raw, index, taken) {
     locked: raw.locked === true,
     props: normalizeProps(type, raw.props),
   }
+  const when = normalizeWhen(raw.when)
+  if (when) out.when = when
+  return out
 }
 
 function normalizePanels(list) {
@@ -527,13 +657,166 @@ export function readBackdrop(display) {
 // sets, would come back. withRemovals(old, next) is `next` plus an explicit
 // null for every key of `old` that `next` dropped, at every depth where both
 // are objects, which the merge then stores as null (and every reader treats as
-// absent). Arrays are replaced by the merge anyway.
-export function withRemovals(before, after) {
+// absent).
+//
+// Panel lists are arrays, which the merge replaces whole, so there the nulls
+// only say what went; they are written all the same (the contract: a removed
+// rule is `when: null`, a removed element style `elements: { <key>: null }`).
+// Panels are matched by id:
+//   - a panel the save does not change (opts.samePanel says the stored copy
+//     and the new one are the same layout) goes back EXACTLY as stored, so a
+//     save never rewrites a panel the user did not edit, whatever a newer
+//     normaliser would add to it
+//   - an edited one is the new panel plus nulls for what it dropped
+// A keyed map of styles (MAP_KEYS: props.elements) that goes as a whole goes
+// as { <key>: null } per entry, so an element's removal reads the same
+// whether or not the normaliser keeps an empty map.
+const MAP_KEYS = new Set(['elements'])
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k)
+
+export function withRemovals(before, after, opts = {}) {
+  if (Array.isArray(before) && Array.isArray(after)) return panelsWithRemovals(before, after, opts)
   if (!isDict(before) || !isDict(after)) return after
   const out = { ...after }
   for (const k of Object.keys(before)) {
-    if (!Object.prototype.hasOwnProperty.call(after, k)) out[k] = null
-    else if (isDict(before[k]) && isDict(after[k])) out[k] = withRemovals(before[k], after[k])
+    if (!hasOwn(after, k)) {
+      out[k] = MAP_KEYS.has(k) && isDict(before[k]) ? Object.fromEntries(Object.keys(before[k]).map((e) => [e, null])) : null
+    } else if ((isDict(before[k]) && isDict(after[k])) || (Array.isArray(before[k]) && Array.isArray(after[k]))) {
+      out[k] = withRemovals(before[k], after[k], opts)
+    }
   }
   return out
+}
+
+const isPanelList = (list) => list.every((p) => isDict(p) && typeof p.id === 'string')
+
+function panelsWithRemovals(before, after, opts) {
+  // Any other array (a rule's conditions) is replaced as it is.
+  if (!after.length || !isPanelList(after)) return after
+  const stored = new Map()
+  for (const p of before) if (isDict(p) && typeof p.id === 'string' && !stored.has(p.id)) stored.set(p.id, p)
+  return after.map((p) => {
+    const old = stored.get(p.id)
+    if (!old) return p
+    if (opts.samePanel && opts.samePanel(old, p)) return old
+    return withRemovals(old, p, opts)
+  })
+}
+
+// --- element styles and rules, for the inspector and the layers -----------------
+
+// One element's style as stored (sparse), {} for none.
+export function elementStyleOf(panel, key) {
+  const st = panel?.props?.elements?.[key]
+  return isDict(st) ? st : {}
+}
+
+// A field's value in a style: the stored one when valid, else the default.
+export function styleValue(field, style) {
+  const v = cleanKnob(field, style?.[field.key])
+  return v === undefined ? field.default : v
+}
+
+// Does the style change anything? (Every field at its default: no.)
+export function isStyled(style) {
+  if (!isDict(style)) return false
+  return elementStyleFields().some((f) => {
+    const v = cleanKnob(f, style[f.key])
+    return v !== undefined && v !== null && v !== f.default
+  })
+}
+
+// How many of the panel's elements carry a style.
+export function styledCount(panel) {
+  const els = panel?.props?.elements
+  if (!isDict(els)) return 0
+  return Object.keys(els).filter((k) => isStyled(els[k])).length
+}
+
+export const isElementHidden = (panel, key) => elementStyleOf(panel, key).hidden === true
+
+// 'all' | 'any' for a rule with one list (the first when it has both).
+export function whenMode(when) {
+  if (!isDict(when)) return 'all'
+  return Array.isArray(when.all) && when.all.length ? 'all' : Array.isArray(when.any) && when.any.length ? 'any' : 'all'
+}
+
+// Every condition, with the list it is in: [{ mode, index, cond }].
+export function whenConditions(when) {
+  const out = []
+  if (!isDict(when)) return out
+  for (const mode of WHEN_MODES) {
+    if (Array.isArray(when[mode])) when[mode].forEach((cond, index) => out.push({ mode, index, cond }))
+  }
+  return out
+}
+
+// "school morning", "not weekend", "7:00 am to 9:00 am", "countdown within 3
+// days", "day part: evening".
+export function condText(cond) {
+  if (!isDict(cond)) return ''
+  const k = ruleKind(cond.kind)
+  const label = (k?.label || humanize(cond.kind)).toLowerCase()
+  let t
+  if (cond.kind === 'timeRange') t = `${shortTime(cond.from)} to ${shortTime(cond.to)}`
+  else if (cond.kind === 'countdownWithin') t = `countdown within ${cond.days} day${cond.days === 1 ? '' : 's'}`
+  else if (cond.kind === 'daypart') {
+    const partName = (DAYPART_LABELS[cond.daypart] || humanize(cond.daypart)).toLowerCase()
+    t = / is$/.test(label) ? `${label} ${partName}` : `${label}: ${partName}`
+  }
+  else {
+    const extra = (k?.params || [])
+      .map((p) => cond[p.key])
+      .filter((v) => v !== undefined && v !== null && v !== '')
+      .join(', ')
+    t = extra ? `${label} (${extra})` : label
+  }
+  return cond.not ? `not ${t}` : t
+}
+
+// The layer row's one line: "shows: school morning", or null when always.
+export function whenSummary(when) {
+  const conds = whenConditions(when)
+  if (!conds.length) return null
+  const all = conds.filter((c) => c.mode === 'all').map((c) => condText(c.cond))
+  const any = conds.filter((c) => c.mode === 'any').map((c) => condText(c.cond))
+  const parts = []
+  if (all.length) parts.push(all.join(' and '))
+  if (any.length) parts.push(all.length && any.length > 1 ? `(${any.join(' or ')})` : any.join(' or '))
+  return `shows: ${parts.join(' and ')}`
+}
+
+// The elements a sub-element sits in, outermost first (the breadcrumb's
+// middle: Countdowns › Tile › Title). From the parents the element list names
+// when it names any, else from the rectangles the app reported for the panel
+// ([{ key, x, y, w, h }]): the smallest other element that holds every drawn
+// instance of this one, and so on outwards.
+export function elementAncestors(type, key, rects) {
+  const list = elementList(type)
+  const declared = []
+  const seen = new Set([key])
+  let at = list.find((e) => e.key === key)
+  while (at?.parent && !seen.has(at.parent) && declared.length < 4) {
+    seen.add(at.parent)
+    declared.unshift(at.parent)
+    at = list.find((e) => e.key === at.parent)
+  }
+  if (declared.length) return declared
+  return rectAncestors(key, Array.isArray(rects) ? rects : [], 0)
+}
+
+const within = (a, b) => a.x >= b.x - 0.5 && a.y >= b.y - 0.5 && a.x + a.w <= b.x + b.w + 0.5 && a.y + a.h <= b.y + b.h + 0.5
+
+function rectAncestors(key, rects, depth) {
+  const mine = rects.filter((r) => r.key === key)
+  if (!mine.length || depth > 3) return []
+  let best = null
+  for (const other of new Set(rects.map((r) => r.key))) {
+    if (other === key) continue
+    const theirs = rects.filter((r) => r.key === other)
+    if (!mine.every((m) => theirs.some((t) => within(m, t) && t.w * t.h > m.w * m.h + 1))) continue
+    const area = Math.max(...theirs.map((t) => t.w * t.h))
+    if (!best || area < best.area) best = { key: other, area }
+  }
+  return best ? [...rectAncestors(best.key, rects, depth + 1), best.key] : []
 }

@@ -35,6 +35,10 @@
 /* --- Day headers ---------------------------------------------------------- */
 
 .tl-agenda__head {
+  /* The headers' row and the lists', named, so a column keeps both in place
+   * even when an element style hides the headers (props.elements): the rows
+   * auto-placement always gave them. */
+  grid-row: 1;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -73,6 +77,7 @@
 /* --- Rows ------------------------------------------------------------------ */
 
 .tl-agenda__list {
+  grid-row: 2;
   container-type: size;
   min-width: 0;
   min-height: 0;
@@ -198,11 +203,13 @@
 }
 
 .tl-knobs .tl-agenda__head {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-head, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-head, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 .tl-knobs .tl-agenda__items {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-row, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-agenda-row, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
 /* rowsPerDay: the height cap of the row size scales with the row budget

@@ -1,8 +1,9 @@
 // schemas.js - the knobs every functional panel declares, as plain data
 // (docs/designs/layout-editor.md, Contract v2, "Panel knobs and schemas").
-// Pure: no imports, no React, no DOM, importable from Node. The editor renders
-// its inspector from these fields, the layout spec normalises a panel's knob
-// props against them, and the panels read the values as their `knobs` prop.
+// Pure: no React, no DOM, importable from Node; its one import is the font
+// registry (lib/fonts.js, pure data too). The editor renders its inspector
+// from these fields, the layout spec normalises a panel's knob props against
+// them, and the panels read the values as their `knobs` prop.
 //
 // A field:
 //   { key, label, type: 'number' | 'select' | 'toggle' | 'color' | 'text',
@@ -22,6 +23,8 @@
 //
 // Runtime rule (layoutSpec.js): this runs on the Echo's Silk, as old as
 // Chrome 80. Plain ES2019 data and functions only.
+
+import { FONTS } from '../lib/fonts.js'
 
 function deepFreeze(o) {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -119,13 +122,13 @@ export const PANEL_SCHEMAS = deepFreeze({
     fields: [
       count('days', 'Days', 3, 7, 4, null, 'Today first'),
       size('size', 'Size'),
-      toggle('showHighLow', 'High and low', true, null, 'Off shows the high only'),
-      toggle('showIcons', 'Icons', true),
+      toggle('showHighLow', 'High and low', true, 'temps', 'Off shows the high only'),
+      toggle('showIcons', 'Icons', true, 'icon'),
     ],
   },
 
   sunmoon: {
-    fields: [size('size', 'Size'), toggle('showMoon', 'Moon', true)],
+    fields: [size('size', 'Size'), toggle('showMoon', 'Moon', true, 'moon')],
   },
 
   wear: {
@@ -158,7 +161,7 @@ export const PANEL_SCHEMAS = deepFreeze({
         'chip'
       ),
       size('size', 'Size'),
-      toggle('showPm25', 'PM2.5', true, 'label'),
+      toggle('showPm25', 'PM2.5', true, 'detail'),
     ],
   },
 
@@ -247,9 +250,9 @@ export const PANEL_SCHEMAS = deepFreeze({
         'image',
         'Of the room the text leaves'
       ),
-      size('titleSize', 'Title size', 'title'),
+      size('titleSize', 'Title size', 'name'),
       size('numberSize', 'Number size', 'number'),
-      toggle('showUnit', 'Days label', true, 'number'),
+      toggle('showUnit', 'Days label', true, 'unit'),
       factor('gap', 'Gap', null, 'Between the tiles'),
       select(
         'prefer',
@@ -270,7 +273,11 @@ export const PANEL_SCHEMAS = deepFreeze({
   },
 
   nowplaying: {
-    fields: [size('size', 'Size', 'title'), toggle('showArt', 'Album art', true, 'art'), toggle('showProgress', 'Progress', true)],
+    fields: [
+      size('size', 'Size', 'track'),
+      toggle('showArt', 'Album art', true, 'art'),
+      toggle('showProgress', 'Progress', true, 'progress'),
+    ],
   },
 
   photo: {
@@ -302,18 +309,19 @@ export const PANEL_SCHEMAS = deepFreeze({
           ['cover', 'Fill'],
           ['contain', 'Whole photo'],
         ],
-        'cover'
+        'cover',
+        'image'
       ),
       toggle('showCaption', 'Caption', true, 'caption'),
-      toggle('showCounter', 'Counter', true),
+      toggle('showCounter', 'Counter', true, 'counter'),
     ],
   },
 
   school: {
     fields: [
       size('size', 'Size'),
-      toggle('showLunch', 'Lunch', true, null, 'Lunch and Grab & Go'),
-      toggle('showActivities', 'Activities', true),
+      toggle('showLunch', 'Lunch', true, 'rows', 'Lunch and Grab & Go'),
+      toggle('showActivities', 'Activities', true, 'rows'),
     ],
   },
 })
@@ -321,53 +329,112 @@ export const PANEL_SCHEMAS = deepFreeze({
 // The sub-elements each panel marks with data-edit (the `element` of its
 // fields point here), with the name the editor shows for them: "Clock > Date".
 // The blocks are listed too; their own props are their schema (layoutSpec.js).
+//
+// Every visible part of a panel carries one of these keys, so the per-element
+// styles (props.elements, layoutSpec.js ELEMENT_STYLE_SCHEMA) reach all of it.
+// A key may mark several elements (every agenda column, every countdown tile)
+// and a style on it styles them all. 'title' is the box's header row
+// (PanelFrame): the panel's own title ("Weather"), or the custom title a box
+// sets (the universal `title`); panels drawn without a header list it too,
+// for that custom title. 'empty' is what a panel says with no data.
+//
+// Order matters: a key whose elements hold another key's (a countdown tile
+// holds its number) comes first, so its styles are written first and the
+// inner key's own win (Entry/specStyles.js).
+const TITLE = { key: 'title', label: 'Title' }
+const EMPTY = { key: 'empty', label: 'Empty message' }
+
 export const PANEL_ELEMENTS = deepFreeze({
   clock: [
+    { key: 'greeting', label: 'Greeting' },
+    TITLE,
     { key: 'time', label: 'Time' },
     { key: 'date', label: 'Date' },
-    { key: 'greeting', label: 'Greeting' },
   ],
   weather: [
+    TITLE,
+    { key: 'updated', label: 'Updated' },
     { key: 'temp', label: 'Temperature' },
     { key: 'icon', label: 'Icon' },
     { key: 'description', label: 'Description' },
     { key: 'range', label: 'High and low' },
+    EMPTY,
   ],
-  forecast: [],
-  sunmoon: [],
+  forecast: [
+    TITLE,
+    { key: 'updated', label: 'Updated' },
+    { key: 'day', label: 'Day' },
+    { key: 'icon', label: 'Icon' },
+    { key: 'temps', label: 'Temperatures' },
+    { key: 'rain', label: 'Rain chance' },
+    EMPTY,
+  ],
+  sunmoon: [
+    TITLE,
+    { key: 'arc', label: 'Sun arc' },
+    { key: 'labels', label: 'Sunrise and sunset labels' },
+    { key: 'times', label: 'Times' },
+    { key: 'moon', label: 'Moon' },
+    { key: 'phase', label: 'Moon phase' },
+    EMPTY,
+  ],
   wear: [
+    TITLE,
+    { key: 'icon', label: 'Icon' },
     { key: 'label', label: 'Advice' },
     { key: 'detail', label: 'Detail' },
-    { key: 'icon', label: 'Icon' },
+    EMPTY,
   ],
   airquality: [
+    TITLE,
     { key: 'number', label: 'Number' },
     { key: 'label', label: 'Label' },
+    { key: 'detail', label: 'Detail' },
   ],
-  headline: [{ key: 'text', label: 'Text' }],
+  headline: [TITLE, { key: 'text', label: 'Text' }],
   agenda: [
+    TITLE,
     { key: 'header', label: 'Day header' },
     { key: 'rows', label: 'Events' },
+    { key: 'message', label: 'Not connected' },
   ],
   countdowns: [
+    TITLE,
     { key: 'tile', label: 'Tile' },
     { key: 'image', label: 'Image' },
-    { key: 'title', label: 'Title' },
+    { key: 'name', label: 'Event name' },
     { key: 'number', label: 'Number' },
+    { key: 'unit', label: 'Days label' },
+    EMPTY,
   ],
   departure: [
+    TITLE,
     { key: 'number', label: 'Countdown' },
+    { key: 'meta', label: 'Details' },
+    { key: 'status', label: 'Status' },
     { key: 'toggle', label: 'Walk or drive' },
   ],
   nowplaying: [
-    { key: 'title', label: 'Title' },
+    TITLE,
+    { key: 'room', label: 'Room' },
     { key: 'art', label: 'Album art' },
+    { key: 'track', label: 'Track' },
+    { key: 'artist', label: 'Artist' },
+    { key: 'album', label: 'Album' },
+    { key: 'meta', label: 'Source' },
+    { key: 'progress', label: 'Progress' },
   ],
-  photo: [{ key: 'caption', label: 'Caption' }],
-  school: [],
-  text: [{ key: 'text', label: 'Text' }],
-  image: [{ key: 'image', label: 'Image' }],
+  photo: [TITLE, { key: 'image', label: 'Photo' }, { key: 'caption', label: 'Caption' }, { key: 'counter', label: 'Counter' }, EMPTY],
+  school: [TITLE, { key: 'rows', label: 'Rows' }, EMPTY],
+  text: [TITLE, { key: 'text', label: 'Text' }],
+  image: [TITLE, { key: 'image', label: 'Image' }],
 })
+
+// The data-edit keys of a type, in PANEL_ELEMENTS order ([] for none).
+export function elementKeysOf(type) {
+  const list = typeof type === 'string' && has(PANEL_ELEMENTS, type) ? PANEL_ELEMENTS[type] : null
+  return Array.isArray(list) ? list.map((e) => e.key) : []
+}
 
 // --- Global ----------------------------------------------------------------------
 
@@ -377,13 +444,12 @@ export const PANEL_ELEMENTS = deepFreeze({
 // --tl-radius-scale. textScale (Contract v1) is the layout spec's own.
 export const GLOBAL_SCHEMA = deepFreeze({
   fields: [
+    // The families are lib/fonts.js's; a box's own font (the universal
+    // `font`, layoutSpec.js BOX_SCHEMA) picks from the same list.
     select(
       'font',
       'Display font',
-      [
-        ['inter', 'Inter'],
-        ['fraunces', 'Fraunces'],
-      ],
+      FONTS.map((f) => [f.id, f.label]),
       'inter',
       null,
       'The big type: time, temperature, headline, numbers'

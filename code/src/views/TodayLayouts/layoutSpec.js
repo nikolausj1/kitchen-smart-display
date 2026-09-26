@@ -10,12 +10,21 @@
 //   { version: 2,
 //     canvas: { w, h },            what it was drawn on (informational)
 //     global: { textScale, font, accent, text, surfaceOpacity, radius },
-//     panels: [ { id, type, x, y, w, h, z, hidden, locked, props } ],
+//     panels: [ { id, type, x, y, w, h, z, hidden, locked, props, when? } ],
 //     eveningFrom: 18,             hour the evening variant starts (12..23)
 //     variants: {                  optional, each optional (Entry phase 2)
 //       morning: { panels, global? },
 //       evening: { panels, global? },
 //       weekend: { panels, global? } } }
+//
+// Editor foundations (docs/designs/panels-and-controls.md, chunk 1), every
+// one optional, absent unless set, and drawn exactly as before when absent:
+//   props.elements   per sub-element styles (ELEMENT_STYLE_SCHEMA)
+//   props.bg, border, shadow, blur, font, color, valign, title
+//                    the box v2 look (BOX_SCHEMA), over `background`
+//   when             a visibility rule (RULE_KINDS, ruleMatches)
+// The normaliser drops each of them, and each of their fields, at its default,
+// so a panel nobody touched normalises to exactly what it did before.
 //
 // The base panels and global are the "day" layout. A variant's global, when
 // it has one, replaces the base's (normalised full, missing keys taken from
@@ -34,8 +43,12 @@
 // may be as old as Chrome 80 (vite.config.js lowers syntax, not APIs). So no
 // Array.prototype.at, Object.hasOwn, structuredClone, String replaceAll.
 
-import { GLOBAL_SCHEMA, PANEL_SCHEMAS, knobDefaults } from './panels/schemas.js'
+import { GLOBAL_SCHEMA, PANEL_SCHEMAS, elementKeysOf, knobDefaults } from './panels/schemas.js'
 import * as Schemas from './panels/schemas.js'
+import { FONTS, FONT_IDS } from './lib/fonts.js'
+
+// The font registry, for the editor (sd-edit:ready fonts) and the renderer.
+export { FONTS }
 
 export const SPEC_VERSION = 2
 export const ENTRY_LAYOUT_ID = 'entry'
@@ -307,6 +320,212 @@ export const UNIVERSAL_DEFAULTS = deepFreeze({
 })
 
 const UNIVERSAL_KEYS = Object.keys(UNIVERSAL_DEFAULTS)
+
+// --- Element styles (props.elements) ----------------------------------------
+//
+// panels[i].props.elements = { <data-edit key>: { hidden, size, weight, color,
+// spaceAbove, spaceBelow, tracking, caps, fit } }: a style for every element
+// of the box that carries that key (panels/schemas.js PANEL_ELEMENTS), drawn
+// by Entry/SpecPanel as a stylesheet scoped to the box (Entry/specStyles.js).
+// Every field is optional and means "as designed" at its default:
+//   hidden      display: none
+//   size        multiplies the element's text size, on top of the panel's own
+//               size knob for it and the box's text scale (tokens.css "Panel
+//               knobs"); art (icons, countdown pictures) keeps its size
+//   weight      font-weight (null: as designed)
+//   color       text colour (null: as designed)
+//   spaceAbove  margin above, in multiples of the layout's padding unit
+//   spaceBelow  margin below, the same
+//   tracking    letter spacing, em (0: as designed)
+//   caps        capitals
+//   fit         'wrap' (as designed), 'shrink' (the type steps down until the
+//               element fits its line or its box, lib/fitText.js), 'clip'
+// weight, color, tracking and caps reach the element's own children too.
+export const ELEMENT_STYLE_SCHEMA = deepFreeze({
+  fields: [
+    { key: 'hidden', type: 'toggle', label: 'Hidden', default: false },
+    { key: 'size', type: 'number', label: 'Size', min: 0.5, max: 2.5, step: 0.05, default: 1, unit: 'x' },
+    {
+      key: 'weight',
+      type: 'select',
+      label: 'Weight',
+      default: null,
+      options: [
+        [null, 'Auto'],
+        [300, 'Light'],
+        [400, 'Regular'],
+        [500, 'Medium'],
+        [600, 'Semibold'],
+        [700, 'Bold'],
+        [800, 'Extra bold'],
+      ],
+    },
+    { key: 'color', type: 'color', label: 'Colour', default: null, nullable: true },
+    { key: 'spaceAbove', type: 'number', label: 'Space above', min: 0, max: 3, step: 0.1, default: 0, unit: 'x' },
+    { key: 'spaceBelow', type: 'number', label: 'Space below', min: 0, max: 3, step: 0.1, default: 0, unit: 'x' },
+    { key: 'tracking', type: 'number', label: 'Letter spacing', min: -0.05, max: 0.2, step: 0.01, default: 0, unit: 'em' },
+    { key: 'caps', type: 'toggle', label: 'Capitals', default: false },
+    {
+      key: 'fit',
+      type: 'select',
+      label: 'When it does not fit',
+      default: 'wrap',
+      options: [
+        ['wrap', 'Wrap'],
+        ['shrink', 'Shrink to fit'],
+        ['clip', 'Clip'],
+      ],
+    },
+  ],
+})
+
+// --- The box v2 look (universal props, all optional) ---------------------------
+//
+//   bg      { color, color2, gradient: 'none' | 'down' | 'right' | 'diagonal',
+//             opacity }: a fill over the `background` preset. A colour
+//             replaces the preset's fill (no colour: the preset's own, so a
+//             gradient or an opacity alone works on the card); color2 is
+//             where a gradient ends (else transparent); opacity is the fill's
+//             alpha (1)
+//   border  { width 0..4 (px at 1920 wide, scaling with the screen like the
+//             padding), color (null: a faint line in the text colour) }
+//   shadow  'none' | 'soft' | 'strong', a drop shadow ('none': as before)
+//   blur    0..20, a backdrop blur (px at 1920 wide); on the Echo, whose Silk
+//           draws backdrop-filter badly, and where it is unsupported, a tint
+//   font    'inherit' (the layout's fonts) or a lib/fonts.js id: every word in
+//           the box, the display sizes and the body text alike
+//   color   the box's text colour ('#rrggbb'; null: the global one). A text
+//           block's own `color` prop is its colour, so this field is not for
+//           text blocks (notFor)
+//   valign  'top' | 'middle' | 'bottom'. 'top' is the panel as designed (a
+//           few are centred by design: the headline, text blocks, the Board's
+//           clock); 'middle' and 'bottom' move the content in its box
+//   title   { mode: 'default' | 'custom' | 'none', text }: the header row.
+//           'default' is the panel's own ("Weather", or none); 'custom' puts
+//           `text` there, on any panel or block; 'none' drops the header
+//
+// BOX_SCHEMA lists one field per leaf, keyed by its dotted path ('bg.color')
+// with the path as an array too; the same field types as the element styles.
+export const GRADIENTS = ['none', 'down', 'right', 'diagonal']
+export const SHADOWS = ['none', 'soft', 'strong']
+export const VALIGNS = ['top', 'middle', 'bottom']
+export const TITLE_MODES = ['default', 'custom', 'none']
+export const TITLE_MAX_LENGTH = 120
+
+export const BOX_SCHEMA = deepFreeze({
+  fields: [
+    { key: 'bg.color', path: ['bg', 'color'], type: 'color', label: 'Fill colour', default: null, nullable: true, hint: 'Replaces the background preset' },
+    { key: 'bg.color2', path: ['bg', 'color2'], type: 'color', label: 'Gradient to', default: null, nullable: true, hint: 'Where a gradient ends; none fades out' },
+    {
+      key: 'bg.gradient',
+      path: ['bg', 'gradient'],
+      type: 'select',
+      label: 'Gradient',
+      default: 'none',
+      options: [
+        ['none', 'None'],
+        ['down', 'Down'],
+        ['right', 'Across'],
+        ['diagonal', 'Diagonal'],
+      ],
+    },
+    { key: 'bg.opacity', path: ['bg', 'opacity'], type: 'number', label: 'Fill opacity', min: 0, max: 1, step: 0.05, default: 1 },
+    { key: 'border.width', path: ['border', 'width'], type: 'number', label: 'Border', min: 0, max: 4, step: 0.5, default: 0, unit: 'px', hint: 'At 1920 wide; scales with the screen' },
+    { key: 'border.color', path: ['border', 'color'], type: 'color', label: 'Border colour', default: null, nullable: true },
+    {
+      key: 'shadow',
+      path: ['shadow'],
+      type: 'select',
+      label: 'Shadow',
+      default: 'none',
+      options: [
+        ['none', 'None'],
+        ['soft', 'Soft'],
+        ['strong', 'Strong'],
+      ],
+    },
+    { key: 'blur', path: ['blur'], type: 'number', label: 'Backdrop blur', min: 0, max: 20, step: 1, default: 0, unit: 'px', hint: 'A tint on the Echo' },
+    {
+      key: 'font',
+      path: ['font'],
+      type: 'select',
+      label: 'Font',
+      default: 'inherit',
+      options: [['inherit', 'Global']].concat(FONTS.map((f) => [f.id, f.label])),
+    },
+    { key: 'color', path: ['color'], type: 'color', label: 'Text colour', default: null, nullable: true, notFor: ['text'] },
+    {
+      key: 'valign',
+      path: ['valign'],
+      type: 'select',
+      label: 'Vertical align',
+      default: 'top',
+      options: [
+        ['top', 'Top'],
+        ['middle', 'Middle'],
+        ['bottom', 'Bottom'],
+      ],
+      hint: 'Top is the panel as designed',
+    },
+    {
+      key: 'title.mode',
+      path: ['title', 'mode'],
+      type: 'select',
+      label: 'Title',
+      default: 'default',
+      options: [
+        ['default', 'Panel'],
+        ['custom', 'Custom'],
+        ['none', 'None'],
+      ],
+    },
+    { key: 'title.text', path: ['title', 'text'], type: 'text', label: 'Title text', default: '', maxLength: TITLE_MAX_LENGTH, showIf: { 'title.mode': 'custom' } },
+  ],
+})
+
+// The box v2 keys, and the element styles: never knobs (a knob of the same
+// name would be ignored, like a universal one).
+const V2_KEYS = ['elements', 'bg', 'border', 'shadow', 'blur', 'font', 'color', 'valign', 'title']
+
+// --- Visibility rules (panels[i].when) -----------------------------------------
+//
+//   when = null | { all?: Cond[], any?: Cond[] }
+//   Cond = { kind, not?, days?, from?, to?, daypart? }
+//
+// The panel shows when every `all` condition holds and at least one `any`
+// condition does (either list may be left out; both empty or absent: always).
+// `not: true` inverts one condition. Checked by SpecBoard against what the
+// screen knows (ruleMatches), at least once a minute; never in the layout
+// editor, which draws every panel and marks a ruled one (data-rule).
+//
+// The kinds, with their parameters (default, range or options, for the
+// editor's new condition):
+export const RULE_DAYPARTS = ['morning', 'day', 'evening', 'weekend']
+export const RULE_KINDS = deepFreeze([
+  { kind: 'schoolMorning', label: 'School morning' },
+  { kind: 'weekend', label: 'Weekend' },
+  { kind: 'weekday', label: 'Weekday' },
+  {
+    kind: 'daypart',
+    label: 'Day part is',
+    param: 'daypart',
+    options: [
+      ['morning', 'Morning'],
+      ['day', 'Day'],
+      ['evening', 'Evening'],
+      ['weekend', 'Weekend'],
+    ],
+    default: 'morning',
+  },
+  { kind: 'timeRange', label: 'Between', params: ['from', 'to'], defaults: { from: '07:00', to: '09:00' } },
+  { kind: 'musicPlaying', label: 'Music is playing' },
+  { kind: 'plexPlaying', label: 'Plex is playing' },
+  { kind: 'alertActive', label: 'A weather alert is active' },
+  { kind: 'countdownWithin', label: 'A countdown is within N days', param: 'days', min: 0, max: 365, default: 7 },
+])
+
+// Conditions per list: a rule is a handful; this only stops a runaway one.
+export const MAX_RULE_CONDITIONS = 20
 
 // A text block. size = percent of the canvas height.
 export const TEXT_DEFAULTS = deepFreeze({
@@ -646,10 +865,192 @@ function fieldValue(field, v, fallback) {
   }
 }
 
-// A functional panel's knob fields, universal keys left out.
+// A functional panel's knob fields, universal (and box v2) keys left out.
 function knobFieldsOf(type) {
   if (isBlockType(type)) return []
-  return fieldsOf(type).filter((f) => UNIVERSAL_KEYS.indexOf(f.key) < 0)
+  return fieldsOf(type).filter((f) => UNIVERSAL_KEYS.indexOf(f.key) < 0 && V2_KEYS.indexOf(f.key) < 0)
+}
+
+// --- Element styles, the box v2 look and rules: normalising --------------------
+//
+// All three follow one rule: an explicit null reads as absent, an invalid
+// value is dropped, and so is every field at its default, so what is left is
+// exactly what differs from the panel as designed (and a panel nobody styled
+// has none of these keys at all).
+
+// One element-style field's value from v, or undefined when v is not one: a
+// number clamped and rounded to its step, a known option, a boolean, a hex.
+function styleFieldValue(field, v) {
+  switch (field.type) {
+    case 'number': {
+      const n = toNum(v)
+      if (!Number.isFinite(n)) return undefined
+      const places = Math.max(decimalsOf(field.step), decimalsOf(field.min), decimalsOf(field.max))
+      return round(clamp(n, field.min, field.max), places)
+    }
+    case 'toggle':
+      return typeof v === 'boolean' ? v : undefined
+    case 'select':
+      return optionValue(field, v)
+    case 'color':
+      return color(v, undefined)
+    default:
+      return undefined
+  }
+}
+
+function normElementStyle(raw) {
+  if (!isDict(raw)) return null
+  const out = {}
+  ELEMENT_STYLE_SCHEMA.fields.forEach((f) => {
+    if (!has(raw, f.key) || raw[f.key] == null) return
+    const v = styleFieldValue(f, raw[f.key])
+    if (v === undefined || v === f.default) return
+    out[f.key] = v
+  })
+  return Object.keys(out).length ? out : null
+}
+
+// normalizeElementStyles(map, type) -> { <key>: style } for the keys the type
+// marks (panels/schemas.js PANEL_ELEMENTS, in that order), each style holding
+// only its fields that differ from the default; null when nothing is left
+// (and for anything that is not a map). A key the type does not mark, a
+// style that is not an object and a null anywhere are dropped.
+export function normalizeElementStyles(map, type) {
+  if (!isDict(map)) return null
+  const out = {}
+  elementKeysOf(type).forEach((key) => {
+    if (!has(map, key)) return
+    const s = normElementStyle(map[key])
+    if (s) out[key] = s
+  })
+  return Object.keys(out).length ? out : null
+}
+
+function hexOrNull(v) {
+  return color(v, null)
+}
+
+function normBg(v) {
+  if (!isDict(v)) return null
+  const out = {}
+  const c1 = hexOrNull(v.color)
+  if (c1) out.color = c1
+  const c2 = hexOrNull(v.color2)
+  if (c2) out.color2 = c2
+  const g = oneOf(v.gradient, GRADIENTS, 'none')
+  if (g !== 'none') out.gradient = g
+  const o = num(v.opacity, 0, 1, 1, 2)
+  if (o !== 1) out.opacity = o
+  return Object.keys(out).length ? out : null
+}
+
+function normBorder(v) {
+  if (!isDict(v)) return null
+  const out = {}
+  const w = num(v.width, 0, 4, 0, 1)
+  if (w !== 0) out.width = w
+  const c = hexOrNull(v.color)
+  if (c) out.color = c
+  return Object.keys(out).length ? out : null
+}
+
+// 'default' is no title override at all; a custom title keeps its text (up to
+// TITLE_MAX_LENGTH, as typed), 'none' needs none.
+function normTitle(v) {
+  if (!isDict(v)) return null
+  const mode = oneOf(v.mode, TITLE_MODES, 'default')
+  if (mode === 'default') return null
+  const out = { mode }
+  if (mode === 'custom') {
+    const t = typeof v.text === 'string' ? v.text : typeof v.text === 'number' && Number.isFinite(v.text) ? String(v.text) : ''
+    const s = t.length > TITLE_MAX_LENGTH ? t.slice(0, TITLE_MAX_LENGTH) : t
+    if (s) out.text = s
+  }
+  return out
+}
+
+// The box v2 look and the element styles from r onto `out` (normProps), each
+// key only when it is not its default. A text block's colour is its own prop.
+function normBoxLook(r, type, out) {
+  const bg = normBg(r.bg)
+  if (bg) out.bg = bg
+  const border = normBorder(r.border)
+  if (border) out.border = border
+  const shadow = oneOf(r.shadow, SHADOWS, 'none')
+  if (shadow !== 'none') out.shadow = shadow
+  const blur = num(r.blur, 0, 20, 0, 0)
+  if (blur !== 0) out.blur = blur
+  if (FONT_IDS.indexOf(r.font) >= 0) out.font = r.font
+  if (type !== 'text') {
+    const c = hexOrNull(r.color)
+    if (c) out.color = c
+  }
+  const valign = oneOf(r.valign, VALIGNS, 'top')
+  if (valign !== 'top') out.valign = valign
+  const title = normTitle(r.title)
+  if (title) out.title = title
+  const elements = normalizeElementStyles(r.elements, type)
+  if (elements) out.elements = elements
+}
+
+// Does a box draw a v2 surface (a fill, a border, a shadow or a blur)? Such a
+// box is never joined to a flush neighbour (cardJoins): it is its own card.
+export function hasBoxSurface(props) {
+  if (!props) return false
+  return isDict(props.bg) || isDict(props.border) || (props.shadow != null && props.shadow !== 'none') || Number(props.blur) > 0
+}
+
+// 'HH:MM' (24 h, zero-padded) from 'H:MM' or 'HH:MM', else null.
+function hhmm(v) {
+  if (typeof v !== 'string') return null
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim())
+  if (!m) return null
+  const h = Number(m[1])
+  if (h > 23 || Number(m[2]) > 59) return null
+  return `${h < 10 ? '0' : ''}${h}:${m[2]}`
+}
+
+function ruleKind(kind) {
+  for (let i = 0; i < RULE_KINDS.length; i++) if (RULE_KINDS[i].kind === kind) return RULE_KINDS[i]
+  return null
+}
+
+// One condition, or null when it cannot be one (an unknown kind, a day part
+// or a time that is not one). countdownWithin's days default to its kind's.
+function normCond(raw) {
+  if (!isDict(raw)) return null
+  const def = typeof raw.kind === 'string' ? ruleKind(raw.kind) : null
+  if (!def) return null
+  const out = { kind: def.kind }
+  if (raw.not === true) out.not = true
+  if (def.kind === 'daypart') {
+    const d = oneOf(raw.daypart, RULE_DAYPARTS, null)
+    if (!d) return null
+    out.daypart = d
+  } else if (def.kind === 'timeRange') {
+    const from = hhmm(raw.from)
+    const to = hhmm(raw.to)
+    if (!from || !to) return null
+    out.from = from
+    out.to = to
+  } else if (def.kind === 'countdownWithin') {
+    out.days = num(raw.days, def.min, def.max, def.default, 0)
+  }
+  return out
+}
+
+// normalizeWhen(raw) -> { all?, any? } with the valid conditions (at most
+// MAX_RULE_CONDITIONS read per list), or null: no rule, the panel always shows.
+export function normalizeWhen(raw) {
+  if (!isDict(raw)) return null
+  const out = {}
+  ;['all', 'any'].forEach((k) => {
+    if (!Array.isArray(raw[k])) return
+    const list = raw[k].slice(0, MAX_RULE_CONDITIONS).map(normCond).filter(Boolean)
+    if (list.length) out[k] = list
+  })
+  return Object.keys(out).length ? out : null
 }
 
 // --- Defaults per type -------------------------------------------------------
@@ -721,6 +1122,8 @@ function normProps(raw, type, layoutId) {
       out[f.key] = fieldValue(f, r[f.key], d[f.key])
     })
   }
+  // The box v2 look and the element styles, only where set.
+  normBoxLook(r, type, out)
   return out
 }
 
@@ -735,7 +1138,7 @@ function normPanel(raw, type, id, layoutId) {
   const h = num(raw.h, t.min.h, 100, box.h, POSITION_PLACES)
   const x = num(raw.x, 0, round(100 - w, POSITION_PLACES), box.x, POSITION_PLACES)
   const y = num(raw.y, 0, round(100 - h, POSITION_PLACES), box.y, POSITION_PLACES)
-  return {
+  const out = {
     id,
     type,
     x,
@@ -747,6 +1150,10 @@ function normPanel(raw, type, id, layoutId) {
     locked: raw.locked === true,
     props: normProps(raw.props, type, layoutId),
   }
+  // A visibility rule, only when it has a condition.
+  const when = normalizeWhen(raw.when)
+  if (when) out.when = when
+  return out
 }
 
 // A panel list (the base's or a variant's).
@@ -842,6 +1249,11 @@ function normVariants(raw, layoutId, baseGlobal) {
 //     on the Entry board's clock and headline); a functional panel's props
 //     gain every knob of its schema, clamped to the schema's range; unknown
 //     keys dropped
+//   - the editor-foundation props (elements, bg, border, shadow, blur, font,
+//     color, valign, title) and a panel's `when` are NOT filled: kept only
+//     when set, each of their fields only when it is not its default, null
+//     read as absent (normalizeElementStyles, normalizeWhen), so a spec that
+//     never used them normalises exactly as it did before they existed
 //   - eveningFrom: a whole hour 12..23, default 18
 //   - variants (morning, evening, weekend): each kept when it has a panels
 //     array, its panels normalised like the base's, its global (when given)
@@ -1051,6 +1463,135 @@ export function resolveDaypart(args) {
   return 'day'
 }
 
+// --- Visibility rules: evaluating ----------------------------------------------
+
+// isSchoolMorning({ now, school, noSchoolToday }): inside the school-morning
+// window on a school day (the same test as resolveDaypart's morning).
+export function isSchoolMorning(args) {
+  const a = isDict(args) ? args : {}
+  const now = a.now
+  if (!(now instanceof Date) || Number.isNaN(now.getTime())) return false
+  return isSchoolDay(now, a.school, a.noSchoolToday) && inSchoolMorning(now, a.school)
+}
+
+const EVERY_VARIANT = { morning: { panels: [] }, evening: { panels: [] }, weekend: { panels: [] } }
+
+// clockDaypart({ now, school, noSchoolToday, eveningFrom }) -> the day part
+// the clock says, whatever variants a spec has: resolveDaypart as if all
+// three existed ('weekend' on Saturday and Sunday, 'morning' in the school
+// morning, 'evening' from eveningFrom (18), else 'day'). The `daypart` rule
+// reads this.
+export function clockDaypart(args) {
+  const a = isDict(args) ? args : {}
+  return resolveDaypart({
+    now: a.now,
+    school: a.school,
+    noSchoolToday: a.noSchoolToday,
+    spec: { eveningFrom: a.eveningFrom, variants: EVERY_VARIANT },
+  })
+}
+
+function minutesOfHhmm(s) {
+  return Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5))
+}
+
+// One condition against ctx: true, false, or null when it cannot be judged
+// (an unknown kind, a malformed parameter, no clock), which a rule ignores.
+function condHolds(cond, ctx) {
+  if (!isDict(cond) || typeof cond.kind !== 'string') return null
+  const now = ctx.now instanceof Date && !Number.isNaN(ctx.now.getTime()) ? ctx.now : null
+  let v
+  switch (cond.kind) {
+    case 'schoolMorning':
+      v = ctx.schoolMorning === true
+      break
+    case 'weekend':
+    case 'weekday': {
+      const weekend = typeof ctx.weekend === 'boolean' ? ctx.weekend : now ? now.getDay() === 0 || now.getDay() === 6 : null
+      if (weekend == null) return null
+      v = cond.kind === 'weekend' ? weekend : !weekend
+      break
+    }
+    case 'daypart':
+      if (RULE_DAYPARTS.indexOf(cond.daypart) < 0 || typeof ctx.daypart !== 'string') return null
+      v = ctx.daypart === cond.daypart
+      break
+    case 'timeRange': {
+      const from = hhmm(cond.from)
+      const to = hhmm(cond.to)
+      if (!from || !to || !now) return null
+      const m = now.getHours() * 60 + now.getMinutes()
+      const a = minutesOfHhmm(from)
+      const b = minutesOfHhmm(to)
+      // [from, to), wrapping past midnight when from is later; the same
+      // time twice is the whole day.
+      v = a === b ? true : a < b ? m >= a && m < b : m >= a || m < b
+      break
+    }
+    case 'musicPlaying':
+      v = ctx.musicPlaying === true
+      break
+    case 'plexPlaying':
+      v = ctx.plexPlaying === true
+      break
+    case 'alertActive':
+      v = ctx.alertActive === true
+      break
+    case 'countdownWithin': {
+      const days = toNum(cond.days)
+      if (!Number.isFinite(days)) return null
+      const list = Array.isArray(ctx.countdownDaysLeft) ? ctx.countdownDaysLeft : []
+      v = list.some((d) => typeof d === 'number' && Number.isFinite(d) && d >= 0 && d <= days)
+      break
+    }
+    default:
+      return null
+  }
+  return cond.not === true ? !v : v
+}
+
+// ruleMatches(when, ctx) -> does a panel with this rule show now? Pure.
+//
+//   when  a panel's `when` (normalizeWhen's shape); null or absent: true
+//   ctx   { now: Date, schoolMorning, weekend, daypart ('morning' | 'day' |
+//           'evening' | 'weekend', clockDaypart), musicPlaying, plexPlaying,
+//           alertActive, countdownDaysLeft: number[] }. weekend may be left
+//           out (it is read off now).
+//
+// Every `all` condition must hold and, when `any` has conditions, one of them.
+// A condition that cannot be judged (unknown kind, bad parameter) is skipped,
+// so a broken rule never hides a panel.
+export function ruleMatches(when, ctx) {
+  if (!isDict(when)) return true
+  const c = isDict(ctx) ? ctx : {}
+  const all = Array.isArray(when.all) ? when.all : []
+  for (let i = 0; i < all.length; i++) {
+    if (condHolds(all[i], c) === false) return false
+  }
+  const any = Array.isArray(when.any) ? when.any : []
+  let judged = 0
+  for (let i = 0; i < any.length; i++) {
+    const v = condHolds(any[i], c)
+    if (v === true) return true
+    if (v === false) judged += 1
+  }
+  return judged === 0
+}
+
+// The rule kinds a panel list uses (for the renderer: Plex is polled only
+// when a rule asks about it).
+export function ruleKindsUsed(panels) {
+  const out = new Set()
+  ;(Array.isArray(panels) ? panels : []).forEach((p) => {
+    const w = p && p.when
+    if (!isDict(w)) return
+    ;['all', 'any'].forEach((k) => {
+      if (Array.isArray(w[k])) w[k].forEach((c) => isDict(c) && typeof c.kind === 'string' && out.add(c.kind))
+    })
+  })
+  return out
+}
+
 // variantPanels(spec, daypart) -> { panels, global, daypart }: what to draw for
 // a day part. A variant the spec lacks (or 'day', or anything else) is the
 // base; a variant's own global replaces the base's (merged over it, so a
@@ -1139,7 +1680,7 @@ const JOIN_EPS = 0.05
 export function cardJoins(panels) {
   const out = {}
   const cards = (Array.isArray(panels) ? panels : []).filter(
-    (p) => p && !p.hidden && p.props && p.props.background !== 'none'
+    (p) => p && !p.hidden && p.props && p.props.background !== 'none' && !hasBoxSurface(p.props)
   )
   for (const a of cards) {
     for (const b of cards) {

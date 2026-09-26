@@ -91,10 +91,11 @@
  *
  * A panel handed `knobs` (a spec layout) carries .tl-knobs on its root and its
  * size knobs as variables in its root's style ('--tl-clock-time': 1.2). A size
- * knob reaches its text by redefining --tl-text-scale on the element it tunes:
+ * knob reaches its text through the element it tunes, in two steps:
  *
  *   .tl-knobs .tl-clock__time {
- *     --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock-time, 1));
+ *     --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock-time, 1));
+ *     --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
  *   }
  *
  * --tl-panel-text-scale is the box's text scale, captured on the panel root:
@@ -103,7 +104,17 @@
  * --tl-text-scale, a layout's own font sizes for it included (the Entry
  * board's what-to-wear lines), so the knob needs no layout's help. Each
  * element starts from the box's scale, never from another knob's, so knobs
- * never compound. Without knobs nothing here applies. */
+ * never compound. Without knobs nothing here applies.
+ *
+ * The second step is the element styles' (props.elements, Entry/specStyles.js):
+ * --tl-el-size is a style's size on a marked element (data-edit) and
+ * --tl-el-fit the shrink-to-fit factor (lib/fitText.js); both inherit, and
+ * both are unset (1) unless a box styles that element. A marked element
+ * recomputes its own text scale the same way from --tl-knob-scale (which the
+ * box sets to its own scale, Entry/SpecPanel.css, and a knob element redefines
+ * for what is inside it), so an element's size and its panel's knob multiply
+ * whichever holds the other. At the defaults the product is the knob's alone,
+ * exactly as before. */
 .tl-knobs {
   --tl-panel-text-scale: var(--tl-text-scale, 1);
 }

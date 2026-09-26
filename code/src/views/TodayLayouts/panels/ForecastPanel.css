@@ -29,6 +29,33 @@
   --tl-fc-temp: clamp(1.4vh, min(calc(var(--tl-fc-col) * 0.28), 17cqh), 3.6vh);
 }
 
+/* Each of a day's cells on its own row, so the column flow keeps a day in one
+ * column even when a cell is hidden (an element style, props.elements): the
+ * rows are the ones auto-placement always gave them. */
+.tl-fc__day {
+  grid-row: 1;
+}
+
+.tl-fc__icon {
+  grid-row: 2;
+}
+
+.tl-fc__temps {
+  grid-row: 3;
+}
+
+.tl-fc__pop {
+  grid-row: 4;
+}
+
+.tl-fc__grid--noicons .tl-fc__temps {
+  grid-row: 2;
+}
+
+.tl-fc__grid--noicons .tl-fc__pop {
+  grid-row: 3;
+}
+
 .tl-fc__day {
   max-width: 100%;
   white-space: nowrap;
@@ -98,6 +125,7 @@
 
 .tl-knobs .tl-fc__grid,
 .tl-knobs .tl-fc__empty {
-  --tl-text-scale: calc(var(--tl-panel-text-scale) * var(--tl-fc-size, 1));
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-fc-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 

@@ -160,7 +160,7 @@ export function Toggle({ checked, onChange, label, ariaLabel, disabled, title })
 // aria-labels.
 // A short hint sits under the label; a long one (a schema's help line) gets
 // the row's full width underneath, rather than a tall, narrow column.
-const LONG_HINT = 30
+const LONG_HINT = 24
 export function Row({ label, hint, children, htmlFor }) {
   const long = typeof hint === 'string' && hint.length > LONG_HINT
   const text = (
@@ -219,15 +219,61 @@ export function TextField({ value, onCommit, placeholder, ariaLabel, id }) {
 
 // A colour well and its hex. The well only speaks #rrggbb; the field keeps
 // whatever valid hex the spec holds (#rgb, #rgba, #rrggbbaa too).
-export function ColorField({ value, onChange, onCommit, label }) {
+//
+// nullable: the colour may be unset (null), which means "Auto" or "Global"
+// (nullLabel): the look as designed, or the layout's own colour. A chip beside
+// the hex clears it and reads as on while it is unset; an empty hex clears it
+// too. The well then shows `unsetWell`, a stand-in only.
+export function ColorField({ value, onChange, onCommit, label, hint, nullable, nullLabel = 'Auto', unsetWell = '#808080' }) {
   const id = useId()
+  const unset = nullable && !value
+  const commit = onCommit || onChange
   return (
-    <Row label={label} htmlFor={id}>
-      <div className="ed-color">
-        <input id={id} type="color" value={colorForWell(value)} onChange={(e) => onChange(e.target.value)} aria-label={label} />
-        <TextField value={value} ariaLabel={`${label} hex`} onCommit={(v) => (onCommit || onChange)(v)} />
+    <Row label={label} htmlFor={id} hint={hint}>
+      <div className={`ed-color${nullable ? ' ed-color--nullable' : ''}${unset ? ' is-unset' : ''}`}>
+        <input
+          id={id}
+          type="color"
+          value={colorForWell(value || unsetWell)}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+        />
+        <TextField
+          value={value || ''}
+          placeholder={unset ? nullLabel : undefined}
+          ariaLabel={`${label} hex`}
+          onCommit={(v) => (nullable && !String(v).trim() ? commit(null) : commit(v))}
+        />
+        {nullable && (
+          <button
+            type="button"
+            className={`ed-chip${unset ? ' is-on' : ''}`}
+            aria-pressed={unset}
+            title={unset ? `${label}: ${nullLabel}` : `Back to ${nullLabel}`}
+            onClick={() => !unset && commit(null)}
+          >
+            {nullLabel}
+          </button>
+        )}
       </div>
     </Row>
+  )
+}
+
+// A time of day as 'HH:MM' (24 h; the browser shows it in the Mac's own
+// format). Commits every complete value.
+export function TimeField({ value, onChange, ariaLabel, disabled }) {
+  return (
+    <input
+      type="time"
+      className="ed-time"
+      value={value || ''}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      onChange={(e) => {
+        if (e.target.value) onChange(e.target.value)
+      }}
+    />
   )
 }
 
@@ -270,8 +316,9 @@ function selectKind(options) {
 
 // One schema field (docs/designs/layout-editor.md, Contract v2): number = a
 // slider and a typed field with its unit, select =
-// segmented or a dropdown, toggle, color = a swatch and its hex, text = an
-// input, or a textarea when the field is multiline.
+// segmented or a dropdown, toggle, color = a swatch and its hex (with an
+// "Auto" chip when the field is nullable), text = an input, or a textarea when
+// the field is multiline.
 export function SchemaField({ field, value, onChange, textRef }) {
   const hint = typeof field.hint === 'string' ? field.hint : undefined
   switch (field.type) {
@@ -324,7 +371,16 @@ export function SchemaField({ field, value, onChange, textRef }) {
         </Row>
       )
     case 'color':
-      return <ColorField label={field.label} value={typeof value === 'string' ? value : ''} onChange={onChange} />
+      return (
+        <ColorField
+          label={field.label}
+          hint={hint}
+          value={typeof value === 'string' ? value : field.nullable ? null : ''}
+          nullable={!!field.nullable}
+          nullLabel={typeof field.nullLabel === 'string' && field.nullLabel ? field.nullLabel : undefined}
+          onChange={onChange}
+        />
+      )
     case 'text':
       if (field.multiline || field.rows > 1) {
         return (

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useSyncExternalStore } from 'react'
 import ClockPanel from '../panels/ClockPanel.jsx'
 import WeatherNowPanel from '../panels/WeatherNowPanel.jsx'
 import ForecastPanel from '../panels/ForecastPanel.jsx'
@@ -16,25 +16,42 @@ import TextBlock from '../panels/TextBlock.jsx'
 import ImageBlock from '../panels/ImageBlock.jsx'
 import { knobDefaults } from '../panels/schemas.js'
 import SpecPanel, { SpecScrims } from './SpecPanel.jsx'
+import { hexChannels } from './specStyles.js'
 import {
   cardJoins,
+  clockDaypart,
   inSchoolMorning,
+  isSchoolMorning,
   knobsOf,
   layoutTextScale,
   normalizeSpec,
   panelType,
   resolveDaypart,
+  ruleKindsUsed,
+  ruleMatches,
   variantPanels,
   visiblePanels,
 } from '../layoutSpec.js'
+import { fontStack } from '../lib/fonts.js'
 import { useEditBridge, useEditDaypart, useEditDraft, useEditHover } from '../editBridge.js'
 import { EDIT_MODE } from '../../../lib/kioskMode.js'
-// The display fonts a spec's global.font can pick (tokens.css --tl-font-inter,
-// --tl-font-fraunces), and Inter 300, the Entry board's light clock and the
-// clock's lightest weight knob: main.jsx only ships 400/600/700. Font faces
-// cost nothing until a page uses them.
+import { PLEX_OFF, effectivePlexFollow, getPlexNow, pickSession, subscribePlexNow } from '../../../hooks/usePlexNow.js'
+// The families a spec's global.font and a box's font can pick (lib/fonts.js),
+// and Inter 300, the Entry board's light clock and the clock's lightest weight
+// knob: main.jsx only ships Inter 400/600/700. Latin subsets; a face costs
+// nothing until a page uses it.
 import '@fontsource/inter/latin-300.css'
 import '@fontsource-variable/fraunces/full.css'
+import '@fontsource/roboto/latin-400.css'
+import '@fontsource/roboto/latin-500.css'
+import '@fontsource/roboto/latin-700.css'
+import '@fontsource/barlow-condensed/latin-400.css'
+import '@fontsource/barlow-condensed/latin-500.css'
+import '@fontsource/barlow-condensed/latin-600.css'
+import '@fontsource/barlow-condensed/latin-700.css'
+import '@fontsource/ibm-plex-mono/latin-400.css'
+import '@fontsource/ibm-plex-mono/latin-500.css'
+import '@fontsource/ibm-plex-mono/latin-700.css'
 import '../tokens.css'
 import './SpecPanel.css'
 
@@ -55,6 +72,13 @@ import './SpecPanel.css'
 //   - every visible panel in its box (SpecPanel), each functional panel with
 //     its knobs (props over the schema defaults, panels/schemas.js), and under
 //     them the scrims of the boxes that have one (SpecScrims)
+//   - visibility rules (a panel's `when`, layoutSpec.js ruleMatches): a panel
+//     whose rule fails is not drawn, re-checked on every render (the board
+//     ticks every second) against the clock and the live data: the school
+//     morning, the weekend, the day part (clockDaypart, whatever variants the
+//     spec has), music, Plex (polled only while a rule asks), a weather alert,
+//     the countdowns. In the layout editor rules are not applied: every panel
+//     is drawn, a ruled one marked data-rule for the editor.
 //
 // The departure countdown. A layout with its own departure panel shows it
 // there, always. Without one it borrows a box, as the two built-in boards
@@ -87,28 +111,16 @@ function tileIntervalMs(slideshow) {
 // The departure panel in a borrowed box has no knobs of its own.
 const DEPARTURE_KNOBS = knobDefaults('departure')
 
-// The display font's variable for spec.global.font (tokens.css).
-const FONT_VARS = { inter: 'var(--tl-font-inter)', fraunces: 'var(--tl-font-fraunces)' }
-
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
-// '#f2f2f0' -> '242, 242, 240' (alpha dropped), for --tl-fg-rgb.
-function hexChannels(hex) {
-  if (typeof hex !== 'string' || !HEX_RE.test(hex)) return null
-  let h = hex.slice(1)
-  if (h.length <= 4) h = h.split('').map((c) => c + c).join('')
-  const n = parseInt(h.slice(0, 6), 16)
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
-}
-
 // spec.global -> the root's variables (tokens.css "Spec layouts"). The text
-// scale is per box (SpecPanel), global x panel.
+// scale is per box (SpecPanel), global x panel. The font is the display font
+// (the big type): its family's stack from lib/fonts.js.
 function globalStyle(global) {
   const g = global || {}
   const style = {}
-  if (typeof g.font === 'string' && Object.prototype.hasOwnProperty.call(FONT_VARS, g.font)) {
-    style['--tl-font-display'] = FONT_VARS[g.font]
-  }
+  const display = typeof g.font === 'string' ? fontStack(g.font) : null
+  if (display) style['--tl-font-display'] = display
   if (typeof g.accent === 'string' && HEX_RE.test(g.accent)) style['--tl-accent'] = g.accent
   const rgb = hexChannels(g.text)
   if (rgb) {
@@ -158,6 +170,48 @@ function fallbackHeadline(greeting) {
 // travel toggle stays visible (it is part of the layout) but writes nothing.
 function noop() {}
 
+// Plex, for the plexPlaying rule: an active subscription (the store polls the
+// hub every 5 s while one is open) only while a rule on screen asks about it,
+// else none at all.
+const subscribePlexActive = (fn) => subscribePlexNow(fn, { active: true })
+const subscribeNothing = () => noop
+const getNothing = () => null
+
+// Is Plex playing, as the rule means it: the player this screen follows
+// (display.plexFollow), or when it follows none, any player.
+function plexPlaying(snap, followSetting) {
+  if (!snap || !Array.isArray(snap.sessions)) return false
+  const follow = effectivePlexFollow(followSetting)
+  const s = pickSession(snap, follow === PLEX_OFF ? null : follow)
+  return !!s && s.player?.state === 'playing'
+}
+
+// A weather alert in force: the hub's list of NWS alerts when the house state
+// carries it (useTodayData weatherAlerts), else the headline, which leads
+// with an alert whenever one outranks everything else.
+function alertActive(d) {
+  if (Array.isArray(d.weatherAlerts)) return d.weatherAlerts.length > 0
+  return d.headline?.kind === 'alert'
+}
+
+// What the rules are judged against (layoutSpec.js ruleMatches).
+function ruleContext(d, spec, plexSnap) {
+  const now = d.now
+  const school = d.settings?.school
+  const noSchoolToday = !!d.school?.noSchool
+  const day = now instanceof Date ? now.getDay() : null
+  return {
+    now,
+    schoolMorning: isSchoolMorning({ now, school, noSchoolToday }),
+    weekend: day === 0 || day === 6,
+    daypart: clockDaypart({ now, school, noSchoolToday, eveningFrom: spec?.eveningFrom }),
+    musicPlaying: !!d.music?.playing,
+    plexPlaying: plexPlaying(plexSnap, d.settings?.display?.plexFollow),
+    alertActive: alertActive(d),
+    countdownDaysLeft: (Array.isArray(d.countdowns) ? d.countdowns : []).map((c) => c?.daysLeft),
+  }
+}
+
 export default function SpecBoard({ d, layoutId, className, children }) {
   const rootRef = useRef(null)
 
@@ -171,17 +225,40 @@ export default function SpecBoard({ d, layoutId, className, children }) {
   // The day part: forced by the editor, else by the clock (a string, so the
   // variant below is only re-picked when it changes, at most once a minute).
   const forcedDaypart = useEditDaypart()
-  const clockDaypart = resolveDaypart({
+  const drawnDaypart = resolveDaypart({
     now: d.now,
     school: d.settings?.school,
     noSchoolToday: !!d.school?.noSchool,
     spec,
   })
-  const view = useMemo(() => variantPanels(spec, forcedDaypart || clockDaypart), [spec, forcedDaypart, clockDaypart])
+  const view = useMemo(() => variantPanels(spec, forcedDaypart || drawnDaypart), [spec, forcedDaypart, drawnDaypart])
   useEditBridge(rootRef, savedRaw, layoutId, view.daypart)
   const hoverId = useEditHover()
 
-  const panels = useMemo(() => visiblePanels(view), [view])
+  const shown = useMemo(() => visiblePanels(view), [view])
+
+  // Visibility rules, off in the editor. Judged on every render; the panel
+  // list only changes identity when which panels pass does.
+  const ruleKinds = useMemo(() => (EDIT_MODE ? new Set() : ruleKindsUsed(shown)), [shown])
+  const needsPlex = ruleKinds.has('plexPlaying')
+  const plexSnap = useSyncExternalStore(
+    needsPlex ? subscribePlexActive : subscribeNothing,
+    needsPlex ? getPlexNow : getNothing,
+    getNothing
+  )
+  let ruledOut = ''
+  if (ruleKinds.size) {
+    const ctx = ruleContext(d, spec, plexSnap)
+    ruledOut = shown
+      .filter((p) => p.when && !ruleMatches(p.when, ctx))
+      .map((p) => p.id)
+      .join(' ')
+  }
+  const panels = useMemo(() => {
+    if (!ruledOut) return shown
+    const out = ruledOut.split(' ')
+    return shown.filter((p) => out.indexOf(p.id) < 0)
+  }, [shown, ruledOut])
   const joins = useMemo(() => cardJoins(panels), [panels])
   const style = useMemo(() => globalStyle(view.global), [view.global])
   // One knobs object per panel, rebuilt only with the panels, so a memoised
@@ -341,6 +418,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             join={joins[p.id] || null}
             hover={hoverId === p.id}
             borrowed={host === p.type}
+            rule={EDIT_MODE && !!p.when}
           >
             {content(p)}
           </SpecPanel>

@@ -21,13 +21,20 @@
 // needs it without every caller passing it along. registerFromReady is called
 // before the reducer hears about the ready, so the re-render that follows
 // already sees it.
+//
+// The same goes for the four objects of the panels-and-controls chunk 1
+// contract (docs/designs/panels-and-controls.md): the element style schema,
+// the box v2 schema, the fonts and the visibility rule kinds. First hit wins:
+// the ready message's elementStyleSchema, boxSchema, fonts and ruleKinds, then
+// the copy bundled with the editor, which appSpec.js registers at load (the
+// app's own exports, or the editor's fallbacks until those land).
 
 import {
   GLOBAL_SCHEMA as APP_GLOBAL_SCHEMA,
   PANEL_ELEMENTS as APP_PANEL_ELEMENTS,
   PANEL_SCHEMAS as APP_PANEL_SCHEMAS,
 } from '../views/TodayLayouts/panels/schemas.js'
-import { clamp, decimalsOf, humanize, isDict, normalizeColor, roundTo, toNum } from './util.js'
+import { clamp, decimalsOf, humanize, isDict, normalizeColor, normalizeTime, roundTo, toNum } from './util.js'
 
 export const FIELD_TYPES = ['number', 'select', 'toggle', 'color', 'text']
 export const UNIVERSAL_KEYS = ['textScale', 'opacity', 'padding', 'background', 'radius', 'align', 'scrim']
@@ -95,13 +102,28 @@ export const TEXT_SCALE_FIELD = {
 
 const EMPTY = { fields: [] }
 
-// A field the editor can render, or null.
+const isOptionValue = (v) => v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+
+// [[value, label]] from [[value, label]], [{ value, label }] or [value]. A
+// null value is an option too: "Auto" (the element style's weight).
+function cleanOptions(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((o) =>
+      Array.isArray(o)
+        ? [o[0], String(o[1] ?? o[0])]
+        : isDict(o)
+          ? [o.value ?? null, String(o.label ?? o.value)]
+          : [o, String(o)]
+    )
+    .filter(([v]) => isOptionValue(v))
+}
+
+// A field the editor can render, or null. Extra keys are kept: element,
+// hint, nullable (a colour that may be "Auto"), nullLabel.
 function cleanField(f) {
   if (!isDict(f) || typeof f.key !== 'string' || !f.key || !FIELD_TYPES.includes(f.type)) return null
   if (f.type === 'select') {
-    const options = (Array.isArray(f.options) ? f.options : [])
-      .map((o) => (Array.isArray(o) ? [o[0], String(o[1] ?? o[0])] : isDict(o) ? [o.value, String(o.label ?? o.value)] : [o, String(o)]))
-      .filter(([v]) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+    const options = cleanOptions(f.options)
     if (!options.length) return null
     return { ...f, options }
   }
@@ -131,8 +153,9 @@ let fromReady = {}
 let readyGlobal = null
 let version = 0
 
-// sd-edit:ready: { schemas, globalSchema, panelTypes: [{ type, schema }] }.
-// Returns true when anything changed.
+// sd-edit:ready: { schemas, globalSchema, panelTypes: [{ type, schema }],
+// elementStyleSchema, boxSchema, fonts, ruleKinds }. Returns true when
+// anything changed.
 export function registerFromReady(msg) {
   const table = cleanTable(msg?.schemas)
   if (Array.isArray(msg?.panelTypes)) {
@@ -143,11 +166,18 @@ export function registerFromReady(msg) {
     }
   }
   const g = cleanSchema(msg?.globalSchema)
-  const changed = JSON.stringify([table, g]) !== JSON.stringify([fromReady, readyGlobal])
+  const c = cleanContract({
+    elementStyleSchema: msg?.elementStyleSchema,
+    boxSchema: msg?.boxSchema,
+    fonts: msg?.fonts,
+    ruleKinds: msg?.ruleKinds,
+  })
+  const changed = JSON.stringify([table, g, c]) !== JSON.stringify([fromReady, readyGlobal, readyContract])
   if (Object.keys(table).length || g) {
     fromReady = table
     readyGlobal = g
   }
+  readyContract = c
   if (changed) version += 1
   return changed
 }
@@ -263,6 +293,32 @@ export function elementLabel(type, key, reported) {
   )
 }
 
+// A type's sub-elements, in order: [{ key, label, parent }] from the ready
+// message's schema (its `elements`), else the app's PANEL_ELEMENTS as bundled.
+// These are the keys element styles may use (props.elements). parent: the key
+// of the element it sits inside when the table says so (else null; the
+// inspector's breadcrumb can still find it from the rectangles).
+export function elementList(type) {
+  const own = listFrom(schemaFor(type).elements)
+  return own.length ? own : listFrom(APP_PANEL_ELEMENTS?.[type])
+}
+
+function listFrom(e) {
+  const out = []
+  const seen = new Set()
+  const push = (key, label, parent) => {
+    if (typeof key !== 'string' || !key || seen.has(key)) return
+    seen.add(key)
+    out.push({ key, label: typeof label === 'string' && label ? label : humanize(key), parent: typeof parent === 'string' && parent ? parent : null })
+  }
+  if (Array.isArray(e)) {
+    for (const it of e) if (isDict(it)) push(it.key, it.label, it.parent)
+  } else if (isDict(e)) {
+    for (const k of Object.keys(e)) push(k, typeof e[k] === 'string' ? e[k] : e[k]?.label, e[k]?.parent)
+  }
+  return out
+}
+
 // Fields grouped by element, in the order the schema first names each one;
 // fields that name no element come last.
 //   -> [{ element: 'time' | null, label, fields }]
@@ -280,4 +336,204 @@ export function groupFields(type, fields, reported) {
   const out = [...groups.values()]
   if (rest.length) out.push({ element: null, label: out.length ? 'Other' : '', fields: rest })
   return out
+}
+
+// --- the chunk 1 contract ----------------------------------------------------
+//
+// ELEMENT_STYLE_SCHEMA  { fields }: one element's style (props.elements[key]):
+//                       hidden, size, weight, color (nullable), spaceAbove,
+//                       spaceBelow, tracking, caps, fit
+// BOX_SCHEMA            { fields }: the box v2 props. A field's key may be a
+//                       path ('bg.color'), or a field may hold its own
+//                       `fields` (a group: { key: 'bg', fields: [...] }); both
+//                       read as the path ['bg', 'color'] here
+// FONTS                 [{ id, label, stack }]: the box font (and the global
+//                       one) is 'inherit' or one of these ids
+// RULE_KINDS            [{ kind, label, param? | params? }]: a param is a
+//                       condition key ('days', 'from', 'to', 'daypart'), or a
+//                       field-like { key, ... } that refines it
+
+const DAYPART_OPTIONS = [
+  ['day', 'Day'],
+  ['morning', 'Morning'],
+  ['evening', 'Evening'],
+  ['weekend', 'Weekend'],
+]
+
+// How the editor draws a rule's parameters: a time picker for from and to, a
+// number for days, the day parts for daypart. A param the app describes with
+// its own { key, ... } can refine the label, range, default and options; the
+// control type of these four stays.
+const PARAM_BUILTINS = {
+  days: { key: 'days', label: 'Days', type: 'number', min: 0, max: 60, step: 1, unit: 'days', default: 7 },
+  from: { key: 'from', label: 'From', type: 'time', default: '07:00' },
+  to: { key: 'to', label: 'To', type: 'time', default: '09:00' },
+  daypart: { key: 'daypart', label: 'Day part', type: 'select', options: DAYPART_OPTIONS, default: 'morning' },
+}
+const PARAM_TYPES = ['number', 'time', 'select', 'text', 'toggle']
+
+function cleanParam(p) {
+  const key = typeof p === 'string' ? p : isDict(p) && typeof p.key === 'string' ? p.key : null
+  if (!key || key === 'kind' || key === 'not') return null
+  const builtin = PARAM_BUILTINS[key]
+  const base = builtin || { key, label: humanize(key), type: 'text', default: '' }
+  const merged = { ...base, ...(isDict(p) ? p : {}), key }
+  if (builtin || !PARAM_TYPES.includes(merged.type)) merged.type = base.type
+  if (merged.type === 'select') {
+    const options = cleanOptions(isDict(p) && Array.isArray(p.options) ? p.options : base.options)
+    if (options.length) merged.options = options
+    else merged.type = 'text'
+  }
+  if (merged.type === 'time' && !normalizeTime(merged.default)) merged.default = base.default
+  return merged
+}
+
+// A kind may refine its parameters itself: with one `param`, its options,
+// default, min, max, step and unit sit on the kind ({ kind: 'countdownWithin',
+// param: 'days', min: 0, max: 365, default: 7 }); with several, `defaults`
+// holds one default per key ({ params: ['from', 'to'], defaults: { from:
+// '07:00', to: '09:00' } }).
+const KIND_REFINES = ['options', 'default', 'min', 'max', 'step', 'unit']
+
+function cleanRuleKinds(list) {
+  if (!Array.isArray(list)) return null
+  const out = []
+  const seen = new Set()
+  for (const k of list) {
+    if (!isDict(k) || typeof k.kind !== 'string' || !k.kind || seen.has(k.kind)) continue
+    seen.add(k.kind)
+    const raw = Array.isArray(k.params) ? k.params : k.param != null ? [k.param] : []
+    const params = raw
+      .map((p) => {
+        const key = typeof p === 'string' ? p : isDict(p) && typeof p.key === 'string' ? p.key : null
+        if (!key) return null
+        const extra = {}
+        if (raw.length === 1) for (const f of KIND_REFINES) if (k[f] !== undefined) extra[f] = k[f]
+        if (isDict(k.defaults) && k.defaults[key] !== undefined) extra.default = k.defaults[key]
+        return cleanParam(isDict(p) ? { ...extra, ...p } : { ...extra, key })
+      })
+      .filter(Boolean)
+    out.push({
+      kind: k.kind,
+      label: typeof k.label === 'string' && k.label ? k.label : humanize(k.kind),
+      hint: typeof k.hint === 'string' ? k.hint : undefined,
+      params,
+    })
+  }
+  return out.length ? out : null
+}
+
+function cleanFonts(list) {
+  if (!Array.isArray(list)) return null
+  const out = []
+  const seen = new Set()
+  for (const f of list) {
+    const id = typeof f === 'string' ? f : isDict(f) && typeof f.id === 'string' ? f.id : null
+    if (!id || id === 'inherit' || seen.has(id)) continue
+    seen.add(id)
+    out.push({
+      id,
+      label: isDict(f) && typeof f.label === 'string' && f.label ? f.label : humanize(id),
+      stack: isDict(f) && typeof f.stack === 'string' ? f.stack : '',
+    })
+  }
+  return out.length ? out : null
+}
+
+// The four objects, cleaned; each null when absent or unusable.
+function cleanContract(c) {
+  return {
+    elementStyle: cleanSchema(c?.elementStyleSchema),
+    box: isDict(c?.boxSchema) && Array.isArray(c.boxSchema.fields) ? c.boxSchema : null,
+    fonts: cleanFonts(c?.fonts),
+    ruleKinds: cleanRuleKinds(c?.ruleKinds),
+  }
+}
+
+let bundledContract = cleanContract(null)
+let readyContract = cleanContract(null)
+
+// appSpec.js, once at load: the copy bundled with the editor.
+export function registerBundledContract(c) {
+  bundledContract = cleanContract(c)
+  version += 1
+}
+
+const pick = (k) => readyContract[k] || bundledContract[k]
+
+// One element's style fields (hidden, size, weight, color, ...).
+export const elementStyleFields = () => (pick('elementStyle') || EMPTY).fields
+
+export const fontList = () => pick('fonts') || []
+
+export const ruleKinds = () => pick('ruleKinds') || []
+
+export const ruleKind = (kind) => ruleKinds().find((k) => k.kind === kind) || null
+
+// 'inherit' first ("Global": the layout's own font), then every font.
+export const fontOptions = (fonts = fontList()) => [['inherit', 'Global'], ...fonts.map((f) => [f.id, f.label])]
+
+// The box v2 fields, flattened: [{ path: ['bg', 'color'], key: 'bg.color',
+// top: 'bg', group: 'Fill' | null, field }] in schema order. field.key is the
+// dotted path. The font field lists fontOptions() whatever the schema says,
+// so the per-panel list and the global one share the one registry.
+let boxCache = { schema: null, fonts: null, list: [] }
+export function boxFields() {
+  const schema = pick('box')
+  const fonts = fontList()
+  if (boxCache.schema === schema && boxCache.fonts === fonts) return boxCache.list
+  const list = []
+  const walk = (fields, prefix, group) => {
+    for (const f of Array.isArray(fields) ? fields : []) {
+      if (!isDict(f) || typeof f.key !== 'string' || !f.key) continue
+      // A field's own `path` when it gives one, else its dotted key.
+      const own = Array.isArray(f.path) && f.path.length && f.path.every((x) => typeof x === 'string' && x) ? f.path : f.key.split('.').filter(Boolean)
+      const path = [...prefix, ...own]
+      if (!path.length) continue
+      if (Array.isArray(f.fields)) {
+        walk(f.fields, path, group ?? (typeof f.label === 'string' ? f.label : null))
+        continue
+      }
+      let field = { ...f, key: path.join('.') }
+      if (field.type === 'font' || (path.length === 1 && path[0] === 'font')) {
+        field = { ...field, type: 'select', options: fontOptions(fonts), default: field.default ?? 'inherit' }
+      }
+      const clean = cleanField(field)
+      if (clean) list.push({ path, key: clean.key, top: path[0], group, field: clean })
+    }
+  }
+  if (schema) walk(schema.fields, [], null)
+  boxCache = { schema, fonts, list }
+  return list
+}
+
+// The box v2 fields a type takes: not those the schema marks `notFor` it
+// (the box text colour is not for a text block, which has its own colour),
+// nor those whose top key the type declares as a knob of its own.
+export const boxFieldsFor = (type) =>
+  boxFields().filter((b) => !(Array.isArray(b.field.notFor) && b.field.notFor.includes(type)) && !declares(type, b.top))
+
+// The top-level prop keys the box v2 fields a type takes live under (bg,
+// border, shadow, blur, font, color, valign, title).
+export const boxTopsFor = (type) => [...new Set(boxFieldsFor(type).map((b) => b.top))]
+
+// A valid value for a rule parameter, or undefined.
+export function cleanParamValue(param, v) {
+  switch (param.type) {
+    case 'time':
+      return normalizeTime(v) ?? undefined
+    case 'number': {
+      const n = toNum(v)
+      if (!Number.isFinite(n)) return undefined
+      const lo = Number.isFinite(param.min) ? param.min : -Infinity
+      const hi = Number.isFinite(param.max) ? param.max : Infinity
+      return roundTo(clamp(n, lo, hi), Number.isFinite(param.step) ? decimalsOf(param.step) : 0)
+    }
+    case 'select':
+      return optionValue(param, v)
+    case 'toggle':
+      return typeof v === 'boolean' ? v : undefined
+    default:
+      return typeof v === 'string' ? v.slice(0, 200) : undefined
+  }
 }

@@ -47,12 +47,16 @@ export default function WeatherNowPanel({ current, today, fetchedAt, now, error,
     <PanelFrame
       title="Weather"
       aside={<FreshnessStamp fetchedAt={fetchedAt} now={now} error={error} />}
+      asideEdit="updated"
+      asideEditLabel="Updated"
       className={cls}
       bodyClassName="tl-wnow__body"
       style={k ? { '--tl-wnow-temp': String(k.tempSize), '--tl-wnow-icon': String(k.iconSize) } : undefined}
     >
       {!hasAnything ? (
-        <div className="tl-wnow__empty">No weather yet</div>
+        <div className="tl-wnow__empty" data-edit="empty">
+          No weather yet
+        </div>
       ) : (
         <>
           <div className="tl-wnow__top">

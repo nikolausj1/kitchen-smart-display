@@ -4,7 +4,8 @@
  * Position, size, z, opacity, padding and radius arrive inline from the spec.
  * This file owns what the options mean: the canvas, the backgrounds, joined
  * cards, the scrims, the panel inside giving up its own chrome, alignment,
- * the editor's hover outline, and the "Too small" state.
+ * the box v2 look (fill, frame, blur, vertical alignment, a block's title;
+ * specStyles.js), the editor's hover outline, and the "Too small" state.
  *
  * Colours come from the layout's root:
  *   --tl-spec-card   the 'card' background (Entry: its translucent card over a
@@ -33,6 +34,9 @@
    * container is for the blocks and the Too small queries below. */
   container-type: size;
   container-name: tl-spec;
+  /* The box's text scale, which the panels' size knobs and the element
+   * styles multiply (tokens.css "Panel knobs"). */
+  --tl-knob-scale: var(--tl-text-scale, 1);
 }
 
 .tl-spec__content {
@@ -199,6 +203,108 @@
 
 .tl-spec--align-end .tl-headline__line {
   justify-content: flex-end;
+}
+
+/* --- The box v2 look (the universal bg, border, shadow, blur, valign,
+ * title; specStyles.js boxLook) ------------------------------------------- *
+ *
+ * Absent unless a box sets them. The fill is a layer under the content (its
+ * own opacity, a gradient), so the box's preset background steps aside; the
+ * preset's hairline and the border move to a frame drawn above the fill; the
+ * box's own shadow is the drop shadow (inline). A v2 box is never joined to a
+ * flush neighbour (layoutSpec.js cardJoins). */
+
+.tl-spec.tl-spec--fill {
+  background-color: transparent;
+}
+
+/* Under the content: the box is a stacking context (its z-index), so -1
+ * paints above the box's own background and below everything in it. */
+.tl-spec__fill {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tl-spec--frame::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  box-shadow: var(--tl-spec-frame);
+  pointer-events: none;
+}
+
+/* Backdrop blur (--tl-spec-blur, in vw). Where it cannot be drawn, and on the
+ * Echo, whose Silk draws backdrop-filter unreliably, a tint of the same
+ * strength instead (--tl-spec-tint), over the box's own background. */
+.tl-spec.tl-spec--blur {
+  -webkit-backdrop-filter: blur(var(--tl-spec-blur));
+  backdrop-filter: blur(var(--tl-spec-blur));
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .tl-spec.tl-spec--blur {
+    background-image: linear-gradient(var(--tl-spec-tint), var(--tl-spec-tint));
+  }
+}
+
+body[data-kiosk='echo'] .tl-spec.tl-spec--blur {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-image: linear-gradient(var(--tl-spec-tint), var(--tl-spec-tint));
+}
+
+/* Vertical alignment. 'top' is the panel as designed (no class); 'middle'
+ * and 'bottom' move what sits in the panel's body, a text block's text, an
+ * image block's picture. A body whose content fills it (the agenda's grid,
+ * the countdown row) has nothing to move. */
+.tl-spec.tl-spec--valign-middle .tl-panel__body,
+.tl-spec.tl-spec--valign-middle .tl-textblock {
+  justify-content: center;
+}
+
+.tl-spec.tl-spec--valign-bottom .tl-panel__body,
+.tl-spec.tl-spec--valign-bottom .tl-textblock {
+  justify-content: flex-end;
+}
+
+.tl-spec.tl-spec--valign-bottom .tl-textblock {
+  justify-content: safe flex-end;
+}
+
+.tl-spec.tl-spec--valign-bottom .tl-imageblock__img {
+  object-position: 50% 100%;
+}
+
+/* A text or image block with a custom title: the header row, then the block
+ * in what is left (a panel's header is its PanelFrame's). */
+.tl-spec__titled {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tl-spec__titled-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tl-spec__titled-body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* --- The layout editor's hover ------------------------------------------ */

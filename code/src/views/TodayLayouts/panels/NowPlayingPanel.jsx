@@ -56,10 +56,14 @@ export default function NowPlayingPanel({ music, now, compact = false, knobs }) 
         style={rootStyle}
       >
         <div className="tl-np__idle">
-          <div className="tl-np__idle-line" data-edit="title" data-edit-label="Title">
+          <div className="tl-np__idle-line" data-edit="track" data-edit-label="Track">
             Nothing playing
           </div>
-          {room && <div className="tl-np__idle-room">{room}</div>}
+          {room && (
+            <div className="tl-np__idle-room" data-edit="room" data-edit-label="Room">
+              {room}
+            </div>
+          )}
         </div>
       </PanelFrame>
     )
@@ -89,6 +93,8 @@ export default function NowPlayingPanel({ music, now, compact = false, knobs }) 
     <PanelFrame
       title="Now playing"
       aside={room}
+      asideEdit="room"
+      asideEditLabel="Room"
       className={rootClass}
       bodyClassName="tl-np__body"
       style={rootStyle}
@@ -112,13 +118,21 @@ export default function NowPlayingPanel({ music, now, compact = false, knobs }) 
         )}
 
         <div className="tl-np__text">
-          <div className="tl-np__title" data-edit="title">
+          <div className="tl-np__title" data-edit="track" data-edit-label="Track">
             {track.title || 'Untitled'}
           </div>
-          {track.artist && <div className="tl-np__artist">{track.artist}</div>}
-          {showAlbum && <div className="tl-np__album">{track.album}</div>}
+          {track.artist && (
+            <div className="tl-np__artist" data-edit="artist">
+              {track.artist}
+            </div>
+          )}
+          {showAlbum && (
+            <div className="tl-np__album" data-edit="album">
+              {track.album}
+            </div>
+          )}
           {(paused || source) && (
-            <div className="tl-np__meta">
+            <div className="tl-np__meta" data-edit="meta" data-edit-label="Source">
               {paused && <span className="tl-np__pill">Paused</span>}
               {source && <span className="tl-np__source">{source}</span>}
             </div>
@@ -127,7 +141,7 @@ export default function NowPlayingPanel({ music, now, compact = false, knobs }) 
       </div>
 
       {showProgress && (
-        <div className="tl-np__progress">
+        <div className="tl-np__progress" data-edit="progress">
           <div className="tl-np__track">
             <div className="tl-np__fill" style={{ width: `${pct}%` }} />
           </div>

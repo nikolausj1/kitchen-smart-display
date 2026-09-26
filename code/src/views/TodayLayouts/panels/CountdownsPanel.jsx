@@ -88,10 +88,10 @@ function CountdownArt({ src, emoji, preferEmoji = false }) {
   return <CalendarGlyph />
 }
 
-// first: the first tile also marks its art, title and number for the layout
-// editor (one of each is enough to select and tune them). k: the knobs, or
-// null (no layout spec: the tile as it always was).
-function Tile({ countdown, first = false, k = null }) {
+// Every tile marks its parts for the layout editor (data-edit: tile, image,
+// name, number, unit), so an element style reaches every tile alike. k: the
+// knobs, or null (no layout spec: the tile as it always was).
+function Tile({ countdown, k = null }) {
   const days = Number.isFinite(countdown?.daysLeft) ? Math.max(0, Math.round(countdown.daysLeft)) : null
   const title = typeof countdown?.title === 'string' ? countdown.title.trim() : ''
   const src = artUrl(countdown?.image)
@@ -123,7 +123,7 @@ function Tile({ countdown, first = false, k = null }) {
       data-edit="tile"
       data-edit-label={title || 'Countdown'}
     >
-      <div className="tl-cd__art" data-edit={first ? 'image' : undefined}>
+      <div className="tl-cd__art" data-edit="image" data-edit-label="Image">
         <CountdownArt
           key={src || 'none'}
           src={src}
@@ -133,13 +133,17 @@ function Tile({ countdown, first = false, k = null }) {
       </div>
       {!artOnly && (
         <>
-          <div className="tl-cd__title" data-edit={first ? 'title' : undefined}>
+          <div className="tl-cd__title" data-edit="name" data-edit-label="Event name">
             <span className="tl-cd__title-text">{title || 'Countdown'}</span>
           </div>
-          <div className={numberClass} data-edit={first ? 'number' : undefined}>
+          <div className={numberClass} data-edit="number" data-edit-label="Number">
             {numberText}
           </div>
-          {showUnit && <div className="tl-cd__unit">{unit || ' '}</div>}
+          {showUnit && (
+            <div className="tl-cd__unit" data-edit="unit" data-edit-label="Days label">
+              {unit || ' '}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -172,11 +176,13 @@ export default function CountdownsPanel({ countdowns, knobs }) {
   return (
     <PanelFrame title={null} className={cls} bodyClassName="tl-cd__body" style={style}>
       {list.length === 0 ? (
-        <div className="tl-cd__empty">No countdowns</div>
+        <div className="tl-cd__empty" data-edit="empty">
+          No countdowns
+        </div>
       ) : (
         <div className="tl-cd__row">
           {list.map((c, i) => (
-            <Tile key={c.id == null ? `cd-${i}` : String(c.id)} countdown={c} first={i === 0} k={k} />
+            <Tile key={c.id == null ? `cd-${i}` : String(c.id)} countdown={c} k={k} />
           ))}
         </div>
       )}

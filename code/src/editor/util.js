@@ -76,3 +76,56 @@ export function ago(iso, now = Date.now()) {
   const d = Math.round(h / 24)
   return d === 1 ? 'yesterday' : `${d} days ago`
 }
+
+// --- nested props (box v2: bg.color, border.width, title.mode) -------------
+
+// The value at a path ['bg', 'color'] of a plain object, else undefined.
+export function getPath(obj, path) {
+  let v = obj
+  for (const k of path) {
+    if (!isDict(v)) return undefined
+    v = v[k]
+  }
+  return v
+}
+
+// A copy of obj with the value at `path` set; undefined (or null) removes it,
+// and an object left empty by that goes too, so a cleared bg.color leaves no
+// empty `bg: {}` behind. The input is not changed.
+export function setPath(obj, path, value) {
+  const base = isDict(obj) ? obj : {}
+  const [k, ...rest] = path
+  const out = { ...base }
+  if (!rest.length) {
+    if (value === undefined || value === null) delete out[k]
+    else out[k] = value
+    return out
+  }
+  const child = setPath(base[k], rest, value)
+  if (Object.keys(child).length) out[k] = child
+  else delete out[k]
+  return out
+}
+
+// A deep copy of JSON data.
+export const cloneJson = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)))
+
+// 'HH:MM' (24 h) from 'H:MM' or 'HH:MM', else null.
+export function normalizeTime(v) {
+  if (typeof v !== 'string') return null
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim())
+  if (!m) return null
+  const h = Number(m[1])
+  const min = Number(m[2])
+  if (h > 23 || min > 59) return null
+  return `${String(h).padStart(2, '0')}:${m[2]}`
+}
+
+// 'HH:MM' -> '7:05 am', for the rule summaries.
+export function shortTime(hm) {
+  const t = normalizeTime(hm)
+  if (!t) return String(hm ?? '')
+  const [h, m] = t.split(':').map(Number)
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')}${h < 12 ? ' am' : ' pm'}`
+}

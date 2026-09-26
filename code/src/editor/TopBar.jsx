@@ -1,11 +1,12 @@
 // TopBar - document controls on the first row (screen, layout, history,
 // copy to another screen, undo and redo, revert, reset, save), view controls
-// on the second (canvas size, zoom, grid, sample data, reload). StatusLine is
-// the strip along the bottom.
+// on the second (canvas size, zoom, grid, sample data, reload), and, while two
+// or more panels are selected, the arrange tools there too (align, distribute,
+// match width and height). StatusLine is the strip along the bottom.
 
 import { useState } from 'react'
 import { NumberField, Segmented, Toggle } from './fields.jsx'
-import { RedoIcon, UndoIcon } from './icons.jsx'
+import { AlignIcon, RedoIcon, UndoIcon } from './icons.jsx'
 import { kindLabel } from './hub.js'
 import { Menu, MenuItem, MenuNote } from './menus.jsx'
 import { LAYOUTS } from './spec.js'
@@ -49,6 +50,7 @@ export default function TopBar({
   saving,
   canSave,
   hasDraft,
+  arrange,
 }) {
   const known = screens.some((d) => d.id === deviceId)
   return (
@@ -162,12 +164,47 @@ export default function TopBar({
           onChange={(on) => onPrefs({ sample: on })}
           title="Fill empty panels with made-up data so there is something to lay out"
         />
+        {arrange && <Arrange {...arrange} />}
         <span className="ed-spacer" />
         <button type="button" className="ed-btn" onClick={onReload} title="Reload the app in the preview">
           Reload preview
         </button>
       </div>
     </header>
+  )
+}
+
+// Two or more panels selected: align them to their bounds, spread them out
+// with equal gaps (three or more), or give them the first one's width or
+// height. Each is one undo step; locked panels stay put.
+const ALIGNS = [
+  ['left', 'Align left edges'],
+  ['centre', 'Align centres (horizontally)'],
+  ['right', 'Align right edges'],
+  ['top', 'Align top edges'],
+  ['middle', 'Align middles (vertically)'],
+  ['bottom', 'Align bottom edges'],
+]
+function Arrange({ count, first, onAlign, onDistribute, onMatch }) {
+  const tool = (kind, title, onClick, disabled) => (
+    <button key={kind} type="button" className="ed-btn ed-btn--icon ed-btn--tool" title={title} aria-label={title} disabled={disabled} onClick={onClick}>
+      <AlignIcon kind={kind} />
+    </button>
+  )
+  return (
+    <div className="ed-arrange" role="toolbar" aria-label="Arrange the selected panels">
+      <span className="ed-arrange__count">{count} selected</span>
+      <span className="ed-arrange__group">{ALIGNS.slice(0, 3).map(([k, t]) => tool(k, t, () => onAlign(k)))}</span>
+      <span className="ed-arrange__group">{ALIGNS.slice(3).map(([k, t]) => tool(k, t, () => onAlign(k)))}</span>
+      <span className="ed-arrange__group">
+        {tool('distributeX', count < 3 ? 'Distribute horizontally (three or more)' : 'Distribute horizontally: equal gaps', () => onDistribute('x'), count < 3)}
+        {tool('distributeY', count < 3 ? 'Distribute vertically (three or more)' : 'Distribute vertically: equal gaps', () => onDistribute('y'), count < 3)}
+      </span>
+      <span className="ed-arrange__group">
+        {tool('matchW', `Match width: ${first}'s`, () => onMatch('w'))}
+        {tool('matchH', `Match height: ${first}'s`, () => onMatch('h'))}
+      </span>
+    </div>
   )
 }
 
