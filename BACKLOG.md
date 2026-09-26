@@ -98,8 +98,9 @@ the hub from Open-Meteo or Apple WeatherKit with hourly, conditions,
 precipitation and alert panels; DAKboard-style countdown tiles with the art
 above a gradient card; Up next, Day list, Week grid and Month grid calendar
 views; shape and clock blocks; Home Assistant panels once the token lands.
-Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`. Waiting
-on Justin: the WeatherKit key and ids, the go for chunk 1.
+Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`. The WeatherKit
+key and ids landed 2026-09-26 (validated against Apple: all five data sets,
+next-hour rain, attribution URL). Waiting on Justin: the go for chunk 1.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +

@@ -2,7 +2,7 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-26
-version: 1.0
+version: 1.1
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, calendar, countdowns, home-assistant, echo-show, frameserver]
 ---
@@ -166,7 +166,13 @@ sensors), presence chips, camera snapshot, the HA shopping list. Ship with the
 dashboard PIN item. Needs: HA's LAN URL, a token from a dedicated non-admin
 user, the entity list and the three buttons (garage, lock, leaving).
 
-## Justin's part for WeatherKit
+## Justin's part for WeatherKit (done 2026-09-26)
+
+Done: the key is at `~/.config/smart-display/weatherkit.p8` with its ids in
+`weatherkit.env` beside it, and on the hub at `secrets/weatherkit.p8` with the
+three ids in the hub's `.env`. Validated against Apple for the house location:
+availability lists all five data sets, current weather and next-hour minutes
+returned, attribution URL present.
 
 1. developer.apple.com, Certificates, Identifiers & Profiles, Identifiers:
    register an App ID (any description, an explicit bundle id such as
