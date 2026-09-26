@@ -16,6 +16,7 @@ import {
   clockDaypart,
   hasBoxSurface,
   isSchoolMorning,
+  knobsOf,
   normalizeElementStyles,
   normalizeSpec,
   normalizeWhen,
@@ -367,4 +368,33 @@ test('ruleKindsUsed collects the kinds of a panel list', () => {
     { when: { any: [{ kind: 'plexPlaying' }] } },
   ])
   assert.deepEqual([...kinds].sort(), ['plexPlaying', 'weekend'])
+})
+
+// --- Chunk 2: the art-above tiles ------------------------------------------------
+
+test('the countdown tiles gain Art above and its four knobs, defaults as before', () => {
+  const fields = Object.fromEntries(PANEL_SCHEMAS.countdowns.fields.map((f) => [f.key, f]))
+  assert.deepEqual(fields.tileStyle.options.map((o) => o[0]), ['card', 'bare', 'imageOnly', 'artAbove'])
+  assert.equal(fields.tileStyle.default, 'card')
+  assert.deepEqual(
+    ['artSize', 'artOverlap', 'tileGradient', 'tileColorFrom'].map((k) => [k, fields[k].default]),
+    [['artSize', 0.8], ['artOverlap', 0.35], ['tileGradient', 'down'], ['tileColorFrom', 'auto']]
+  )
+  assert.deepEqual([fields.artSize.min, fields.artSize.max, fields.artOverlap.min, fields.artOverlap.max], [0.4, 1.2, 0, 0.8])
+  assert.deepEqual(fields.tileGradient.options.map((o) => o[0]), ['down', 'diagonal', 'none'])
+  assert.deepEqual(fields.tileColorFrom.options.map((o) => o[0]), ['auto', 'marker', 'calendar'])
+  // The built-in board's tiles: the card, as they always were.
+  const tiles = DEFAULT_ENTRY_SPEC.panels.find((p) => p.id === 'countdowns')
+  assert.equal(tiles.props.tileStyle, 'card')
+  assert.equal(knobsOf(tiles).tileGradient, 'down')
+})
+
+test('the art-above knobs clamp and fall back like any knob', () => {
+  const spec = normalizeSpec({
+    panels: [
+      { id: 'countdowns', type: 'countdowns', props: { tileStyle: 'artAbove', artSize: 5, artOverlap: -1, tileGradient: 'up', tileColorFrom: 'art' } },
+    ],
+  })
+  const p = spec.panels[0].props
+  assert.deepEqual([p.tileStyle, p.artSize, p.artOverlap, p.tileGradient, p.tileColorFrom], ['artAbove', 1.2, 0, 'down', 'auto'])
 })
