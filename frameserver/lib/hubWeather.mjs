@@ -296,23 +296,45 @@ export function createHubWeather({
   }
 }
 
-// --- the hub's one forecast ---------------------------------------------------------
+// --- the hub's one forecast: a thin adapter over lib/weather.mjs -------------------
+//
+// Since docs/designs/panels-and-controls.md ("One weather feed"), the hub's
+// weather comes from lib/weather.mjs (Apple WeatherKit when configured, else
+// Open-Meteo, with automatic fallback) rather than from createHubWeather
+// above. That factory, parseForecast and forecastUrl stay exactly as they
+// were - frameserver/test/weatherRules.test.mjs and headline.test.mjs pin
+// their Open-Meteo parsing and hour-shift semantics directly - they are just
+// no longer what the running server uses. getForecast() reshapes
+// lib/weather.mjs's getWeather() (whichever source) back into the narrow
+// shape weatherRules.mjs and headline.mjs have always read, so both, and
+// their tests, are unchanged.
+import { brief as weatherBrief, getWeather, startWeatherRefresher as startWeatherFeed } from './weather.mjs'
 
-let hub = null
-
-// server.mjs: startWeatherRefresher(() => getShared().location, { dir: ROOT }).
-// Returns what was restored from disk ({ fetchedAt, hours } or null).
+// server.mjs: startWeatherRefresher(() => getShared().location, { dir: ROOT, getNwsAlerts: getAlerts }).
+// Returns what was restored from disk ({ fetchedAt, source } or null).
 export function startWeatherRefresher(getLocation, options = {}) {
-  hub?.stop()
-  hub = createHubWeather({ ...options, getLocation })
-  return hub.start()
+  return startWeatherFeed(getLocation, options)
 }
 
 export function getForecast(now = new Date()) {
-  return hub ? hub.current(now) : { fetchedAt: null, error: 'not started', hourly: [], daily: [] }
+  const w = getWeather(now)
+  return {
+    fetchedAt: w.fetchedAt,
+    error: w.error,
+    hourly: (w.hourly || []).map((h) => ({
+      time: h.time, tempF: h.tempF, feelsF: h.feelsF, precipProb: h.precipProb,
+      precipIn: h.precipIn, code: h.code, gustMph: h.gustMph, windMph: h.windMph,
+    })),
+    daily: (w.daily || []).slice(0, DAYS).map((d) => ({
+      date: d.date, highF: d.highF, lowF: d.lowF, precipProbMax: d.precipProbMax,
+      code: d.code, sunrise: d.sunrise, sunset: d.sunset,
+    })),
+  }
 }
 
-// GET /healthz: { fetchedAt, error }.
+// GET /healthz: { fetchedAt, error }. GET /healthz.weather (server.mjs) uses
+// lib/weather.mjs's own brief() directly for the fuller per-source picture.
 export function weatherHealth() {
-  return hub ? hub.health() : { fetchedAt: null, error: 'not started' }
+  const b = weatherBrief()
+  return { fetchedAt: b.fetchedAt, error: b.error }
 }
