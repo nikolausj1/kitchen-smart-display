@@ -1,0 +1,170 @@
+{
+  "_comment": "Hand-written, not a captured response (frameserver/test/fixtures/nws-winter-storm.json's own precedent): no active alert was reachable anywhere WeatherKit could be probed from while this was built, in either of the two US locations tried (see frameserver/lib/weatherKit.mjs's header comment). The currentWeather/forecastHourly/forecastDaily/forecastNextHour blocks are minimal but shaped like a real response (frameserver/test/fixtures/weather/weatherkit-house.json) so normalizeWeatherKit can run on the whole thing; weatherAlerts.alerts follows Apple's documented WeatherAlertSummary field names (id, description, severity, urgency, certainty, effectiveTime, eventOnsetTime, eventEndTime, expireTime, issuedTime, detailsUrl, source) - there is no separate short 'event' field, hence eventFromDescription().",
+  "currentWeather": {
+    "name": "CurrentWeather",
+    "metadata": { "latitude": 47.66, "longitude": -122.4, "readTime": "2026-10-01T00:05:00Z", "reportedTime": "2026-10-01T00:05:00Z", "units": "m" },
+    "asOf": "2026-10-01T00:05:00Z",
+    "cloudCover": 0.9,
+    "conditionCode": "Cloudy",
+    "daylight": false,
+    "humidity": 0.88,
+    "precipitationIntensity": 0.5,
+    "pressure": 1005.2,
+    "temperature": 5.0,
+    "temperatureApparent": 2.0,
+    "temperatureDewPoint": 3.5,
+    "uvIndex": 0,
+    "visibility": 6000,
+    "windDirection": 200,
+    "windGust": 40.0,
+    "windSpeed": 25.0
+  },
+  "forecastHourly": {
+    "name": "DailyForecast",
+    "metadata": { "latitude": 47.66, "longitude": -122.4 },
+    "hours": [
+      {
+        "forecastStart": "2026-10-01T00:00:00Z",
+        "cloudCover": 0.9,
+        "conditionCode": "Cloudy",
+        "daylight": false,
+        "humidity": 0.88,
+        "precipitationAmount": 0.6,
+        "precipitationChance": 0.8,
+        "precipitationType": "rain",
+        "snowfallAmount": 0,
+        "temperature": 5.0,
+        "temperatureApparent": 2.0,
+        "uvIndex": 0,
+        "windDirection": 200,
+        "windGust": 40.0,
+        "windSpeed": 25.0
+      },
+      {
+        "forecastStart": "2026-10-01T01:00:00Z",
+        "cloudCover": 0.2,
+        "conditionCode": "TotallyMadeUpCode",
+        "daylight": false,
+        "humidity": 0.7,
+        "precipitationAmount": 0,
+        "precipitationChance": 0,
+        "precipitationType": "clear",
+        "snowfallAmount": 0,
+        "temperature": 4.0,
+        "temperatureApparent": 1.0,
+        "uvIndex": 0,
+        "windDirection": 210,
+        "windGust": 10.0,
+        "windSpeed": 5.0
+      },
+      {
+        "forecastStart": "2026-10-01T02:00:00Z",
+        "cloudCover": 0.2,
+        "conditionCode": "TotallyMadeUpCode",
+        "daylight": false,
+        "humidity": 0.7,
+        "precipitationAmount": 0,
+        "precipitationChance": 0,
+        "precipitationType": "clear",
+        "snowfallAmount": 0,
+        "temperature": 3.5,
+        "temperatureApparent": 0.5,
+        "uvIndex": 0,
+        "windDirection": 210,
+        "windGust": 9.0,
+        "windSpeed": 5.0
+      }
+    ]
+  },
+  "forecastDaily": {
+    "name": "DailyForecast",
+    "metadata": { "latitude": 47.66, "longitude": -122.4 },
+    "days": [
+      {
+        "forecastStart": "2026-10-01T07:00:00Z",
+        "forecastEnd": "2026-10-02T07:00:00Z",
+        "conditionCode": "Rain",
+        "maxUvIndex": 1,
+        "moonPhase": "waningCrescent",
+        "precipitationAmount": 5.0,
+        "precipitationChance": 0.8,
+        "precipitationType": "rain",
+        "snowfallAmount": 0,
+        "sunrise": "2026-10-01T14:05:00Z",
+        "sunset": "2026-10-02T01:50:00Z",
+        "temperatureMax": 12.0,
+        "temperatureMin": 6.0,
+        "windGustSpeedMax": 45.0,
+        "windSpeedAvg": 20.0,
+        "windSpeedMax": 30.0,
+        "daytimeForecast": { "cloudCover": 0.85 }
+      }
+    ]
+  },
+  "forecastNextHour": {
+    "name": "NextHourForecast",
+    "metadata": { "latitude": 47.66, "longitude": -122.4 },
+    "summary": [
+      { "startTime": "2026-10-01T00:05:00Z", "condition": "precipitation", "precipitationChance": 0.8, "precipitationIntensity": 0.5 }
+    ],
+    "forecastStart": "2026-10-01T00:05:00Z",
+    "forecastEnd": "2026-10-01T01:00:00Z",
+    "minutes": [
+      { "startTime": "2026-10-01T00:05:00Z", "precipitationChance": 0.8, "precipitationIntensity": 0.5 },
+      { "startTime": "2026-10-01T00:06:00Z", "precipitationChance": 0.8, "precipitationIntensity": 0.6 }
+    ]
+  },
+  "weatherAlerts": {
+    "name": "WeatherAlertCollection",
+    "metadata": { "latitude": 47.66, "longitude": -122.4 },
+    "alerts": [
+      {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "description": "Wind Advisory issued October 1 at 12:05AM PDT until October 1 at 6:00PM PDT by NWS Seattle WA",
+        "severity": "Moderate",
+        "urgency": "Expected",
+        "certainty": "Likely",
+        "effectiveTime": "2026-10-01T00:05:00Z",
+        "eventOnsetTime": "2026-10-01T00:05:00Z",
+        "eventEndTime": "2026-10-02T01:00:00Z",
+        "issuedTime": "2026-10-01T00:05:00Z",
+        "expireTime": "2026-10-02T01:00:00Z",
+        "detailsUrl": "https://example.invalid/alerts/11111111",
+        "source": "NWS Seattle WA",
+        "responses": ["shelter"]
+      },
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "description": "Localized ponding on roadways is possible.",
+        "severity": "SEVERE",
+        "issuedTime": "2026-10-01T00:00:00Z",
+        "effectiveTime": "2026-10-01T00:00:00Z",
+        "expireTime": "2026-10-01T12:00:00Z",
+        "source": "Apple Weather Service",
+        "responses": []
+      },
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "description": "An alert with an unrecognised severity word.",
+        "severity": "Bogus",
+        "issuedTime": "2026-10-01T00:00:00Z",
+        "effectiveTime": "2026-10-01T00:00:00Z",
+        "expireTime": "2026-10-01T06:00:00Z",
+        "source": "Apple Weather Service",
+        "responses": []
+      },
+      {
+        "description": "Missing its id; must be dropped, not thrown.",
+        "severity": "Minor",
+        "effectiveTime": "2026-10-01T00:00:00Z",
+        "expireTime": "2026-10-01T06:00:00Z"
+      },
+      {
+        "id": "44444444-4444-4444-4444-444444444444",
+        "severity": "Minor",
+        "effectiveTime": "2026-10-01T00:00:00Z",
+        "expireTime": "2026-10-01T06:00:00Z"
+      }
+    ]
+  }
+}

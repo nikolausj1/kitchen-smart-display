@@ -992,6 +992,7 @@ function renderShared() {
 
   renderCalendars()
   renderArt()
+  renderWeather()
   // Paint the status from what was last fetched, so a re-render does not flash
   // "Loading", then refetch it if that is over a minute old.
   paintExtras()
@@ -1245,6 +1246,19 @@ function renderArt() {
   setSyncButton()
 }
 
+// GET /api/weather (docs/designs/panels-and-controls.md, "One weather feed"):
+// Apple WeatherKit when configured, else Open-Meteo, with automatic fallback.
+// Read-only, like the calendar and countdown art status above; the source and
+// the WeatherKit key itself are set in the hub's .env, not here.
+function renderWeather() {
+  const c = card('Weather',
+    'The one weather feed every screen and the headline read: Apple WeatherKit when the hub’s .env has a key, ' +
+    'Open-Meteo otherwise, with automatic fallback if the active source fails for a cycle.')
+  const body = make('div')
+  body.id = 'weatherStatus'
+  c.appendChild(body)
+}
+
 let artSyncing = false
 function setSyncButton() {
   const b = $('#artSync')
@@ -1290,7 +1304,8 @@ function syncResultText(r) {
 const EXTRAS_MS = 60 * 1000
 const CAL_STALE_MS = 20 * 60 * 1000     // the hub refetches Google every 5 min
 const ART_STALE_MS = 3 * 60 * 60 * 1000 // and syncs the album hourly
-let extras = { calendar: null, state: null, art: null, at: 0 }
+const WEATHER_STALE_MS = 45 * 60 * 1000 // and refreshes the weather feed every 15 min
+let extras = { calendar: null, state: null, art: null, weather: null, at: 0 }
 let extrasJob = null
 
 function loadExtras(force) {
@@ -1299,9 +1314,9 @@ function loadExtras(force) {
   // Each source fails on its own: a hub without /api/calendar still shows its
   // headline and art.
   const get = (path) => api(path).then((data) => ({ data }), (e) => ({ error: String(e.message || e) }))
-  extrasJob = Promise.all([get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art')])
-    .then(([calendar, state, art]) => {
-      extras = { calendar, state, art, at: Date.now() }
+  extrasJob = Promise.all([get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art'), get('/api/weather')])
+    .then(([calendar, state, art, weather]) => {
+      extras = { calendar, state, art, weather, at: Date.now() }
       paintExtras()
     })
     .catch((e) => console.error('house-wide status', e))
@@ -1314,6 +1329,8 @@ function paintExtras() {
   if (status) paintCalendarStatus(status)
   const art = $('#artBody')
   if (art) paintArt(art)
+  const weather = $('#weatherStatus')
+  if (weather) paintWeatherStatus(weather)
   updateAges()
 }
 
@@ -1353,6 +1370,35 @@ function paintCalendarStatus(box) {
       : state.error ? make('span', 'bad', `Could not read /api/state: ${state.error}`)
       : hl && hl.text ? headlineLine(hl)
       : make('span', 'muted', 'None (this hub does not send a headline yet)'))
+}
+
+// GET /api/weather (docs/designs/panels-and-controls.md, "One weather feed"):
+// { source, fetchedAt, error, attribution: null | { name, url }, ... }.
+const WEATHER_SOURCE_LABEL = { weatherkit: 'Apple WeatherKit', 'open-meteo': 'Open-Meteo' }
+function paintWeatherStatus(box) {
+  box.innerHTML = ''
+  const { weather } = extras
+  if (!weather) {
+    infoRow(box, 'Weather', make('span', 'muted', 'Loading…'))
+    return
+  }
+  if (weather.error) {
+    infoRow(box, 'Weather', make('span', 'bad', `Could not read /api/weather: ${weather.error}`))
+    return
+  }
+  const w = weather.data || {}
+  const label = WEATHER_SOURCE_LABEL[w.source] || w.source || 'unknown'
+  infoRow(box, 'Source', make('span', null, label))
+  infoRow(box, 'Fetched', ageSpan(w.fetchedAt, 'never', WEATHER_STALE_MS))
+  if (w.error) infoRow(box, 'Error', make('span', 'bad', String(w.error)))
+  if (w.attribution && w.attribution.url) {
+    const link = document.createElement('a')
+    link.href = w.attribution.url
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = w.attribution.name || 'Apple Weather'
+    infoRow(box, 'Attribution', link)
+  }
 }
 
 function countdownList(list) {

@@ -42,6 +42,9 @@
 //                                     a person card: TMDB (lib/tmdb.mjs) + what
 //                                     else of theirs is in the Plex library
 //   GET  /api/plex/image?path=&w=&h=  a Plex image, the token added here
+//   GET  /api/weather                 the one weather feed (lib/weather.mjs):
+//                                     Apple WeatherKit when configured, else
+//                                     Open-Meteo, with automatic fallback
 //   GET  /healthz                     liveness + a glance at everything
 //
 // Secrets and keys come from the environment or the service root's .env
@@ -52,7 +55,11 @@
 // screen: PLEX_URL (default http://127.0.0.1:32400, Plex on this box),
 // PLEX_TOKEN or the file PLEX_TOKEN_FILE (default secrets/plex-token.txt),
 // TMDB_API_KEY or the file TMDB_API_KEY_FILE (default secrets/tmdb-key.txt,
-// optional), PLEX_FIXTURE (tests). Keys and tokens are never logged.
+// optional), PLEX_FIXTURE (tests). WeatherKit (docs/designs/panels-and-controls.md,
+// "One weather feed"): WEATHERKIT_KEY_FILE (default secrets/weatherkit.p8, never
+// in git), WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID,
+// WEATHER_SOURCE (auto|weatherkit|open-meteo, default auto). Keys and tokens
+// are never logged.
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.
@@ -81,7 +88,8 @@ import { calendarSettings, createGoogleCalendar, eventsForDays, publicEvent } fr
 import { buildCountdowns } from './lib/countdowns.mjs'
 import { ART_EXTS, createCountdownArt } from './lib/countdownArt.mjs'
 import { createAirQuality } from './lib/airQuality.mjs'
-import { getForecast, startWeatherRefresher, weatherHealth } from './lib/hubWeather.mjs'
+import { getForecast, startWeatherRefresher } from './lib/hubWeather.mjs'
+import { brief as weatherBrief, getWeather } from './lib/weather.mjs'
 import { alertsHealth, getAlerts, startAlertsRefresher, weatherAlertsFor } from './lib/nwsAlerts.mjs'
 import { headlineFor } from './lib/headline.mjs'
 import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
@@ -102,6 +110,7 @@ const ENV_FILE = loadEnvFile(join(ROOT, '.env'))
 const ENV_KEYS = [
   'IMMICH_URL', 'IMMICH_API_KEY', 'GOOGLE_CALENDAR_KEY_FILE', 'GOOGLE_CALENDAR_FIXTURE',
   'PLEX_URL', 'PLEX_TOKEN', 'PLEX_TOKEN_FILE', 'PLEX_FIXTURE', 'TMDB_API_KEY', 'TMDB_API_KEY_FILE',
+  'WEATHERKIT_KEY_FILE', 'WEATHERKIT_TEAM_ID', 'WEATHERKIT_KEY_ID', 'WEATHERKIT_SERVICE_ID', 'WEATHER_SOURCE',
 ]
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
@@ -490,11 +499,13 @@ function currentState(now = new Date()) {
   })
   // The Entry board's line, the same on every screen: headline.mjs over every
   // cached event (60 days; it needs today's and tomorrow's), the hub's own
-  // forecast and the NWS alerts (lib/hubWeather.mjs, lib/nwsAlerts.mjs); the
-  // alerts in force, most severe first, at most 3; and the air quality chip
-  // (null without a reading from the last 6 hours).
+  // forecast (lib/hubWeather.mjs's adapter over lib/weather.mjs) and the
+  // alerts NWS and WeatherKit both report, merged and deduped
+  // (lib/weather.mjs's getWeather().alerts); the alerts in force, most severe
+  // first, at most 3; and the air quality chip (null without a reading from
+  // the last 6 hours).
   const forecast = getForecast(now)
-  const alerts = getAlerts(now)
+  const alerts = getWeather(now).alerts
   state.headline = headlineFor({ now, events: calendar.snapshot(registry.shared).events, forecast, alerts })
   state.weatherAlerts = weatherAlertsFor(alerts, now)
   state.airQuality = air.current(now)
@@ -801,7 +812,7 @@ async function handle(req, res) {
       },
       calendar: { connected: cal.connected, events: cal.events.length, fetchedAt: cal.fetchedAt, error: cal.error },
       countdownArt: { items: artStatus.items.length, syncedAt: artStatus.syncedAt },
-      weather: weatherHealth(),
+      weather: weatherBrief(),
       alerts: alertsHealth(),
       airQuality: state.airQuality ? state.airQuality.label : null,
       plex: { ...plex.health(), tmdb: tmdb.configured() },
@@ -1011,6 +1022,14 @@ async function handle(req, res) {
     return json(res, 405, { error: 'GET or POST' })
   }
 
+  // The one weather feed (docs/designs/panels-and-controls.md): Apple
+  // WeatherKit when configured, else Open-Meteo, with automatic fallback.
+  // json() already sends Cache-Control: no-store.
+  if (path === '/api/weather') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, getWeather())
+  }
+
   // --- Entry board: calendar, countdown art ---
   if (path === '/api/calendar') {
     if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
@@ -1163,8 +1182,11 @@ const restoredTravel = travel.start()
 const restoredCalendar = calendar.start()
 const restoredArt = art.start()
 // The headline's forecast and NWS alerts, for the air quality's location.
+// getNwsAlerts lets lib/weather.mjs merge WeatherKit's own alerts with NWS's
+// without importing lib/nwsAlerts.mjs itself (which imports lib/hubWeather.mjs
+// for coordsOf, and lib/hubWeather.mjs now imports lib/weather.mjs - a cycle).
 const getLocation = () => getShared().location
-startWeatherRefresher(getLocation, { dir: ROOT })
+const restoredWeather = startWeatherRefresher(getLocation, { dir: ROOT, getNwsAlerts: getAlerts })
 startAlertsRefresher(getLocation)
 const restoredAir = air.start()
 const restoredPlex = plex.start()
@@ -1194,6 +1216,10 @@ server.listen(PORT, BIND, () => {
       (restoredCalendar.fetchedAt ? ` from ${restoredCalendar.fetchedAt}` : '')}`)
   console.log(`  art    : ${ART_DIR} (${restoredArt.items} image(s) in index.json` +
               `${restoredArt.syncedAt ? `, written ${restoredArt.syncedAt}` : ''}); Immich album "Countdown Art", hourly`)
+  const weatherStartupBrief = weatherBrief()
+  console.log(`  weather: ${weatherStartupBrief.weatherKit.configured ? 'WeatherKit configured' : 'WeatherKit not configured'} ` +
+              `(WEATHER_SOURCE=${process.env.WEATHER_SOURCE || 'auto'}); ` +
+              `${restoredWeather ? `restored ${restoredWeather.source} from ${restoredWeather.fetchedAt}` : 'no recent forecast'}`)
   console.log(`  air    : ${restoredAir ? `restored AQI ${restoredAir.aqi} (${restoredAir.label}) from ${restoredAir.fetchedAt}` : 'no recent reading'}`)
   console.log(`  plex   : ${PLEX_FIXTURE ? `FIXTURE ${PLEX_FIXTURE} (instead of /status/sessions)` : PLEX_URL}; ` +
               `token ${plex.configured() ? 'present' : `MISSING (${PLEX_TOKEN_FILE}): /api/plex/now reports it`}; ` +
