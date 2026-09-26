@@ -523,8 +523,8 @@ progress bar). Remaining:
   captions) once the Apple TV's Plex app advertises as a player (Justin's
   switch, STATUS "Waiting on Me"); (2) a Plex button in the menu pill, to open
   the view by hand; (3) a "New on Plex" panel (recently added to the library)
-  for the spec layouts; (4) Plex and TMDB unit tests: done with rev 2 (`plex.test.mjs` 17, `tmdb.test.mjs` 22).mjs` and
-  `tmdb.mjs`, which the hub suite does not cover yet. Design:
+  for the spec layouts; (4) Plex and TMDB unit tests: done with rev 2 (`plex.test.mjs` 17,
+  `tmdb.test.mjs` 22). Design:
   `docs/designs/plex-second-screen.md`.
 - **ROADOM as the long-term family-room screen** (DECISION, 2026-09-24) - the
   Echo Show is the quick win; a ROADOM 10.1" on a Pi pointed at the hub
