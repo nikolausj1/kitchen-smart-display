@@ -13,7 +13,11 @@ import { deepEqual } from '../lib/settings.js'
 //     events:     [{ id, calendarId, calendarLabel, color, title, description,
 //                    location, allDay, start, end, startDate, endDate, status }],
 //     countdowns: [{ id, title, date, daysLeft, leadDays, image, emoji,
-//                    calendarLabel, color }] }
+//                    calendarLabel, color, tileColor }] }
+//
+// A countdown's color is its calendar's; tileColor is the `color:` marker in
+// its description ('#rrggbb' or null), which the art-above tiles draw
+// (views/TodayLayouts/lib/tileColor.js).
 //
 // Same pattern as lib/houseState.js: a module store read with
 // useSyncExternalStore, a localStorage cache so a reload while the hub is down
