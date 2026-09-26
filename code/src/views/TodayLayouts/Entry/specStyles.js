@@ -8,6 +8,8 @@
 //   shrinkKeysOf(elements)             the keys that shrink to fit, 'a,b'
 //   boxLook(props, type)               classes, inline style, the fill layer,
 //                                      the box shadow, and the title override
+//   linearGradient(gradient, from, to) a box v2 gradient between two colours
+//                                      (the countdown tiles' cards use it too)
 //
 // Everything is absent at the defaults: no stylesheet, no class, no style, so
 // a box nobody styled draws exactly as it did before these props existed.
@@ -113,6 +115,15 @@ export function shrinkKeysOf(elements) {
 
 const GRADIENT_DIRS = { down: 'to bottom', right: 'to right', diagonal: 'to bottom right' }
 
+// linearGradient('down' | 'right' | 'diagonal', from, to) -> the CSS
+// gradient between two colours in that direction, or null for 'none' (or
+// anything else). The box fill below draws with it, and so do the countdown
+// tiles' gradient cards (lib/tileColor.js tileVars).
+export function linearGradient(gradient, from, to) {
+  const dir = typeof gradient === 'string' && Object.prototype.hasOwnProperty.call(GRADIENT_DIRS, gradient) ? GRADIENT_DIRS[gradient] : null
+  return dir ? `linear-gradient(${dir}, ${from}, ${to})` : null
+}
+
 // Drop shadows in the layout's padding unit, so they scale with the screen.
 const SHADOWS = {
   soft: '0 calc(var(--tl-pad) * 0.15) calc(var(--tl-pad) * 0.9) rgba(0, 0, 0, 0.3)',
@@ -155,9 +166,9 @@ export function boxLook(props, type) {
   if (bg) {
     const c1 = hex(bg.color) || presetFill
     const c2 = hex(bg.color2)
-    const dir = GRADIENT_DIRS[bg.gradient] || null
+    const gradient = c1 || c2 ? linearGradient(bg.gradient, c1 || 'transparent', c2 || 'transparent') : null
     let background = null
-    if (dir && (c1 || c2)) background = `linear-gradient(${dir}, ${c1 || 'transparent'}, ${c2 || 'transparent'})`
+    if (gradient) background = gradient
     else if (c1) background = c1
     if (background) {
       out.fill = { background, opacity: finite(bg.opacity) && bg.opacity < 1 ? Math.max(0, bg.opacity) : null }
