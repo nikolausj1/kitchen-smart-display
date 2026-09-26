@@ -1,17 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSettings } from '../../../lib/settings.js'
 import { dateKey } from '../../../lib/schoolDay.js'
+import useHubWeather from '../../../hooks/useHubWeather.js'
+import { dailySnapshotFromFeed, dailySnapshotFromOpenMeteo, parseLocalStamp } from '../../../hooks/hubWeatherFeed.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
 
-// useDailyForecast - the second Open-Meteo call the new Today layouts need:
-// current conditions plus a five day daily block (highs, lows, precip odds,
-// sunrise, sunset). hooks/useWeather.js fetches the HOURLY block for the
-// Framed view's time slots and stays untouched; this one asks for what a
-// forecast strip and a sun arc need.
+// useDailyForecast - current conditions plus the days (highs, lows, precip
+// odds, sunrise, sunset) for the new Today layouts: the forecast strip, the
+// weather card, the sun arc, what to wear.
 //
-// Same shape of resilience as useWeather: seed from a localStorage cache so a
-// reload during an outage still shows something, keep the prior data when a
-// fetch fails, and mark it stale rather than blanking it.
+// Source: the hub's one weather feed (hooks/useHubWeather.js), Apple
+// WeatherKit or Open-Meteo, whichever the hub serves. The direct Open-Meteo
+// fetch this hook always made is kept ONLY as the fallback, while the feed
+// has never answered or its data is more than 90 minutes old (a hub on a
+// build without /api/weather, or the hub down). A feed past its 90 minutes is
+// still shown until the fallback has something newer.
+//
+// Both sources become the same plain, JSON-safe snapshot, { current, days }
+// (hooks/hubWeatherFeed.js dailySnapshotFromFeed / dailySnapshotFromOpenMeteo:
+// ISO date strings, no Date objects), and the Date-bearing view model is
+// derived from it in a useMemo, so it survives a round trip through
+// localStorage unchanged and consumers get one stable object identity per
+// fetch.
+//
+// Output, unchanged, plus `feed`: { current, days, sunrise, sunset, loading,
+// error, stale, fetchedAt, feed } where `feed` is the hub's whole feed when
+// that is what the view was drawn from, else null (the fallback, or nothing
+// yet). useTodayData hands the feed on to the weather panels.
 //
 // Docs: https://open-meteo.com/en/docs
 
@@ -19,11 +34,6 @@ const REFRESH_MS = 15 * 60 * 1000
 const ERROR_RETRY_MS = 2 * 60 * 1000   // shorter retry when the API is down
 const CACHE_KEY = 'kioskDailyForecastCache'
 const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000  // older than this is not useful
-
-// What we persist and hold in state is a plain, JSON-safe snapshot (ISO date
-// strings, no Date objects). The Date-bearing view model is derived from it in
-// a useMemo, so it survives a round trip through localStorage unchanged and
-// consumers get one stable object identity per fetch.
 
 function readCache() {
   if (typeof localStorage === 'undefined') return null
@@ -48,50 +58,6 @@ function writeCache(snapshot) {
   }
 }
 
-function numOrNull(v) {
-  return typeof v === 'number' && Number.isFinite(v) ? v : null
-}
-
-function roundOrNull(v) {
-  const n = numOrNull(v)
-  return n == null ? null : Math.round(n)
-}
-
-// Open-Meteo returns local wall-clock stamps when a timezone is requested:
-// '2026-09-04T06:32' for sunrise, but a bare '2026-09-04' for the daily date.
-// JS parses an offset-less DATE-TIME as local (what we want) and a bare DATE as
-// UTC midnight - which is the previous day anywhere west of Greenwich and would
-// shift every day label by one. Adding a time forces the local reading.
-function parseLocal(iso) {
-  if (typeof iso !== 'string' || !iso) return null
-  const d = new Date(iso.includes('T') ? iso : `${iso}T00:00:00`)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-function toSnapshot(payload) {
-  const cur = payload?.current || {}
-  const daily = payload?.daily || {}
-  const times = Array.isArray(daily.time) ? daily.time : []
-  return {
-    current: {
-      tempF: roundOrNull(cur.temperature_2m),
-      feelsLikeF: roundOrNull(cur.apparent_temperature),
-      code: numOrNull(cur.weather_code),
-      windMph: roundOrNull(cur.wind_speed_10m),
-      isDay: cur.is_day == null ? null : !!cur.is_day,
-    },
-    days: times.slice(0, 7).map((iso, i) => ({
-      dateIso: iso,
-      code: numOrNull(daily.weather_code?.[i]),
-      highF: roundOrNull(daily.temperature_2m_max?.[i]),
-      lowF: roundOrNull(daily.temperature_2m_min?.[i]),
-      precipPct: roundOrNull(daily.precipitation_probability_max?.[i]),
-      sunriseIso: typeof daily.sunrise?.[i] === 'string' ? daily.sunrise[i] : null,
-      sunsetIso: typeof daily.sunset?.[i] === 'string' ? daily.sunset[i] : null,
-    })),
-  }
-}
-
 // Snapshot -> the shape consumers read. Days carry `dateKey` so the caller can
 // find today without re-deriving it, and `sunrise`/`sunset` per day so a stale
 // cache read after midnight can still find the right pair.
@@ -100,7 +66,7 @@ function buildView(snapshot) {
 
   const days = (snapshot.days || [])
     .map((d) => {
-      const date = parseLocal(d.dateIso)
+      const date = parseLocalStamp(d.dateIso)
       if (!date) return null
       return {
         date,
@@ -110,8 +76,8 @@ function buildView(snapshot) {
         highF: d.highF,
         lowF: d.lowF,
         precipPct: d.precipPct,
-        sunrise: parseLocal(d.sunriseIso),
-        sunset: parseLocal(d.sunsetIso),
+        sunrise: parseLocalStamp(d.sunriseIso),
+        sunset: parseLocalStamp(d.sunsetIso),
       }
     })
     .filter(Boolean)
@@ -142,7 +108,12 @@ function buildView(snapshot) {
 
 export default function useDailyForecast() {
   const { location } = useSettings()
+  const hub = useHubWeather()
+  // Ask Open-Meteo only once the hub has been asked and has nothing current.
+  const fallback = hub.checked && hub.stale
 
+  // The fallback's own state, seeded from its cache so a reload during an
+  // outage still shows something.
   const [state, setState] = useState(() => {
     const cached = readCache()
     return {
@@ -155,6 +126,7 @@ export default function useDailyForecast() {
   })
 
   useEffect(() => {
+    if (!fallback) return undefined
     let cancelled = false
     let timer = null
 
@@ -180,7 +152,7 @@ export default function useDailyForecast() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const payload = await res.json()
         if (cancelled) return
-        const snapshot = toSnapshot(payload)
+        const snapshot = dailySnapshotFromOpenMeteo(payload)
         writeCache(snapshot)
         setState({
           snapshot,
@@ -215,20 +187,36 @@ export default function useDailyForecast() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [location.lat, location.lon, location.timezone])
+  }, [fallback, location.lat, location.lon, location.timezone])
 
-  const view = useMemo(() => buildView(state.snapshot), [state.snapshot])
+  // The feed while it is current; past its 90 minutes, whichever of it and
+  // the fallback is newer.
+  const feed = hub.weather
+  const fromFeed =
+    !!feed && (!hub.stale || !state.snapshot || (hub.fetchedAt ?? 0) >= (state.fetchedAt ?? 0))
+  const snapshot = useMemo(
+    () => (fromFeed ? dailySnapshotFromFeed(feed) : state.snapshot),
+    [fromFeed, feed, state.snapshot]
+  )
+  const view = useMemo(() => buildView(snapshot), [snapshot])
+
+  const loading = fromFeed ? false : state.loading
+  const error = fromFeed ? (hub.stale ? state.error || hub.error : hub.error) : state.error
+  const stale = fromFeed ? hub.stale || !!hub.error : state.stale
+  const fetchedAt = fromFeed ? hub.fetchedAt : state.fetchedAt
+  const feedOut = fromFeed ? feed : null
 
   // One stable object per fetch, so a consumer memoising on this hook's output
   // is not invalidated by the layout's 1 Hz tick.
   return useMemo(
     () => ({
       ...view,
-      loading: state.loading,
-      error: state.error,
-      stale: state.stale,
-      fetchedAt: state.fetchedAt,
+      loading,
+      error,
+      stale,
+      fetchedAt,
+      feed: feedOut,
     }),
-    [view, state.loading, state.error, state.stale, state.fetchedAt]
+    [view, loading, error, stale, fetchedAt, feedOut]
   )
 }

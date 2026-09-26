@@ -1,0 +1,182 @@
+/* PrecipPanel - rain chance bars under an optional next-hour strip. The
+ * type is sized against the body (a size container) and carries
+ * var(--tl-text-scale) (tokens.css); the bars are art. Spacing is margins and
+ * padding, never a flex gap. */
+
+.tl-rain__body {
+  container-type: size;
+  min-height: 0;
+}
+
+/* --- The next hour -------------------------------------------------------------- */
+
+.tl-rain__next {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: calc(var(--tl-pad) * 0.5);
+  padding-bottom: calc(var(--tl-pad) * 0.4);
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.tl-rain__next-head {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  margin-bottom: 0.35em;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(3.4cqw, 8cqh), 24px));
+  line-height: 1.2;
+}
+
+.tl-rain__next-title {
+  flex: 0 0 auto;
+  margin-right: 0.7em;
+  font-size: 0.72em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+}
+
+.tl-rain__next-text {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--tl-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The minutes: one thin bar each, touching, so they read as an area. */
+.tl-rain__minutes {
+  display: flex;
+  align-items: flex-end;
+  height: clamp(14px, 11cqh, 64px);
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.tl-rain__minute {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--tl-accent);
+  opacity: 0.5;
+}
+
+.tl-rain__minute--likely {
+  opacity: 1;
+}
+
+.tl-rain__ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25em;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(2.4cqw, 5.5cqh), 16px));
+  line-height: 1.2;
+  color: var(--tl-fg-3);
+}
+
+/* --- The hours ------------------------------------------------------------------- *
+ * A slot per hour, the bar three quarters of its width, centred (a percentage
+ * padding would be of the whole chart's width, not the slot's). */
+
+.tl-rain__chart {
+  flex: 1 1 auto;
+  min-height: 4vh;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tl-rain__plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.tl-rain__slot {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.tl-rain__bar {
+  width: 76%;
+  border-radius: 2px 2px 0 0;
+  background: var(--tl-accent);
+}
+
+.tl-rain__bar--none {
+  visibility: hidden;
+}
+
+.tl-rain__bar--slight {
+  background: rgba(var(--tl-fg-rgb), 0.28);
+}
+
+.tl-rain__bar--possible {
+  opacity: 0.55;
+}
+
+/* The threshold at 50 %: dashed, behind the bars, labelled at its right end. */
+.tl-rain__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 50%;
+  border-top: 1px dashed rgba(var(--tl-fg-rgb), 0.3);
+  pointer-events: none;
+}
+
+.tl-rain__line-label {
+  position: absolute;
+  right: 0;
+  bottom: 50%;
+  margin-bottom: 2px;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(2.2cqw, 5cqh), 15px));
+  line-height: 1.1;
+  color: var(--tl-fg-3);
+  pointer-events: none;
+}
+
+.tl-rain__labels {
+  position: relative;
+  flex: 0 0 auto;
+  height: calc(var(--tl-text-scale, 1) * clamp(10px, min(2.6cqw, 6.5cqh), 18px) * 1.5);
+  margin-top: 0.3em;
+}
+
+.tl-rain__label {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(2.6cqw, 6.5cqh), 18px));
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+}
+
+/* The ends: aligned inward (their position comes inline) so they never
+ * leave the chart. */
+.tl-rain__label--first,
+.tl-rain__label--last {
+  transform: none;
+}
+
+.tl-rain__empty {
+  margin: auto 0;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
+  color: var(--tl-fg-3);
+}
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-rain__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-rain-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

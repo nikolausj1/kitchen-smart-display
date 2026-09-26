@@ -14,6 +14,7 @@ import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CACHE_FILE, MAX_AGE_MS, createWeather } from '../lib/weather.mjs'
+import { getForecast, startWeatherRefresher } from '../lib/hubWeather.mjs'
 
 // A throwaway generated key, so fetchWeatherKit's JWT signing (real ES256, not
 // stubbed) succeeds in every scenario below - only the HTTP layer is mocked.
@@ -424,5 +425,51 @@ describe('weather: single-flight', () => {
     assert.equal(requestWeatherKit.calls.length, 1)
     assert.equal(requestOpenMeteo.calls.length, 1) // the tz resolution
     w.stop()
+  })
+})
+
+describe('weather: the hours run from local midnight', () => {
+  // WeatherKit's hours for the whole of 2026-09-24 PDT (07:00Z onwards), NOW
+  // being 15:05 PDT: the feed keeps midnight onwards, the headline's forecast
+  // only the hours not yet over.
+  function wkDay() {
+    const p = wkPayload()
+    const first = p.forecastHourly.hours[0]
+    p.forecastHourly.hours = Array.from({ length: 30 }, (_, i) => ({
+      ...first,
+      forecastStart: new Date(Date.parse('2026-09-24T07:00:00Z') + i * 3_600_000).toISOString().replace('.000Z', 'Z'),
+      temperature: 10 + i,
+    }))
+    return p
+  }
+
+  test('the WeatherKit request asks from local midnight, and the feed starts there', async () => {
+    const requestWeatherKit = queue(ok(wkDay()))
+    const w = createWeather({
+      dir: null, getLocation: () => HOUSE, log: () => {}, clock: () => NOW,
+      weatherKitConfig: () => okConfig, requestWeatherKit, requestOpenMeteo: queue(ok(omPayload())),
+    })
+    await w.refresh('test')
+    const url = new URL(requestWeatherKit.calls[0].url)
+    assert.equal(url.searchParams.get('hourlyStart'), '2026-09-24T07:00:00.000Z') // 00:00 PDT
+    assert.equal(url.searchParams.get('hourlyEnd'), '2026-09-26T23:00:00.000Z') // 22:00Z + 49 h
+    const out = w.getWeather(NOW)
+    assert.equal(out.hourly[0].time, '2026-09-24T00:00')
+    assert.equal(out.hourly.length, 30) // all of them: midnight through 05:00 the next day
+    w.stop()
+  })
+
+  test('getForecast() hands the headline rules only the hours not yet over, as before', async () => {
+    startWeatherRefresher(() => HOUSE, {
+      dir: null, log: () => {}, clock: () => NOW,
+      weatherKitConfig: () => okConfig,
+      requestWeatherKit: queue(ok(wkDay())),
+      requestOpenMeteo: queue(ok(omPayload())),
+    })
+    for (let i = 0; i < 50 && !getForecast(NOW).hourly.length; i++) await new Promise((r) => setTimeout(r, 5))
+    const f = getForecast(NOW)
+    assert.equal(f.hourly[0].time, '2026-09-24T15:00') // the hour NOW (15:05 PDT) is in
+    assert.equal(f.hourly.length, 30 - 15)
+    assert.ok(f.hourly.every((h) => new Date(h.time).getTime() + 3_600_000 > NOW.getTime()))
   })
 })

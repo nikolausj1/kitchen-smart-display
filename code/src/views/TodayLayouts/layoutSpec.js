@@ -104,6 +104,15 @@ const TYPE_TABLE = [
   { type: 'clock', label: 'Clock', kind: 'panel', min: { w: 6, h: 4 }, minPx: { w: 110, h: 40 }, box: { x: 30, y: 30, w: 40, h: 30 }, props: CARD },
   { type: 'weather', label: 'Weather', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 150, h: 52 }, box: { x: 35, y: 35, w: 30, h: 26 }, props: CARD },
   { type: 'forecast', label: 'Forecast', kind: 'panel', min: { w: 12, h: 10 }, minPx: { w: 180, h: 100 }, box: { x: 32, y: 30, w: 36, h: 40 }, props: CARD },
+  // --- Weather panels (docs/designs/panels-and-controls.md, chunk 2): on no
+  // default board; they arrive through Add panel. The alert banner is its own
+  // card (like the countdown tiles), and its box is dropped while no alert is
+  // in force (SpecBoard). ---
+  { type: 'hourly', label: 'Hourly forecast', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 220, h: 90 }, box: { x: 20, y: 34, w: 60, h: 30 }, props: CARD },
+  { type: 'conditions', label: 'Conditions', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 150, h: 70 }, box: { x: 34, y: 30, w: 32, h: 36 }, props: CARD },
+  { type: 'precip', label: 'Rain chance', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 220, h: 90 }, box: { x: 25, y: 34, w: 50, h: 30 }, props: CARD },
+  { type: 'alert', label: 'Weather alert', kind: 'panel', min: { w: 10, h: 4 }, minPx: { w: 160, h: 28 }, box: { x: 20, y: 3, w: 60, h: 9 }, props: BARE },
+  // --- end weather panels ---
   { type: 'sunmoon', label: 'Sun and moon', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 160, h: 90 }, box: { x: 34, y: 34, w: 32, h: 32 }, props: CARD },
   { type: 'wear', label: 'What to wear', kind: 'panel', min: { w: 10, h: 5 }, minPx: { w: 140, h: 40 }, box: { x: 32, y: 41, w: 36, h: 18 }, props: CARD },
   {

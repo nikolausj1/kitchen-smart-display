@@ -2,6 +2,13 @@ import { useMemo, useRef, useSyncExternalStore } from 'react'
 import ClockPanel from '../panels/ClockPanel.jsx'
 import WeatherNowPanel from '../panels/WeatherNowPanel.jsx'
 import ForecastPanel from '../panels/ForecastPanel.jsx'
+// --- Weather panels (chunk 2) ---
+import HourlyPanel from '../panels/HourlyPanel.jsx'
+import ConditionsPanel from '../panels/ConditionsPanel.jsx'
+import PrecipPanel from '../panels/PrecipPanel.jsx'
+import AlertPanel from '../panels/AlertPanel.jsx'
+import { pickAlert } from '../lib/weatherPanels.js'
+// --- end weather panels ---
 import SunMoonPanel from '../panels/SunMoonPanel.jsx'
 import WhatToWearPanel from '../panels/WhatToWearPanel.jsx'
 import AirQualityChip from '../panels/AirQualityChip.jsx'
@@ -89,6 +96,12 @@ import './SpecPanel.css'
 //
 // In the layout editor (?edit=1 inside its frame) editBridge.js reports where
 // each box and each marked sub-element landed.
+//
+// The weather panels (docs/designs/panels-and-controls.md, chunk 2) read the
+// hub's weather feed from d.weather, and every one that shows Apple's data
+// carries its mark (d.weather.attribution). The alert banner's box is dropped
+// while no alert is in force, as if a rule hid it; the editor keeps it, with
+// a placeholder, so it can be placed.
 
 // The Board's tile ran twelve photos; so does any photo panel.
 const PHOTO_COUNT = 12
@@ -254,6 +267,11 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       .map((p) => p.id)
       .join(' ')
   }
+  // --- Weather panels (chunk 2): no alert in force, no banner box. ---
+  if (!EDIT_MODE && !pickAlert(d.weather?.alerts, d.now) && shown.some((p) => p.type === 'alert')) {
+    ruledOut = ruledOut ? `${ruledOut} alert` : 'alert'
+  }
+  // --- end weather panels ---
   const panels = useMemo(() => {
     if (!ruledOut) return shown
     const out = ruledOut.split(' ')
@@ -320,6 +338,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             now={d.now}
             error={d.weather?.error}
             knobs={k}
+            attribution={d.weather?.attribution}
           />
         )
       case 'forecast':
@@ -331,8 +350,51 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             count={k.days}
             error={d.weather?.error}
             knobs={k}
+            attribution={d.weather?.attribution}
           />
         )
+      // --- Weather panels (chunk 2) ---
+      case 'hourly':
+        return (
+          <HourlyPanel
+            hourly={d.weather?.hourly}
+            current={d.weather?.current}
+            now={d.now}
+            knobs={k}
+            attribution={d.weather?.attribution}
+          />
+        )
+      case 'conditions':
+        return (
+          <ConditionsPanel
+            current={d.weather?.current}
+            sunrise={d.weather?.sunrise}
+            sunset={d.weather?.sunset}
+            knobs={k}
+            attribution={d.weather?.attribution}
+          />
+        )
+      case 'precip':
+        return (
+          <PrecipPanel
+            hourly={d.weather?.hourly}
+            nextHour={d.weather?.nextHour}
+            now={d.now}
+            knobs={k}
+            attribution={d.weather?.attribution}
+          />
+        )
+      case 'alert':
+        return (
+          <AlertPanel
+            alerts={d.weather?.alerts}
+            now={d.now}
+            knobs={k}
+            editing={EDIT_MODE}
+            attribution={d.weather?.attribution}
+          />
+        )
+      // --- end weather panels ---
       case 'sunmoon':
         return (
           <SunMoonPanel
@@ -341,10 +403,11 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             sunset={d.weather?.sunset}
             moon={d.moon}
             knobs={k}
+            attribution={d.weather?.attribution}
           />
         )
       case 'wear':
-        return <WhatToWearPanel wear={d.wear} knobs={k} />
+        return <WhatToWearPanel wear={d.wear} knobs={k} attribution={d.weather?.attribution} />
       case 'airquality':
         return <AirQualityChip airQuality={d.airQuality} knobs={k} />
       case 'agenda':

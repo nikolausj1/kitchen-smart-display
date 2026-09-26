@@ -1,4 +1,5 @@
 import PanelFrame from './PanelFrame.jsx'
+import WeatherAttribution from './WeatherAttribution.jsx'
 import { panelKnobs } from './schemas.js'
 import { fmtClock } from '../lib/format.js'
 import './SunMoonPanel.css'
@@ -9,6 +10,10 @@ import './SunMoonPanel.css'
 //
 // knobs (a spec layout, panels/schemas.js 'sunmoon'): size (the words and
 // times; the arc and the moon are art), showMoon.
+//
+// attribution: the Apple Weather mark while sunrise and sunset are
+// WeatherKit's (useTodayData d.weather.attribution), in the panel's corner;
+// null draws nothing, as before.
 
 // The dashed track is a quadratic Bezier through the two horizon points. The
 // same three points are used by the SVG path below and by the dot maths, so
@@ -66,7 +71,7 @@ function moonLitPath(phase, cx, cy, r) {
   return `M${top} A${r} ${r} 0 0 ${limbSweep} ${bottom} A${rx.toFixed(3)} ${r} 0 0 ${termSweep} ${top} Z`
 }
 
-export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
+export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs, attribution = null }) {
   const k = panelKnobs('sunmoon', knobs)
   const riseMs = msOf(sunrise)
   const setMs = msOf(sunset)
@@ -92,7 +97,7 @@ export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
   return (
     <PanelFrame
       title="Sun & moon"
-      className={`tl-sun${k ? ' tl-knobs' : ''}`}
+      className={`tl-sun${k ? ' tl-knobs' : ''}${attribution ? ' tl-wx-host' : ''}`}
       bodyClassName="tl-sun__body"
       style={k ? { '--tl-sun-size': String(k.size) } : undefined}
     >
@@ -166,6 +171,7 @@ export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs }) {
           )}
         </div>
       )}
+      <WeatherAttribution attribution={attribution} corner />
     </PanelFrame>
   )
 }

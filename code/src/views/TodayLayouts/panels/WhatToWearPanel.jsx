@@ -1,4 +1,5 @@
 import PanelFrame from './PanelFrame.jsx'
+import WeatherAttribution from './WeatherAttribution.jsx'
 import { panelKnobs } from './schemas.js'
 import './WhatToWearPanel.css'
 
@@ -81,7 +82,10 @@ function WearGlyph({ name }) {
   )
 }
 
-export default function WhatToWearPanel({ wear, knobs }) {
+// attribution: the Apple Weather mark while the forecast behind the advice is
+// WeatherKit's (useTodayData d.weather.attribution), in the panel's corner;
+// null draws nothing, as before.
+export default function WhatToWearPanel({ wear, knobs, attribution = null }) {
   const k = panelKnobs('wear', knobs)
   const headline = wear?.headline || null
   // One line keeps the advice and drops its detail, unless the advice is all
@@ -94,7 +98,7 @@ export default function WhatToWearPanel({ wear, knobs }) {
   return (
     <PanelFrame
       title="What to wear"
-      className={`tl-wear${k ? ' tl-knobs' : ''}`}
+      className={`tl-wear${k ? ' tl-knobs' : ''}${attribution ? ' tl-wx-host' : ''}`}
       bodyClassName="tl-wear__body"
       style={k ? { '--tl-wear-size': String(k.size) } : undefined}
     >
@@ -123,6 +127,7 @@ export default function WhatToWearPanel({ wear, knobs }) {
           </div>
         </div>
       )}
+      <WeatherAttribution attribution={attribution} corner />
     </PanelFrame>
   )
 }

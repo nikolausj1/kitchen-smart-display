@@ -316,12 +316,20 @@ export function startWeatherRefresher(getLocation, options = {}) {
   return startWeatherFeed(getLocation, options)
 }
 
+// The feed's hours run from local midnight; the rules look forward from now,
+// so they get the hours not yet over, which is what they always had.
+function notOverYet(h, nowMs) {
+  const t = typeof h?.time === 'string' ? new Date(h.time).getTime() : NaN
+  return !Number.isFinite(t) || t + 3_600_000 > nowMs
+}
+
 export function getForecast(now = new Date()) {
   const w = getWeather(now)
+  const nowMs = now.getTime()
   return {
     fetchedAt: w.fetchedAt,
     error: w.error,
-    hourly: (w.hourly || []).map((h) => ({
+    hourly: (w.hourly || []).filter((h) => notOverYet(h, nowMs)).map((h) => ({
       time: h.time, tempF: h.tempF, feelsF: h.feelsF, precipProb: h.precipProb,
       precipIn: h.precipIn, code: h.code, gustMph: h.gustMph, windMph: h.windMph,
     })),

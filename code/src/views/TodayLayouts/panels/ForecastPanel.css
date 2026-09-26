@@ -129,3 +129,119 @@
   --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
 }
 
+
+/* --- Band style (knob style: 'band') -------------------------------------------
+ *
+ * A day per line: label, icon (the rain chance under it), the low, a track
+ * with the day's low-to-high bar placed on the whole period's range, the
+ * high. One grid for the whole band, every cell in its own column and on its
+ * day's row (inline grid-row), so the columns line up down the panel and a
+ * hidden cell leaves a gap instead of shifting its line. Spacing is padding
+ * on the cells, never a gap, so a column nobody draws (no icons) costs
+ * nothing. Everything is sized against one row's height (--tl-fc-rowh).
+ * The type carries var(--tl-text-scale); the icons and the bar are art. */
+
+.tl-fc__band {
+  container-type: size;
+  flex: 1 1 auto;
+  min-height: 6vh;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto auto auto auto minmax(3vw, 1fr) auto;
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: center;
+  --tl-fc-rowh: calc(100cqh / var(--tl-fc-n, 4));
+  --tl-fc-btemp: clamp(1.3vh, min(calc(var(--tl-fc-rowh) * 0.4), 6cqw), 3.4vh);
+}
+
+.tl-fc__bday {
+  grid-column: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--tl-fg-2);
+  padding-right: calc(var(--tl-gap) * 0.8);
+}
+
+/* The icon, and the day's rain chance beside it when it counts. */
+.tl-fc__bicon {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding-right: calc(var(--tl-gap) * 0.6);
+}
+
+.tl-fc__bicon-art {
+  width: min(calc(var(--tl-fc-rowh) * 0.62), 9cqw);
+  height: min(calc(var(--tl-fc-rowh) * 0.62), 9cqw);
+}
+
+.tl-fc__bicon-art .weather-icon-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.tl-fc__bpop {
+  margin-left: 0.35em;
+  font-size: calc(var(--tl-text-scale, 1) * max(10px, var(--tl-fc-btemp) * 0.6));
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tl-accent);
+  white-space: nowrap;
+}
+
+/* Without icons the rain chance has a column to itself. */
+.tl-fc__bpop--alone {
+  grid-column: 3;
+  margin-left: 0;
+  padding-right: calc(var(--tl-gap) * 0.6);
+}
+
+.tl-fc__blo,
+.tl-fc__bhi {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-fc-btemp));
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.tl-fc__blo {
+  grid-column: 4;
+  justify-self: end;
+  font-weight: 500;
+  color: var(--tl-fg-2);
+  padding-right: calc(var(--tl-gap) * 0.6);
+}
+
+.tl-fc__bhi {
+  grid-column: 6;
+  justify-self: end;
+  font-weight: 600;
+  color: var(--tl-fg);
+  padding-left: calc(var(--tl-gap) * 0.6);
+}
+
+/* The period's range, and the day's part of it. */
+.tl-fc__track {
+  grid-column: 5;
+  position: relative;
+  height: clamp(4px, calc(var(--tl-fc-rowh) * 0.1), 12px);
+  border-radius: 999px;
+  background: rgba(var(--tl-fg-rgb), 0.12);
+}
+
+.tl-fc__seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(to right, rgba(var(--tl-fg-rgb), 0.55), var(--tl-accent));
+}
+
+.tl-knobs .tl-fc__band {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-fc-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

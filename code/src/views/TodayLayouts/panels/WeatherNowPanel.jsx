@@ -1,6 +1,7 @@
 import WeatherIcon from '../../../components/WeatherIcon/WeatherIcon.jsx'
 import PanelFrame from './PanelFrame.jsx'
 import FreshnessStamp from './FreshnessStamp.jsx'
+import WeatherAttribution from './WeatherAttribution.jsx'
 import { panelKnobs } from './schemas.js'
 import './WeatherNowPanel.css'
 
@@ -12,6 +13,10 @@ import './WeatherNowPanel.css'
 // board's wide card; 'stacked': the words under them, the Board's tile),
 // showHighLow, showRain, showDescription. Without knobs the layout's own CSS
 // decides the arrangement, exactly as before.
+//
+// attribution: the Apple Weather mark while the hub's feed is WeatherKit's
+// (useTodayData d.weather.attribution), pinned to the panel's bottom-right
+// corner (WeatherAttribution.jsx); null draws nothing, as before.
 
 // Precipitation under 20% is noise on a Seattle display, so it is left off the
 // meta line entirely rather than shown as a reassuring "10%".
@@ -33,7 +38,7 @@ function metaSegments(current, today, showHighLow = true, showRain = true) {
   return segs
 }
 
-export default function WeatherNowPanel({ current, today, fetchedAt, now, error, knobs }) {
+export default function WeatherNowPanel({ current, today, fetchedAt, now, error, knobs, attribution = null }) {
   const k = panelKnobs('weather', knobs)
   const segs = k ? metaSegments(current, today, k.showHighLow, k.showRain) : metaSegments(current, today)
   // WeatherIcon falls back to the overcast art for an unknown name, so only
@@ -41,7 +46,8 @@ export default function WeatherNowPanel({ current, today, fetchedAt, now, error,
   const iconName = current?.iconName || today?.iconName || null
   const hasAnything = current != null || today != null
   const showDescription = k ? k.showDescription : true
-  const cls = k ? `tl-wnow tl-knobs tl-wnow--${k.layout === 'stacked' ? 'stacked' : 'horizontal'}` : 'tl-wnow'
+  const base = k ? `tl-wnow tl-knobs tl-wnow--${k.layout === 'stacked' ? 'stacked' : 'horizontal'}` : 'tl-wnow'
+  const cls = attribution ? `${base} tl-wx-host` : base
 
   return (
     <PanelFrame
@@ -87,6 +93,7 @@ export default function WeatherNowPanel({ current, today, fetchedAt, now, error,
           )}
         </>
       )}
+      <WeatherAttribution attribution={attribution} corner />
     </PanelFrame>
   )
 }

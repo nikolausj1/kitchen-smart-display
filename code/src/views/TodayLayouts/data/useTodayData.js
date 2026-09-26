@@ -25,12 +25,14 @@ import { useDemoMode } from './demoMode.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
 import {
   DEMO_AIR_QUALITY,
+  DEMO_FORCE_WEATHER,
   DEMO_HEADLINE,
   DEMO_MUSIC,
   DEMO_SCHOOL,
   DEMO_TIMER,
   DEMO_TIMER_MINUTES,
   demoCalendar,
+  demoFeed,
   demoWeather,
 } from './demo.js'
 
@@ -63,6 +65,19 @@ import {
 // headline }], /api/state), or null while the house state does not carry
 // them (lib/houseState.js keeps only the keys it knows; the layouts then read
 // an alert off the headline). The spec layouts' alertActive rule reads it.
+//
+// weather: what the weather card, the forecast and the sun arc have always
+// read, { current, today, days, sunrise, sunset, forecastForHour, fetchedAt,
+// stale, error }, and with it the hub's whole weather feed
+// (hooks/useHubWeather.js, docs/designs/panels-and-controls.md chunk 2) for
+// the weather panels: source ('weatherkit' | 'open-meteo', null with no
+// weather), hourly, daily, nextHour, alerts, sun, moon, attribution (Apple's
+// mark while WeatherKit's data is what is shown, else null). `current` gains
+// the feed's readings (humidity, dewF, gustMph, windDir, pressureMb,
+// visibilityMi, uv, cloudCover, ...) under the card's own keys. When the hooks
+// fall back to Open-Meteo directly the feed keys are empty (source
+// 'open-meteo'); in demo mode with no live weather they are data/demo.js's
+// demoFeed.
 
 // URL params, parsed ONCE at module load the way lib/kioskMode.js does.
 // Reading window.location in a render body trips the React Compiler purity
@@ -82,6 +97,11 @@ const FLAGS = readFlags()
 // calendar hook asks the hub for (hooks/useCalendar.js DAYS, also 6): a day
 // past those would read "Nothing scheduled" whatever the calendar holds.
 const AGENDA_DAYS_MAX = 6
+
+// The feed keys when there is no feed: one frozen object each, so memos hold.
+const NO_LIST = Object.freeze([])
+const NO_SUN = Object.freeze({ sunrise: null, sunset: null })
+const NO_MOON = Object.freeze({ phase: null, name: null })
 
 function startOfDay(d) {
   const x = new Date(d)
@@ -172,14 +192,25 @@ export default function useTodayData() {
   const hourlyNowCode = hourlyNow?.code ?? null
 
   const demoWeatherView = useMemo(() => (demo ? demoWeather(today) : null), [demo, today])
+  const demoFeedData = useMemo(
+    () => (demo && demoSince != null ? demoFeed(demoSince) : null),
+    [demo, demoSince]
+  )
 
   // The demo weather fixture is a last resort: real data always wins, so a demo
   // screenshot taken on the wall shows the real sky outside the window.
+  // ?demoWeather=1 asks for the fixture anyway (data/demo.js demoFeed).
   const haveLiveForecast = !!(daily.current || daily.days.length)
-  const usingDemoWeather = demo && !haveLiveForecast
+  const usingDemoWeather = demo && (DEMO_FORCE_WEATHER || !haveLiveForecast)
   const source = usingDemoWeather ? demoWeatherView : daily
 
   const liveFetchedAt = daily.fetchedAt ?? weather.fetchedAt ?? null
+
+  // The hub's feed behind what is shown: the live one when the daily view came
+  // from it (not from the Open-Meteo fallback), the demo one with the demo
+  // weather. Its keys go out beside the card's own.
+  const feed = usingDemoWeather ? demoFeedData : daily.feed || null
+  const feedCurrent = feed ? feed.current : null
 
   // Past days are dropped so days[0] really is today, which is what the panels
   // are told to assume. A cache written yesterday evening is still inside its
@@ -221,9 +252,15 @@ export default function useTodayData() {
     }
   }, [source, hourlyNowTempF, hourlyNowCode])
 
+  // The card's current conditions, with the feed's other readings under them.
+  const currentMerged = useMemo(
+    () => (currentOut && feedCurrent ? { ...feedCurrent, ...currentOut } : currentOut),
+    [currentOut, feedCurrent]
+  )
+
   const weatherOut = useMemo(
     () => ({
-      current: currentOut,
+      current: currentMerged,
       today: todayDay
         ? {
             highF: todayDay.highF,
@@ -242,9 +279,18 @@ export default function useTodayData() {
       // data we are not showing right now.
       stale: usingDemoWeather ? false : !!daily.stale,
       error: usingDemoWeather ? null : daily.error ?? null,
+      // The hub's feed, for the weather panels.
+      source: feed ? feed.source : haveLiveForecast ? 'open-meteo' : null,
+      hourly: feed ? feed.hourly : NO_LIST,
+      daily: feed ? feed.daily : NO_LIST,
+      nextHour: feed ? feed.nextHour : null,
+      alerts: feed ? feed.alerts : NO_LIST,
+      sun: feed ? feed.sun : NO_SUN,
+      moon: feed ? feed.moon : NO_MOON,
+      attribution: feed && feed.source === 'weatherkit' ? feed.attribution : null,
     }),
     [
-      currentOut,
+      currentMerged,
       todayDay,
       days,
       source,
@@ -254,6 +300,8 @@ export default function useTodayData() {
       liveFetchedAt,
       daily.stale,
       daily.error,
+      feed,
+      haveLiveForecast,
     ]
   )
 

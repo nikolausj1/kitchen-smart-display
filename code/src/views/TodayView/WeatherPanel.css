@@ -94,3 +94,10 @@
   color: #ffffff;
   text-shadow: 0 0.04vw 0.04vw rgba(0, 0, 0, 0.25);
 }
+
+/* The Apple Weather mark (WeatherAttribution): in the bottom padding, its
+ * right edge on the content's, so it never moves or covers a slot. */
+.weather > .tl-wx-attr--corner {
+  right: 2.4vw;
+  bottom: 0.3vh;
+}

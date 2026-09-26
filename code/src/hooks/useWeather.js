@@ -1,8 +1,33 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSettings } from '../lib/settings.js'
+import useHubWeather from './useHubWeather.js'
+import {
+  forecastFromColumns,
+  forecastFromHours,
+  hourLabel,
+  localDateKey,
+  openMeteoColumnsOf,
+  pickSlots,
+  slotsFromHours,
+} from './hubWeatherFeed.js'
 
-// Open-Meteo: no API key, no sign-up. Hourly forecasts with WMO codes.
-// Docs: https://open-meteo.com/en/docs
+// useWeather - the hourly weather the Framed Today's slots (views/TodayView,
+// the slideshow's time widget) and the departure-hour lookup read.
+//
+// Source: the hub's one weather feed (hooks/useHubWeather.js), Apple
+// WeatherKit or Open-Meteo, whichever the hub serves. The direct Open-Meteo
+// fetch this hook always made is kept ONLY as the fallback, while the feed
+// has never answered or its data is more than 90 minutes old (a hub on a
+// build without /api/weather, or the hub down). Docs:
+// https://open-meteo.com/en/docs
+//
+// Output: { slots, loading, error, stale, hourly, fetchedAt, forecastForHour }
+// as always, plus `attribution`: Apple's mark ({ name, url }) while the slots
+// are WeatherKit's data, else null (views that draw the slots show it with
+// views/TodayLayouts/panels/WeatherAttribution.jsx). An hour H is the feed's
+// entry for the hour STARTING at H:00 (hooks/hubWeatherFeed.js, "Hour
+// alignment"); the feed's hours run from today's local midnight, so this
+// morning's slots are there on a fresh load in the afternoon too.
 
 const REFRESH_MS = 15 * 60 * 1000
 const ERROR_RETRY_MS = 2 * 60 * 1000  // shorter retry when the API is down
@@ -35,61 +60,21 @@ function writeCache(slots) {
   }
 }
 
-function wmoToIcon(code) {
-  if (code === 0 || code === 1) return 'clear'
-  if (code === 2) return 'partly-cloudy'
-  if (code === 3) return 'overcast'
-  if (code === 45 || code === 48) return 'fog'
-  if (code === 51) return 'light-drizzle'
-  if (code === 53 || code === 55) return 'drizzle'
-  if ([56, 57, 66, 67].includes(code)) return 'freezing-rain'
-  if ([61, 63, 80, 81].includes(code)) return 'rain'
-  if ([65, 82].includes(code)) return 'heavy-rain'
-  if ([71, 73, 77, 85].includes(code)) return 'snow'
-  if ([75, 86].includes(code)) return 'heavy-snow'
-  if ([95, 96, 99].includes(code)) return 'thunderstorm'
-  return 'overcast'
-}
-
-function hourLabel(hour) {
-  if (hour === 0) return '12AM'
-  if (hour === 12) return '12PM'
-  if (hour < 12) return `${hour}AM`
-  return `${hour - 12}PM`
-}
+const NO_HOURS = Object.freeze([])
 
 function todayLocalIsoDate(now = new Date()) {
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function pickSlots(payload, hours) {
-  const times = payload?.hourly?.time || []
-  const temps = payload?.hourly?.temperature_2m || []
-  const codes = payload?.hourly?.weather_code || []
-  const today = todayLocalIsoDate()
-
-  return hours.map((hour) => {
-    const stamp = `${today}T${String(hour).padStart(2, '0')}:00`
-    const idx = times.indexOf(stamp)
-    if (idx === -1) {
-      return { label: hourLabel(hour), iconName: 'overcast', tempF: null }
-    }
-    return {
-      label: hourLabel(hour),
-      iconName: wmoToIcon(codes[idx]),
-      tempF: Math.round(temps[idx]),
-    }
-  })
+  return localDateKey(now)
 }
 
 export default function useWeather() {
   const { location, weatherSlots } = useSettings()
-  // Seed initial state from the cache so a transient Open-Meteo outage
-  // doesn't leave us showing --° placeholders. Stale cache (>12h) is
-  // ignored - we'd rather show placeholders than yesterday's forecast.
+  const hub = useHubWeather()
+  // Ask Open-Meteo only once the hub has been asked and has nothing current.
+  const fallback = hub.checked && hub.stale
+
+  // The fallback's own state, seeded from its cache so a transient outage
+  // doesn't leave us showing --° placeholders. Stale cache (>12h) is ignored -
+  // we'd rather show placeholders than yesterday's forecast.
   const [state, setState] = useState(() => {
     const cached = readCache()
     return {
@@ -108,6 +93,7 @@ export default function useWeather() {
   })
 
   useEffect(() => {
+    if (!fallback) return undefined
     let cancelled = false
     let timer = null
 
@@ -125,7 +111,7 @@ export default function useWeather() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const payload = await res.json()
         if (cancelled) return
-        const slots = pickSlots(payload, weatherSlots)
+        const slots = pickSlots(payload, weatherSlots, todayLocalIsoDate())
         writeCache(slots)
         setState({
           slots,
@@ -162,26 +148,48 @@ export default function useWeather() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [location.lat, location.lon, location.timezone, weatherSlots])
+  }, [fallback, location.lat, location.lon, location.timezone, weatherSlots])
 
-  // Look up today's forecast for a specific local hour (0-23) from the live
-  // hourly arrays. Returns { code, tempF } or null if unavailable. Used by the
-  // travel-mode default to read the departure-time forecast.
-  const forecastForHour = (hour) => {
-    const h = state.hourly
-    if (!h?.time) return null
-    const stamp = `${todayLocalIsoDate()}T${String(hour).padStart(2, '0')}:00`
-    const idx = h.time.indexOf(stamp)
-    if (idx === -1) return null
-    const code = h.weather_code?.[idx]
-    const temp = h.temperature_2m?.[idx]
+  // The feed's view: today's slots from the feed's hours (from local
+  // midnight). A feed past its 90 minutes still beats nothing: it is shown
+  // until the fallback has something newer.
+  const feed = hub.weather
+  const hours = feed ? feed.hourly : NO_HOURS
+  const day = hub.day
+  const fromFeed =
+    hours.length > 0 && (!hub.stale || !state.slots || (hub.fetchedAt ?? 0) >= (state.fetchedAt ?? 0))
+  const feedView = useMemo(
+    () =>
+      fromFeed
+        ? {
+            slots: slotsFromHours(hours, weatherSlots, day),
+            hourly: openMeteoColumnsOf(hours),
+          }
+        : null,
+    [fromFeed, hours, weatherSlots, day]
+  )
+
+  if (feedView) {
+    // Look up today's forecast for a specific local hour (0-23): { code,
+    // tempF } or null. Used by the travel-mode default to read the
+    // departure-time forecast.
+    const forecastForHour = (hour) => forecastFromHours(hours, day, hour)
     return {
-      code: typeof code === 'number' ? code : null,
-      tempF: typeof temp === 'number' ? Math.round(temp) : null,
+      slots: feedView.slots,
+      loading: false,
+      error: hub.stale ? state.error || hub.error : hub.error,
+      stale: hub.stale || !!hub.error,
+      hourly: feedView.hourly,
+      fetchedAt: hub.fetchedAt,
+      forecastForHour,
+      attribution: feed.source === 'weatherkit' ? feed.attribution : null,
     }
   }
 
-  return { ...state, forecastForHour }
+  // The fallback's view (its live data, else its cache, else placeholders):
+  // Open-Meteo's, which needs no mark.
+  const forecastForHour = (hour) => forecastFromColumns(state.hourly, day, hour)
+  return { ...state, forecastForHour, attribution: null }
 }
 
 export function placeholderSlots(hours = [8, 11, 14, 17, 20]) {

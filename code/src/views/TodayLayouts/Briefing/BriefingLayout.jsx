@@ -71,6 +71,7 @@ export default function BriefingLayout() {
             fetchedAt={d.weather.fetchedAt}
             now={d.now}
             error={d.weather.error}
+            attribution={d.weather.attribution}
           />
         </div>
 
@@ -81,6 +82,7 @@ export default function BriefingLayout() {
             now={d.now}
             count={4}
             error={d.weather.error}
+            attribution={d.weather.attribution}
           />
         </div>
 
@@ -103,6 +105,7 @@ export default function BriefingLayout() {
             sunrise={d.weather.sunrise}
             sunset={d.weather.sunset}
             moon={d.moon}
+            attribution={d.weather.attribution}
           />
         </div>
       </div>

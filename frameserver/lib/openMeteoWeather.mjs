@@ -17,6 +17,12 @@
 // miles from whatever unit the response says it used (Open-Meteo ties
 // visibility's unit to the wind speed unit; asking for mph gets feet back).
 //
+// The hours run from today's local midnight (`past_hours` asks for a day of
+// them, trimmed here to midnight) through HOURS past the current hour, so
+// `hourly[0].time` is today's 'T00:00' and there are HOURS plus the hours
+// elapsed today: a screen drawing this morning's slots in the afternoon finds
+// them in the feed.
+//
 // Hour semantics: `hourly[].time` is the START of the hour it describes, same
 // rule as hubWeather.mjs and the same reason. Open-Meteo stamps
 // precipitation_probability, precipitation, snowfall, weather_code and
@@ -48,7 +54,11 @@ export const DAILY_VARS = [
   'temperature_2m_max', 'temperature_2m_min', 'precipitation_probability_max',
   'precipitation_sum', 'weather_code', 'sunrise', 'sunset', 'uv_index_max', 'wind_gusts_10m_max',
 ]
+// Hours ahead of the current one (the current one included); the hours of
+// today before it come on top.
 export const HOURS = 48
+// Past hours asked for: a day, enough to reach back to local midnight.
+export const PAST_HOURS = 24
 export const DAYS = 10
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
@@ -68,9 +78,27 @@ export function openMeteoWeatherUrl({ lat, lon }) {
   url.searchParams.set('precipitation_unit', 'inch')
   url.searchParams.set('timezone', 'auto')
   url.searchParams.set('forecast_days', String(DAYS))
+  // A day back, trimmed to local midnight by the parser.
+  url.searchParams.set('past_hours', String(PAST_HOURS))
   // One stamp past HOURS: the last hour's "preceding hour" columns sit on the next stamp.
   url.searchParams.set('forecast_hours', String(HOURS + 1))
   return url
+}
+
+// The indexes of the hourly stamps to keep: from the first stamp of the
+// current hour's day (local midnight) through HOURS past the current hour.
+// The current hour is the one `current.time` falls in (the local moment the
+// response describes, which is the hour forecast_hours counts from). Without
+// it, or when that hour is not among the stamps, the stamps from the first
+// on, HOURS of them.
+function hourWindow(times, currentTime) {
+  const key = typeof currentTime === 'string' && currentTime.length >= 13 ? currentTime.slice(0, 13) : null
+  const cur = key ? times.findIndex((t) => typeof t === 'string' && t.slice(0, 13) === key) : -1
+  if (cur < 0) return { first: 0, last: HOURS - 1 }
+  const day = key.slice(0, 10)
+  let first = cur
+  while (first > 0 && typeof times[first - 1] === 'string' && times[first - 1].slice(0, 10) >= day) first -= 1
+  return { first, last: cur + HOURS - 1 }
 }
 
 // Visibility's unit rides along with whatever the response says it used
@@ -148,8 +176,10 @@ export function parseOpenMeteoWeather(payload) {
   const code = col('weather_code')
   const gust = col('wind_gusts_10m')
 
+  const c0 = isDict(payload.current) ? payload.current : {}
+  const { first, last } = hourWindow(times, c0.time)
   const hourly = []
-  for (let i = 0; i + 1 < times.length && hourly.length < HOURS; i++) {
+  for (let i = first; i <= last && i + 1 < times.length; i++) {
     if (typeof times[i] !== 'string') continue
     hourly.push({
       time: times[i],

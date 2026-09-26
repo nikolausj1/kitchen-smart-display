@@ -1,0 +1,31 @@
+/* WeatherAttribution - the Apple Weather mark. 12 to 14 px whatever the box's
+ * text scale (the licence wants it legible, and it is not the panel's type),
+ * muted, one line. The fallbacks are for the views outside the Today layouts'
+ * tokens (the Framed Today, the slideshow's time widget). */
+
+.tl-wx-attr {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  margin-top: calc(var(--tl-pad, 12px) * 0.3);
+  font-size: clamp(12px, 0.73vw, 14px);
+  font-weight: 500;
+  font-style: normal;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--tl-fg-3, rgba(242, 242, 240, 0.5));
+  white-space: nowrap;
+}
+
+/* The panel the mark is pinned into. Only set while the mark shows, so a
+ * panel without it is exactly as it was. */
+.tl-wx-host {
+  position: relative;
+}
+
+.tl-wx-attr--corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+}

@@ -130,6 +130,181 @@ export function demoWeather(today) {
   }
 }
 
+// --- The hub's weather feed (hooks/useHubWeather.js), faked -----------------
+//
+// demoFeed(sinceMs) -> a full feed in the hub's shape (GET /api/weather,
+// hooks/hubWeatherFeed.js), so the weather panels have everything to draw
+// under ?demo=1: 48 hours from the hour the demo started, ten days (the first
+// five are DEMO_DAYS), the next hour's minutes with rain arriving, a wind
+// advisory, the sun, the moon. Like demoWeather it is the last resort: live
+// weather always wins (useTodayData), unless the URL also carries
+// ?demoWeather=1, which shows the demo weather whatever the sky is doing (a
+// dry day has no alert banner and no next-hour strip to design with). It
+// claims the house's source, Apple WeatherKit, so a design shot carries the
+// attribution a real screen does. Built from the moment demo mode turned on
+// and frozen there.
+
+function readForceWeather() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('demoWeather') === '1'
+}
+
+export const DEMO_FORCE_WEATHER = readForceWeather()
+
+const DEMO_MORE_DAYS = [
+  { code: 3, highF: 63, lowF: 51, precipPct: 15 },
+  { code: 61, highF: 58, lowF: 49, precipPct: 80 },
+  { code: 2, highF: 62, lowF: 48, precipPct: 10 },
+  { code: 0, highF: 67, lowF: 50, precipPct: 0 },
+  { code: 3, highF: 64, lowF: 52, precipPct: 25 },
+]
+
+// The first evening turns wet: rain chances from 5 pm to midnight.
+const DEMO_EVENING_RAIN = { 17: 20, 18: 35, 19: 55, 20: 70, 21: 65, 22: 50, 23: 30 }
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+// '2026-09-26T14:00', the feed's local wall-clock stamp.
+function stampOf(d) {
+  return `${dateKey(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+// A day's temperature at `hour`: its low at 3 am, its high at 3 pm.
+function demoTempAt(day, hour) {
+  const shape = (1 + Math.cos(((hour - 15) / 24) * 2 * Math.PI)) / 2
+  return Math.round((day.lowF + (day.highF - day.lowF) * shape) * 10) / 10
+}
+
+// The demo's current reading (demoWeather's), which the first hours ease into.
+const DEMO_NOW_F = 62
+
+function demoHour(t, dayIndex, ease) {
+  const day = DEMO_DAYS.concat(DEMO_MORE_DAYS)[dayIndex] || DEMO_DAYS[0]
+  const h = t.getHours()
+  const rain = dayIndex === 0 && Object.prototype.hasOwnProperty.call(DEMO_EVENING_RAIN, h) ? DEMO_EVENING_RAIN[h] : dayIndex === 1 && h < 11 ? 25 : 5
+  const code = rain >= 50 ? 61 : rain >= 20 ? 3 : dayIndex === 0 ? 2 : day.code
+  const wind = Math.round((6 + 5 * Math.sin((h / 24) * Math.PI)) * 10) / 10
+  const tempF = Math.round((demoTempAt(day, h) + ease) * 10) / 10
+  return {
+    time: stampOf(t),
+    tempF,
+    feelsF: Math.round((tempF - wind / 3) * 10) / 10,
+    precipProb: rain,
+    precipIn: rain >= 50 ? 0.04 : 0,
+    snowIn: 0,
+    code,
+    condition: null,
+    windMph: wind,
+    gustMph: Math.round(wind * 1.7 * 10) / 10,
+    humidity: 60 + Math.round(rain / 3),
+    uv: h >= 9 && h <= 17 ? Math.max(0, 5 - Math.abs(13 - h)) : 0,
+    isDay: h >= DEMO_SUNRISE.hour + 1 && h <= DEMO_SUNSET.hour,
+  }
+}
+
+export function demoFeed(sinceMs) {
+  const since = new Date(sinceMs)
+  const base = new Date(since)
+  base.setHours(0, 0, 0, 0)
+
+  // The day's curve, eased over six hours from the current reading, so the
+  // strip's "Now" and the next hours agree with the weather card.
+  const offset = DEMO_NOW_F - demoTempAt(DEMO_DAYS[0], since.getHours())
+  const hourly = []
+  for (let i = 0; i < 48; i++) {
+    const t = new Date(since.getFullYear(), since.getMonth(), since.getDate(), since.getHours() + i, 0, 0, 0)
+    const dayIndex = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - base.getTime()) / 86400000)
+    hourly.push(demoHour(t, dayIndex, offset * Math.max(0, 1 - i / 6)))
+  }
+
+  const daily = DEMO_DAYS.concat(DEMO_MORE_DAYS).map((d, i) => {
+    const date = atTime(base, i, { hour: 0, minute: 0 })
+    return {
+      date: dateKey(date),
+      highF: d.highF,
+      lowF: d.lowF,
+      precipProbMax: d.precipPct,
+      precipIn: d.precipPct >= 50 ? 0.3 : 0,
+      code: d.code,
+      condition: null,
+      sunrise: stampOf(atTime(base, i, DEMO_SUNRISE)),
+      sunset: stampOf(atTime(base, i, DEMO_SUNSET)),
+      uvMax: 5,
+      windMaxMph: 18,
+      moonPhase: 0.42,
+    }
+  })
+
+  // Rain arriving: a slight chance now, likely from 18 minutes on.
+  const minute0 = new Date(since)
+  minute0.setSeconds(0, 0)
+  const minutes = []
+  for (let i = 0; i < 70; i++) {
+    const t = new Date(minute0.getTime() + i * 60000)
+    const chance = i < 12 ? 5 : i < 18 ? 20 + (i - 12) * 5 : Math.min(80, 55 + (i - 18))
+    minutes.push({ time: stampOf(t), precipChance: chance, precipIntensityInHr: chance >= 50 ? 0.02 : 0 })
+  }
+  const rainFrom = new Date(minute0.getTime() + 18 * 60000)
+
+  const hour0 = new Date(since)
+  hour0.setMinutes(0, 0, 0)
+  const alertEnds = new Date(hour0.getTime() + 6 * 3600000)
+
+  return {
+    source: 'weatherkit',
+    fetchedAt: since.toISOString(),
+    error: null,
+    location: { lat: null, lon: null, timezone: null },
+    current: {
+      time: stampOf(since),
+      tempF: DEMO_NOW_F,
+      feelsF: 60,
+      humidity: 71,
+      dewF: 52,
+      windMph: 6,
+      gustMph: 14,
+      windDir: 225,
+      pressureMb: 1016,
+      visibilityMi: 10,
+      uv: 4,
+      cloudCover: 45,
+      code: 2,
+      condition: 'PartlyCloudy',
+      isDay: true,
+      precipIn: 0,
+    },
+    hourly,
+    daily,
+    nextHour: {
+      summary: [
+        { time: stampOf(minute0), condition: 'clear', precipChance: 5, precipIntensityInHr: 0 },
+        { time: stampOf(rainFrom), condition: 'rain', precipChance: 60, precipIntensityInHr: 0.02 },
+      ],
+      minutes,
+    },
+    alerts: [
+      {
+        id: 'demo-wind-advisory',
+        event: 'Wind Advisory',
+        severity: 'Moderate',
+        urgency: 'Expected',
+        certainty: 'Likely',
+        headline: 'Wind Advisory issued by NWS Seattle WA: southwest winds 20 to 30 mph with gusts to 45 mph',
+        description: 'Southwest winds 20 to 30 mph with gusts up to 45 mph. Gusty winds will blow around unsecured objects.',
+        onset: new Date(hour0.getTime() - 3600000).toISOString(),
+        ends: alertEnds.toISOString(),
+        source: 'weatherkit',
+        url: null,
+      },
+    ],
+    sun: { sunrise: daily[0].sunrise, sunset: daily[0].sunset },
+    moon: { phase: 0.42, name: 'Waxing Gibbous' },
+    attribution: { name: 'Apple Weather', url: 'https://weatherkit.apple.com/legal-attribution.html' },
+  }
+}
+
 // --- Entry board: calendar, countdowns, headline, air quality ----------------
 //
 // The same shapes the hub serves (GET /api/calendar, /api/state headline and

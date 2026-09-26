@@ -1,0 +1,208 @@
+/* HourlyPanel - the next hours in columns. The whole strip is sized against
+ * one column's width (--tl-hr-col) and one row's height (--tl-hr-rowh), both
+ * from the area (a size container), so 6 hours in a wide box and 24 in two
+ * rows both fit without a layout tuning anything. The type carries
+ * var(--tl-text-scale) (tokens.css); the icons and the curve are art.
+ *
+ * Each row of hours is one grid: every cell in its hour's column (inline
+ * grid-column) and on its kind's row, so a hidden cell (an element style)
+ * leaves a gap instead of shifting the hours. The spacing is margins, never a
+ * gap, so a row nobody draws (no feels-like, no wind) costs nothing. */
+
+.tl-hr__body {
+  min-height: 0;
+}
+
+.tl-hr__area {
+  container-type: size;
+  flex: 1 1 auto;
+  min-height: 6vh;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  --tl-hr-col: calc(100cqw / var(--tl-hr-cols, 12));
+  --tl-hr-rowh: calc(100cqh / var(--tl-hr-rows, 1));
+  --tl-hr-temp: clamp(12px, min(calc(var(--tl-hr-col) * 0.3), calc(var(--tl-hr-rowh) * 0.17)), 3.4vh);
+}
+
+.tl-hr__row {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--tl-hr-cols, 12), minmax(0, 1fr));
+  /* hour, icon, curve band, temperature, feels like, rain, wind */
+  grid-template-rows: auto minmax(0, 1fr) 0 auto auto auto auto;
+  justify-items: center;
+  align-items: center;
+}
+
+.tl-hr__row + .tl-hr__row {
+  margin-top: calc(var(--tl-pad) * 0.5);
+  padding-top: calc(var(--tl-pad) * 0.5);
+  border-top: 1px solid var(--tl-rule);
+}
+
+.tl-hr__hour {
+  grid-row: 1;
+  max-width: 100%;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(calc(var(--tl-hr-col) * 0.19), calc(var(--tl-hr-rowh) * 0.1)), 20px));
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.tl-hr__hour--now {
+  color: var(--tl-fg);
+}
+
+/* The icon takes what its row leaves (the flexible track) and never more
+ * than its size, so a tight row shrinks it rather than letting it spill over
+ * the hour or the curve. */
+.tl-hr__icon {
+  grid-row: 2;
+  align-self: stretch;
+  min-height: 0;
+  width: min(calc(var(--tl-hr-col) * 0.58), calc(var(--tl-hr-rowh) * 0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--tl-hr-rowh) * 0.025) 0;
+  box-sizing: border-box;
+}
+
+/* Scoped copy of the sizing WeatherPanel gives the shared icon. */
+.tl-hr__icon .weather-icon-img {
+  width: 100%;
+  height: 100%;
+  max-height: min(calc(var(--tl-hr-col) * 0.58), calc(var(--tl-hr-rowh) * 0.3));
+  object-fit: contain;
+  display: block;
+}
+
+.tl-hr__temp {
+  grid-row: 4;
+  margin-top: calc(var(--tl-hr-rowh) * 0.02);
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hr-temp));
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-hr__deg {
+  font-size: 0.62em;
+  vertical-align: 0.42em;
+  margin-left: 0.02em;
+  color: var(--tl-fg-2);
+}
+
+.tl-hr__feels,
+.tl-hr__rain,
+.tl-hr__wind {
+  max-width: 100%;
+  margin-top: calc(var(--tl-hr-rowh) * 0.025);
+  font-size: calc(var(--tl-text-scale, 1) * max(10px, var(--tl-hr-temp) * 0.6));
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.tl-hr__feels {
+  grid-row: 5;
+  color: var(--tl-fg-2);
+}
+
+.tl-hr__feels-word {
+  font-size: 0.9em;
+  color: var(--tl-fg-3);
+}
+
+.tl-hr__rain {
+  grid-row: 6;
+}
+
+/* Rain worth planning around, in the accent; below the floor it stays muted. */
+.tl-hr__rain--wet {
+  font-weight: 600;
+  color: var(--tl-accent);
+}
+
+.tl-hr__wind {
+  grid-row: 7;
+  color: var(--tl-fg-2);
+}
+
+.tl-hr__unit {
+  font-size: 0.8em;
+  color: var(--tl-fg-3);
+}
+
+/* --- The temperature line (style: 'curve') ------------------------------------------ */
+
+/* The band shares what the numbers leave with the icons, 0.7 to their 1, so
+ * a tight row shrinks both rather than squeezing the icons out. */
+.tl-hr--curve .tl-hr__row {
+  grid-template-rows: auto minmax(0, 1fr) minmax(10px, 0.7fr) auto auto auto auto;
+}
+
+.tl-hr__curve {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  align-self: stretch;
+  position: relative;
+  min-height: 0;
+}
+
+.tl-hr__curve-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.tl-hr__curve-svg path {
+  stroke: var(--tl-fg-2);
+  stroke-width: max(1.5px, 0.18vh);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* A real round element on the line, so the stretched SVG never squashes it. */
+.tl-hr__dot {
+  position: absolute;
+  width: clamp(5px, calc(var(--tl-hr-rowh) * 0.035), 12px);
+  height: clamp(5px, calc(var(--tl-hr-rowh) * 0.035), 12px);
+  border-radius: 50%;
+  background: var(--tl-fg);
+  transform: translate(-50%, -50%);
+}
+
+.tl-hr__dot--now {
+  background: var(--tl-accent);
+}
+
+.tl-hr__empty {
+  margin: auto 0;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
+  color: var(--tl-fg-3);
+}
+
+/* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */
+
+.tl-knobs .tl-hr__area {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-hr-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

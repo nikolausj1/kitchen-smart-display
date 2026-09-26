@@ -313,3 +313,9 @@
   margin-top: 0;
   font-size: clamp(10px, 1.3vh, 17px);
 }
+
+/* The Apple Weather mark under the weather (WeatherAttribution): over a
+ * photo, the lighter of the muted inks. */
+.tl-ambient__right > .tl-wx-attr {
+  color: var(--tl-fg-2);
+}

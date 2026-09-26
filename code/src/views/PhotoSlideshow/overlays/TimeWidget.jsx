@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import useWeather, { placeholderSlots } from '../../../hooks/useWeather.js'
 import WeatherIcon from '../../../components/WeatherIcon/WeatherIcon.jsx'
+import WeatherAttribution from '../../TodayLayouts/panels/WeatherAttribution.jsx'
 import './TimeWidget.css'
 
 // Time widget overlay - bottom-left of the Photo Slideshow.
@@ -66,8 +67,10 @@ export default function TimeWidget() {
       {(mode === 'time-date' || mode === 'time-date-weather') && (
         <div className="time-widget__date">{date}</div>
       )}
+      {/* With the slots, while they are WeatherKit's: the Apple Weather mark,
+        * just past the last slot, out of the layout. */}
       {mode === 'time-date-weather' && (
-        <div className="time-widget__weather">
+        <div className={`time-widget__weather${weather.attribution ? ' tl-wx-host' : ''}`}>
           {slots.map((s) => (
             <div className="time-widget__slot" key={s.label}>
               <div className="time-widget__slot-label">{s.label}</div>
@@ -79,6 +82,7 @@ export default function TimeWidget() {
               </div>
             </div>
           ))}
+          <WeatherAttribution attribution={weather.attribution} corner />
         </div>
       )}
     </button>

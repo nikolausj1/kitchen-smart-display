@@ -70,3 +70,14 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* The Apple Weather mark (WeatherAttribution): past the last slot, on the
+ * temperatures' line, out of the layout, so the slots never move. */
+.time-widget__weather > .tl-wx-attr--corner {
+  left: 100%;
+  right: auto;
+  bottom: 0.2vh;
+  margin-left: 1.2vw;
+  /* Over a photo: a lighter muted ink, with the widget's own shadow. */
+  color: rgba(255, 255, 255, 0.78);
+}

@@ -1,10 +1,11 @@
 // WMO weather-code lookups for the Today layouts.
 //
-// wmoToIcon MIRRORS the table of the same name in hooks/useWeather.js. It is a
-// copy on purpose: the layouts must not reach into a Framed-Today hook's
-// internals, and that function is not exported. The two tables have to stay in
-// step - if you change one, change the other. The names it returns are the
-// keys of FILES in components/WeatherIcon/WeatherIcon.jsx.
+// wmoToIcon MIRRORS the table of the same name in hooks/hubWeatherFeed.js
+// (the weather hooks' own, which hooks/useWeather.js kept until the hub's
+// weather feed). It is a copy on purpose: the layouts keep their own lookups.
+// The two tables have to stay in step - if you change one, change the other.
+// The names it returns are the keys of FILES in
+// components/WeatherIcon/WeatherIcon.jsx.
 
 export function wmoToIcon(code) {
   if (code === 0 || code === 1) return 'clear'

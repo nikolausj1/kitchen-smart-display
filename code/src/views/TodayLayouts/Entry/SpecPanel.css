@@ -360,6 +360,27 @@ body[data-kiosk='echo'] .tl-spec.tl-spec--blur {
   .tl-spec--sunmoon > .tl-panel--small { display: flex; }
 }
 
+/* The weather panels (chunk 2). */
+@container tl-spec (width < 220px) or (height < 90px) {
+  .tl-spec--hourly > .tl-spec__content { display: none; }
+  .tl-spec--hourly > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 150px) or (height < 70px) {
+  .tl-spec--conditions > .tl-spec__content { display: none; }
+  .tl-spec--conditions > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 220px) or (height < 90px) {
+  .tl-spec--precip > .tl-spec__content { display: none; }
+  .tl-spec--precip > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 160px) or (height < 28px) {
+  .tl-spec--alert > .tl-spec__content { display: none; }
+  .tl-spec--alert > .tl-panel--small { display: flex; }
+}
+
 @container tl-spec (width < 140px) or (height < 40px) {
   .tl-spec--wear > .tl-spec__content { display: none; }
   .tl-spec--wear > .tl-panel--small { display: flex; }

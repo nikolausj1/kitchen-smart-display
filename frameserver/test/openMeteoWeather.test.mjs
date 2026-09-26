@@ -9,8 +9,9 @@
 //   node --test frameserver/test/openMeteoWeather.test.mjs
 //
 // Fixtures: test/fixtures/weather/open-meteo-house.json, a real response for
-// the house (lat 47.66, lon -122.40), fetched 2026-09-26 with this module's
-// own parameter set (current/hourly/daily, forecast_days=10, forecast_hours=49).
+// the house (lat 47.66, lon -122.40), fetched 2026-09-26 15:14 PDT with this
+// module's own parameter set (current/hourly/daily, forecast_days=10,
+// past_hours=24, forecast_hours=49): 73 hourly stamps from 2026-09-25T15:00.
 
 process.env.TZ = 'America/Los_Angeles'
 
@@ -26,6 +27,7 @@ import {
   FORECAST_URL,
   HOURLY_VARS,
   HOURS,
+  PAST_HOURS,
   fetchOpenMeteoWeather,
   moonPhaseFraction,
   moonPhaseName,
@@ -37,7 +39,7 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'weat
 const fixture = (name) => JSON.parse(readFileSync(join(FIXTURES, name), 'utf8'))
 
 describe('openMeteoWeather: the request', () => {
-  test('current, hourly and daily variable lists, imperial units, timezone=auto, 10 days, 49 hourly stamps', () => {
+  test('current, hourly and daily variable lists, imperial units, timezone=auto, 10 days, a day back and 49 hourly stamps ahead', () => {
     const url = openMeteoWeatherUrl({ lat: 47.6610608, lon: -122.3999576 })
     const q = Object.fromEntries(url.searchParams)
     assert.equal(url.origin + url.pathname, FORECAST_URL)
@@ -52,9 +54,11 @@ describe('openMeteoWeather: the request', () => {
       precipitation_unit: 'inch',
       timezone: 'auto',
       forecast_days: '10',
+      past_hours: '24',
       forecast_hours: '49',
     })
     assert.equal(HOURS, 48)
+    assert.equal(PAST_HOURS, 24)
     assert.equal(DAYS, 10)
   })
 
@@ -181,6 +185,39 @@ describe('openMeteoWeather: parseOpenMeteoWeather, a synthetic payload', () => {
     assert.equal(out.attribution, null)
   })
 
+  test('the hours: from local midnight through HOURS past the current hour, yesterday trimmed', () => {
+    // 03:30 now: yesterday 20:00 onwards is in the response (past_hours),
+    // then 52 hours ahead of the current hour.
+    const stamps = []
+    const base = Date.UTC(2026, 8, 23, 20) // wall-clock arithmetic in UTC, printed as local stamps
+    for (let i = 0; i < 60; i++) stamps.push(new Date(base + i * 3_600_000).toISOString().slice(0, 16))
+    const col = (v) => stamps.map(() => v)
+    const p = {
+      ...syntheticPayload(),
+      current: { ...syntheticPayload().current, time: '2026-09-24T03:30' },
+      hourly: {
+        time: stamps, temperature_2m: stamps.map((_, i) => i), apparent_temperature: col(50),
+        precipitation_probability: col(0), precipitation: col(0), snowfall: col(0), weather_code: col(1),
+        wind_speed_10m: col(5), wind_gusts_10m: col(10), relative_humidity_2m: col(50), uv_index: col(0), is_day: col(0),
+      },
+    }
+    const out = parseOpenMeteoWeather(p)
+    assert.equal(stamps[4], '2026-09-24T00:00')
+    assert.equal(out.hourly[0].time, '2026-09-24T00:00') // yesterday's 20:00..23:00 trimmed
+    assert.equal(out.hourly[0].tempF, 4)
+    assert.equal(out.hourly.length, 3 + HOURS) // 00:00..02:00 elapsed, then 03:00 + 47
+    assert.equal(out.hourly[3].time, '2026-09-24T03:00')
+    assert.equal(out.hourly[out.hourly.length - 1].time, '2026-09-26T02:00')
+    // Just after midnight nothing has elapsed: HOURS from 00:00.
+    const early = parseOpenMeteoWeather({ ...p, current: { ...p.current, time: '2026-09-24T00:10' } })
+    assert.equal(early.hourly[0].time, '2026-09-24T00:00')
+    assert.equal(early.hourly.length, HOURS)
+    // A response whose current hour is not among the stamps: the first HOURS.
+    const lost = parseOpenMeteoWeather({ ...p, current: { ...p.current, time: '2026-10-30T12:00' } })
+    assert.equal(lost.hourly[0].time, stamps[0])
+    assert.equal(lost.hourly.length, HOURS)
+  })
+
   test('no hourly data throws; a missing current block is null, not a crash', () => {
     assert.throws(() => parseOpenMeteoWeather({ daily: {} }), /no hourly data/)
     assert.throws(() => parseOpenMeteoWeather({ hourly: { time: ['2026-09-24T15:00'] } }), /no hourly data/)
@@ -193,9 +230,23 @@ describe('openMeteoWeather: parseOpenMeteoWeather, a synthetic payload', () => {
 describe('openMeteoWeather: parseOpenMeteoWeather, the real house response', () => {
   const payload = fixture('open-meteo-house.json')
 
-  test('48 hours, 10 days, current present, resolved timezone', () => {
+  test('today from local midnight plus 48 hours ahead, 10 days, current present, resolved timezone', () => {
     const out = parseOpenMeteoWeather(payload)
-    assert.equal(out.hourly.length, 48)
+    assert.equal(payload.current.time, '2026-09-26T15:00')
+    assert.equal(payload.hourly.time.length, 73) // 24 back, the current hour, 48 ahead
+    assert.equal(out.hourly[0].time, '2026-09-26T00:00')
+    assert.equal(out.hourly.length, 15 + HOURS) // 00:00..14:00 elapsed, then 15:00 + 47
+    assert.equal(out.hourly[15].time, '2026-09-26T15:00')
+    assert.equal(out.hourly[out.hourly.length - 1].time, '2026-09-28T14:00')
+    for (let i = 1; i < out.hourly.length; i++) {
+      assert.equal(new Date(out.hourly[i].time) - new Date(out.hourly[i - 1].time), 3_600_000, `hour ${i}`)
+    }
+    // Still the hour-start rule: 08:00 is its own temperature and the code
+    // Open-Meteo stamps at 09:00.
+    const at = (t) => payload.hourly.time.indexOf(t)
+    const eight = out.hourly.find((h) => h.time === '2026-09-26T08:00')
+    assert.equal(eight.tempF, payload.hourly.temperature_2m[at('2026-09-26T08:00')])
+    assert.equal(eight.code, payload.hourly.weather_code[at('2026-09-26T09:00')])
     assert.equal(out.daily.length, 10)
     assert.equal(out.timezone, 'America/Los_Angeles')
     assert.ok(out.current)

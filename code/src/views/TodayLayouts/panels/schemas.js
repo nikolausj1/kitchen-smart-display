@@ -124,8 +124,97 @@ export const PANEL_SCHEMAS = deepFreeze({
       size('size', 'Size'),
       toggle('showHighLow', 'High and low', true, 'temps', 'Off shows the high only'),
       toggle('showIcons', 'Icons', true, 'icon'),
+      select(
+        'style',
+        'Style',
+        [
+          ['rows', 'Side by side'],
+          ['band', 'Bars'],
+        ],
+        'rows',
+        'bar',
+        "Bars: a day per line, a bar from its low to its high on the week's range"
+      ),
     ],
   },
+
+  // --- Weather panels (docs/designs/panels-and-controls.md, chunk 2) ---------
+  // The hub's one weather feed (hooks/useHubWeather.js), through useTodayData.
+  hourly: {
+    fields: [
+      count('hours', 'Hours', 6, 24, 12, null, 'From this hour'),
+      select(
+        'columns',
+        'Columns',
+        [
+          ['auto', 'Auto'],
+          [6, '6'],
+          [8, '8'],
+          [12, '12'],
+        ],
+        'auto',
+        null,
+        'Hours past the columns wrap to another row'
+      ),
+      select(
+        'style',
+        'Temperature line',
+        [
+          ['columns', 'None'],
+          ['curve', 'Curve'],
+        ],
+        'columns',
+        'curve',
+        'Curve: a line through the temperatures, above the numbers'
+      ),
+      toggle('showRain', 'Rain chance', true, 'rain', 'In the accent from 20%'),
+      toggle('showFeelsLike', 'Feels like', false, 'feels'),
+      toggle('showWind', 'Wind', false, 'wind'),
+      size('size', 'Size'),
+    ],
+  },
+
+  conditions: {
+    fields: [
+      select(
+        'layout',
+        'Layout',
+        [
+          ['auto', 'Auto'],
+          ['one', 'One column'],
+          ['two', 'Two columns'],
+        ],
+        'auto',
+        null,
+        'Auto: two columns when the box is wide'
+      ),
+      toggle('showCondition', 'Sky now', true, 'condition', 'The icon and its word, above the rows'),
+      toggle('showFeelsLike', 'Feels like', true, 'value'),
+      toggle('showHumidity', 'Humidity', true, 'value'),
+      toggle('showWind', 'Wind', true, 'value'),
+      toggle('showGusts', 'Gusts', false, 'value'),
+      toggle('showUv', 'UV index', true, 'value'),
+      toggle('showPressure', 'Pressure', false, 'value'),
+      toggle('showVisibility', 'Visibility', false, 'value'),
+      toggle('showDewPoint', 'Dew point', false, 'value'),
+      toggle('showSunrise', 'Sunrise', true, 'value'),
+      toggle('showSunset', 'Sunset', true, 'value'),
+      toggle('showCloudCover', 'Cloud cover', false, 'value'),
+      size('size', 'Size'),
+    ],
+  },
+
+  precip: {
+    fields: [
+      count('hours', 'Hours', 12, 48, 24, 'bar', 'From this hour; a label every 3 hours, every 6 past a day'),
+      size('size', 'Size'),
+    ],
+  },
+
+  alert: {
+    fields: [size('size', 'Size', 'event')],
+  },
+  // --- end weather panels ---
 
   sunmoon: {
     fields: [size('size', 'Size'), toggle('showMoon', 'Moon', true, 'moon')],
@@ -367,8 +456,45 @@ export const PANEL_ELEMENTS = deepFreeze({
     { key: 'icon', label: 'Icon' },
     { key: 'temps', label: 'Temperatures' },
     { key: 'rain', label: 'Rain chance' },
+    { key: 'bar', label: 'High-low bar' },
     EMPTY,
   ],
+  // --- Weather panels (chunk 2). Their Apple Weather mark is marked
+  // data-edit="attribution" but deliberately left out of these lists, so no
+  // element style can hide or restyle it (panels/WeatherAttribution.jsx). ---
+  hourly: [
+    TITLE,
+    { key: 'hour', label: 'Hour' },
+    { key: 'icon', label: 'Icon' },
+    { key: 'curve', label: 'Temperature line' },
+    { key: 'temp', label: 'Temperature' },
+    { key: 'feels', label: 'Feels like' },
+    { key: 'rain', label: 'Rain chance' },
+    { key: 'wind', label: 'Wind' },
+    EMPTY,
+  ],
+  conditions: [
+    TITLE,
+    { key: 'icon', label: 'Icon' },
+    { key: 'condition', label: 'Sky now' },
+    { key: 'label', label: 'Label' },
+    { key: 'value', label: 'Value' },
+    EMPTY,
+  ],
+  precip: [
+    TITLE,
+    { key: 'nextHour', label: 'Next hour' },
+    { key: 'bar', label: 'Bars' },
+    { key: 'label', label: 'Labels' },
+    EMPTY,
+  ],
+  alert: [
+    TITLE,
+    { key: 'event', label: 'Event' },
+    { key: 'until', label: 'Until' },
+    { key: 'headline', label: 'Headline' },
+  ],
+  // --- end weather panels ---
   sunmoon: [
     TITLE,
     { key: 'arc', label: 'Sun arc' },

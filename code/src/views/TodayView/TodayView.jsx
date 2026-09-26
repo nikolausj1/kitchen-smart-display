@@ -118,7 +118,7 @@ export default function TodayView() {
       <div className="today-view today-view--noschool">
         <div className="today-view__left">
           <TimeDatePanel />
-          <WeatherPanel slots={slots} band={band} />
+          <WeatherPanel slots={slots} band={band} attribution={weather.attribution} />
         </div>
       </div>
     )
@@ -128,7 +128,7 @@ export default function TodayView() {
     <div className="today-view">
       <div className="today-view__left">
         <TimeDatePanel />
-        <WeatherPanel slots={slots} band={band} />
+        <WeatherPanel slots={slots} band={band} attribution={weather.attribution} />
       </div>
       <div className="today-view__right">
         <TimerPanel {...timerProps} />

@@ -1,6 +1,7 @@
 import useTodayData from '../data/useTodayData.js'
 import PhotoPanel from '../panels/PhotoPanel.jsx'
 import NowPlayingPanel from '../panels/NowPlayingPanel.jsx'
+import WeatherAttribution from '../panels/WeatherAttribution.jsx'
 import WeatherIcon from '../../../components/WeatherIcon/WeatherIcon.jsx'
 import { fmtDateLong, fmtTime } from '../lib/format.js'
 // Inter 300, latin subset only. main.jsx loads 400/600/700, so a rule asking for
@@ -156,6 +157,8 @@ export default function AmbientLayout() {
               )}
             </div>
           )}
+          {/* Apple's mark while its data is the reading above. */}
+          {current && <WeatherAttribution attribution={d.weather?.attribution} />}
 
           {next && (
             <div

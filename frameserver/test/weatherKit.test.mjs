@@ -33,6 +33,7 @@ import {
   WEATHERKIT_BASE,
   fetchWeatherKit,
   loadWeatherKitConfig,
+  localMidnightMs,
   moonPhaseFractionFromWeatherKit,
   normalizeWeatherKit,
   signWeatherKitToken,
@@ -123,6 +124,36 @@ describe('weatherKit: the JWT', () => {
     assert.equal(url.searchParams.get('dataSets'), DATA_SETS.join(','))
     assert.equal(url.searchParams.get('countryCode'), 'US')
     assert.equal(url.searchParams.get('timezone'), 'America/Los_Angeles')
+    assert.equal(url.searchParams.get('hourlyStart'), null) // no `now`, no window
+  })
+
+  test('the request with a `now`: hourlyStart at local midnight, hourlyEnd HOURS + 1 past the current hour', () => {
+    const url = weatherKitUrl({ lat: 47.66, lon: -122.4, timezone: 'America/Los_Angeles', now: new Date('2026-09-26T18:42:00Z') })
+    assert.equal(url.searchParams.get('hourlyStart'), '2026-09-26T07:00:00.000Z') // 00:00 PDT
+    assert.equal(url.searchParams.get('hourlyEnd'), '2026-09-28T19:00:00.000Z') // 18:00Z + 49 h
+  })
+
+  test('localMidnightMs: the zone\'s own midnight, through both DST changes and a half-hour zone', () => {
+    const at = (iso, tz) => new Date(localMidnightMs(Date.parse(iso), tz)).toISOString()
+    assert.equal(at('2026-09-26T18:42:00Z', 'America/Los_Angeles'), '2026-09-26T07:00:00.000Z')
+    assert.equal(at('2026-09-26T02:00:00Z', 'America/Los_Angeles'), '2026-09-25T07:00:00.000Z') // still the 25th there
+    assert.equal(at('2026-11-01T18:00:00Z', 'America/Los_Angeles'), '2026-11-01T07:00:00.000Z') // fall back at 2 am: midnight was PDT
+    assert.equal(at('2026-03-08T20:00:00Z', 'America/Los_Angeles'), '2026-03-08T08:00:00.000Z') // spring forward: midnight was PST
+    assert.equal(at('2026-09-26T18:42:00Z', 'Asia/Kolkata'), '2026-09-26T18:30:00.000Z') // 00:12 on the 27th there
+    assert.equal(localMidnightMs(Date.parse('2026-09-26T18:42:00Z'), null), null)
+  })
+
+  test('fetchWeatherKit asks for the window from local midnight', async () => {
+    const seen = []
+    await fetchWeatherKit({
+      lat: 47.66, lon: -122.4, timezone: 'America/Los_Angeles', config, now: new Date('2026-09-26T18:42:00Z'),
+      request: async (url) => {
+        seen.push(new URL(String(url)))
+        return { status: 200, body: '{}' }
+      },
+    })
+    assert.equal(seen[0].searchParams.get('hourlyStart'), '2026-09-26T07:00:00.000Z')
+    assert.equal(seen[0].searchParams.get('hourlyEnd'), '2026-09-28T19:00:00.000Z')
   })
 
   test('fetchWeatherKit signs a bearer token and never throws it back out on failure', async () => {
@@ -331,12 +362,17 @@ describe('weatherKit: normalizeWeatherKit, the real house response', () => {
   // Fetched 2026-09-26T18:39:10Z; a `now` a few minutes later, same hour.
   const now = new Date('2026-09-26T18:42:00Z')
 
-  test('windowed to 48 hours starting at the current hour, 10 days, nextHour present, no alerts that day', () => {
+  test('windowed to local midnight through 48 hours past the current hour, 10 days, nextHour present, no alerts that day', () => {
     const out = normalizeWeatherKit(payload, { timezone: 'America/Los_Angeles', now })
-    assert.equal(out.hourly.length, HOURS)
+    // The raw hours start at 2026-09-26T05:00Z, 22:00 the evening before.
+    assert.equal(payload.forecastHourly.hours[0].forecastStart, '2026-09-26T05:00:00Z')
+    // Today's local midnight (07:00Z) first; the current UTC hour (18:00) in
+    // America/Los_Angeles (PDT, UTC-7) is 11:00, eleven hours in.
+    assert.equal(out.hourly[0].time, '2026-09-26T00:00')
+    assert.equal(out.hourly[11].time, '2026-09-26T11:00')
+    assert.equal(out.hourly.length, 11 + HOURS)
+    assert.equal(out.hourly[out.hourly.length - 1].time, '2026-09-28T10:00')
     assert.equal(out.daily.length, 10)
-    // The current UTC hour (18:00) in America/Los_Angeles (PDT, UTC-7) is 11:00.
-    assert.equal(out.hourly[0].time, '2026-09-26T11:00')
     // Strictly increasing, one hour apart, no gaps or repeats.
     for (let i = 1; i < out.hourly.length; i++) {
       const prev = new Date(out.hourly[i - 1].time)

@@ -34,6 +34,13 @@
 // by event name + end time, NWS preferred on a clash, ended alerts dropped,
 // most severe first (lib/weatherRules.mjs's own activeAlerts/compareAlerts).
 //
+// The hours: both sources serve today's local midnight through 48 hours past
+// the current hour (lib/openMeteoWeather.mjs, lib/weatherKit.mjs), so
+// `hourly[0].time` is today's 'T00:00' and a screen drawing this morning's
+// slots in the afternoon finds them here. Each entry is the hour STARTING at
+// its time. lib/hubWeather.mjs's getForecast() hands the headline rules only
+// the hours not yet over, as they have always had.
+//
 // getWeather(now) -> the /api/weather contract. startWeatherRefresher(getLocation,
 // options) starts it (lib/hubWeather.mjs calls this; nothing else should).
 // brief() -> { source, fetchedAt, error, weatherKit: { configured, lastOkAt,

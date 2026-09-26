@@ -4,6 +4,7 @@ import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView, normalizeHomeView } from '../../shell/homeView.js'
 import useImmichPhotos from '../../hooks/useImmichPhotos.js'
+import useHubWeather from '../../hooks/useHubWeather.js'
 import { PLEX_OFF, usePlexPlayers } from '../../hooks/usePlexNow.js'
 import { LAYOUT_IDS, LAYOUT_LABELS, normalizeLayoutId } from '../TodayLayouts/registry.js'
 import { REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
@@ -479,6 +480,11 @@ export default function SettingsView() {
   const { location, school, sonos, slideshow, display } = settings
   const { setView } = useView()
   const { albums: manifestAlbums } = useImmichPhotos()
+  // Apple's attribution, while the hub's weather comes from WeatherKit (the
+  // licence asks for the mark and the legal link wherever its data shows;
+  // hooks/useHubWeather.js). Open-Meteo needs none.
+  const { weather: hubWeather } = useHubWeather()
+  const weatherAttribution = hubWeather?.source === 'weatherkit' ? hubWeather.attribution : null
   // The layout this screen is actually showing: a ?layout= preview wins, as it
   // does in TodayLayoutSwitch, so its own options are here while previewing.
   const shownLayout = normalizeLayoutId(REQUESTED_LAYOUT || display?.todayLayout)
@@ -1124,6 +1130,21 @@ export default function SettingsView() {
               }
             />
           </Row>
+          {/* The link is printed in full: the Echo's Silk cannot follow one. */}
+          {weatherAttribution && (
+            <Row label={`Weather by ${weatherAttribution.name}`} hint="Legal attribution and other data sources">
+              <a
+                className="settings-note"
+                href={weatherAttribution.url}
+                target="_blank"
+                rel="noreferrer"
+                data-interactive="true"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {weatherAttribution.url}
+              </a>
+            </Row>
+          )}
         </section>
 
         {/* --- Reset --- */}

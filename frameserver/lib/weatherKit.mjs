@@ -19,6 +19,10 @@
 // GET https://weatherkit.apple.com/api/v1/weather/en/<lat>/<lon>
 //   ?dataSets=currentWeather,forecastHourly,forecastDaily,forecastNextHour,weatherAlerts
 //   &countryCode=US&timezone=<IANA zone>
+//   &hourlyStart=<today's local midnight, UTC ISO>&hourlyEnd=<HOURS + 1 past the current hour>
+// The hours run from local midnight so a screen drawing this morning's slots
+// in the afternoon finds them in the feed; the normaliser keeps midnight
+// through HOURS past the current hour.
 // Requesting `weatherAlerts` alone (with no other data set) 400s with an
 // empty body in testing; the full set above always works and is what we ask
 // for. A verified real response for the house lands in
@@ -66,11 +70,15 @@ import { moonPhaseName } from './openMeteoWeather.mjs'
 export const WEATHERKIT_BASE = 'https://weatherkit.apple.com/api/v1/weather'
 export const DATA_SETS = ['currentWeather', 'forecastHourly', 'forecastDaily', 'forecastNextHour', 'weatherAlerts']
 export const ATTRIBUTION = Object.freeze({ name: 'Apple Weather', url: 'https://weatherkit.apple.com/legal-attribution.html' })
-// WeatherKit's forecastHourly.hours runs from around local midnight through
-// several days out (250+ entries seen in testing, some already in the past)
-// and forecastDaily.days can run past what the contract promises; both are
-// windowed to the contract's own limits below.
+// forecastHourly.hours, left to its own devices, ran from around local
+// midnight through several days out (250+ entries in testing); the request
+// now asks for local midnight through just past the window (hourlyStart,
+// hourlyEnd), and forecastDaily.days can run past what the contract
+// promises; both are windowed to the contract's own limits below: the hours
+// from today's local midnight through HOURS past the current hour (so HOURS
+// plus the hours elapsed today), DAYS days.
 export const HOURS = 48
+const HOUR_MS = 3_600_000
 export const DAYS = 10
 const JWT_TTL_S = 3600
 const FETCH_TIMEOUT_MS = 10_000
@@ -128,11 +136,42 @@ export function signWeatherKitToken({ teamId, keyId, serviceId, keyPem }, nowMs 
   return `${signingInput}.${base64url(signature)}`
 }
 
-export function weatherKitUrl({ lat, lon, timezone }) {
+// The offset of `timeZone` from UTC at the instant `ms`, in ms (whole minutes).
+function zoneOffsetMs(ms, timeZone) {
+  const stamp = toLocalStamp(new Date(ms), timeZone)
+  if (!stamp) return null
+  return Date.parse(`${stamp}:00Z`) - Math.floor(ms / 60_000) * 60_000
+}
+
+// The instant (ms) today's local midnight is in `timeZone`, for the day `ms`
+// falls on there; null without a zone. The offset is taken again at the
+// first guess, so a DST change between midnight and now lands right.
+export function localMidnightMs(ms, timeZone) {
+  const stamp = toLocalStamp(new Date(ms), timeZone)
+  if (!stamp) return null
+  const midnightAsUtc = Date.parse(`${stamp.slice(0, 10)}T00:00:00Z`)
+  const off = zoneOffsetMs(ms, timeZone)
+  if (off == null) return null
+  const guess = midnightAsUtc - off
+  const off2 = zoneOffsetMs(guess, timeZone)
+  return off2 == null ? guess : midnightAsUtc - off2
+}
+
+const currentHourOf = (ms) => Math.floor(ms / HOUR_MS) * HOUR_MS
+
+// `now` (a Date or ms) adds hourlyStart (today's local midnight) and
+// hourlyEnd (HOURS + 1 past the current hour: the window below plus one).
+export function weatherKitUrl({ lat, lon, timezone, now = null }) {
   const url = new URL(`${WEATHERKIT_BASE}/en/${lat}/${lon}`)
   url.searchParams.set('dataSets', DATA_SETS.join(','))
   url.searchParams.set('countryCode', 'US')
   url.searchParams.set('timezone', timezone)
+  const nowMs = now instanceof Date ? now.getTime() : typeof now === 'number' ? now : NaN
+  if (Number.isFinite(nowMs)) {
+    const start = localMidnightMs(nowMs, timezone)
+    if (start != null) url.searchParams.set('hourlyStart', new Date(start).toISOString())
+    url.searchParams.set('hourlyEnd', new Date(currentHourOf(nowMs) + (HOURS + 1) * HOUR_MS).toISOString())
+  }
   return url
 }
 
@@ -146,8 +185,9 @@ async function httpGet(url, headers) {
 // error, never anything of ours). `request(url, headers)` is injectable.
 export async function fetchWeatherKit({ lat, lon, timezone, config, request = httpGet, now = Date.now() }) {
   if (!config?.configured) throw new Error(config?.error || 'WeatherKit is not configured')
-  const token = signWeatherKitToken(config, now)
-  const { status, body } = await request(weatherKitUrl({ lat, lon, timezone }), { Authorization: `Bearer ${token}` })
+  const nowMs = now instanceof Date ? now.getTime() : Number(now)
+  const token = signWeatherKitToken(config, nowMs)
+  const { status, body } = await request(weatherKitUrl({ lat, lon, timezone, now: nowMs }), { Authorization: `Bearer ${token}` })
   if (status < 200 || status >= 300) throw new Error(`WeatherKit HTTP ${status}: ${body.slice(0, 200)}`)
   return JSON.parse(body)
 }
@@ -382,8 +422,9 @@ function nextHourFrom(nh, timezone) {
 // itself asked WeatherKit for), used to turn every UTC timestamp into the
 // house's local wall-clock stamp. `now` windows `forecastHourly.hours` (which
 // runs from around local midnight, well before "now", through several days
-// out) down to the contract's 48 hours starting at the current hour. `log`
-// gets one line per unknown conditionCode, the first time it is seen.
+// out) down to the contract's window: today's local midnight (in `timezone`)
+// through HOURS past the current hour. `log` gets one line per unknown
+// conditionCode, the first time it is seen.
 export function normalizeWeatherKit(payload, { timezone, now = new Date(), log = () => {} } = {}) {
   if (!isDict(payload)) throw new Error('not a WeatherKit response')
   const cw = payload.currentWeather
@@ -391,16 +432,17 @@ export function normalizeWeatherKit(payload, { timezone, now = new Date(), log =
   const daily = payload.forecastDaily
   const nextHour = payload.forecastNextHour
 
-  const currentHourMs = Math.floor(now.getTime() / 3_600_000) * 3_600_000
+  const currentHourMs = currentHourOf(now.getTime())
+  const startMs = localMidnightMs(now.getTime(), timezone) ?? currentHourMs
+  const endMs = currentHourMs + HOURS * HOUR_MS
   const current = isDict(cw) ? currentFrom(cw, timezone, log) : null
   const hourlyList = Array.isArray(hourly?.hours)
     ? hourly.hours
         .filter(isDict)
         .filter((h) => {
           const t = Date.parse(h.forecastStart)
-          return Number.isFinite(t) && t >= currentHourMs
+          return Number.isFinite(t) && t >= startMs && t < endMs
         })
-        .slice(0, HOURS)
         .map((h) => hourFrom(h, timezone, log))
     : []
   const dailyList = Array.isArray(daily?.days) ? daily.days.filter(isDict).slice(0, DAYS).map((d) => dayFrom(d, timezone, log)) : []
