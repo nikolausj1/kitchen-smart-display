@@ -42,6 +42,10 @@
 //                                     a person card: TMDB (lib/tmdb.mjs) + what
 //                                     else of theirs is in the Plex library
 //   GET  /api/plex/image?path=&w=&h=  a Plex image, the token added here
+//   GET  /api/ha/state                Home Assistant snapshot (lib/homeAssistant.mjs)
+//   POST /api/ha/action               {actionId, screen, data?}: run a whitelisted action
+//   GET  /api/ha/entities?q=          live HA entity search, for the dashboard's Add box
+//   GET  /api/ha/actions/log?limit=N  the newest logged action attempts
 //   GET  /healthz                     liveness + a glance at everything
 //
 // Secrets and keys come from the environment or the service root's .env
@@ -52,7 +56,9 @@
 // screen: PLEX_URL (default http://127.0.0.1:32400, Plex on this box),
 // PLEX_TOKEN or the file PLEX_TOKEN_FILE (default secrets/plex-token.txt),
 // TMDB_API_KEY or the file TMDB_API_KEY_FILE (default secrets/tmdb-key.txt,
-// optional), PLEX_FIXTURE (tests). Keys and tokens are never logged.
+// optional), PLEX_FIXTURE (tests). Home Assistant (lib/homeAssistant.mjs):
+// HA_URL and HA_TOKEN or HA_TOKEN_FILE (default secrets/ha-token.txt).
+// Keys and tokens are never logged.
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.
@@ -86,6 +92,7 @@ import { alertsHealth, getAlerts, startAlertsRefresher, weatherAlertsFor } from 
 import { headlineFor } from './lib/headline.mjs'
 import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
 import { createTmdb } from './lib/tmdb.mjs'
+import { createHomeAssistant } from './lib/homeAssistant.mjs'
 import {
   DEFAULT_SCHOOL_SLUG,
   getCachedSchoolCal,
@@ -102,6 +109,7 @@ const ENV_FILE = loadEnvFile(join(ROOT, '.env'))
 const ENV_KEYS = [
   'IMMICH_URL', 'IMMICH_API_KEY', 'GOOGLE_CALENDAR_KEY_FILE', 'GOOGLE_CALENDAR_FIXTURE',
   'PLEX_URL', 'PLEX_TOKEN', 'PLEX_TOKEN_FILE', 'PLEX_FIXTURE', 'TMDB_API_KEY', 'TMDB_API_KEY_FILE',
+  'HA_URL', 'HA_TOKEN', 'HA_TOKEN_FILE',
 ]
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
@@ -469,6 +477,20 @@ function noteShared(shared) {
   calendar.noteShared(shared)
 }
 
+// The one write path for shared settings: the dashboard's PATCH route below
+// and lib/homeAssistant.mjs's one-time whitelist seed both go through this,
+// so every writer re-notifies the same derived modules the same way.
+function patchShared(partial) {
+  const reg = readRegistry()
+  reg.shared = deepMerge(reg.shared, partial)
+  writeRegistry(reg)
+  noteShared(reg.shared)
+  return reg.shared
+}
+
+// --- Home Assistant (lib/homeAssistant.mjs): a whitelisted read/action layer ---
+const ha = createHomeAssistant({ dir: ROOT, getShared, patchShared, log: (m) => console.log(m) })
+
 // state.json holds ONLY { countdown } - the user's decisions. Everything else
 // in /api/state is derived or owned elsewhere (registry, calendar, forecast).
 function readStoredState() {
@@ -498,6 +520,9 @@ function currentState(now = new Date()) {
   state.headline = headlineFor({ now, events: calendar.snapshot(registry.shared).events, forecast, alerts })
   state.weatherAlerts = weatherAlertsFor(alerts, now)
   state.airQuality = air.current(now)
+  // Home Assistant indicator states (garage, locks, modes, ...) folded into
+  // house state so a screen polling here never needs a second poll for them.
+  state.ha = ha.compact()
   return state
 }
 
@@ -805,6 +830,7 @@ async function handle(req, res) {
       alerts: alertsHealth(),
       airQuality: state.airQuality ? state.airQuality.label : null,
       plex: { ...plex.health(), tmdb: tmdb.configured() },
+      ha: ha.brief(),
     })
   }
 
@@ -871,13 +897,10 @@ async function handle(req, res) {
     if (req.method === 'GET') return json(res, 200, readRegistry().shared)
     if (req.method === 'PATCH' || req.method === 'POST') {
       try {
-        const reg = readRegistry()
-        reg.shared = deepMerge(reg.shared, await readBody(req))
-        writeRegistry(reg)
         // Location, departure hour or the calendar list may have moved: the
-        // calendar refetches at once when its ids change.
-        noteShared(reg.shared)
-        return json(res, 200, reg.shared)
+        // calendar refetches at once when its ids change (patchShared calls
+        // noteShared for every writer, this route included).
+        return json(res, 200, patchShared(await readBody(req)))
       } catch (e) {
         return json(res, 400, { error: String(e.message || e) })
       }
@@ -1113,6 +1136,40 @@ async function handle(req, res) {
     return res.end(req.method === 'HEAD' ? undefined : r.body)
   }
 
+  // --- Home Assistant (lib/homeAssistant.mjs) ---
+  // The snapshot the dashboard card (and later, panels) read; never cached.
+  if (path === '/api/ha/state') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, ha.snapshot())
+  }
+
+  // { actionId, screen, data? } -> { ok, status, error }. Only actionId is
+  // required; a refused or failed call still answers 200 (the body says why),
+  // like Plex's command route - except an unknown action (404) and a rate
+  // limit (429) are real HTTP statuses, so a panel can tell those apart.
+  if (path === '/api/ha/action') {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'POST only' })
+    let body
+    try {
+      body = await readBody(req)
+    } catch (e) {
+      return json(res, 400, { ok: false, status: 400, error: String(e.message || e) })
+    }
+    const r = await ha.runAction(body?.actionId, { screen: body?.screen, data: body?.data })
+    return json(res, r.status, { ok: r.ok, status: r.status, error: r.error })
+  }
+
+  // Live HA entity search for the dashboard's "Add entity" box, capped at 30.
+  if (path === '/api/ha/entities') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, await ha.searchEntities(url.searchParams.get('q'), 30))
+  }
+
+  if (path === '/api/ha/actions/log') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, ha.actionsLog(url.searchParams.get('limit')))
+  }
+
   // --- Sonos ---
   if (path === '/api/sonos' || path.startsWith('/api/sonos/')) return proxySonos(req, res, url)
 
@@ -1168,6 +1225,7 @@ startWeatherRefresher(getLocation, { dir: ROOT })
 startAlertsRefresher(getLocation)
 const restoredAir = air.start()
 const restoredPlex = plex.start()
+const restoredHa = ha.start()
 
 function envSummary() {
   const file = ENV_FILE.found
@@ -1198,6 +1256,8 @@ server.listen(PORT, BIND, () => {
   console.log(`  plex   : ${PLEX_FIXTURE ? `FIXTURE ${PLEX_FIXTURE} (instead of /status/sessions)` : PLEX_URL}; ` +
               `token ${plex.configured() ? 'present' : `MISSING (${PLEX_TOKEN_FILE}): /api/plex/now reports it`}; ` +
               `${restoredPlex.players} known player(s); TMDB key ${tmdb.configured() ? 'present' : 'absent (cast from Plex)'}`)
+  console.log(`  ha     : ${ha.configured() ? `configured (${restoredHa.entities} whitelisted entit${restoredHa.entities === 1 ? 'y' : 'ies'})` : 'NOT CONFIGURED (HA_URL / HA_TOKEN missing): /api/ha/state reports it'}` +
+              `${restoredHa.seeded ? '; whitelist seeded from the built-in list' : ''}`)
   console.log(`  cached : schoolcal ${cachedSchool.calendar ?? 'none'} | lunch ${cachedSchool.lunch ?? 'none'} | ` +
               `travel ${restoredTravel ? `${restoredTravel.date} ${restoredTravel.mode}` : 'none'}`)
   if (!existsSync(PHOTOS_DIR)) console.warn(`  WARNING: photos dir does not exist`)
