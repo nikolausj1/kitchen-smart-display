@@ -1,13 +1,16 @@
 // countdowns.test.mjs - the Entry board's hand-marked countdown tiles.
 //
 // docs/designs/entry-board.md is the source of truth for the marker syntax
-// and the art-matching precedence tested here.
+// and the art-matching precedence tested here; the `color:` directive is
+// docs/designs/panels-and-controls.md's (chunk 2, countdown tiles).
 
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   descriptionText,
   parseCountdownMarker,
+  tileColor,
+  TILE_COLORS,
   titleEmoji,
   stripEmoji,
   artName,
@@ -15,6 +18,17 @@ import {
   daysBetween,
   buildCountdowns,
 } from '../lib/countdowns.mjs'
+
+// WCAG 2 contrast of a '#rrggbb' against white.
+function contrastWithWhite(hex) {
+  const lin = (c) => {
+    const v = c / 255
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const n = parseInt(hex.slice(1), 16)
+  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
+  return 1.05 / (l + 0.05)
+}
 
 describe('descriptionText', () => {
   it('turns <br> into newlines', () => {
@@ -47,28 +61,28 @@ describe('parseCountdownMarker', () => {
   })
 
   it('bare "countdown" uses the default lead days', () => {
-    assert.deepEqual(parseCountdownMarker('countdown'), { leadDays: 30, label: null, image: null })
-    assert.deepEqual(parseCountdownMarker('countdown', { defaultLeadDays: 10 }), { leadDays: 10, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown'), { leadDays: 30, label: null, image: null, color: null })
+    assert.deepEqual(parseCountdownMarker('countdown', { defaultLeadDays: 10 }), { leadDays: 10, label: null, image: null, color: null })
   })
 
   it('"countdown 14" is 14 days', () => {
-    assert.deepEqual(parseCountdownMarker('countdown 14'), { leadDays: 14, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown 14'), { leadDays: 14, label: null, image: null, color: null })
   })
 
   it('"countdown = 14 days" is 14 days', () => {
-    assert.deepEqual(parseCountdownMarker('countdown = 14 days'), { leadDays: 14, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown = 14 days'), { leadDays: 14, label: null, image: null, color: null })
   })
 
   it('"countdown: 2 weeks" is 14 days', () => {
-    assert.deepEqual(parseCountdownMarker('countdown: 2 weeks'), { leadDays: 14, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown: 2 weeks'), { leadDays: 14, label: null, image: null, color: null })
   })
 
   it('"countdown 1 month" is 30 days', () => {
-    assert.deepEqual(parseCountdownMarker('countdown 1 month'), { leadDays: 30, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown 1 month'), { leadDays: 30, label: null, image: null, color: null })
   })
 
   it('tolerates extra whitespace between the number and the unit', () => {
-    assert.deepEqual(parseCountdownMarker('countdown   7   weeks'), { leadDays: 49, label: null, image: null })
+    assert.deepEqual(parseCountdownMarker('countdown   7   weeks'), { leadDays: 49, label: null, image: null, color: null })
   })
 
   it('is a whole-word match: "countdowns" and "notcountdown" do not match', () => {
@@ -78,21 +92,21 @@ describe('parseCountdownMarker', () => {
 
   it('reads label: and image: from their own lines', () => {
     const marker = parseCountdownMarker('countdown 5\nlabel: Minnesota!\nimage: airplane')
-    assert.deepEqual(marker, { leadDays: 5, label: 'Minnesota!', image: 'airplane' })
+    assert.deepEqual(marker, { leadDays: 5, label: 'Minnesota!', image: 'airplane', color: null })
   })
 
   it('splits a label/image pair sharing one line at the second keyword', () => {
     const marker = parseCountdownMarker('countdown\nlabel: Trip image: mark_kim')
-    assert.deepEqual(marker, { leadDays: 30, label: 'Trip', image: 'mark_kim' })
+    assert.deepEqual(marker, { leadDays: 30, label: 'Trip', image: 'mark_kim', color: null })
   })
 
   it('"image: none" is captured verbatim (matchArt interprets it)', () => {
-    assert.deepEqual(parseCountdownMarker('countdown\nimage: none'), { leadDays: 30, label: null, image: 'none' })
+    assert.deepEqual(parseCountdownMarker('countdown\nimage: none'), { leadDays: 30, label: null, image: 'none', color: null })
   })
 
   it('reads the marker out of HTML (Google stores descriptions as HTML)', () => {
     const marker = parseCountdownMarker('countdown 7<br>label: Test')
-    assert.deepEqual(marker, { leadDays: 7, label: 'Test', image: null })
+    assert.deepEqual(marker, { leadDays: 7, label: 'Test', image: null, color: null })
   })
 
   it('is case-insensitive and can sit anywhere in the description', () => {
@@ -104,6 +118,96 @@ describe('parseCountdownMarker', () => {
     const long = 'x'.repeat(200)
     const marker = parseCountdownMarker(`countdown\nlabel: ${long}`)
     assert.equal(marker.label.length, 80)
+  })
+
+  it('reads color: beside label: and image:, on its own line', () => {
+    const marker = parseCountdownMarker('countdown 5\nlabel: Minnesota!\nimage: minnesota\ncolor: green')
+    assert.deepEqual(marker, { leadDays: 5, label: 'Minnesota!', image: 'minnesota', color: TILE_COLORS.green })
+  })
+
+  it('takes #rrggbb and #rgb in any case, with : or =, as lowercase #rrggbb', () => {
+    assert.equal(parseCountdownMarker('countdown\ncolor: #2F80ED').color, '#2f80ed')
+    assert.equal(parseCountdownMarker('countdown\ncolor = #0F0').color, '#00ff00')
+    assert.equal(parseCountdownMarker('countdown\nCOLOR:#abc').color, '#aabbcc')
+  })
+
+  it('takes a palette name in any case, and the colour: spelling', () => {
+    assert.equal(parseCountdownMarker('countdown\ncolor: Blue').color, TILE_COLORS.blue)
+    assert.equal(parseCountdownMarker('countdown\ncolour: PURPLE').color, TILE_COLORS.purple)
+    assert.equal(parseCountdownMarker('countdown\ncolor: grey').color, TILE_COLORS.gray)
+  })
+
+  it('ignores a value that is not a colour, and keeps the rest of the marker', () => {
+    const marker = parseCountdownMarker('countdown 7\nlabel: Trip\ncolor: chartreuse\nimage: airplane')
+    assert.deepEqual(marker, { leadDays: 7, label: 'Trip', image: 'airplane', color: null })
+    for (const bad of ['#12', '#1234', '#12345g', '#12345678', 'rgb(1, 2, 3)', 'dark blue', '']) {
+      assert.equal(parseCountdownMarker(`countdown\ncolor: ${bad}`).color, null, bad)
+    }
+  })
+
+  it('skips an unknown colour for a later one: the first colour wins', () => {
+    assert.equal(parseCountdownMarker('countdown\ncolor: sparkly\ncolor: teal\ncolor: red').color, TILE_COLORS.teal)
+  })
+
+  it('leaves the label and image precedence as it was: the first of each wins', () => {
+    const marker = parseCountdownMarker('countdown\ncolor: red\nlabel: First\nimage: a\nlabel: Second\nimage: b\ncolor: blue')
+    assert.deepEqual(marker, { leadDays: 30, label: 'First', image: 'a', color: TILE_COLORS.red })
+  })
+
+  it('splits a label and a color sharing one line at the second keyword', () => {
+    const marker = parseCountdownMarker('countdown\nlabel: Trip color: blue; image: airplane')
+    assert.deepEqual(marker, { leadDays: 30, label: 'Trip', image: 'airplane', color: TILE_COLORS.blue })
+  })
+
+  it('reads color: out of HTML, but never out of a tag', () => {
+    assert.equal(parseCountdownMarker('countdown<br>color: <b>purple</b>').color, TILE_COLORS.purple)
+    assert.equal(parseCountdownMarker('<span style="color: #333333">countdown</span>').color, null)
+  })
+
+  it('is a whole word: watercolor: is not color:', () => {
+    assert.equal(parseCountdownMarker('countdown\nwatercolor: blue').color, null)
+  })
+})
+
+describe('tileColor', () => {
+  it('expands #rgb and lowercases #rrggbb', () => {
+    assert.equal(tileColor('#3AF'), '#33aaff')
+    assert.equal(tileColor('#2F80ED'), '#2f80ed')
+    assert.equal(tileColor('  #2f80ed  '), '#2f80ed')
+  })
+
+  it('knows every palette name in any case, grey as gray', () => {
+    for (const [name, hex] of Object.entries(TILE_COLORS)) {
+      assert.equal(tileColor(name), hex)
+      assert.equal(tileColor(name.toUpperCase()), hex)
+    }
+    assert.equal(tileColor('Grey'), TILE_COLORS.gray)
+  })
+
+  it('forgives wrapping quotes and a closing full stop', () => {
+    assert.equal(tileColor('"blue"'), TILE_COLORS.blue)
+    assert.equal(tileColor("'#abc'"), '#aabbcc')
+    assert.equal(tileColor('Green.'), TILE_COLORS.green)
+  })
+
+  it('is null for anything else', () => {
+    for (const bad of ['chartreuse', 'blue tile', '#12', '#1234', '#12345g', '#12345678', 'rgb(1,2,3)', 'constructor', '__proto__', '', '#']) {
+      assert.equal(tileColor(bad), null, bad)
+    }
+    assert.equal(tileColor(null), null)
+    assert.equal(tileColor(undefined), null)
+    assert.equal(tileColor(42), null)
+  })
+
+  it('has the eleven names, each a lowercase #rrggbb that white text reads on', () => {
+    assert.deepEqual(Object.keys(TILE_COLORS), [
+      'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'indigo', 'purple', 'pink', 'brown', 'gray',
+    ])
+    assert.ok(Object.isFrozen(TILE_COLORS))
+    for (const [name, hex] of Object.entries(TILE_COLORS)) {
+      assert.match(hex, /^#[0-9a-f]{6}$/, name)
+      assert.ok(contrastWithWhite(hex) >= 3, `${name} ${hex} ${contrastWithWhite(hex).toFixed(2)}`)
+    }
   })
 })
 
@@ -336,5 +440,37 @@ describe('buildCountdowns', () => {
   it('malformed input: non-array events, and junk entries, never throw', () => {
     assert.deepEqual(buildCountdowns(undefined, { now }), [])
     assert.deepEqual(buildCountdowns([null, 42, 'junk'], { now }), [])
+  })
+
+  it("carries the marker's colour as tileColor, beside the calendar's own colour", () => {
+    const marked = [
+      { id: 'a', title: 'Last day of school', description: 'countdown\ncolor: blue', startDate: '2026-10-01', color: '#e0457b' },
+      { id: 'b', title: 'Fly to Minnesota', description: 'countdown\ncolour: #3A6', startDate: '2026-10-02', color: '#4a90e2' },
+      { id: 'c', title: 'Cabin', description: 'countdown\ncolor: plaid', startDate: '2026-10-03', color: '#e0457b' },
+      { id: 'd', title: 'Pumpkins', description: 'countdown', startDate: '2026-10-04' },
+    ]
+    const out = buildCountdowns(marked, { now, max: 10 })
+    assert.deepEqual(
+      out.map((c) => [c.id, c.tileColor, c.color]),
+      [
+        ['a', TILE_COLORS.blue, '#e0457b'],
+        ['b', '#33aa66', '#4a90e2'],
+        ['c', null, '#e0457b'],
+        ['d', null, null],
+      ]
+    )
+  })
+
+  it('a colour changes nothing else: the same tiles, in the same order', () => {
+    const plain = buildCountdowns(events, { now, artIndex, max: 100 })
+    const coloured = buildCountdowns(
+      events.map((e) => ({ ...e, description: `${e.description}\ncolor: red` })),
+      { now, artIndex, max: 100 }
+    )
+    assert.ok(plain.length > 0)
+    assert.ok(plain.every((c) => c.tileColor === null))
+    assert.ok(coloured.every((c) => c.tileColor === TILE_COLORS.red))
+    const withoutTile = (list) => list.map((c) => ({ ...c, tileColor: undefined }))
+    assert.deepEqual(withoutTile(coloured), withoutTile(plain))
   })
 })
