@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-25
-version: 7.4
+modified: 2026-09-26
+version: 7.5
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -86,6 +86,20 @@ refresh, resolve the flags. Full flow:
 ---
 
 ## Active design topics (in discussion)
+
+### Panels and controls (PLANNED 2026-09-26, not built)
+
+The layout editor's next round, decided against Justin's DAKboard screens:
+generic element styles on every panel (hide, size, weight, colour, spacing,
+tracking, caps, wrap or shrink), box background v2 (gradient, border,
+shadow, blur with a tint fallback), per-panel fonts with a few new families,
+vertical align, block titles, per-panel visibility rules; weather served by
+the hub from Open-Meteo or Apple WeatherKit with hourly, conditions,
+precipitation and alert panels; DAKboard-style countdown tiles with the art
+above a gradient card; Up next, Day list, Week grid and Month grid calendar
+views; shape and clock blocks; Home Assistant panels once the token lands.
+Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`. Waiting
+on Justin: the WeatherKit key and ids, the go for chunk 1.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -590,6 +604,15 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-26 - Panels and controls, the next editor round.** Apple
+  WeatherKit joins Open-Meteo on the hub (Open-Meteo stays default and
+  fallback); element styles are generic across every panel; text shrinks or
+  wraps, never truncates; countdown tiles take the DAKboard look with the art
+  above a gradient card; a few new fonts only; calendar views include Week
+  and Month grids for the Echo 15; Home Assistant panels wait for the inputs;
+  alert tones, week offsets, the availability calendar and auto-scroll are
+  skipped. Delivered in reviewable chunks, not necessarily overnight. Design:
+  `docs/designs/panels-and-controls.md`.
 - **2026-09-25 - The Plex screen is a cast board.** Its job is "who is that,
   and what else are they in": portrait headshots, every credited actor plus
   guest stars and series regulars, character names under actor names, no
