@@ -2,16 +2,21 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-26
-version: 1.2
+version: 1.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, calendar, countdowns, home-assistant, echo-show, frameserver]
 ---
 
 # Panels and controls
 
-**Status: planned 2026-09-26, not built.** The plan of record for the layout
-editor's next round, decided in conversation with Justin against his DAKboard
-screens (calendar, time, weather and countdown settings). Builds on
+**Status: chunk 1 built and deployed 2026-09-26 (hub 12:49, build
+`2fcca07`); as built in `layout-editor.md`, "As built, chunk 1
+(2026-09-26)". The hub halves of chunk 2 (the one weather feed, on Apple
+WeatherKit) and chunk 5 (Home Assistant, actions off) were built and
+deployed the same day. Their app halves, and chunks 3 and 4, are not
+built.** The plan of record for the layout editor's next round, decided in
+conversation with Justin against his DAKboard screens (calendar, time,
+weather and countdown settings). Builds on
 `layout-editor.md` (Contract v2, panel schemas, day-part variants) and
 `entry-board.md`. Delivered in reviewable chunks, each its own deploy; not
 necessarily an overnight pass.
@@ -31,13 +36,45 @@ necessarily an overnight pass.
 - **Calendar views**: Up next, Day list, Week grid and Month grid, the wide
   ones aimed at the Echo Show 15.
 - **Home Assistant panels wait** for the LAN URL, the token and the entity
-  list; the design is ready in `BACKLOG.md` and below.
+  list; the design is ready in `BACKLOG.md` and below. (The inputs landed the
+  same day; see Chunk 5.)
 - **Skipped from DAKboard**: alert tones at event time, week offsets, the
   availability calendar, and auto-scrolling (motion on a glance screen).
 
-## Chunk 1: editor foundations
+## Chunk 1: editor foundations (BUILT, deployed 2026-09-26)
 
-Everything later inherits these, so they go first.
+Everything later inherits these, so they went first. **Built and deployed
+2026-09-26** (hub 12:49, build `2fcca07`). The as-built record, with every
+field, range and mechanism, is `layout-editor.md`, "As built, chunk 1
+(2026-09-26)". Where the build differs from the plan below:
+
+- `background` stays the preset (`none | card | solid`); the custom look is
+  sibling props, `bg { color, color2, gradient, opacity }`, `border`,
+  `shadow` and `blur`, not one object inside `background`.
+- `title` is `{ mode: default | custom | none, text }` rather than `{ show,
+  text }`, so a panel's own header can be kept, replaced or dropped.
+- `valign: top` means the panel as designed: the headline, text blocks and
+  the Board's clock are centred by design and stay so. A real top is in
+  BACKLOG.
+- Rules are `when: { all?, any? }`, lists of conditions, each with its own
+  `not`; `timeRange` is `{ from, to }` as `'HH:MM'`; a `daypart` kind joined
+  the list; `countdownWithin` takes `days`.
+- Shrink to fit writes a text-scale factor (`--tl-el-fit`), not a font size,
+  so it composes with the size knobs and the element's own size; it also
+  re-fits when the text changes and when web fonts load.
+- The defaults stay as designed, pixel for pixel, rather than "shrink for
+  single values": text that was cut off with an ellipsis before (a headline
+  past its line, a long agenda title) still is, until its element is set to
+  Shrink to fit (`_review/layout-editor/found-elements-headline-*.png`).
+- Fonts: Roboto and IBM Plex Mono 400, 500 and 700, Barlow Condensed 400 to
+  700; the global Display font offers all five families.
+- `PANEL_ELEMENTS` grew to cover every visible part, and two keys were
+  renamed so that `title` is the header row everywhere: the countdown tile's
+  event title is `name`, Now Playing's track title is `track`.
+- Reset per element is the Element section's Reset element; per panel, the
+  panel menu's Reset element styles.
+
+The plan as written:
 
 ### Element styles
 
@@ -115,6 +152,85 @@ dashboard's weather card, and a small mark inside weather panels while the
 source is Apple. A missing or failing key falls back to Open-Meteo and says so
 in `/healthz`.
 
+### As built: the hub half (2026-09-26)
+
+Deployed with the hub 2026-09-26 12:49 (build `2fcca07`); the live hub
+reports `source: weatherkit`. `frameserver/lib/weather.mjs` is the feed
+(source choice, fallback, cache, merged alerts); `lib/weatherKit.mjs` and
+`lib/openMeteoWeather.mjs` are one client each, normalised to one contract.
+`lib/hubWeather.mjs` is now an adapter that reshapes the feed into the narrow
+forecast the headline rules have always read, so `weatherRules.mjs`,
+`headline.mjs` and their tests run unchanged on either source.
+
+- `GET /api/weather`: `{ source, fetchedAt, error, location: { lat, lon,
+  timezone }, current, hourly, daily, nextHour, alerts, sun, moon,
+  attribution }`. `error` is the preferred source's last error when it is not
+  what is being served. `hourly` is 48 entries from the current hour, each
+  `time` the START of its hour (Open-Meteo's end-of-hour columns moved back,
+  as the headline already did); `daily` is 10 days. UV sits in `current.uv`,
+  `hourly[].uv` and `daily[].uvMax`, not at the top level. `condition` is
+  WeatherKit's own string (`MostlyCloudy`) and null for Open-Meteo; `code`
+  is the WMO code both share (WeatherKit's conditions mapped by one table,
+  an unknown one logged once and drawn from the cloud cover).
+  `daily[].windMaxMph` is the day's maximum gust. `nextHour` (WeatherKit
+  only, else null) is `{ summary, minutes }`, `summary` being WeatherKit's
+  list of segments (start, condition, chance, intensity). `moon` is `{
+  phase, name }`, computed locally for Open-Meteo; `attribution` is `{ name:
+  'Apple Weather', url }` for WeatherKit, null for Open-Meteo.
+- Alerts: the NWS alerts (`lib/nwsAlerts.mjs`) merged on every read with
+  WeatherKit's own, deduped by event name and end, the NWS copy kept on a
+  clash, ended ones dropped, most severe first; each carries `source: 'nws'
+  | 'weatherkit'`. `/api/state.headline` and `/api/state.weatherAlerts` use
+  this merged list.
+- Source: WeatherKit when configured, Open-Meteo otherwise.
+  `WEATHER_SOURCE=auto | weatherkit | open-meteo` (default auto) names the
+  preferred source, and the other one is still tried when it fails, pinned
+  or not; `source` always says whose data is in the response. Refreshed
+  every 15 minutes, retried 5 minutes after a failure, one fetch at a time;
+  the disk cache `weather-feed-cache.json` serves the last snapshot at once
+  after a restart, and a snapshot more than 3 hours old counts as none.
+- Timezone: the registry stores `shared.location.timezone: 'auto'`, and
+  WeatherKit needs a real zone (so do the local `time` stamps), so the hub
+  asks Open-Meteo once per location and keeps its answer; a real zone in the
+  registry wins.
+- `/healthz.weather` = `{ source, fetchedAt, error, weatherKit: {
+  configured, lastOkAt, lastError }, openMeteo: { lastOkAt, lastError } }`.
+  The dashboard's house-wide Weather card shows the source, the age, any
+  error and, when the source is Apple, the Apple Weather attribution link.
+- Tests: 49 new (`weatherKit` 18, `openMeteoWeather` 15, `weather` 16).
+  Fixtures in `frameserver/test/fixtures/weather/`: real WeatherKit and
+  Open-Meteo responses for the house, and a hand-written WeatherKit alerts
+  payload.
+
+Findings:
+
+- WeatherKit's CDN caches a successful response for 5 minutes by URL, so a
+  second request inside that window gets the same body, and a check of a
+  change (a new key, say) can pass on a cached answer.
+- A wrong key id alone did not fail authentication; a wrong team id did. One
+  good answer does not prove every id is right.
+- WeatherKit's alert summaries have no `event` field; the name is parsed
+  from the description (the text before " issued"). Unverified against a
+  live alert (none was active within reach while this was built); the
+  parser drops what it cannot read rather than failing.
+- Asking for `weatherAlerts` alone answers 400 with an empty body; the full
+  list of data sets always works. With no alerts Apple leaves the
+  `weatherAlerts` key out rather than sending an empty list.
+- `forecastHourly` starts around local midnight (250 hours or more, some
+  already past), so the hub windows it to 48 hours from the current hour.
+
+What remains of chunk 2:
+
+- The app: its weather hooks (`hooks/useWeather.js`,
+  `views/TodayLayouts/data/useDailyForecast.js`) still fetch Open-Meteo
+  themselves; they move to `/api/weather`, keeping that fetch as the
+  fallback.
+- Attribution on the screens: the Apple Weather mark and link in Settings,
+  and the small mark inside weather panels while the source is Apple. Only
+  the dashboard has it so far, while the headline's weather lines already
+  come from WeatherKit's data.
+- The panels below and the countdown tiles.
+
 ### Panels
 
 - **Hourly strip**: the next 6 to 24 hours, icon, temperature, rain chance,
@@ -156,7 +272,7 @@ Shape and line blocks (fill, gradient, radius, blur), the flip clock as a
 panel, an analog clock, a second clock with its own time zone, a date-only
 block, week number and day X of Y.
 
-## Chunk 5: Home Assistant (inputs landed 2026-09-26)
+## Chunk 5: Home Assistant (hub half BUILT 2026-09-26; panels not built)
 
 Received 2026-09-26: the LAN URL and a long-lived token from the dedicated
 local-only user `frameserver`, validated from the Mac and from the hub
@@ -187,7 +303,92 @@ into `/api/state`, an action route that logs every call. Panels: indicator
 chip, button with hold-to-confirm, toggle, sensor value (the Awair indoor air
 sensors), presence chips, camera snapshot, the HA shopping list. Ship with the
 dashboard PIN item. Needs: HA's LAN URL, a token from a dedicated non-admin
-user, the entity list and the three buttons (garage, lock, leaving).
+user, the entity list and the three buttons (garage, lock, leaving); all
+received 2026-09-26.
+
+### As built: the hub half (2026-09-26)
+
+Deployed with the hub 2026-09-26 12:49 (build `2fcca07`). At the deploy it
+was connected with all 13 entities live (the garage open, the front door
+locked, the day part on Auto). No service call has ever been sent to the
+real Home Assistant.
+
+- `frameserver/lib/homeAssistant.mjs`: `HA_URL`, and `HA_TOKEN` or
+  `HA_TOKEN_FILE` (default `secrets/ha-token.txt`). A WebSocket to
+  `<HA_URL>/api/websocket`: auth, `subscribe_events` for `state_changed`, an
+  initial `get_states`; reconnect with backoff (5 s doubling to 2 minutes);
+  while the socket is down, a REST poll of `/api/states` every 60 s. Only
+  whitelisted entities are kept, with a small allowlist of attributes. The
+  whitelist is re-read every 5 s, so a dashboard edit reaches memory within
+  seconds.
+- The whitelist lives in the registry, `shared.ha = { entities: [{ id,
+  label, kind }], actions: [{ id, label, entity, service, confirm: tap |
+  hold }], actionsEnabled }`, edited on the dashboard. It was seeded once
+  from Justin's list above, each entity checked to exist first (all did): 13
+  entities (the garage cover, the front door lock and its contact sensor,
+  the five modes, the day part select, `light.downstairs`,
+  `light.basement_basement`, `person.justin`, `person.sheena`) and 10
+  actions:
+
+  | action | service on entity | confirm |
+  |---|---|---|
+  | Turn off downstairs | `light.turn_off` on `light.downstairs` | tap |
+  | Garage | `cover.toggle` on `cover.garage_door_controller` | hold |
+  | Close garage | `cover.close_cover` on the garage | hold |
+  | Lock front door | `lock.lock` on the front door lock | tap |
+  | Unlock front door | `lock.unlock` on the front door lock | hold |
+  | Leaving | `input_boolean.turn_on` on `input_boolean.mode_away` | tap |
+  | Home | `input_boolean.turn_off` on `input_boolean.mode_away` | tap |
+  | Guest mode | `input_boolean.toggle` on `input_boolean.mode_guest` | tap |
+  | Basement light | `light.toggle` on `light.basement_basement` | tap |
+  | Day part | `input_select.select_option` on `input_select.day_part_override` | tap |
+
+  A stored action carries no data of its own: what a call needs comes with
+  the call (`data.option` for the day part, listed in the snapshot as the
+  action's `needs`).
+- Routes: `GET /api/ha/state` (connection, each whitelisted entity's state,
+  label and kind, the actions and whether they are enabled), `POST
+  /api/ha/action { actionId, screen, data? }`, `GET /api/ha/entities?q=` (a
+  live search for the dashboard's Add entity box, at most 30, with ids in a
+  domain that has a kind, such as lights, locks, covers, sensors and people,
+  ranked above a device's diagnostics), `GET /api/ha/actions/log`. `/api/state.ha` carries a compact copy (`connected`,
+  and per entity its state, a few attributes and when it changed), so a
+  screen sees indicators without a second poll. `/healthz.ha` = `{
+  configured, connected, actionsEnabled, entities, lastEventAt, error }`.
+- Guards on an action, in order: the id must be on the whitelist (else
+  404); actions must be switched on (else 403, "actions are disabled on the
+  dashboard"); the service must be on its domain's allowlist (lights and
+  switches on, off and toggle; covers open, close, stop and toggle; locks
+  lock and unlock; input booleans on, off and toggle; `select_option`;
+  scenes and scripts on; nothing for the read-only domains), else 400; a
+  rate limit of 12 a minute per screen and 60 overall (else 429); only
+  allowlisted data keys pass (`option` for `select_option`, `brightness_pct`
+  for `light.turn_on`). Every attempt that names an action id, refused or
+  not, is logged to `ha-actions.json` (the newest 200). A call Home Assistant
+  itself refuses comes back as `{ ok: false }` with the reason.
+- **Actions are off by default.** `actionsEnabled` is seeded false, and a
+  missing key reads as false. The action route has no authentication beyond
+  being on the LAN, so once it is on any device on the Wi-Fi could open the
+  garage; the dashboard's "Allow actions from screens" switch stays off until
+  a first real press has been watched and the dashboard PIN decided.
+- Dashboard: a house-wide "Home Assistant" card with the connection status,
+  the entity whitelist with live states and a kind select per row, an Add
+  entity search, the action list (label, entity, service, tap or hold), the
+  switch, and Recent actions (the newest 20). Review shot:
+  `_review/hub/ha-card.png` (taken before the switch was added).
+- Tests: 35 new (`frameserver/test/homeAssistant.test.mjs`); with the
+  weather feed's the hub suite is 468.
+
+### What remains of chunk 5
+
+- The panels: indicator chip, button with hold-to-confirm, toggle, sensor
+  value, presence chips, camera snapshot, the shopping list.
+- The first real action, with Justin present, then the switch.
+- The dashboard PIN, before the switch stays on.
+- Justin to confirm two choices in the seed: "Turn off downstairs" as
+  `light.turn_off` on the `light.downstairs` group (no script or scene of
+  that name exists), and the basement as the room group
+  `light.basement_basement` rather than `light.basement_light_switch`.
 
 ## Justin's part for WeatherKit (done 2026-09-26)
 

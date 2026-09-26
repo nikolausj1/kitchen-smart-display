@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-26
-version: 7.6
+version: 7.7
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,7 +87,7 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Panels and controls (PLANNED 2026-09-26, not built)
+### Panels and controls (chunk 1 BUILT 2026-09-26; the hub halves of chunks 2 and 5 BUILT)
 
 The layout editor's next round, decided against Justin's DAKboard screens:
 generic element styles on every panel (hide, size, weight, colour, spacing,
@@ -97,11 +97,20 @@ vertical align, block titles, per-panel visibility rules; weather served by
 the hub from Open-Meteo or Apple WeatherKit with hourly, conditions,
 precipitation and alert panels; DAKboard-style countdown tiles with the art
 above a gradient card; Up next, Day list, Week grid and Month grid calendar
-views; shape and clock blocks; Home Assistant panels (the URL and token landed 2026-09-26; the hub module is
-being built first, the panels follow chunk 1).
-Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`. The WeatherKit
-key and ids landed 2026-09-26 (validated against Apple: all five data sets,
-next-hour rain, attribution URL). Waiting on Justin: the go for chunk 1.
+views; shape and clock blocks; Home Assistant panels.
+Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`.
+
+**Built and deployed to the hub 2026-09-26 12:49 (build `2fcca07`):** chunk
+1, the editor foundations (element styles, box v2, fonts, visibility rules,
+multi-select, copy and paste style; as built in
+`docs/designs/layout-editor.md`, "As built, chunk 1"); chunk 2's hub half,
+one weather feed at `GET /api/weather`, on WeatherKit with Open-Meteo as the
+automatic fallback; chunk 5's hub half, the Home Assistant layer (connected,
+13 entities, 10 actions, actions off behind a dashboard switch). See Recently
+Shipped. **Next:** chunk 2's app half (the app's weather hooks onto
+`/api/weather`, the Apple attribution on the screens, the weather panels, the
+countdown tiles), then chunk 3. Chunk 5's panels follow the first real
+action with Justin and the dashboard PIN.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -117,7 +126,8 @@ registry. All four steps are built and deployed: steps 1 and 2 on
 2026-09-24, steps 3 and 4 (panel knobs, spec v2, sub-elements, smart guides,
 day-part tabs, the Board as a spec layout, history, copy to another screen)
 overnight 2026-09-24/25. What is left is polish: "Layout editor nits" under
-Shared / infrastructure. Design and as-built record:
+Shared / infrastructure. Chunk 1 of the next round (Panels and controls,
+above) extended it on 2026-09-26. Design and as-built record:
 `docs/designs/layout-editor.md`.
 
 ### Mixtape: cassette deck Now Playing (BUILT 2026-09-24, on the TV, in review)
@@ -513,7 +523,7 @@ progress bar). Remaining:
   captions) once the Apple TV's Plex app advertises as a player (Justin's
   switch, STATUS "Waiting on Me"); (2) a Plex button in the menu pill, to open
   the view by hand; (3) a "New on Plex" panel (recently added to the library)
-  for the spec layouts; (4) unit tests for `frameserver/lib/plex.mjs` and
+  for the spec layouts; (4) Plex and TMDB unit tests: done with rev 2 (`plex.test.mjs` 17, `tmdb.test.mjs` 22).mjs` and
   `tmdb.mjs`, which the hub suite does not cover yet. Design:
   `docs/designs/plex-second-screen.md`.
 - **ROADOM as the long-term family-room screen** (DECISION, 2026-09-24) - the
@@ -548,25 +558,78 @@ progress bar). Remaining:
   (`Entry/SpecPanel.css`); Board saves carry `eveningFrom` (harmless, the
   Board has no day parts); the editor rounds positions to two decimals when it
   loads a spec, so a Board tuned in the editor loses the default's third
-  decimal on every box (edges can move by up to 4/64 px at 1280x800). Also
-  not built from the design: the right-click menu, safe margins, "freeze
-  data". Detail: `docs/designs/layout-editor.md`, "As built (steps 3 and 4)".
-- **Home Assistant indicators and buttons on the Entry board** (DESIGN,
-  discussed 2026-09-25) - Home Assistant states at a glance by the front door,
-  and a few actions. Shape discussed: a hub-side HA module
-  (`frameserver/lib/`) with a long-lived token in the hub's `secrets/`, a
-  whitelist of entities it may read and actions it may call (nothing else
-  passes through), and two panel types for the spec layouts, `hastatus`
-  (indicators) and `habutton` (an action), with hold-to-confirm on anything
-  that opens the house (garage, lock). Needs from Justin: HA's LAN URL, a
-  long-lived token from a dedicated non-admin HA user, and the entity list.
-  Pair it with the dashboard PIN below, since the hub has no login. The same
-  module would be the way in for the items blocked on Home Assistant (the
-  doorbell, presence dimming).
-- **Dashboard PIN** (DECISION) - the hub has no login (LAN-only by design), so
-  anyone on the network can change every screen from `/admin` and the editor.
-  A PIN in front of the dashboard, and in front of any Home Assistant action
-  once those exist. Needs Justin's call on the PIN and what it covers.
+  decimal on every box (edges can move by up to 4/64 px at 1280x800); since
+  2026-09-26 only on the boxes a save changes, and on every box of the first
+  save over the built-in default, because untouched panels now go back
+  exactly as stored. Also not built from the design: the right-click menu,
+  safe margins, "freeze data". Detail: `docs/designs/layout-editor.md`, "As
+  built (steps 3 and 4)".
+- **Vertical align: a real "top"** (POLISH, from chunk 1, 2026-09-26) -
+  `valign: 'top'` means the panel as designed, so the boxes centred by design
+  (the headline, text blocks, the Board's clock) cannot be pinned to the top
+  of their box. Add a value that really pins to the top, keeping "as
+  designed" the default so no saved layout moves. Detail:
+  `docs/designs/layout-editor.md`, "As built, chunk 1".
+- **Missing font faces** (POLISH, from chunk 1, 2026-09-26) - Inter has no
+  500 (Medium renders Regular); Roboto, Barlow Condensed and IBM Plex Mono
+  have no 300 (the Entry clock's Light draws at 400 in them); Roboto and IBM
+  Plex Mono have no 600 (Semibold renders Bold, and the Board's clock is
+  Semibold). Latin subsets imported in `Entry/SpecBoard.jsx`; a face
+  downloads only when a page uses it.
+- **Remove the layout editor's contract fallbacks** (POLISH, from chunk 1,
+  2026-09-26) - `code/src/editor/appSpec.js` imports the app's
+  `layoutSpec.js` as a namespace and keeps fallback copies of
+  `ELEMENT_STYLE_SCHEMA`, `BOX_SCHEMA`, `FONTS` and `RULE_KINDS`, plus the
+  `carryOver` in `readSpec`, from when the two halves were built in
+  parallel. Inert since the app exports all four: switch to named imports
+  and drop them. Same pass, three comments left by that day's parallel
+  merges: `frameserver/server.mjs`'s header repeats half a sentence (after
+  the WeatherKit keys), and the header of `lib/homeAssistant.mjs` and the
+  `/api/ha/action` route's comment list the statuses from before the actions
+  switch (it answers 403, and a service off the allowlist 400).
+- **Home Assistant indicators and buttons on the Entry board** (hub layer
+  BUILT 2026-09-26; panels TODO) - Home Assistant states at a glance by the
+  front door, and a few actions. The hub half shipped 2026-09-26
+  (`frameserver/lib/homeAssistant.mjs`: a WebSocket subscription, a
+  dashboard-edited whitelist seeded with 13 entities and 10 actions,
+  per-service allowlists, rate limits, an action log, actions off behind a
+  dashboard switch; see Recently Shipped). Left: the panel types for the
+  spec layouts (indicator chip, button with hold-to-confirm on anything that
+  opens the house, toggle, sensor value, presence chips, camera snapshot,
+  the shopping list), after the first real action and the dashboard PIN
+  below. The same layer is the way in for the items blocked on Home
+  Assistant (the doorbell, presence dimming). Design:
+  `docs/designs/panels-and-controls.md`, chunk 5.
+- **First real Home Assistant action, with Justin present** (VERIFY, from
+  2026-09-26) - no service call has ever reached Home Assistant. With Justin
+  there: switch "Allow actions from screens" on (dashboard, Home Assistant
+  card), press one harmless action (the basement light toggle, say) through
+  `POST /api/ha/action`, watch Home Assistant and the card's Recent actions,
+  then switch it off again, or leave it on once the dashboard PIN is in
+  place. Also his to confirm: "Turn off downstairs" as `light.turn_off` on
+  the `light.downstairs` group, and the basement as `light.basement_basement`
+  rather than `light.basement_light_switch`.
+- **Dashboard PIN** (DECISION, now before Home Assistant actions go on) - the
+  hub has no login (LAN-only by design), so anyone on the network can change
+  every screen from `/admin` and the editor, and, once the dashboard's
+  "Allow actions from screens" switch is on, open the garage or unlock the
+  front door through `POST /api/ha/action`. A PIN in front of the dashboard
+  and the action route, in place before that switch stays on. Needs Justin's
+  call on the PIN and what it covers.
+- **WeatherKit alert spot-check** (VERIFY, at the first real alert, from
+  2026-09-26) - WeatherKit's alert summaries have no `event` field, so the
+  hub parses the name from the description, tested only against a
+  hand-written fixture. At the first alert WeatherKit reports for the house,
+  check `GET /api/weather`'s `alerts`: a readable event name, one entry
+  where the NWS sends the same alert (deduped by event and end), and the
+  headline's line. Design: `docs/designs/panels-and-controls.md`, chunk 2.
+- **Kitchen Pi and Apple TV not redeployed on 2026-09-26** (TODO, with the
+  next Pi deploy) - that day's deploys were the hub only (build `2fcca07`),
+  and neither needs anything from them: the kitchen Pi serves its own bundle
+  (`812242f`, 2026-09-25) and shows Framed Today, so chunk 1's styles and
+  rules matter there only once it shows a spec layout; the Apple TV reads
+  nothing new (`/api/weather` is there for it later). The next `./deploy.sh
+  pi` brings the kitchen level.
 - **Countdown helpers** (SKIPPED 2026-09-25, kept as an option) - helpers
   around the countdown tiles, which today come only from the `countdown`
   marker typed into an event's description (`entry-board.md`). Not built in
@@ -606,6 +669,36 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-26 - Home Assistant actions start off, behind a dashboard
+  switch.** The hub's action route has no authentication beyond being on the
+  LAN, and the whitelist holds the garage and the front door lock, so
+  `shared.ha.actionsEnabled` is seeded false (a missing key reads as false)
+  and every press is refused with a 403 and logged until the dashboard's
+  "Allow actions from screens" is on. It goes on after a first real press
+  with Justin present, and the dashboard PIN is meant to pair with it.
+  Design: `docs/designs/panels-and-controls.md`, chunk 5.
+- **2026-09-26 - The weather feed falls back automatically, even when a
+  source is pinned.** `WEATHER_SOURCE` names the preferred source (default
+  auto: WeatherKit when configured), and the other one is still tried when
+  it fails: a pin states a preference, not a ban, and a screen is better
+  served by the other provider's current forecast than by none. `source` in
+  every response says whose data it is, and `error` why the preferred one is
+  not it.
+- **2026-09-26 - `valign: top` means "as designed".** Every saved layout is
+  at `top`, and a few panels are centred in their box by design (the
+  headline, text blocks, the Board's clock); a `top` that pinned them would
+  have moved them on every screen. `middle` and `bottom` move content; a
+  real top comes later as its own value (BACKLOG, Shared / infrastructure).
+- **2026-09-26 - `title` is the header row on every panel, so the countdown
+  tile's title key became `name`.** The element key `title` now marks each
+  panel's header (its own or a custom block title), so the countdown tile's
+  event title is `name` ("Event name") and Now Playing's track title is
+  `track`. Safe to rename: no saved layout used the keys, since element
+  styles were new that day.
+- **2026-09-26 - Plex is polled only while a visibility rule needs it.** The
+  `plexPlaying` rule keeps the hub's Plex state polled (every 5 s) only while
+  a panel on screen carries such a rule, so a screen with no such rule that
+  does not follow Plex polls nothing, as before.
 - **2026-09-26 - Panels and controls, the next editor round.** Apple
   WeatherKit joins Open-Meteo on the hub (Open-Meteo stays default and
   fallback); element styles are generic across every panel; text shrinks or
@@ -910,6 +1003,49 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-26 - Layout editor chunk 1: the editor foundations** (hub
+  deployed 12:49, build `2fcca07`; the Echos take it on their next reload;
+  the kitchen Pi and the Apple TV were not redeployed and need nothing from
+  it). Every labelled part of every panel takes an element style (hide,
+  size, weight, colour, space above and below, letter spacing, capitals, and
+  wrap, shrink to fit or clip), its size multiplying with the panel's own
+  knobs; boxes gain a fill colour and gradient, a border, a shadow, a
+  backdrop blur (a tint on the Echo), their own font and text colour,
+  vertical alignment and a block title; Roboto, Barlow Condensed and IBM
+  Plex Mono join Inter and Fraunces; any panel can show only when a rule
+  holds (school morning, weekend or weekday, day part, a time range, music
+  or Plex playing, a weather alert, a countdown within N days). In the
+  editor: an Element section with a breadcrumb, an Elements tree with eyes,
+  Fill and border, Type and Block title sections, "Show when",
+  multi-select with align, distribute and match, copy and paste style, and
+  saves that put untouched panels back exactly as stored. Defaults
+  pixel-identical (0 px in 14 scenarios); 36 new app tests. Design and
+  as-built: `docs/designs/layout-editor.md`, "As built, chunk 1". Shots:
+  `_review/layout-editor/found-*`.
+- **2026-09-26 - Home Assistant on the hub, actions off** (hub deployed
+  12:49). `frameserver/lib/homeAssistant.mjs` keeps a WebSocket
+  subscription to Home Assistant (a REST poll while it is down) for a
+  whitelist edited on the dashboard, seeded from Justin's list: 13 entities
+  (the garage, the front door lock and contact, five modes, the day part,
+  two light groups, two people) and 10 actions, hold-to-confirm on the
+  garage and the unlock. `GET /api/ha/state`, `POST /api/ha/action`, an
+  entity search, an action log, a compact copy in `/api/state.ha`,
+  per-service allowlists and rate limits. Actions are refused until the
+  dashboard's "Allow actions from screens" is on (off by default); no call
+  has reached Home Assistant yet. Connected at the deploy with all 13 live.
+  35 new tests. Design: `docs/designs/panels-and-controls.md`, chunk 5.
+  Shot: `_review/hub/ha-card.png`.
+- **2026-09-26 - One weather feed on the hub, on Apple WeatherKit** (hub
+  deployed 12:49). `GET /api/weather` (current, 48 hours, 10 days, the next
+  hour by the minute, alerts, sun, moon, attribution) from WeatherKit when
+  configured, else Open-Meteo, falling back automatically, refreshed every
+  15 minutes and cached on disk; NWS and WeatherKit alerts merged; the
+  headline rules read it through `lib/hubWeather.mjs`, now an adapter, and
+  run unchanged; per-source status in `/healthz.weather`; the dashboard's
+  Weather card with the Apple Weather attribution. The live hub serves
+  WeatherKit. The screens still fetch Open-Meteo themselves (the app half is
+  next). 49 new tests; the hub suite is 468. Design:
+  `docs/designs/panels-and-controls.md`, chunk 2.
 - **2026-09-25 - Plex second screen, rev 2: the cast board** (hub deployed
   16:10, build `4564476`). After Justin's couch review of rev 1 (too small,
   poster too big, cast too small): a 151 px title strip, then a scrolling
@@ -1224,15 +1360,17 @@ Newest first.
 - **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
-- **Branches not on GitHub (2026-09-25)** - `main` matches `origin/main`
-  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (65
-  commits over `main`, with Mixtape and the Today layouts inside it) exist
-  only locally. Merging waits on the Mixtape label pick; pushing does not
-  have to.
+- **Branches not on GitHub (2026-09-26)** - `main` matches `origin/main`
+  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (85
+  commits over `main` at `2fcca07`, with Mixtape and the Today layouts
+  inside it) exist only locally. Merging waits on the Mixtape label pick;
+  pushing does not have to.
 - **Secrets on the Mac and the hub** - `~/.config/smart-display/` holds
-  `google-calendar.json`, `plex-token.txt` and `tmdb-key.txt` (mode 600); the
-  hub keeps its copies in `C:\Services\FrameServer\secrets\`. Never in git,
-  never in `_inbox/` (it syncs to Dropbox).
+  `google-calendar.json`, `plex-token.txt`, `tmdb-key.txt`, `weatherkit.p8`
+  with its ids in `weatherkit.env`, and `ha-token.txt` with `ha.env` (all
+  mode 600); the hub keeps its copies in
+  `C:\Services\FrameServer\secrets\`, with the WeatherKit ids and `HA_URL`
+  in its `.env`. Never in git, never in `_inbox/` (it syncs to Dropbox).
 - **Photo-flag triage queue** - the queue lives on the hub since 2026-09-24
   (`GET http://nuc.local:8095/api/flags?unresolved=1`, 25 unresolved after the
   migration, 26 on 2026-09-25; `flags-review.mjs` and `flags-apply.mjs` point

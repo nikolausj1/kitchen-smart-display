@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-09-25
-version: 5.3
+modified: 2026-09-26
+version: 5.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
@@ -15,9 +15,11 @@ Kitchen Smart Display covers the family's screens, all fed by one hub (FrameServ
 
 ## Stage
 
-Active Development. Five screens are registered with the hub (plus `dev-mac` for testing): the kitchen Pi, the Living Room Apple TV, and three Echo Shows running the kitchen web app in Silk: the family-room Echo Show 10 (which now follows the Apple TV's Plex playback), the Echo Show 15 by the front door (the Entry board, its home view) and the office Echo Show 5 (its Today is the flip clock). All five polled the hub on 2026-09-25. Every screen depends on FrameServer on the NUC and nothing else on the LAN. The work since 2026-08-18 is committed on `feature/echo-hub` (65 commits) and deployed, not merged or pushed.
+Active Development. Five screens are registered with the hub (plus `dev-mac` for testing): the kitchen Pi, the Living Room Apple TV, and three Echo Shows running the kitchen web app in Silk: the family-room Echo Show 10 (which now follows the Apple TV's Plex playback), the Echo Show 15 by the front door (the Entry board, its home view) and the office Echo Show 5 (its Today is the flip clock). All five polled the hub on 2026-09-25. Every screen depends on FrameServer on the NUC and nothing else on the LAN. The work since 2026-08-18 is committed on `feature/echo-hub` (85 commits at `2fcca07`) and deployed, not merged or pushed.
 
 ## Health
+
+**2026-09-26: the layout editor's next round began, and the hub gained Apple weather and Home Assistant; all of it went to the hub at 12:49 (build `2fcca07`).** In the editor Justin can now style any part of any panel on its own (hide it, size it, change its weight, colour, spacing or capitals, shrink long text to fit), give a box a colour or gradient fill, a border, a shadow, a blurred backdrop (a tint on the Echos), its own font (Roboto, Barlow Condensed and IBM Plex Mono are new) and its own title, and make a panel appear only when something holds: a school morning, the weekend, a time of day, music or Plex playing, a weather alert, a countdown drawing near. He can also select several panels to align, distribute and size them together, and copy one panel's style onto another. Everything left at its default draws exactly as before (0 px differ in 14 comparisons), and a save now puts every panel it did not change back exactly as stored. The hub has one weather feed, live on Apple WeatherKit with Open-Meteo as the automatic fallback; the headline's weather lines already use it, while the screens' own weather panels still read Open-Meteo until the next step. And the hub is connected to Home Assistant with the 13 entities and 10 actions from Justin's list, live states on the dashboard, and actions switched off: no command has been sent to the house, and the first one waits for Justin to be there. The kitchen Pi and the Apple TV were not redeployed and need nothing from this. Tests: the hub's suite is 468 (84 new), the app's 51 (36 new). Next: the app half of the weather work (the screens reading the hub's feed, the Apple attribution, the new weather panels, the DAKboard-style countdown tiles).
 
 **2026-09-25, afternoon: the Plex second screen got its rev 2 after Justin's couch review, deployed to the hub at 16:10.** It is now a cast board: big portrait headshots of every credited actor with character names, guest tags and the series regulars, a full-screen person card with Known for and what is in the library, one-minute timers reset by touch, and a per-screen text size knob. The hub feeds it up to 60 cast entries and a richer person payload, with 39 new tests (384 total). Still waiting on "Advertise as Player" for the buttons. Separately, a parallel session made the office flip clock full width and deployed at 09:43; that work is committed on the branch too.
 
@@ -37,11 +39,13 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Waiting on Me
 
-- [ ] **Replace the kitchen Pi's power supply (urgent)** - it runs off a USB-A port built into a wall outlet (~12W, no USB-C PD negotiation); a Pi 5 needs the official 27W USB-C PD supply in a real AC socket, and the panel should keep the outlet's USB port. The new heartbeat shows it is not only at boot: 201 undervoltage dips this boot by 08:42 on 2026-09-25, about 2 s each, roughly 6 an hour day and night (~10 min)
+- [ ] **Replace the kitchen Pi's power supply (urgent)** - it runs off a USB-A port built into a wall outlet (~12W, no USB-C PD negotiation); a Pi 5 needs the official 27W USB-C PD supply in a real AC socket, and the panel should keep the outlet's USB port. The new heartbeat shows it is not only at boot: 201 undervoltage dips this boot by 08:42 on 2026-09-25, about 2 s each, and still dipping: 262 by 13:14 on 2026-09-26 (~10 min)
       - unblocks: the kitchen display staying up unattended. This is the likely cause of the 2026-09-22 outage, which also took music and the morning countdown off the Apple TV until the Pi was reset. The dashboard's Power line turns green once the dips stop.
 - [ ] **Turn on Advertise as Player in the Plex app on the Apple TV, then watch the family-room Echo follow** - the setting is in the Plex app's own settings on the Living Room Apple TV. Then play something: the family-room Echo should switch to the Plex view after about 10 s, with play, pause, skip and captions buttons, and go back about 30 s after you stop (~5 min)
       - unblocks: controlling Plex from the family-room screen (built, untested) and confirming that Echo as the follower (it follows the Apple TV as of 2026-09-25)
-- [ ] **Finish the Echo first run: fullscreen** - all three Echos poll the hub, but each reports a viewport 100 px shorter than its panel (1280x700, 1920x980, 960x380), which reads as Silk's toolbar still showing. Tap once on each ("Tap to start", or the chip bottom-left) and tell the agent, which can check the viewport from the hub. Then the overnight look: the page still there in the morning, the faint clock after midnight (~5 min, then a glance the next morning)
+- [ ] **Tap each Echo once after the 12:49 hub deploy on 2026-09-26** - after a deploy each Echo reloads onto the new build within about 5 minutes and waits for one tap ("Tap to start") to re-arm its keep-alive audio and fullscreen. At 13:09 the hub had not heard from the office Echo Show 5 since its restart, so check that one is on the page (~2 min)
+      - unblocks: all three Echos on the new build and staying on the page
+- [ ] **Finish the Echo first run: fullscreen** - all three Echos poll the hub, but each reported a viewport 100 px shorter than its panel (1280x700, 1920x980, 960x380), which reads as Silk's toolbar still showing. At 13:09 on 2026-09-26 the family-room Echo reported 1280x800 and the Echo Show 15 1920x1080, their full panels, so those two look done; the office Echo Show 5 had not reported since the hub restarted. Tap once on each ("Tap to start", or the chip bottom-left) and tell the agent, which can check the viewport from the hub. Then the overnight look: the page still there in the morning, the faint clock after midnight (~5 min, then a glance the next morning)
       - unblocks: the Entry board drawing at the Echo 15's full 1920x1080; calling the Echos done
 - [ ] **Share Sheena's calendar with the hub** - from her Google account, share her calendar with `frameserver@smart-display-509622.iam.gserviceaccount.com` ("See all event details"), then add her calendar ID on the dashboard's Calendars card (House-wide). Until then the agenda shows only your events (~5 min)
       - unblocks: the family agenda on the front-door board
@@ -49,13 +53,15 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: the countdown tiles picking the right art without an `image:` line in every event
 - [ ] **Pick a Mixtape label layout** - open `_review/mockups/mixtape-label-concepts.html`, choose among six concepts (full-bleed art, blurred full-bleed, tall art column, wide banner, two-line hierarchy, sticker), Copy decisions, paste into chat (~10 min)
       - unblocks: the label rebuild, redeploy, and merging `feature/mixtape`
-- [ ] **If you want Home Assistant on the Entry board: three inputs** - Home Assistant's LAN URL, a long-lived access token from a new non-admin HA user made for the hub (drop it in `~/.config/smart-display/`, never `_inbox/`), and the list of entities to show and actions to allow (the garage and the lock would get hold-to-confirm buttons) (~15 min)
-      - unblocks: the hub's Home Assistant module and the indicator and button panels (BACKLOG, Shared / infrastructure)
-- [ ] **Decide the dashboard PIN** - whether the dashboard (and any Home Assistant action) sits behind a PIN, and what the PIN is; today anyone on the LAN can change every screen (~2 min)
-      - unblocks: adding Home Assistant buttons safely
+- [ ] **Confirm two Home Assistant choices** - the hub seeded "Turn off downstairs" as `light.turn_off` on the `light.downstairs` group (Home Assistant has no script or scene of that name) and the basement light as the room group `light.basement_basement`, not the switch's own `light.basement_light_switch`. Say yes, or which to use instead (~2 min)
+      - unblocks: the Home Assistant buttons doing what you expect
+- [ ] **A few minutes with the agent for the first real Home Assistant action, then decide the switch** - no command has ever been sent to the house. Together: turn on "Allow actions from screens" on the dashboard's Home Assistant card, press one harmless action (the basement light), watch it happen and appear under Recent actions, then turn the switch off again, or leave it on once the dashboard PIN is decided (~10 min)
+      - unblocks: the Home Assistant buttons and indicators on the screens (the panels, chunk 5 in `docs/designs/panels-and-controls.md`)
+- [ ] **Decide the dashboard PIN** - whether the dashboard and the Home Assistant action route sit behind a PIN, and what the PIN is; today anyone on the LAN can change every screen, and once "Allow actions from screens" is on, could open the garage or unlock the front door (~2 min)
+      - unblocks: turning Home Assistant actions on safely
 - [ ] **Consider lowering the Echo Show 15's darkness to 0.5 or 0.6** - dashboard, the `echo-show15` screen, Entry board card, "Darken photos". It runs 0.8, so bright photos hit the 0.9 cap; with the new scrims and adaptive darkness, 0.5 to 0.6 reads well (~2 min)
       - unblocks: brighter photos by the front door without losing the text
-- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (65 commits over `main`, with Mixtape and the Today layouts inside it), not pushed and not merged. Merging waits on the Mixtape label pick since the branch includes Mixtape (~20 min to read)
+- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (85 commits over `main` at `2fcca07`, with Mixtape and the Today layouts inside it), not pushed and not merged. Merging waits on the Mixtape label pick since the branch includes Mixtape (~20 min to read)
       - unblocks: merging to main and pushing to GitHub; the Pi lock-down step after the soak week
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
@@ -72,22 +78,24 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 ## Next Up
 
 1. Justin: the 27 W supply for the kitchen Pi (urgent), then Advertise as Player on the Apple TV (see Waiting on Me).
-2. After the next Pi reboot: confirm the journal kept the previous boot (`journalctl --list-boots` lists two), and route the kiosk server's own log into the journal (BACKLOG, "Kitchen Pi health follow-ups").
-3. After a clean week (from 2026-10-01): lock the kitchen Pi to localhost and delete its legacy routes and Sonos service (BACKLOG, Shared / infrastructure). The agent can do this on its own once the Pi's log shows nothing but the Mac calling them.
-4. Once the Apple TV advertises: test Plex transport from the family-room Echo, then the Plex follow-ups (a button in the menu pill, unit tests for the Plex and TMDB modules).
-5. Rotate the exposed `immich-go-import` API key, and merge and push `feature/echo-hub` after the Mixtape label pick.
+2. The app half of the weather work (`docs/designs/panels-and-controls.md`, chunk 2): the screens' weather hooks onto the hub's `/api/weather`, the Apple Weather attribution on the screens, then the new weather panels and the DAKboard-style countdown tiles.
+3. With Justin: the first real Home Assistant action, then the dashboard PIN and the actions switch; then the Home Assistant panels (chunk 5).
+4. After the next Pi reboot: confirm the journal kept the previous boot (`journalctl --list-boots` lists two), and route the kiosk server's own log into the journal (BACKLOG, "Kitchen Pi health follow-ups").
+5. After a clean week (from 2026-10-01): lock the kitchen Pi to localhost and delete its legacy routes and Sonos service (BACKLOG, Shared / infrastructure). The agent can do this on its own once the Pi's log shows nothing but the Mac calling them.
+6. Once the Apple TV advertises: test Plex transport from the family-room Echo, then the Plex follow-ups (a button in the menu pill; the Plex and TMDB unit tests landed with rev 2).
+7. Rotate the exposed `immich-go-import` API key, and merge and push `feature/echo-hub` after the Mixtape label pick.
 
 ## Biggest Risk
 
-A full-permission Immich API key was pasted into chat during the family photo import and has still not been rotated. The code half of the old risk has partly reopened: `main` matches GitHub as of 2026-08-18, but everything since (the hub migration, the Echo screens, the layout editor, the Entry board, Plex, Mixtape; 65 commits on `feature/echo-hub`) exists only in the local repository, and GitHub has none of it. A push closes that half; it does not need the merge.
+A full-permission Immich API key was pasted into chat during the family photo import and has still not been rotated. The code half of the old risk has partly reopened: `main` matches GitHub as of 2026-08-18, but everything since (the hub migration, the Echo screens, the layout editor, the Entry board, Plex, Mixtape, the weather feed, Home Assistant; 85 commits on `feature/echo-hub`) exists only in the local repository, and GitHub has none of it. A push closes that half; it does not need the merge.
 
 ## Ideas Shelf
 
-- **Home Assistant indicators and buttons on the Entry board** (M) - Home Assistant states at a glance by the front door and a few actions, hold-to-confirm for the garage and the lock. A hub-side module with a whitelist of entities and actions (the token stays on the hub) and two new panel types, `hastatus` and `habutton`, that drop into the layout editor like any other panel. Needs Home Assistant's LAN URL, a token from a non-admin user and the entity list (Waiting on Me), and pairs with the dashboard PIN.
 - **Countdown helpers** (M) - skipped on 2026-09-25 but kept as an option: help around the countdown tiles beyond typing `countdown` into an event by hand. The "suggested countdowns" list on the dashboard (`docs/designs/entry-board.md`) is the obvious first piece.
 - **"On this day" photos** (M) - photos taken on today's date in past years, as a slideshow bias or an Entry board panel. The manifest already carries each photo's capture date.
-- **Doorbell snapshot on the Entry board** (M) - when the doorbell rings, the front-door board shows the doorbell camera's snapshot, through the Home Assistant module above; the kitchen's "Doorbell ring to Camera view" backlog item is the same idea for the kitchen.
-- **Flip clock as an editor panel, with a next-meeting line** (S) - the flip clock already sizes itself from one CSS variable, so it can become a panel type in the spec layouts (any size, anywhere on a board) with the next calendar event under it.
+- **Doorbell snapshot on the Entry board** (M) - when the doorbell rings, the front-door board shows the doorbell camera's snapshot. The hub's Home Assistant layer (live since 2026-09-26) is the way in: the doorbell and its camera join the whitelist, and the hub gains a snapshot route. Chunk 5 plans a camera panel; this is the version that jumps in on a ring. The kitchen's "Doorbell ring to Camera view" backlog item is the same idea for the kitchen.
+- **Screen health strip** (S) - every screen's state at a glance (last seen, build, power) in one strip on the dashboard, so a sick or silent screen shows without opening its card. The hub already holds all of it (last seen, the viewport, the heartbeat).
+- **"New on Plex" panel** (S) - what was recently added to the Plex library, as a panel for the spec layouts, with the posters the Plex view already fetches through the hub.
 
 ---
 
@@ -258,6 +266,9 @@ Newest first.
 
 ## Lessons
 
+- **Parallel worktree branches that add to the same lists merge by keeping both sides; then reread the merged hunks (2026-09-26).** The weather feed and the Home Assistant layer were built in parallel worktrees and each added routes, env keys and a dashboard loader to the same `server.mjs` and `admin.html`. Every conflict resolved by keeping both sides and the tests stayed green, but one comment kept both halves of a sentence. Tests do not read comments; one pass over the merged regions does.
+- **Pixel diffs want software raster (2026-09-26).** Headless Chrome with GPU raster drew up to 42 px of one-level noise between two loads of the same build, all in blurred shadows. With `--disable-gpu --disable-gpu-compositing` and one raster thread a build diffs at 0 against itself, so every pixel that moves is real; keep a second load of the old build against the first as the control.
+- **WeatherKit's CDN caches a good answer for 5 minutes by URL (2026-09-26).** A check made right after changing a credential can pass on the cached response, and in testing a wrong key id alone did not fail authentication (a wrong team id did). Test a credential change against a URL not asked for in the last 5 minutes, and do not take one good answer as proof that every id is right.
 - **Pixel-diff a refactor against a frozen world (2026-09-25).** To prove a rendering change is pixel-identical, freeze the clock, seed `Math.random`, serve one fixed stand-in image for every photo URL, block writes, and throw the first screenshot of each run away: Chrome rasterises a large photo in two different ways between launches, and that alone reads as a large diff. With that, the layout editor's knob refactor diffed at 0 of 2,073,600 px.
 - **Node 22's `node --test` wants a glob, not a directory (2026-09-25).** `node --test frameserver/test/` fails on Node 22; `node --test 'frameserver/test/**/*.test.mjs'` (quoted, so the shell leaves it alone) runs the suite.
 - **Parallel agent workers each get a git worktree, and deploys come from a detached snapshot (2026-09-25).** Workers editing one checkout step on each other's half-finished files. Give each worker its own worktree and branch, merge when it is done, and deploy from a detached worktree at a known commit, so a deploy can never ship another worker's edit in progress.

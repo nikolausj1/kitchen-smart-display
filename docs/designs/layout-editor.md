@@ -1,10 +1,10 @@
 ---
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
-modified: 2026-09-25
-version: 1.6
+modified: 2026-09-26
+version: 1.7
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show]
+tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules]
 ---
 
 # Layout editor
@@ -12,11 +12,15 @@ tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show]
 **Status: all four steps built. Steps 1 and 2 deployed 2026-09-24; steps 3
 and 4 (panel knobs, spec v2, sub-elements, smart guides, day parts, the
 Board, history, copy) deployed to the hub 2026-09-24 23:45 (build
-`309eb66`).** Open a screen's card on the dashboard and press Edit layout (it
-opens the Today layout that screen is on), or go to
+`309eb66`). The next round's editor foundations (`panels-and-controls.md`,
+chunk 1: element styles, box v2, fonts, visibility rules, multi-select, copy
+and paste style) deployed to the hub 2026-09-26 12:49 (build `2fcca07`).**
+Open a screen's card on the dashboard and press Edit layout (it opens the
+Today layout that screen is on), or go to
 `http://nuc.local:8095/editor/?device=echo-show15`. What was built, and where
-it differs from the contracts: "As built" under each contract below. Review
-shots: `_review/layout-editor/`.
+it differs from the contracts: "As built" under each contract below, and "As
+built, chunk 1 (2026-09-26)" at the end. Review shots:
+`_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
@@ -563,9 +567,261 @@ the layers list.
 - Board saves carry `eveningFrom` (harmless).
 - The editor rounds positions to two decimals when it loads a spec, so a
   Board saved from the editor loses the default's third decimal on every box
-  (edges can move by up to 4/64 px at 1280x800).
+  (edges can move by up to 4/64 px at 1280x800). Since 2026-09-26 only on
+  the boxes a save changes, and on every box of the first save over the
+  built-in default: an untouched panel goes back exactly as stored ("As
+  built, chunk 1", The editor).
 
 Review shots: `_review/layout-editor/editor3-*.png` (the editor),
 `panels-*.png` (the knobs), `spec2-*.png` (the v2 renderer, the Board as a
 spec layout, day parts) and `clock-*.png` (the flip clock,
 `today-layouts.md`). The index is that folder's README.
+
+## As built, chunk 1 (2026-09-26)
+
+The editor foundations from `panels-and-controls.md` ("Chunk 1: editor
+foundations"), built on `feature/echo-hub` (commit `2fcca07`) and deployed to
+the hub 2026-09-26 12:49 (build `2fcca07`). The Echos load the app from the
+hub and take it on their next reload (Echo mode checks the build stamp every
+5 minutes). The kitchen Pi serves its own bundle (`812242f`), which predates
+this, and shows Framed Today, so nothing changes there until its next deploy.
+Contract v2 stays the reference; everything below is optional and adds to it.
+
+**Nothing at the defaults.** Each new prop, each field inside one, and a
+panel's `when` are absent unless set: `normalizeSpec` fills none of them,
+drops every field at its default and reads an explicit `null` as absent. A
+spec that never used them normalises byte for byte as it did before, and a
+panel nobody styled carries none of these keys.
+
+### The spec additions
+
+- `props.elements = { <key>: { hidden, size, weight, color, spaceAbove,
+  spaceBelow, tracking, caps, fit } }`, keyed by `PANEL_ELEMENTS[type]`
+  (`panels/schemas.js`); a key the type does not mark is dropped.
+  `ELEMENT_STYLE_SCHEMA` (`layoutSpec.js`): `size` 0.5 to 2.5 (x), `weight`
+  Auto or 300 to 800, `color` a hex or none, `spaceAbove` and `spaceBelow` 0
+  to 3 (multiples of `--tl-pad`), `tracking` -0.05 to 0.2 em, `caps`, `fit`
+  wrap (the default: as designed), shrink or clip.
+- Box v2, universal props beside `background`, which stays the preset
+  (`BOX_SCHEMA`): `bg { color, color2, gradient: none | down | right |
+  diagonal, opacity 0..1 }`, `border { width 0..4 (px at 1920 wide, scaling
+  with the screen), color }`, `shadow: none | soft | strong`, `blur` 0 to 20,
+  `font: 'inherit' | <font id>`, `color` (the box's text colour; not on text
+  blocks, whose own `color` prop is their colour), `valign: top | middle |
+  bottom`, `title { mode: default | custom | none, text }` (up to 120
+  characters).
+- `panels[i].when = { all?: Cond[], any?: Cond[] }`, `Cond = { kind, not?,
+  daypart?, from?, to?, days? }`, at most 20 read per list (`RULE_KINDS`,
+  `normalizeWhen`). A condition that is not one (an unknown kind, a malformed
+  time or day part) is dropped by the normaliser.
+
+### How element styles draw
+
+- One `<style>` per box (`Entry/specStyles.js`, `elementStylesCss`, applied by
+  `SpecPanel`), scoped `[data-box="<id>"] [data-edit="<key>"]`, so a key that
+  marks several elements (every agenda column, every countdown tile) styles
+  them all. Declarations are `!important` where a panel sets the same
+  property inline or more specifically (the clock's weight knob is an inline
+  `font-weight`). Weight, colour, letter spacing and capitals are written for
+  the element's children too. `PANEL_ELEMENTS` lists an outer key before the
+  keys it holds (a tile before its number), so the inner key's own style
+  wins.
+- **Size composes; it never writes a font size.** A marked element's text
+  scale is `--tl-text-scale = --tl-knob-scale x --tl-el-size x --tl-el-fit`:
+  `--tl-knob-scale` is the box's scale times the panel's own size knob for
+  that element (`tokens.css`, "Panel knobs"), `--tl-el-size` the style's size
+  and `--tl-el-fit` the shrink factor. Every font size in the panels already
+  multiplies by `--tl-text-scale`, so an element's size, its knob and the
+  fitter multiply whichever holds the other, and at the defaults the product
+  is the knob's alone. Art (icons, countdown pictures) keeps its size.
+- `fit: 'shrink'` is `lib/fitText.js` with `Entry/useFitText.js`, one fitter
+  per box that has a shrinking element. It writes `--tl-el-fit` (1 or less)
+  inline on the element: measure the overflow at 1, jump to the linear
+  estimate, probe just above it, bisect. Typically four forced layouts per
+  fit, never more than eight, never below 0.3x (past that the element
+  overflows as it would have). It runs at start and on a spec change (a
+  layout effect, before paint), when the box resizes, when the element's
+  text changes and after web fonts load; an element whose text and room are
+  unchanged is skipped (the clock re-renders every second). No timer and no
+  work between passes, so nothing runs during the photo crossfade. Measured:
+  a median of 0.4 ms at 1x CPU and 2.6 ms at 6x throttle.
+  `window.__sdFitStats` keeps the counts.
+- `clip` hides the overflow, for the rare case, never as a default.
+
+### The box v2 look
+
+- The fill is a layer under the content (`.tl-spec__fill`), so its opacity
+  fades the fill alone. A colour replaces the preset's fill; without one a
+  gradient or an opacity works on the preset's own card. `color2` is where a
+  gradient ends (none fades out).
+- The border and the preset card's hairline are drawn in a frame above the
+  fill; the box's own shadow is then the drop shadow alone, in `--tl-pad`
+  units so it scales with the screen. A box with any v2 surface (a fill, a
+  border, a shadow or a blur) is never joined to a flush neighbour
+  (`cardJoins`): it is its own card.
+- Blur is a `backdrop-filter` (px at 1920 wide, drawn in `vw`). Where it is
+  unsupported, and always on the Echo (`body[data-kiosk='echo']`, whose Silk
+  draws `backdrop-filter` unreliably), the box gets a tint of matching
+  strength instead (alpha 0.15 plus 0.02 per px, at most 0.55).
+- `font` sets every word in the box, the display sizes and the body text
+  alike. `color` sets the box's text colour and derives its two quieter inks
+  (`--tl-fg-2`, `--tl-fg-3`).
+- **`valign: 'top'` means "as designed", not "pinned to the top".** A few
+  panels are centred in their box by design (the headline, text blocks, the
+  Board's clock) and stay centred at `top`; `middle` and `bottom` move the
+  content within the box. A real top is a backlog item.
+- `title`: `default` is the panel's own header ("Weather", or none),
+  `custom` puts the text in the header row of any panel or block, `none`
+  drops the header. Panels read it through `PanelTitleContext` in
+  `PanelFrame`; text and image blocks, which have no `PanelFrame`, get the
+  header row from `SpecPanel`. The header row is the `title` element, so it
+  takes an element style like any other.
+
+### Fonts
+
+- `lib/fonts.js` `FONTS` is one registry for the global Display font
+  (`GLOBAL_SCHEMA`, which now offers all five) and a box's `font`: `inter`,
+  `fraunces`, `roboto`, `barlow` (Barlow Condensed), `plexmono` (IBM Plex
+  Mono). Latin subsets bundled in `Entry/SpecBoard.jsx`: Roboto and IBM Plex
+  Mono 400, 500 and 700, Barlow Condensed 400 to 700, beside Inter 300
+  (there) and 400, 600 and 700 (`main.jsx`), and Fraunces variable. A
+  browser downloads a face only when a page uses it.
+- A weight a family lacks falls to its nearest face. Inter has no 500, so
+  Medium renders Regular (its 800 is in the bundle, from the flip clock).
+  Roboto and IBM Plex Mono: Light renders Regular, Semibold and Extra bold
+  render Bold. Barlow Condensed: Light renders Regular, Extra bold renders
+  Bold. So the Entry clock's Light (300) draws at 400 in the three new
+  families, and the Board's Semibold clock at 700 in Roboto or IBM Plex
+  Mono.
+
+### Visibility rules
+
+- `SpecBoard` judges each panel's `when` on every render
+  (`layoutSpec.js`, `ruleMatches`); the board ticks every second, so a rule
+  follows its condition within a second. The panel shows when every `all`
+  condition holds and, when `any` has conditions, at least one of those does;
+  `not` inverts one condition. A condition that cannot be judged (an unknown
+  kind, a malformed parameter, no data) is skipped, so a broken rule never
+  hides a panel.
+- The kinds and what they read: `schoolMorning` (inside the school-morning
+  window on a school day, the Morning variant's test); `weekend` and
+  `weekday` (Saturday and Sunday, or not); `daypart` (the day part the clock
+  says, whatever variants the spec has: weekend, morning, evening from
+  `eveningFrom`, else day); `timeRange` (`'HH:MM'` from and to, from
+  inclusive, to exclusive, wrapping past midnight; the same time twice is all
+  day); `musicPlaying` (the screen's Sonos room is playing); `plexPlaying`
+  (the player the screen follows, `display.plexFollow`, else any player;
+  the rule keeps the 5 s Plex poll running only while a panel on screen
+  carries it, and a screen that follows Plex polls anyway); `alertActive` (the hub's `weatherAlerts` is not empty, else the
+  headline is an alert); `countdownWithin` (`days` 0 to 365, default 7: a
+  countdown with 0 to N days left).
+- `lib/houseState.js` now carries `weatherAlerts` from `/api/state` (up to
+  three, `{ event, severity, until, headline }`), which `useTodayData` hands
+  on (null in demo mode), so `alertActive` sees the alerts themselves.
+- Never applied in the layout editor: every panel is drawn, and one with a
+  rule carries `data-rule="1"`, which the editor marks on the stage with a
+  rule badge. Day-part variants remain the tool for whole layouts; rules are
+  for single panels.
+
+### `PANEL_ELEMENTS`, grown and renamed
+
+Every visible part of a panel now carries a key, so the element styles reach
+all of it.
+
+- Every type gains `title` (the header row, or the custom title); panels
+  with an empty state gain `empty`.
+- New keys: weather `updated`; forecast `updated`, `day`, `icon`, `temps`,
+  `rain` (it had none); sunmoon `arc`, `labels`, `times`, `moon`, `phase`
+  (none before); airquality `detail`; agenda `message`; countdowns `name`,
+  `unit`; departure `meta`, `status`; nowplaying `room`, `track`, `artist`,
+  `album`, `meta`, `progress`; photo `image`, `counter`; school `rows` (none
+  before).
+- **Renamed:** the countdown tile's event title was `title` and is now
+  `name` ("Event name"); Now Playing's track title was `title` and is now
+  `track`. `title` is the header row on every type. The knobs point at the
+  new keys (`titleSize` tunes `name`, `showUnit` tunes `unit`, Now Playing's
+  `size` tunes `track`), and several knobs that named no element now do. No
+  stored spec used the old keys (element styles are new, and the keys were
+  only the editor's hover and focus), so nothing saved breaks.
+
+### The bridge
+
+`sd-edit:ready` gains `elementStyleSchema`, `boxSchema`, `fonts` and
+`ruleKinds`, the four contract objects above. Nothing else in the bridge
+changed.
+
+### The editor
+
+- **Element section.** Selecting a sub-element (on the stage or in the
+  layers) puts an Element section at the top of the inspector: a breadcrumb
+  from the panel through the elements it sits in ("Countdowns > Tile > Event
+  name", each part clickable), the `ELEMENT_STYLE_SCHEMA` fields and Reset
+  element. The panel's own knobs for that element stay below, one click
+  away.
+- **Elements tree.** A chevron on each layer opens its elements
+  (`PANEL_ELEMENTS`): click one to select it on the stage; its eye hides that
+  element alone (`hidden`); a badge on the panel's row counts its styled
+  elements.
+- **Appearance** gains three sections drawn from `BOX_SCHEMA`: Fill and
+  border (fill colour, opacity, gradient, and the second colour only once
+  there is a gradient; border width and colour; shadow; backdrop blur, with
+  the hint "Shows as a tint on the Echo"), Type (font, text colour, vertical
+  align) and Block title (Panel, Custom or None, and the text for Custom).
+- **Show when.** Always (no rule), Add condition from `RULE_KINDS`, each
+  condition with its parameters and a Not, and All or Any once there are
+  two. The layer row says when the panel shows ("shows: school morning") and
+  the stage draws a rule badge on the box.
+- **Multi-select.** Shift-click on the stage or in the layers adds a panel or
+  takes it out. Several panels move together and can be aligned (left,
+  centre, right, top, middle, bottom, to the selection's bounds),
+  distributed (three or more, equal gaps) and matched in width or height (to
+  the first selected); locked panels stay put, and each operation is one undo
+  step.
+- **Copy style and Paste style** (the panel's header menu, option-command-C
+  and option-command-V; Paste style onto all with several selected): the
+  universal props, the box v2 props, the element styles and the rule; the
+  knobs only onto a panel of the same type; never the position, size,
+  stacking, id, hidden, locked or content (a text block's text, an image's
+  picture). The same menu has Reset element styles for the whole panel.
+- **Saves match stored panels by id.** At Save the editor reads the stored
+  copy fresh from the hub. A panel the save does not change goes back
+  exactly as stored; an edited one is the new panel plus a `null` for each
+  key it dropped (`when: null`, `elements: { <key>: null }`), because the
+  hub's PATCH deep-merges. So a newer normaliser never rewrites a panel
+  nobody touched. The two copies are compared normalised, so an untouched
+  panel also keeps what the editor would round or fill (a Board's third
+  decimal, a missing `scrim`). Copy layout to another screen merges by the
+  same rule against the target's stored copy.
+- **Contract fallbacks.** `editor/appSpec.js` imports the app's
+  `layoutSpec.js` as a namespace and keeps fallback copies of the four
+  contract objects, plus a `carryOver` in `readSpec` for an app normaliser
+  that predates them, from when the two halves were built in parallel.
+  Inert now that the app exports all four; removing them is a backlog item.
+
+### Verified
+
+- Pixel diffs against the previous build (`6cbc0f7`), every new prop at its
+  default: 0 px differ in all 14 scenarios (the Entry board afternoon and
+  school morning at 1920x1080 and 1280x800, the Board at 1280x800, Briefing
+  at 1920x1080, the Entry board in edit mode at 1920x1080; each with
+  replayed live data and with demo data), and 0 between two loads of the
+  same build. Taken with software raster: GPU raster showed up to 42 px of
+  one-level noise between two loads of one build, in blurred shadows. Method
+  and numbers: `_review/layout-editor/found-diff-results.json`.
+- Tests: 36 new in the app (`layoutSpec.test.mjs` 21, `specStyles.test.mjs`
+  10, `fitText.test.mjs` 3, `fonts.test.mjs` 2), 51 with the backdrop luma
+  tests: `node --test 'code/src/**/*.test.mjs'` from the project root.
+- The editor, against a mock app and against the live hub with the real app
+  and sample data: element styles set and reset, the tree's eyes, the box
+  fields, rules, multi-select, paste onto the same type and across types,
+  untouched panels kept byte for byte, copy to another screen
+  (`found-editor-report.json`, `found-editor-live-report.json`).
+- Review shots: `_review/layout-editor/found-*.png` (the app) and
+  `found-editor-*.png` (the editor); the index is that folder's README.
+
+### Left for later (in BACKLOG)
+
+- A real "top" vertical alignment.
+- The missing faces: Inter 500, the 300 faces of Roboto, Barlow Condensed
+  and IBM Plex Mono, and 600 for Roboto and IBM Plex Mono.
+- Removing the editor's contract fallbacks.

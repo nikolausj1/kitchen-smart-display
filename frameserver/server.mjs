@@ -62,11 +62,9 @@
 // optional), PLEX_FIXTURE (tests). WeatherKit (docs/designs/panels-and-controls.md,
 // "One weather feed"): WEATHERKIT_KEY_FILE (default secrets/weatherkit.p8, never
 // in git), WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID,
-// WEATHER_SOURCE (auto|weatherkit|open-meteo, default auto). Keys and tokens
-// are never logged.
-// optional), PLEX_FIXTURE (tests). Home Assistant (lib/homeAssistant.mjs):
-// HA_URL and HA_TOKEN or HA_TOKEN_FILE (default secrets/ha-token.txt).
-// Keys and tokens are never logged.
+// WEATHER_SOURCE (auto|weatherkit|open-meteo, default auto). Home Assistant
+// (lib/homeAssistant.mjs): HA_URL and HA_TOKEN or HA_TOKEN_FILE (default
+// secrets/ha-token.txt). Keys and tokens are never logged.
 //
 // Paths stay `/stub-photos/...` because that prefix is baked into every
 // manifest entry's `src` (build-photo-manifest.mjs) and into both clients.

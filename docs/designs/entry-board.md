@@ -1,8 +1,8 @@
 ---
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
-modified: 2026-09-25
-version: 1.3
+modified: 2026-09-26
+version: 1.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, headline, weather, nws, legibility, scrims, frameserver]
 ---
@@ -210,6 +210,17 @@ constants and `frameserver/test/weatherRules.test.mjs` pins every boundary:
 - Units: the app has no units setting (it asks Open-Meteo for Fahrenheit and
   mph), so the hub asks for the same. `headlineFor` takes `units: 'metric'`
   for the day one exists; it changes only the quoted degrees.
+
+**Since 2026-09-26 the forecast and the alerts come through the hub's one
+weather feed** (`lib/weather.mjs`; `panels-and-controls.md`, chunk 2): Apple
+WeatherKit when configured (it is), Open-Meteo otherwise, refreshed every 15
+minutes and cached in `weather-feed-cache.json`. `lib/hubWeather.mjs` is now
+an adapter that reshapes the feed into the same hourly and daily lists, so
+the rules and their tests are unchanged; its own Open-Meteo fetch described
+below stays in the file for those tests and no longer runs. The alerts
+behind the headline and `weatherAlerts` are the feed's merged list: the NWS
+alerts below plus WeatherKit's own, deduped by event and end, the NWS copy
+kept on a clash. `/healthz.weather` now reports each source.
 
 Where the weather comes from (the hub, beside the air quality, for the same
 `shared.location`, refetched within a minute of a location change):
