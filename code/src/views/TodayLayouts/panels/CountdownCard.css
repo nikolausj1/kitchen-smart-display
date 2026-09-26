@@ -1,0 +1,263 @@
+/* CountdownCard - a countdown drawn the DAKboard way (CountdownCard.jsx): the
+ * art above a coloured card, dipping into its top edge ('stacked'), or left
+ * of it, dipping into its left edge ('side').
+ *
+ * The panel root sets the knobs as variables: --tl-cd-art-size (artSize, of
+ * the card's width stacked, of its height beside), --tl-cd-art-overlap
+ * (artOverlap, of the art's own height, or width beside), --tl-cd-radius,
+ * --tl-cd-title and --tl-cd-num. The card sets --tl-cd-tint (its colour; the
+ * accent without one) and --tl-cd-shade (the gradient's veil, or none)
+ * inline, from lib/tileColor.js.
+ *
+ * The geometry, stacked. The slot (.tl-cdc: a tile, or the single
+ * countdown's whole box) is a size container, and so is the card in it:
+ *
+ *   A       the art's box: artSize of the card's width, at most half the
+ *           slot's height, so the text always keeps the lower half
+ *   art     a strip A x (1 - overlap) tall across the top of the slot; the
+ *           picture sits on its bottom edge, centred, and moves down by
+ *           overlap of its own height, into the card
+ *   card    the rest of the slot, its text starting A below the slot's top,
+ *           past the deepest the art can reach whatever the overlap
+ *
+ * Side is the same turned on its side, A from the height (at most 45% of the
+ * width). A card with no art fills the slot; in a row where other tiles have
+ * art (tl-cdc--align) it keeps its text where theirs is, else centres it.
+ *
+ * Without container units (Silk on the Echo may predate them) A is a share
+ * of the screen's height and the type falls back to vh sizes, as the other
+ * tile styles do (CountdownsPanel.css). Chrome 80 rules: no `inset`, no flex
+ * `gap`, no `aspect-ratio` here. */
+
+.tl-cdc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  container-type: size;
+  --tl-cdc-overlap: var(--tl-cd-art-overlap, 0.35);
+  --tl-cdc-a: calc(var(--tl-cd-art-size, 0.8) * 16vh);
+}
+
+.tl-cdc--side {
+  flex-direction: row;
+}
+
+/* A, from the slot. Written on the slot and read by what is inside it, whose
+ * container the slot is. */
+@supports (height: 1cqh) {
+  .tl-cdc--stacked {
+    --tl-cdc-a: min(calc(var(--tl-cd-art-size, 0.8) * 100cqw), 50cqh);
+  }
+
+  .tl-cdc--side {
+    --tl-cdc-a: min(calc(var(--tl-cd-art-size, 0.8) * 100cqh), 45cqw);
+  }
+}
+
+/* A tile in the countdowns panel's row: one share of it, as the other styles. */
+.tl-cd__row > .tl-cdc {
+  flex: 1 1 0;
+}
+
+/* --- The art ------------------------------------------------------------------ */
+
+.tl-cdc__art {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+}
+
+.tl-cdc--stacked > .tl-cdc__art {
+  height: calc(var(--tl-cdc-a) * (1 - var(--tl-cdc-overlap)));
+}
+
+.tl-cdc--side > .tl-cdc__art {
+  width: calc(var(--tl-cdc-a) * (1 - var(--tl-cdc-overlap)));
+}
+
+.tl-cdc__img,
+.tl-cdc__emoji {
+  position: absolute;
+  display: block;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The picture at its own shape inside A x A (--tl-cdc-wf / --tl-cdc-hf, read
+ * when it loads; square until then, contained). */
+.tl-cdc__img {
+  width: calc(var(--tl-cdc-a) * var(--tl-cdc-wf, 1));
+  height: calc(var(--tl-cdc-a) * var(--tl-cdc-hf, 1));
+  object-fit: contain;
+}
+
+.tl-cdc__emoji {
+  font-size: calc(var(--tl-cdc-a) * 0.84);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Down (or across) by the overlap of its own size: translate's percentages
+ * are the element's own. */
+.tl-cdc--stacked .tl-cdc__img,
+.tl-cdc--stacked .tl-cdc__emoji {
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, calc(var(--tl-cdc-overlap) * 100%));
+}
+
+.tl-cdc--side .tl-cdc__img,
+.tl-cdc--side .tl-cdc__emoji {
+  right: 0;
+  top: 50%;
+  transform: translate(calc(var(--tl-cdc-overlap) * 100%), -50%);
+}
+
+/* --- The card ------------------------------------------------------------------ */
+
+.tl-cdc__card {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--tl-pad) * 0.6) calc(var(--tl-pad) * 0.8) calc(var(--tl-pad) * 0.7);
+  border-radius: calc(var(--tl-radius) * var(--tl-cd-radius, 1));
+  background-color: var(--tl-cd-tint, var(--tl-accent));
+  background-image: var(--tl-cd-shade, none);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  /* The art's colour arrives once its picture has been read: ease into it. */
+  transition: background-color 400ms ease;
+}
+
+/* The text starts past the art: A below the slot's top (A beside it). The
+ * card's own padding reads A from the slot, the card's container. */
+.tl-cdc--stacked > .tl-cdc__art + .tl-cdc__card {
+  padding-top: calc(var(--tl-cdc-a) * var(--tl-cdc-overlap) + var(--tl-pad) * 0.5);
+}
+
+.tl-cdc--stacked.tl-cdc--align > .tl-cdc__card {
+  padding-top: calc(var(--tl-cdc-a) + var(--tl-pad) * 0.5);
+}
+
+.tl-cdc--side > .tl-cdc__art + .tl-cdc__card {
+  padding-left: calc(var(--tl-cdc-a) * var(--tl-cdc-overlap) + var(--tl-pad) * 0.6);
+}
+
+/* --- The text: white on the card, sized to what the card leaves it ------------ */
+
+/* A fixed two-line box, the text on its bottom edge, so the numbers of a row
+ * of tiles line up when one title wraps and another does not. */
+.tl-cdc__title {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 2.36em;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  font-weight: 600;
+  line-height: 1.18;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(12px, 1.8vh, 26px));
+}
+
+.tl-cdc__title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* A box one number tall, whatever it holds (the word on the day is smaller). */
+.tl-cdc__num {
+  flex: 0 0 auto;
+  height: 1em;
+  margin-top: 0.12em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--tl-font-display);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(28px, 7vh, 110px));
+}
+
+.tl-cdc__today {
+  font-size: 0.5em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tl-cdc__unit {
+  flex: 0 0 auto;
+  margin-top: 0.35em;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(10px, 1.3vh, 20px));
+}
+
+/* The single countdown: a title as tall as it needs (it has no neighbours to
+ * line up with). Its bigger type needs container units, below; without them
+ * it takes the tiles' sizes, which fit any box it can be given. */
+.tl-cdc--solo .tl-cdc__title {
+  height: auto;
+}
+
+/* With container units, each size is a share of the card's text area (its
+ * content box): a row tile's, then the single countdown's. The shares add up
+ * to under the area's height with the title on two lines. */
+@supports (height: 1cqh) {
+  .tl-cdc__title {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(12px, min(12.5cqw, 12cqh), 30px));
+  }
+
+  .tl-cdc__num {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(28px, min(46cqw, 38cqh), 150px));
+  }
+
+  .tl-cdc__unit {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(8cqw, 7cqh), 22px));
+  }
+
+  .tl-cdc--solo .tl-cdc__title {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(13px, min(9cqw, 11cqh), 44px));
+  }
+
+  .tl-cdc--solo .tl-cdc__num {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(32px, min(46cqw, 48cqh), 320px));
+  }
+
+  .tl-cdc--solo .tl-cdc__unit {
+    font-size: calc(var(--tl-text-scale, 1) * clamp(10px, min(6.5cqw, 7.5cqh), 30px));
+  }
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ------------------------------------------ */
+
+.tl-knobs .tl-cdc__title {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-title, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+.tl-knobs .tl-cdc__num,
+.tl-knobs .tl-cdc__unit {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-cd-num, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

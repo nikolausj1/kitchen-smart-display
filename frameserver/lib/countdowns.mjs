@@ -12,11 +12,17 @@
 //                             extension and trailing digits do not matter
 //                             (`image: mark_kim5.png` finds mark_kim);
 //                             `image: none` = no art, show the title's emoji
+//   color: blue               the tile's colour (the art-above tiles,
+//                             docs/designs/panels-and-controls.md): #rgb,
+//                             #rrggbb or a TILE_COLORS name; `colour:` too.
+//                             Anything else is ignored, as if it were not
+//                             there, and the tile takes its colour from the
+//                             art, else the calendar
 //
-// Case-insensitive, anywhere in the description. label/image take the rest of
-// their line, so give each its own line (a label/image pair on one line is
-// split at the second keyword). Google stores descriptions edited on the web
-// as HTML (<br>, <p>, &amp;), which is read as the text it displays.
+// Case-insensitive, anywhere in the description. label/image/color take the
+// rest of their line, so give each its own line (a pair on one line is split
+// at the second keyword). Google stores descriptions edited on the web as
+// HTML (<br>, <p>, &amp;), which is read as the text it displays.
 //
 // Art (lib/countdownArt.mjs mirrors the "Countdown Art" Immich album): an
 // explicit `image:` wins; otherwise the entry with the LONGEST keyword that
@@ -70,7 +76,7 @@ export function descriptionText(description) {
 
 const COUNTDOWN_RE =
   /(?<![\p{L}\p{N}_])countdown(?![\p{L}_])(?:[ \t]*[:=]?[ \t]*(\d{1,3})(?:[ \t]*(days?|d|weeks?|wks?|w|months?|mo)(?!\p{L}))?)?/iu
-const DIRECTIVE_RE = /(?<![\p{L}\p{N}_])(label|image)[ \t]*[:=][ \t]*/giu
+const DIRECTIVE_RE = /(?<![\p{L}\p{N}_])(label|image|colou?r)[ \t]*[:=][ \t]*/giu
 const LABEL_MAX = 80
 
 function unitDays(unit) {
@@ -80,7 +86,49 @@ function unitDays(unit) {
   return 1
 }
 
-// { label, image } from `label: ...` / `image: ...` directives, first of each.
+// --- tile colours ----------------------------------------------------------------
+
+// The names `color:` knows, each a mid-tone that white text reads on (WCAG
+// contrast 3.25 to 4.96 against white, the large-text bar): the art-above
+// tile draws its title and number in white on this colour and on the darker
+// shade the gradient runs to. 'grey' is read as gray.
+export const TILE_COLORS = Object.freeze({
+  red: '#d9453d',
+  orange: '#e06a1b',
+  yellow: '#b8860b',
+  green: '#2f9e44',
+  teal: '#0d9488',
+  blue: '#2f7fe8',
+  indigo: '#5b61e0',
+  purple: '#8e4ed8',
+  pink: '#db4a8a',
+  brown: '#9a6a45',
+  gray: '#6b7280',
+})
+
+const HEX_COLOR_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+// A `color:` value as '#rrggbb' (lowercase), or null when it is not one:
+// '#rgb' and '#rrggbb' in any case, or a TILE_COLORS name in any case.
+// Wrapping quotes and a closing full stop are forgiven ("color: Blue.").
+export function tileColor(value) {
+  if (typeof value !== 'string') return null
+  const s = value
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/\.$/, '')
+    .trim()
+    .toLowerCase()
+  if (HEX_COLOR_RE.test(s)) {
+    return s.length === 4 ? `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}` : s
+  }
+  const name = s === 'grey' ? 'gray' : s
+  return Object.hasOwn(TILE_COLORS, name) ? TILE_COLORS[name] : null
+}
+
+// { label, image, color } from `label: ...` / `image: ...` / `color: ...`
+// directives, the first of each; for color the first that is a colour (an
+// unknown one is skipped, as if it were not there). `colour:` is `color:`.
 function directives(text) {
   const out = {}
   for (const line of text.split('\n')) {
@@ -89,15 +137,23 @@ function directives(text) {
       const from = m.index + m[0].length
       const to = i + 1 < hits.length ? hits[i + 1].index : line.length
       const value = line.slice(from, to).trim().replace(/[\s,;|]+$/, '')
-      const key = m[1].toLowerCase()
-      if (value && out[key] === undefined) out[key] = value
+      const word = m[1].toLowerCase()
+      const key = word === 'colour' ? 'color' : word
+      if (!value || out[key] !== undefined) return
+      if (key === 'color') {
+        const c = tileColor(value)
+        if (c) out.color = c
+        return
+      }
+      out[key] = value
     })
   }
   return out
 }
 
 // The countdown marker in an event description, or null when there is none.
-//   -> { leadDays, label: string|null, image: string|null }
+//   -> { leadDays, label: string|null, image: string|null,
+//        color: '#rrggbb'|null }
 export function parseCountdownMarker(description, { defaultLeadDays = 30 } = {}) {
   const text = descriptionText(description)
   if (!text) return null
@@ -109,6 +165,7 @@ export function parseCountdownMarker(description, { defaultLeadDays = 30 } = {})
     leadDays: Number.isFinite(lead) && lead >= 0 ? Math.round(lead) : 30,
     label: d.label ? d.label.slice(0, LABEL_MAX).trim() : null,
     image: d.image || null,
+    color: d.color || null,
   }
 }
 
@@ -242,7 +299,11 @@ function count(v, fallback) {
 }
 
 // Normalized calendar events -> the countdown tiles:
-//   [{ id, title, date, daysLeft, leadDays, image, emoji, calendarLabel, color }]
+//   [{ id, title, date, daysLeft, leadDays, image, emoji, calendarLabel, color,
+//      tileColor }]
+// `color` is the event's calendar colour (the tiles' edge, the dashboard's
+// dot); `tileColor` the marker's `color:`, '#rrggbb' or null (the art-above
+// tile's own colour, over the art's and the calendar's).
 // Only marked events with 0 <= daysLeft <= leadDays, by date then title, at
 // most `max`. A recurring series shows only its next instance.
 export function buildCountdowns(
@@ -291,6 +352,7 @@ export function buildCountdowns(
       emoji: titleEmoji(marker.label) || titleEmoji(e.title),
       calendarLabel: e.calendarLabel ?? null,
       color: e.color ?? null,
+      tileColor: marker.color,
     })
   }
   return out

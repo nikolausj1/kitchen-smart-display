@@ -11,11 +11,14 @@ import {
   ELEMENT_STYLE_SCHEMA,
   FONTS,
   PANEL_TYPE_LIST,
+  PANEL_TYPES,
   RULE_KINDS,
   cardJoins,
   clockDaypart,
   hasBoxSurface,
   isSchoolMorning,
+  knobsOf,
+  newPanel,
   normalizeElementStyles,
   normalizeSpec,
   normalizeWhen,
@@ -367,4 +370,75 @@ test('ruleKindsUsed collects the kinds of a panel list', () => {
     { when: { any: [{ kind: 'plexPlaying' }] } },
   ])
   assert.deepEqual([...kinds].sort(), ['plexPlaying', 'weekend'])
+})
+
+// --- Chunk 2: the art-above tiles and the single countdown ------------------------
+
+test('the countdown tiles gain Art above and its four knobs, defaults as before', () => {
+  const fields = Object.fromEntries(PANEL_SCHEMAS.countdowns.fields.map((f) => [f.key, f]))
+  assert.deepEqual(fields.tileStyle.options.map((o) => o[0]), ['card', 'bare', 'imageOnly', 'artAbove'])
+  assert.equal(fields.tileStyle.default, 'card')
+  assert.deepEqual(
+    ['artSize', 'artOverlap', 'tileGradient', 'tileColorFrom'].map((k) => [k, fields[k].default]),
+    [['artSize', 0.8], ['artOverlap', 0.35], ['tileGradient', 'down'], ['tileColorFrom', 'auto']]
+  )
+  assert.deepEqual([fields.artSize.min, fields.artSize.max, fields.artOverlap.min, fields.artOverlap.max], [0.4, 1.2, 0, 0.8])
+  assert.deepEqual(fields.tileGradient.options.map((o) => o[0]), ['down', 'diagonal', 'none'])
+  assert.deepEqual(fields.tileColorFrom.options.map((o) => o[0]), ['auto', 'marker', 'calendar'])
+  // The built-in board's tiles: the card, as they always were.
+  const tiles = DEFAULT_ENTRY_SPEC.panels.find((p) => p.id === 'countdowns')
+  assert.equal(tiles.props.tileStyle, 'card')
+  assert.equal(knobsOf(tiles).tileGradient, 'down')
+})
+
+test('the art-above knobs clamp and fall back like any knob', () => {
+  const spec = normalizeSpec({
+    panels: [
+      { id: 'countdowns', type: 'countdowns', props: { tileStyle: 'artAbove', artSize: 5, artOverlap: -1, tileGradient: 'up', tileColorFrom: 'art' } },
+    ],
+  })
+  const p = spec.panels[0].props
+  assert.deepEqual([p.tileStyle, p.artSize, p.artOverlap, p.tileGradient, p.tileColorFrom], ['artAbove', 1.2, 0, 'down', 'auto'])
+})
+
+test('the single countdown is a panel type with its knobs and elements', () => {
+  const t = PANEL_TYPES.countdown
+  assert.equal(t.label, 'Countdown')
+  assert.equal(t.kind, 'panel')
+  assert.equal(t.unique, true)
+  assert.deepEqual(t.minPx, { w: 120, h: 100 })
+  assert.deepEqual(elementKeysOf('countdown'), ['title', 'image', 'name', 'number', 'unit', 'empty'])
+  assert.deepEqual(PANEL_SCHEMAS.countdown.fields.map((f) => f.key), [
+    'pick', 'titleMatch', 'layout', 'tileGradient', 'tileColorFrom', 'tileRadius',
+    'artSize', 'artOverlap', 'titleSize', 'numberSize', 'showUnit', 'prefer',
+  ])
+})
+
+test('Add panel puts the single countdown at about 20 x 30 percent, drawing no box of its own', () => {
+  const p = newPanel('countdown', null, { layoutId: 'entry' })
+  assert.deepEqual([p.id, p.x, p.y, p.w, p.h, p.z], ['countdown', 40, 35, 20, 30, 10])
+  assert.equal(p.props.background, 'none')
+  assert.equal(p.props.padding, 0)
+  assert.deepEqual(
+    [p.props.pick, p.props.titleMatch, p.props.layout, p.props.tileGradient, p.props.tileColorFrom, p.props.artSize, p.props.artOverlap],
+    ['next', '', 'stacked', 'down', 'auto', 0.8, 0.35]
+  )
+  assert.equal(newPanel('countdown', null, { layoutId: 'board' }).w, 20)
+  // Neither built-in board has one.
+  assert.equal(DEFAULT_ENTRY_SPEC.panels.some((x) => x.type === 'countdown'), false)
+  assert.equal(DEFAULT_BOARD_SPEC.panels.some((x) => x.type === 'countdown'), false)
+})
+
+test('the single countdown normalises its knobs: a known pick, a title match of 80 at most', () => {
+  const spec = normalizeSpec({
+    panels: [
+      { id: 'countdown', type: 'countdown', props: { pick: 'first', titleMatch: 'x'.repeat(200), layout: 'sideways' } },
+      { id: 'countdown', type: 'countdown', props: { pick: 'title' } },
+    ],
+  })
+  // One per layout, the first kept.
+  assert.equal(spec.panels.length, 1)
+  const p = spec.panels[0].props
+  assert.deepEqual([p.pick, p.titleMatch.length, p.layout], ['next', 80, 'stacked'])
+  assert.deepEqual(normalizeSpec(spec), spec)
 })

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import PanelFrame from './PanelFrame.jsx'
+import CountdownCard from './CountdownCard.jsx'
 import { panelKnobs } from './schemas.js'
-import { hubUrl } from '../../../lib/hub.js'
+import { artUrl, dayCount, hasArt } from './countdownParts.js'
 import { cleanColor } from '../lib/agenda.js'
 import './CountdownsPanel.css'
 
@@ -20,7 +21,9 @@ import './CountdownsPanel.css'
 //   maxTiles        1..4 tiles (3)
 //   tileStyle       'card' (the card per the three knobs below), 'bare' (the
 //                   art, title and number alone: no surface, no edge, no
-//                   corners) or 'imageOnly' (the art alone, in the card)
+//                   corners), 'imageOnly' (the art alone, in the card) or
+//                   'artAbove' (DAKboard's: the art above a coloured card,
+//                   dipping into it; CountdownCard.jsx draws those tiles)
 //   tileBorder      'color' (the calendar colour along the top) or 'none'
 //   tileBackground  'card' (the translucent surface), 'solid' or 'none' (no
 //                   surface and no hairline)
@@ -29,17 +32,18 @@ import './CountdownsPanel.css'
 //   titleSize, numberSize (the number and its unit), showUnit, gap (between
 //   tiles, multiplier), prefer ('art' | 'emoji': which one a countdown that
 //   has both shows first)
+// and for 'artAbove' alone (the edge, the background and imageSize are the
+// other styles'):
+//   artSize         the art's box, of the card's width (0.4..1.2, 0.8)
+//   artOverlap      how much of the art's height dips into the card (0..0.8,
+//                   0.35)
+//   tileGradient    'down' | 'diagonal' | 'none': the card runs from its
+//                   colour to a darker shade of it
+//   tileColorFrom   'auto' (the event's `color:` marker, else a colour from
+//                   the art, else the calendar's), 'marker' (never the art)
+//                   or 'calendar'; the accent with none (lib/tileColor.js)
 
 const MAX_TILES = 3
-
-// '/countdown-art/x.png' -> the hub's URL for it. Absolute and data: URLs are
-// left alone, so a fixture can point anywhere.
-function artUrl(image) {
-  if (typeof image !== 'string' || !image.trim()) return null
-  const s = image.trim()
-  if (/^(https?:|data:|blob:)/i.test(s)) return s
-  return hubUrl(s)
-}
 
 function CalendarGlyph() {
   return (
@@ -92,7 +96,7 @@ function CountdownArt({ src, emoji, preferEmoji = false }) {
 // name, number, unit), so an element style reaches every tile alike. k: the
 // knobs, or null (no layout spec: the tile as it always was).
 function Tile({ countdown, k = null }) {
-  const days = Number.isFinite(countdown?.daysLeft) ? Math.max(0, Math.round(countdown.daysLeft)) : null
+  const count = dayCount(countdown)
   const title = typeof countdown?.title === 'string' ? countdown.title.trim() : ''
   const src = artUrl(countdown?.image)
   // The edge is the calendar's colour; without one the edge draws nothing.
@@ -101,24 +105,13 @@ function Tile({ countdown, k = null }) {
   const artOnly = !!k && k.tileStyle === 'imageOnly'
   const showUnit = k ? !!k.showUnit : true
 
-  let numberClass = 'tl-cd__num tl-num'
-  let numberText
-  let unit
-  if (days == null) {
-    numberText = '--'
-    unit = 'DAYS'
-  } else if (days === 0) {
-    numberClass = 'tl-cd__num'
-    numberText = <span className="tl-cd__today">Today</span>
-    unit = ''
-  } else {
-    numberText = days
-    unit = days === 1 ? 'DAY' : 'DAYS'
-  }
+  const numberClass = count.today ? 'tl-cd__num' : 'tl-cd__num tl-num'
+  const numberText = count.today ? <span className="tl-cd__today">{count.text}</span> : count.text
+  const unit = count.unit
 
   return (
     <div
-      className={`tl-cd__tile${days === 0 ? ' tl-cd__tile--today' : ''}`}
+      className={`tl-cd__tile${count.today ? ' tl-cd__tile--today' : ''}`}
       style={style}
       data-edit="tile"
       data-edit-label={title || 'Countdown'}
@@ -162,6 +155,9 @@ export default function CountdownsPanel({ countdowns, knobs }) {
     .filter((c) => c && typeof c === 'object')
     .slice(0, max)
 
+  // Art above: the tiles are CountdownCards, which take the art's size and
+  // overlap as two more variables. The other styles draw exactly as before.
+  const above = !!k && k.tileStyle === 'artAbove'
   const cls = k ? `tl-cd tl-knobs tl-cd--style-${k.tileStyle} tl-cd--bg-${k.tileBackground}` : 'tl-cd'
   const style = k
     ? {
@@ -170,8 +166,12 @@ export default function CountdownsPanel({ countdowns, knobs }) {
         '--tl-cd-title': String(k.titleSize),
         '--tl-cd-num': String(k.numberSize),
         '--tl-cd-gap': String(k.gap),
+        ...(above ? { '--tl-cd-art-size': String(k.artSize), '--tl-cd-art-overlap': String(k.artOverlap) } : null),
       }
     : undefined
+  // A tile with no art keeps its text level with its neighbours' when any of
+  // them has art.
+  const align = above && list.some(hasArt)
 
   return (
     <PanelFrame title={null} className={cls} bodyClassName="tl-cd__body" style={style}>
@@ -181,9 +181,13 @@ export default function CountdownsPanel({ countdowns, knobs }) {
         </div>
       ) : (
         <div className="tl-cd__row">
-          {list.map((c, i) => (
-            <Tile key={c.id == null ? `cd-${i}` : String(c.id)} countdown={c} k={k} />
-          ))}
+          {list.map((c, i) =>
+            above ? (
+              <CountdownCard key={c.id == null ? `cd-${i}` : String(c.id)} countdown={c} k={k} align={align} />
+            ) : (
+              <Tile key={c.id == null ? `cd-${i}` : String(c.id)} countdown={c} k={k} />
+            )
+          )}
         </div>
       )}
     </PanelFrame>

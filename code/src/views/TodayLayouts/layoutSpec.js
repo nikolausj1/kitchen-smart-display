@@ -130,6 +130,9 @@ const TYPE_TABLE = [
   // Also the departure countdown's box during a school morning (as on the phase
   // 1 board), so its minimum covers that panel too. The tiles are the cards.
   { type: 'countdowns', label: 'Countdowns', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 110 }, box: { x: 30, y: 30, w: 40, h: 40 }, props: BARE },
+  // One countdown, big (panels/CountdownPanel.jsx). Its card is its own, like
+  // the countdown tiles', so the box draws nothing.
+  { type: 'countdown', label: 'Countdown', kind: 'panel', min: { w: 6, h: 8 }, minPx: { w: 120, h: 100 }, box: { x: 40, y: 35, w: 20, h: 30 }, props: BARE },
   { type: 'departure', label: 'Departure', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 100 }, box: { x: 35, y: 30, w: 30, h: 40 }, props: CARD },
   // Also the departure countdown's box while one runs (the Board's rule).
   { type: 'nowplaying', label: 'Now playing', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 160, h: 70 }, box: { x: 34, y: 34, w: 32, h: 32 }, props: CARD },

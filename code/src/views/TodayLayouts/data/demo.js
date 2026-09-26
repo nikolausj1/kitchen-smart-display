@@ -385,7 +385,10 @@ function demoAllDay(base, id, cal, title, offsetDays, lengthDays) {
 // demoCalendar(today) -> { events, countdowns, calendars }: eight events over
 // three days (one all-day event spans tomorrow and the day after, so it shows
 // in two columns), and two countdowns - one whose art is a hub path that does
-// not exist, so the tile's fallback runs, and one with an emoji.
+// not exist, so the tile's fallback runs, and one with an emoji. Each carries
+// a marker colour (`tileColor`, the hub's palette purple and green: what
+// `color: purple` and `color: green` in an event's description send), which
+// only the art-above tiles draw; the other tile styles draw as before.
 export function demoCalendar(today) {
   const base = new Date(today)
   base.setHours(0, 0, 0, 0)
@@ -413,6 +416,7 @@ export function demoCalendar(today) {
       emoji: '\u{1F382}',
       calendarLabel: justin.label,
       color: justin.color,
+      tileColor: '#8e4ed8',
     },
     {
       id: 'demo-cd-cabin',
@@ -424,6 +428,7 @@ export function demoCalendar(today) {
       emoji: null,
       calendarLabel: sheena.label,
       color: sheena.color,
+      tileColor: '#2f9e44',
     },
   ]
 

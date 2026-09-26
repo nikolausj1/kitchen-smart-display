@@ -65,6 +65,36 @@ function select(key, label, options, def, element, hint) {
   return withExtras({ key, label, type: 'select', options, default: def }, element, hint)
 }
 
+// The art-above countdown card's own knobs (countdowns' 'artAbove' tiles and
+// the single countdown; panels/CountdownCard.jsx, lib/tileColor.js).
+function tileGradientField(element, hint) {
+  const options = [
+    ['down', 'Down'],
+    ['diagonal', 'Diagonal'],
+    ['none', 'None'],
+  ]
+  return select('tileGradient', 'Gradient', options, 'down', element, hint)
+}
+
+function tileColorFromField(element, hint) {
+  const options = [
+    ['auto', 'Auto'],
+    ['marker', 'Marker'],
+    ['calendar', 'Calendar'],
+  ]
+  return select('tileColorFrom', 'Colour from', options, 'auto', element, hint)
+}
+
+function artSizeField(hint) {
+  return withExtras({ key: 'artSize', label: 'Art size', type: 'number', min: 0.4, max: 1.2, step: 0.05, unit: 'x', default: 0.8 }, 'image', hint)
+}
+
+function artOverlapField(hint) {
+  return withExtras({ key: 'artOverlap', label: 'Art overlap', type: 'number', min: 0, max: 0.8, step: 0.05, default: 0.35 }, 'image', hint)
+}
+
+const COLOR_FROM_HINT = "Auto: the event's color: marker, else the art, else the calendar. Marker never reads the art"
+
 const WEIGHTS = [
   [300, 'Light'],
   [400, 'Regular'],
@@ -306,10 +336,11 @@ export const PANEL_SCHEMAS = deepFreeze({
           ['card', 'Card'],
           ['bare', 'Bare'],
           ['imageOnly', 'Image only'],
+          ['artAbove', 'Art above'],
         ],
         'card',
         'tile',
-        'Bare: the image, title and number, nothing else'
+        'Bare: the image, title and number, nothing else. Art above: the art over a coloured card'
       ),
       select(
         'tileBorder',
@@ -333,16 +364,74 @@ export const PANEL_SCHEMAS = deepFreeze({
         'tile'
       ),
       factor('tileRadius', 'Corner radius', 'tile'),
+      tileGradientField('tile', 'Art above: the card runs from its colour to a darker shade'),
+      tileColorFromField('tile', `Art above. ${COLOR_FROM_HINT}`),
       // The image already fills what the text leaves it, so it can only shrink.
       withExtras(
         { key: 'imageSize', label: 'Image size', type: 'number', min: 0.25, max: 1, step: 0.05, unit: 'x', default: 1 },
         'image',
         'Of the room the text leaves'
       ),
+      artSizeField('Art above: of the card width'),
+      artOverlapField("Art above: how much of the art's height dips into the card"),
       size('titleSize', 'Title size', 'name'),
       size('numberSize', 'Number size', 'number'),
       toggle('showUnit', 'Days label', true, 'unit'),
       factor('gap', 'Gap', null, 'Between the tiles'),
+      select(
+        'prefer',
+        'Prefer',
+        [
+          ['art', 'Art'],
+          ['emoji', 'Emoji'],
+        ],
+        'art',
+        'image',
+        'Which one a countdown with both shows'
+      ),
+    ],
+  },
+
+  // One countdown, big, drawn as an art-above card (panels/CountdownPanel.jsx).
+  countdown: {
+    fields: [
+      select(
+        'pick',
+        'Show',
+        [
+          ['next', 'The next one'],
+          ['title', 'By title'],
+        ],
+        'next',
+        null,
+        'The next one: the soonest countdown'
+      ),
+      {
+        key: 'titleMatch',
+        label: 'Title contains',
+        type: 'text',
+        default: '',
+        maxLength: 80,
+        placeholder: 'e.g. Minnesota',
+        hint: 'By title: part of the countdown title, any case',
+      },
+      select(
+        'layout',
+        'Layout',
+        [
+          ['stacked', 'Art above'],
+          ['side', 'Art left'],
+        ],
+        'stacked'
+      ),
+      tileGradientField(null, 'The card runs from its colour to a darker shade'),
+      tileColorFromField(null, COLOR_FROM_HINT),
+      factor('tileRadius', 'Corner radius'),
+      artSizeField('Of the card: its width with the art above, its height with the art left'),
+      artOverlapField("How much of the art's height (its width, art left) dips into the card"),
+      size('titleSize', 'Title size', 'name'),
+      size('numberSize', 'Number size', 'number'),
+      toggle('showUnit', 'Days label', true, 'unit'),
       select(
         'prefer',
         'Prefer',
@@ -527,6 +616,14 @@ export const PANEL_ELEMENTS = deepFreeze({
   countdowns: [
     TITLE,
     { key: 'tile', label: 'Tile' },
+    { key: 'image', label: 'Image' },
+    { key: 'name', label: 'Event name' },
+    { key: 'number', label: 'Number' },
+    { key: 'unit', label: 'Days label' },
+    EMPTY,
+  ],
+  countdown: [
+    TITLE,
     { key: 'image', label: 'Image' },
     { key: 'name', label: 'Event name' },
     { key: 'number', label: 'Number' },

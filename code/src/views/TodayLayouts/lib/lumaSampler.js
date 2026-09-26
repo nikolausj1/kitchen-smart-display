@@ -3,6 +3,9 @@
 //
 //   sampleLuma(src, { w, h, fit }) -> Promise<{ src, cols, rows, grid, ms } | null>
 //
+// Its decoder is shared (decodeImage, decodeElement): the countdown tiles'
+// colour sampler (lib/tileColor.js) reads the Countdown Art the same way.
+//
 // The photo is read again beside the <img> on screen, as a CORS request (the
 // kitchen Pi's app is served by the Pi and its photos by the hub, which sends
 // Access-Control-Allow-Origin: * on them; the Echos load both from the hub,
@@ -45,16 +48,8 @@ function clock() {
   return typeof performance !== 'undefined' && performance.now ? performance.now() : 0
 }
 
-// A small decoded bitmap of the photo, or a decoded <img> as the fallback.
-function decode(src) {
-  if (typeof createImageBitmap === 'function' && typeof fetch === 'function') {
-    return fetch(src, { mode: 'cors' })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.blob()
-      })
-      .then((blob) => createImageBitmap(blob, { resizeWidth: DECODE_WIDTH, resizeQuality: 'medium' }))
-  }
+// A decoded <img>, read as a CORS request (so a canvas may read it back).
+export function decodeElement(src) {
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.decoding = 'async'
@@ -63,6 +58,28 @@ function decode(src) {
     img.onerror = () => reject(new Error('load failed'))
     img.src = src
   })
+}
+
+// decodeImage(src, width) -> Promise of a small decoded bitmap of the image,
+// `width` pixels wide (its aspect kept), decoded off the main thread; or of
+// a decoded <img> as the fallback. Rejects when it cannot be had. The
+// countdown tiles' colour sampler (lib/tileColor.js) reads its art with it.
+// Release a bitmap with close() when done.
+export function decodeImage(src, width) {
+  if (typeof createImageBitmap === 'function' && typeof fetch === 'function') {
+    return fetch(src, { mode: 'cors' })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.blob()
+      })
+      .then((blob) => createImageBitmap(blob, { resizeWidth: width, resizeQuality: 'medium' }))
+  }
+  return decodeElement(src)
+}
+
+// A small decoded bitmap of the photo, or a decoded <img> as the fallback.
+function decode(src) {
+  return decodeImage(src, DECODE_WIDTH)
 }
 
 function measure(source, src, cols, rows, fit, w, h) {

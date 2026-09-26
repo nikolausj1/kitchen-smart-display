@@ -2,7 +2,7 @@
 // as. Run from code/: node --test src/views/TodayLayouts/Entry/specStyles.test.mjs
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { blurTintAlpha, boxLook, elementStylesCss, hexChannels, shrinkKeysOf } from './specStyles.js'
+import { blurTintAlpha, boxLook, elementStylesCss, hexChannels, linearGradient, shrinkKeysOf } from './specStyles.js'
 
 test('no styles, no stylesheet', () => {
   assert.equal(elementStylesCss('clock', null), '')
@@ -67,6 +67,13 @@ test('boxLook: a gradient fill over the preset, a frame above it, a drop shadow'
   assert.equal(look.style['--tl-spec-frame'], 'inset 0 0 0 max(1px, 0.1042vw) #ffffff, inset 0 0 0 1px var(--tl-spec-edge)')
   assert.match(look.boxShadow, /^0 calc\(var\(--tl-pad\) \* 0\.15\)/)
   assert.equal(look.rounded, true)
+})
+
+test('linearGradient: the box v2 directions, null for none and anything else', () => {
+  assert.equal(linearGradient('down', '#000', '#fff'), 'linear-gradient(to bottom, #000, #fff)')
+  assert.equal(linearGradient('right', 'red', 'blue'), 'linear-gradient(to right, red, blue)')
+  assert.equal(linearGradient('diagonal', 'a', 'b'), 'linear-gradient(to bottom right, a, b)')
+  for (const g of ['none', 'up', 'constructor', '', null, undefined]) assert.equal(linearGradient(g, 'a', 'b'), null, String(g))
 })
 
 test('boxLook: an opacity alone fades the preset fill; no preset, no colour, no fill', () => {
