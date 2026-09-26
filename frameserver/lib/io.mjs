@@ -25,6 +25,30 @@ export function writeJsonFileAtomic(path, value, pretty = false) {
 
 export const isDict = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 
+// An ISO instant (usually UTC, 'Z') -> the local wall-clock stamp in `timeZone`
+// ('2026-09-24T15:00', no zone), matching Open-Meteo's own local-stamp
+// convention (lib/hubWeather.mjs, lib/openMeteoWeather.mjs): every `time` /
+// `date` / `sunrise` / `sunset` the hub hands to weatherRules.mjs and
+// headline.mjs is a local, offset-less string, so `new Date(v)` parses it in
+// the process's own zone (the house's, verified Pacific on the NUC) and every
+// source reads the same way. WeatherKit answers in UTC, so lib/weatherKit.mjs
+// uses this to convert. Returns null for an unparseable instant or a missing
+// timeZone.
+export function toLocalStamp(iso, timeZone) {
+  if (!timeZone) return null
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d).map((p) => [p.type, p.value]),
+  )
+  // Some ICU builds print midnight as "24" with hour12: false.
+  const hour = parts.hour === '24' ? '00' : parts.hour
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`
+}
+
 // fetch() with a hard timeout covering the headers AND the body. The global
 // fetch has no timeout of its own, and a hung upstream (a Sonos speaker
 // mid-reboot, a school site that accepts the connection and stalls) must never
