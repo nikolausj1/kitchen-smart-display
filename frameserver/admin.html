@@ -1370,12 +1370,17 @@ function renderHomeAssistant() {
   const model = {
     entities: (Array.isArray(shared.ha?.entities) ? shared.ha.entities : []).map((e) => ({ ...e })),
     actions: (Array.isArray(shared.ha?.actions) ? shared.ha.actions : []).map((a) => ({ ...a })),
+    // Off by default: an existing shared.ha without the key (or a fresh
+    // seed) reads as false, same as the hub's own actionsEnabled() getter.
+    actionsEnabled: shared.ha?.actionsEnabled === true,
   }
   let saving = Promise.resolve()
   const save = () => {
     saving = saving.then(async () => {
       try {
-        const merged = await patchShared({ ha: { entities: model.entities, actions: model.actions } })
+        const merged = await patchShared({
+          ha: { entities: model.entities, actions: model.actions, actionsEnabled: model.actionsEnabled },
+        })
         if (merged && typeof merged === 'object') shared = merged
       } catch (e) {
         toast(`Not saved: ${e.message || e}`)
@@ -1481,6 +1486,11 @@ function renderHomeAssistant() {
 
     // --- actions ---
     body.appendChild(make('h3', 'ha-sub', 'Actions'))
+    row(body, 'Allow actions from screens',
+      'Off: screens can show states but every button is refused. On: any device on the Wi-Fi can trigger ' +
+      'these actions through the hub; the dashboard PIN item in BACKLOG.md is meant to pair with this.',
+      select([[true, 'On'], [false, 'Off']], model.actionsEnabled,
+        (v) => { model.actionsEnabled = v === 'true'; save() }))
     const aTable = make('div', 'ha-actions-table')
     const aHead = make('div', 'ha-head')
     for (const t of ['Label', 'Entity', 'Service', 'Confirm', '']) aHead.appendChild(make('span', null, t))

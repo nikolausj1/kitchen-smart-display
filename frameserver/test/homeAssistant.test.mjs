@@ -314,6 +314,11 @@ describe('seeding the whitelist', () => {
     assert.ok(!saved.entities.some((e) => e.id === 'binary_sensor.front_door_contact_open' || e.id === 'person.sheena'))
     // Neither dropped id had an action targeting it, so all 10 survive.
     assert.equal(saved.actions.length, 10)
+    // The seed writes actions disabled: a whitelist can be built and
+    // reviewed before any screen can actually trigger it.
+    assert.equal(saved.actionsEnabled, false)
+    assert.equal(ha.snapshot().actionsEnabled, false)
+    assert.equal(ha.brief().actionsEnabled, false)
     ha.stop()
   })
 
@@ -453,11 +458,14 @@ function startMockHa() {
 }
 
 describe('runAction: the exact request, against a real mock HA server', () => {
+  // Actions enabled by default here: this whole describe block is about
+  // whitelisting, data merging and rate limiting, not the kill switch below
+  // (its own describe block sets actionsEnabled explicitly on every case).
   async function haAgainstMock(t, { shared, ...opts } = {}) {
     const { server, requests, url } = await startMockHa()
     t.after(() => server.close())
     const { ha, dir } = makeHa(t, {
-      shared: shared ?? { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS } },
+      shared: shared ?? { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: true } },
       url,
       getToken: () => 'secret-token',
       ...opts,
@@ -496,6 +504,7 @@ describe('runAction: the exact request, against a real mock HA server', () => {
       shared: { ha: {
         entities: SEED_ENTITIES,
         actions: [{ id: 'evil', label: 'Evil', entity: 'light.downstairs', service: 'light.explode', confirm: 'tap' }],
+        actionsEnabled: true,
       } },
     })
     const r = await ha.runAction('evil', { screen: 'kitchen' })
@@ -515,7 +524,9 @@ describe('runAction: the exact request, against a real mock HA server', () => {
     const { server, requests: _r, url } = await startMockHa()
     server.close() // close it at once: connections to this port now fail
     await new Promise((res) => setTimeout(res, 20))
-    const { ha } = makeHa(t, { shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS } }, url, getToken: () => 'x' })
+    const { ha } = makeHa(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: true } }, url, getToken: () => 'x',
+    })
     const r = await ha.runAction('downstairs-off', { screen: 'kitchen' })
     assert.equal(r.ok, false)
     assert.equal(r.status, 200)
@@ -568,6 +579,90 @@ describe('runAction: the exact request, against a real mock HA server', () => {
   })
 })
 
+// ---- actionsEnabled: the dashboard's kill switch on runAction --------------
+
+describe('actionsEnabled: refused before the allowlist and rate limit, before ever touching HA', () => {
+  async function haWithMock(t, { shared, ...opts } = {}) {
+    const { server, requests, url } = await startMockHa()
+    t.after(() => server.close())
+    const { ha, store } = makeHa(t, { shared, url, getToken: () => 'secret-token', ...opts })
+    return { ha, store, requests }
+  }
+
+  test('off (the explicit default) refuses with 403 and never reaches the server', async (t) => {
+    const { ha, requests } = await haWithMock(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: false } },
+    })
+    const r = await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    assert.deepEqual(r, { ok: false, status: 403, error: 'actions are disabled on the dashboard' })
+    assert.equal(requests.length, 0)
+  })
+
+  test('an existing shared.ha with no actionsEnabled key at all reads as off, same as false', async (t) => {
+    const { ha, requests } = await haWithMock(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS } }, // no actionsEnabled key
+    })
+    assert.equal(ha.snapshot().actionsEnabled, false)
+    const r = await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    assert.equal(r.status, 403)
+    assert.equal(requests.length, 0)
+  })
+
+  test('checked before the allowlist and the rate limit: neither refusal reason is reachable while off', async (t) => {
+    // A disallowed service and a spent rate-limit budget would each refuse
+    // this call on their own; with actions off, 403 wins over both.
+    const { ha, requests } = await haWithMock(t, {
+      shared: { ha: {
+        entities: SEED_ENTITIES,
+        actions: [{ id: 'evil', label: 'Evil', entity: 'light.downstairs', service: 'light.explode', confirm: 'tap' }],
+        actionsEnabled: false,
+      } },
+    })
+    const r = await ha.runAction('evil', { screen: 'kitchen' })
+    assert.deepEqual(r, { ok: false, status: 403, error: 'actions are disabled on the dashboard' })
+    assert.equal(requests.length, 0)
+  })
+
+  test('a refusal while off is still logged, with the entity resolved', async (t) => {
+    const { ha } = await haWithMock(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: false } },
+    })
+    await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    const [entry] = ha.actionsLog(1)
+    assert.equal(entry.action, 'downstairs-off')
+    assert.equal(entry.screen, 'kitchen')
+    assert.equal(entry.entity, 'light.downstairs')
+    assert.deepEqual(entry.result, { ok: false, status: 403, error: 'actions are disabled on the dashboard' })
+  })
+
+  test('on: the call proceeds as normal and reaches the server', async (t) => {
+    const { ha, requests } = await haWithMock(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: true } },
+    })
+    const r = await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    assert.deepEqual(r, { ok: true, status: 200, error: null })
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].url, '/api/services/light/turn_off')
+    const [entry] = ha.actionsLog(1)
+    assert.deepEqual(entry.result, { ok: true, status: 200, error: null })
+  })
+
+  test('flipping it off between calls refuses the very next one, no restart needed', async (t) => {
+    const { ha, store, requests } = await haWithMock(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: true } },
+    })
+    const first = await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    assert.equal(first.ok, true)
+    assert.equal(requests.length, 1)
+    // shared.ha is read fresh on every call (like the dashboard's own PATCH
+    // path), so flipping the flag takes effect on the very next call.
+    store.patch({ ha: { ...store.get().ha, actionsEnabled: false } })
+    const second = await ha.runAction('downstairs-off', { screen: 'kitchen' })
+    assert.deepEqual(second, { ok: false, status: 403, error: 'actions are disabled on the dashboard' })
+    assert.equal(requests.length, 1, 'no second request reached the server')
+  })
+})
+
 // ---- snapshot() / brief() / compact(): shape -------------------------------
 
 describe('snapshot / brief / compact shape', () => {
@@ -580,9 +675,11 @@ describe('snapshot / brief / compact shape', () => {
       url: '', getToken: () => null,
     })
     const snap = ha.snapshot()
-    assert.deepEqual(Object.keys(snap).sort(), ['actions', 'configured', 'connected', 'entities', 'error', 'fetchedAt', 'lastEventAt'].sort())
+    assert.deepEqual(Object.keys(snap).sort(),
+      ['actions', 'actionsEnabled', 'configured', 'connected', 'entities', 'error', 'fetchedAt', 'lastEventAt'].sort())
     assert.equal(snap.configured, false)
     assert.equal(snap.connected, false)
+    assert.equal(snap.actionsEnabled, false, 'absent from shared.ha: reads as false')
     assert.equal(snap.entities['input_select.day_part_override'].kind, 'select')
     assert.equal(snap.entities['input_select.day_part_override'].state, null)
     assert.equal(snap.actions[0].confirm, 'tap')
@@ -590,11 +687,14 @@ describe('snapshot / brief / compact shape', () => {
   })
 
   test('brief(): the /healthz slice', (t) => {
-    const { ha } = makeHa(t, { shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS } }, url: '', getToken: () => null })
+    const { ha } = makeHa(t, {
+      shared: { ha: { entities: SEED_ENTITIES, actions: SEED_ACTIONS, actionsEnabled: true } }, url: '', getToken: () => null,
+    })
     const b = ha.brief()
-    assert.deepEqual(Object.keys(b).sort(), ['configured', 'connected', 'entities', 'error', 'lastEventAt'].sort())
+    assert.deepEqual(Object.keys(b).sort(), ['actionsEnabled', 'configured', 'connected', 'entities', 'error', 'lastEventAt'].sort())
     assert.equal(b.configured, false)
     assert.equal(b.entities, 13)
+    assert.equal(b.actionsEnabled, true)
   })
 
   test('compact(): state plus only friendly_name/options/current_position of attributes', (t) => {

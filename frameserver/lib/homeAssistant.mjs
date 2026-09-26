@@ -317,6 +317,11 @@ export function createHomeAssistant({
 
   const whitelistIds = () => currentEntities().map((e) => e.id)
 
+  // The dashboard's kill switch, off by default: an absent key (a pre-existing
+  // shared.ha, or one hand-edited without it) reads as false, same as an
+  // explicit false. Only a literal true turns it on.
+  const actionsEnabled = () => getShared?.()?.ha?.actionsEnabled === true
+
   // --- REST ---
 
   async function restGetStates() {
@@ -496,7 +501,9 @@ export function createHomeAssistant({
     const droppedIds = checks.filter((c) => !c.ok).map((c) => c.e.id)
     const keptIds = new Set(kept.map((e) => e.id))
     const actions = SEED_ACTIONS.filter((a) => keptIds.has(a.entity)).map((a) => ({ ...a }))
-    patchShared({ ha: { entities: kept, actions } })
+    // Actions start disabled: seeding fills the whitelist, it does not turn
+    // the house over to it. Justin flips this on from the dashboard.
+    patchShared({ ha: { entities: kept, actions, actionsEnabled: false } })
     if (droppedIds.length) {
       log(`[ha] seed: ${droppedIds.length} entity id(s) not found in Home Assistant, dropped: ${droppedIds.join(', ')}`)
     }
@@ -555,6 +562,16 @@ export function createHomeAssistant({
     if (!action) {
       const result = { ok: false, status: 404, error: 'unknown action' }
       appendLog({ time, screen: screenId, action: actionId, entity: null, result })
+      return result
+    }
+    // The dashboard's kill switch: off by default (seeded false, and an
+    // existing shared.ha without the key reads as false too), so a whitelist
+    // can be built and reviewed before any screen can actually trigger it.
+    // Checked before the allowlist and the rate limit, and before anything
+    // that would reach Home Assistant.
+    if (!actionsEnabled()) {
+      const result = { ok: false, status: 403, error: 'actions are disabled on the dashboard' }
+      appendLog({ time, screen: screenId, action: actionId, entity: action.entity, result })
       return result
     }
     const [domain, bareService] = splitService(action.service)
@@ -653,13 +670,17 @@ export function createHomeAssistant({
       confirm: a.confirm === 'hold' ? 'hold' : 'tap',
       needs: NEEDS_MAP[a.service] || [],
     }))
-    return { connected, configured: configuredNow(), fetchedAt, lastEventAt, error: lastError, entities, actions }
+    return {
+      connected, configured: configuredNow(), fetchedAt, lastEventAt, error: lastError,
+      actionsEnabled: actionsEnabled(), entities, actions,
+    }
   }
 
   function brief() {
     return {
       configured: configuredNow(),
       connected,
+      actionsEnabled: actionsEnabled(),
       entities: currentEntities().length,
       lastEventAt,
       error: lastError,
