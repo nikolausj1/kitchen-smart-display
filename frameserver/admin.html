@@ -276,6 +276,48 @@
     #powerEvents { order: 1; }
   }
   /* ==== /health ========================================================== */
+
+  /* ==== home assistant: the house-wide "Home Assistant" card =============
+     frameserver/lib/homeAssistant.mjs. The entity and action whitelists are
+     edited here like the calendar list above (one grid per table, header and
+     rows sharing columns via display: contents); the connection status,
+     per-entity state and the recent-actions log are read-only, repainted in
+     place from loadExtras()'s minute tick (paintHaStatus / paintHaLog). */
+  .ha-table, .ha-actions-table { display: grid; gap: .5rem .6rem; align-items: center; margin-bottom: .8rem; }
+  .ha-table { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) auto auto auto; }
+  .ha-actions-table { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.3fr) auto auto; }
+  .ha-head, .ha-row { display: contents; }
+  .ha-head span { color: var(--muted); font-size: .78rem; }
+  .ha-row input[type=text] { min-width: 0; width: 100%; }
+  .ha-id { font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; }
+  .ha-state { font-size: .85rem; font-variant-numeric: tabular-nums; }
+  h3.ha-sub { margin: 0 0 .5rem; font-size: .85rem; }
+  .ha-search { position: relative; margin-bottom: 1rem; }
+  .ha-search input[type=text] { width: 100%; max-width: 26rem; }
+  .ha-search-results {
+    margin-top: .4rem; max-width: 26rem; border: 1px solid var(--line); border-radius: 8px;
+    max-height: 14rem; overflow-y: auto; background: var(--panel);
+  }
+  .ha-search-result {
+    display: flex; align-items: center; justify-content: space-between; gap: .6rem;
+    padding: .5rem .7rem; border-top: 1px solid var(--line); font-size: .85rem;
+  }
+  .ha-search-result:first-child { border-top: 0; }
+  .ha-search-result .ha-id { flex: 1; min-width: 0; color: var(--ink); }
+  .ha-log { display: grid; gap: .5rem; font-size: .82rem; }
+  .ha-log-row { display: flex; flex-wrap: wrap; gap: .1rem .6rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+  .ha-log-row:first-child { border-top: 0; padding-top: 0; }
+  .ha-log-row .when { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 620px) {
+    .ha-table, .ha-actions-table { display: block; }
+    .ha-table .ha-head, .ha-actions-table .ha-head { display: none; }
+    .ha-table .ha-row, .ha-actions-table .ha-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .5rem;
+      padding: .7rem 0; border-top: 1px solid var(--line);
+    }
+    .ha-table .ha-row > *:first-child, .ha-actions-table .ha-row > *:first-child { grid-column: 1 / -1; }
+  }
+  /* ==== /home assistant ==================================================== */
 </style>
 </head>
 <body>
@@ -993,6 +1035,7 @@ function renderShared() {
   renderCalendars()
   renderArt()
   renderWeather()
+  renderHomeAssistant()
   // Paint the status from what was last fetched, so a re-render does not flash
   // "Loading", then refetch it if that is over a minute old.
   paintExtras()
@@ -1298,6 +1341,297 @@ function syncResultText(r) {
     (changes.length ? ` (${changes.join(', ')})` : '')
 }
 
+// ==== home assistant: the whitelist and the action log =====================
+// frameserver/lib/homeAssistant.mjs. Mirrors that module's KINDS and
+// SERVICE_ALLOWLIST here (this page has no module loader to import an .mjs
+// from) - keep the two in sync by hand if either changes.
+const HA_KINDS = ['cover', 'lock', 'door', 'light', 'switch', 'mode', 'select', 'person', 'sensor', 'camera', 'todo', 'other']
+const HA_SERVICE_ALLOWLIST = {
+  cover: ['open_cover', 'close_cover', 'stop_cover', 'toggle'],
+  lock: ['lock', 'unlock'],
+  light: ['turn_on', 'turn_off', 'toggle'],
+  switch: ['turn_on', 'turn_off', 'toggle'],
+  input_boolean: ['turn_on', 'turn_off', 'toggle'],
+  input_select: ['select_option'],
+  scene: ['turn_on'],
+  script: ['turn_on'],
+}
+const HA_DOMAIN_KIND = {
+  light: 'light', switch: 'switch', cover: 'cover', lock: 'lock',
+  input_boolean: 'switch', input_select: 'select', select: 'select',
+  person: 'person', sensor: 'sensor', binary_sensor: 'sensor', camera: 'camera', todo: 'todo',
+}
+const haDomainOf = (id) => String(id || '').split('.')[0] || ''
+const haDefaultKind = (id) => HA_DOMAIN_KIND[haDomainOf(id)] || 'other'
+// "domain.service" options for whichever entity is currently chosen.
+const haServiceOptions = (entityId) => {
+  const domain = haDomainOf(entityId)
+  return (HA_SERVICE_ALLOWLIST[domain] || []).map((s) => [`${domain}.${s}`, s])
+}
+
+let haSearchTimer = null
+
+// One card, built once per renderShared() and redrawn in place on every add
+// or remove (never re-added: card() would otherwise stack a second section
+// on top of the first). Mirrors renderCalendars()'s one-save-at-a-time queue.
+function renderHomeAssistant() {
+  const c = card('Home Assistant',
+    "A whitelist of entities the hub may read and actions it may call - nothing else passes through. " +
+    "Screens never talk to Home Assistant directly. Panels that show this on a screen are a later step.")
+  const body = make('div')
+  c.appendChild(body)
+
+  const model = {
+    entities: (Array.isArray(shared.ha?.entities) ? shared.ha.entities : []).map((e) => ({ ...e })),
+    actions: (Array.isArray(shared.ha?.actions) ? shared.ha.actions : []).map((a) => ({ ...a })),
+    // Off by default: an existing shared.ha without the key (or a fresh
+    // seed) reads as false, same as the hub's own actionsEnabled() getter.
+    actionsEnabled: shared.ha?.actionsEnabled === true,
+  }
+  let saving = Promise.resolve()
+  const save = () => {
+    saving = saving.then(async () => {
+      try {
+        const merged = await patchShared({
+          ha: { entities: model.entities, actions: model.actions, actionsEnabled: model.actionsEnabled },
+        })
+        if (merged && typeof merged === 'object') shared = merged
+      } catch (e) {
+        toast(`Not saved: ${e.message || e}`)
+        loadAll().catch(() => {})
+      }
+    })
+    return saving
+  }
+
+  function redraw() {
+    body.innerHTML = ''
+
+    const status = make('div')
+    status.id = 'haStatus'
+    body.appendChild(status)
+
+    // --- entities ---
+    body.appendChild(make('h3', 'ha-sub', 'Entities'))
+    const eTable = make('div', 'ha-table')
+    const eHead = make('div', 'ha-head')
+    for (const t of ['Label', 'Entity ID', 'Kind', 'State', '']) eHead.appendChild(make('span', null, t))
+    eTable.appendChild(eHead)
+    const eNone = make('p', 'empty-note', 'No entities whitelisted yet. Search for one below.')
+    eTable.hidden = model.entities.length === 0
+    eNone.hidden = !eTable.hidden
+
+    for (const entry of model.entities) {
+      const r = make('div', 'ha-row')
+      const label = document.createElement('input')
+      label.type = 'text'; label.value = entry.label ?? ''
+      label.placeholder = entry.id
+      label.setAttribute('aria-label', `Label for ${entry.id}`)
+      label.onchange = () => {
+        entry.label = label.value.trim()
+        label.value = entry.label
+        save()
+      }
+      const kindSel = select(HA_KINDS.map((k) => [k, k]), HA_KINDS.includes(entry.kind) ? entry.kind : haDefaultKind(entry.id),
+        (v) => { entry.kind = v; save() })
+      const stateEl = make('span', 'ha-state', '…')
+      stateEl.dataset.haStateId = entry.id
+      const rm = make('button', 'action danger', 'Remove')
+      rm.type = 'button'
+      rm.onclick = () => {
+        if (!confirm(`Remove ${entry.label || entry.id}? Any action using it is removed too.`)) return
+        model.entities.splice(model.entities.indexOf(entry), 1)
+        model.actions = model.actions.filter((a) => a.entity !== entry.id)
+        save()
+        redraw()
+      }
+      r.append(label, make('code', 'ha-id', entry.id), kindSel, stateEl, rm)
+      eTable.appendChild(r)
+    }
+    body.append(eTable, eNone)
+
+    // --- add entity: search Home Assistant live ---
+    const search = make('div', 'ha-search')
+    const searchInput = document.createElement('input')
+    searchInput.type = 'text'
+    searchInput.placeholder = 'Search Home Assistant by entity id or name…'
+    searchInput.setAttribute('aria-label', 'Search Home Assistant entities')
+    const results = make('div', 'ha-search-results')
+    results.hidden = true
+    searchInput.oninput = () => {
+      clearTimeout(haSearchTimer)
+      const q = searchInput.value.trim()
+      if (!q) { results.hidden = true; results.innerHTML = ''; return }
+      haSearchTimer = setTimeout(async () => {
+        let list
+        try {
+          list = await api(`/api/ha/entities?q=${encodeURIComponent(q)}`)
+        } catch (e) {
+          results.innerHTML = ''
+          results.appendChild(make('div', 'ha-search-result', `Search failed: ${e.message || e}`))
+          results.hidden = false
+          return
+        }
+        const already = new Set(model.entities.map((e) => e.id))
+        const fresh = (Array.isArray(list) ? list : []).filter((x) => !already.has(x.id))
+        results.innerHTML = ''
+        if (!fresh.length) results.appendChild(make('div', 'ha-search-result', 'No new matches.'))
+        for (const x of fresh) {
+          const row = make('div', 'ha-search-result')
+          const text = make('span', 'ha-id', x.label && x.label !== x.id ? `${x.label} — ${x.id}` : x.id)
+          const add = make('button', 'action ghost', 'Add')
+          add.type = 'button'
+          add.onclick = () => {
+            model.entities.push({ id: x.id, label: x.label || x.id, kind: haDefaultKind(x.id) })
+            save()
+            searchInput.value = ''
+            results.hidden = true
+            results.innerHTML = ''
+            redraw()
+          }
+          row.append(text, add)
+          results.appendChild(row)
+        }
+        results.hidden = false
+      }, 300)
+    }
+    search.append(searchInput, results)
+    body.appendChild(search)
+
+    // --- actions ---
+    body.appendChild(make('h3', 'ha-sub', 'Actions'))
+    row(body, 'Allow actions from screens',
+      'Off: screens can show states but every button is refused. On: any device on the Wi-Fi can trigger ' +
+      'these actions through the hub; the dashboard PIN item in BACKLOG.md is meant to pair with this.',
+      select([[true, 'On'], [false, 'Off']], model.actionsEnabled,
+        (v) => { model.actionsEnabled = v === 'true'; save() }))
+    const aTable = make('div', 'ha-actions-table')
+    const aHead = make('div', 'ha-head')
+    for (const t of ['Label', 'Entity', 'Service', 'Confirm', '']) aHead.appendChild(make('span', null, t))
+    aTable.appendChild(aHead)
+    const aNone = make('p', 'empty-note', 'No actions yet.')
+    aTable.hidden = model.actions.length === 0
+    aNone.hidden = !aTable.hidden
+
+    for (const entry of model.actions) {
+      const r = make('div', 'ha-row')
+      const label = document.createElement('input')
+      label.type = 'text'; label.value = entry.label ?? ''
+      label.setAttribute('aria-label', `Label for action ${entry.id}`)
+      label.onchange = () => {
+        entry.label = label.value.trim()
+        label.value = entry.label
+        save()
+      }
+      const entitySel = select(model.entities.map((e) => [e.id, e.label || e.id]), entry.entity, (v) => {
+        entry.entity = v
+        const opts = haServiceOptions(v)
+        if (!opts.some(([val]) => val === entry.service)) entry.service = opts[0] ? opts[0][0] : ''
+        save()
+        redraw()
+      })
+      const serviceSel = select(haServiceOptions(entry.entity), entry.service, (v) => { entry.service = v; save() })
+      const confirmSel = select([['tap', 'Tap'], ['hold', 'Hold']], entry.confirm === 'hold' ? 'hold' : 'tap',
+        (v) => { entry.confirm = v; save() })
+      const rm = make('button', 'action danger', 'Remove')
+      rm.type = 'button'
+      rm.onclick = () => {
+        if (!confirm(`Remove the action "${entry.label || entry.id}"?`)) return
+        model.actions.splice(model.actions.indexOf(entry), 1)
+        save()
+        redraw()
+      }
+      r.append(label, entitySel, serviceSel, confirmSel, rm)
+      aTable.appendChild(r)
+    }
+    body.append(aTable, aNone)
+
+    const bar = make('div', 'toolbar')
+    const addAction = make('button', 'action ghost', 'Add action')
+    addAction.type = 'button'
+    if (!model.entities.length) {
+      addAction.disabled = true
+      addAction.title = 'Add an entity first'
+    }
+    addAction.onclick = () => {
+      const entity = model.entities[0].id
+      const opts = haServiceOptions(entity)
+      model.actions.push({ id: `action-${Date.now().toString(36)}`, label: '', entity, service: opts[0] ? opts[0][0] : '', confirm: 'tap' })
+      save()
+      redraw()
+    }
+    bar.appendChild(addAction)
+    body.appendChild(bar)
+
+    // --- recent actions (read-only, painted from loadExtras) ---
+    const logWrap = make('div', 'status-block')
+    const logTitle = make('h3', null, 'Recent actions')
+    logTitle.appendChild(make('small', null, 'newest 20, refreshes every minute'))
+    const logBox = make('div', 'ha-log')
+    logBox.id = 'haLog'
+    logWrap.append(logTitle, logBox)
+    body.appendChild(logWrap)
+
+    paintExtras()
+  }
+
+  redraw()
+}
+
+// A whitelisted entity's live state, in the dashboard's own words rather than
+// Home Assistant's raw string, for the kinds this package already knows.
+function haStateText(e) {
+  if (e == null || e.state == null) return 'no data yet'
+  const s = e.state
+  if (e.kind === 'door') return s === 'on' ? 'Open' : s === 'off' ? 'Closed' : s
+  if (e.kind === 'cover') return s === 'open' ? 'Open' : s === 'closed' ? 'Closed' : s
+  if (e.kind === 'lock') return s === 'locked' ? 'Locked' : s === 'unlocked' ? 'Unlocked' : s
+  if (e.kind === 'mode' || e.kind === 'switch') return s === 'on' ? 'On' : s === 'off' ? 'Off' : s
+  return String(s)
+}
+
+function paintHaStatus(box) {
+  box.innerHTML = ''
+  const ha = extras.ha
+  if (!ha) {
+    infoRow(box, 'Home Assistant', make('span', 'muted', 'Loading…'))
+  } else if (ha.error) {
+    infoRow(box, 'Home Assistant', make('span', 'bad', `Could not read /api/ha/state: ${ha.error}`))
+  } else {
+    const d = ha.data || {}
+    infoRow(box, 'Configured', make('span', d.configured ? 'ok' : 'bad', d.configured ? 'Yes' : 'No (HA_URL / token missing on the hub)'))
+    infoRow(box, 'Connected', make('span', d.connected ? 'ok' : 'bad', d.connected ? 'Yes' : 'No'))
+    infoRow(box, 'Last event', d.lastEventAt ? ageSpan(d.lastEventAt, 'never') : make('span', 'muted', 'none yet'))
+    if (d.error) infoRow(box, 'Error', make('span', 'bad', String(d.error)))
+  }
+  const entities = (extras.ha && extras.ha.data && extras.ha.data.entities) || {}
+  for (const el of document.querySelectorAll('[data-ha-state-id]')) {
+    el.textContent = ha && !ha.error ? haStateText(entities[el.dataset.haStateId]) : '…'
+  }
+}
+
+function paintHaLog(box) {
+  const log = extras.haLog
+  box.innerHTML = ''
+  if (!log) return box.appendChild(make('p', 'empty-note', 'Loading…'))
+  if (log.error) return box.appendChild(make('p', 'err-line', `Could not read the action log: ${log.error}`))
+  const rows = Array.isArray(log.data) ? log.data : []
+  if (!rows.length) return box.appendChild(make('p', 'empty-note', 'No actions logged yet.'))
+  for (const entry of rows) {
+    const row = make('div', 'ha-log-row')
+    const ok = !!(entry.result && entry.result.ok)
+    row.append(
+      make('span', 'when', clockText(entry.time)),
+      make('span', null, entry.action),
+      make('span', 'muted', entry.entity || ''),
+      make('span', 'muted', entry.screen || ''),
+      make('span', ok ? 'ok' : 'bad', ok ? 'ok' : (entry.result && entry.result.error) || 'failed'),
+    )
+    box.appendChild(row)
+  }
+}
+// ==== /home assistant ========================================================
+
 // The read-only house-wide status. Fetched when the House-wide pane opens and
 // every minute while it is open, then painted in place (paintExtras): it never
 // rebuilds the calendar table, so it cannot disturb an edit.
@@ -1305,18 +1639,22 @@ const EXTRAS_MS = 60 * 1000
 const CAL_STALE_MS = 20 * 60 * 1000     // the hub refetches Google every 5 min
 const ART_STALE_MS = 3 * 60 * 60 * 1000 // and syncs the album hourly
 const WEATHER_STALE_MS = 45 * 60 * 1000 // and refreshes the weather feed every 15 min
-let extras = { calendar: null, state: null, art: null, weather: null, at: 0 }
+let extras = { calendar: null, state: null, art: null, weather: null, ha: null, haLog: null, at: 0 }
 let extrasJob = null
 
 function loadExtras(force) {
   if (extrasJob) return force ? extrasJob.then(() => loadExtras(true)) : extrasJob
   if (!force && Date.now() - extras.at < EXTRAS_MS) return Promise.resolve()
   // Each source fails on its own: a hub without /api/calendar still shows its
-  // headline and art.
+  // headline and art (and one without Home Assistant configured still shows
+  // everything else).
   const get = (path) => api(path).then((data) => ({ data }), (e) => ({ error: String(e.message || e) }))
-  extrasJob = Promise.all([get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art'), get('/api/weather')])
-    .then(([calendar, state, art, weather]) => {
-      extras = { calendar, state, art, weather, at: Date.now() }
+  extrasJob = Promise.all([
+    get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art'),
+    get('/api/weather'), get('/api/ha/state'), get('/api/ha/actions/log?limit=20'),
+  ])
+    .then(([calendar, state, art, weather, ha, haLog]) => {
+      extras = { calendar, state, art, weather, ha, haLog, at: Date.now() }
       paintExtras()
     })
     .catch((e) => console.error('house-wide status', e))
@@ -1331,6 +1669,10 @@ function paintExtras() {
   if (art) paintArt(art)
   const weather = $('#weatherStatus')
   if (weather) paintWeatherStatus(weather)
+  const haStatus = $('#haStatus')
+  if (haStatus) paintHaStatus(haStatus)
+  const haLog = $('#haLog')
+  if (haLog) paintHaLog(haLog)
   updateAges()
 }
 
