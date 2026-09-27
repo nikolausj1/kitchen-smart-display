@@ -578,6 +578,12 @@ export const DEFAULTS = {
     // this, 0.8..1.6 (clamped by plexTextScaleOf below, like entryDim). 1 is
     // the 1280x800 design: six columns, two rows of the cast in view.
     plexTextScale: 1,
+    // Swipe left or right on a Today screen for the next or the previous
+    // Today layout (views/TodayLayouts/useLayoutSwipe.js); each swipe saves
+    // todayLayout, as the Settings select does. false turns the gesture off
+    // (read through swipeLayoutsOn below). Never on the legacy web TV or in
+    // the layout editor's preview, whatever this says.
+    swipeLayouts: true,
   },
   slideshow: {
     intervalMs: 6000,
@@ -611,6 +617,12 @@ export const PLEX_TEXT_SCALE_MAX = 1.6
 export function plexTextScaleOf(v) {
   const n = typeof v === 'number' && Number.isFinite(v) ? v : 1
   return Math.max(PLEX_TEXT_SCALE_MIN, Math.min(PLEX_TEXT_SCALE_MAX, n))
+}
+
+// display.swipeLayouts as the Today screens read it: on unless it is exactly
+// false, so a missing or hand-edited value keeps the default.
+export function swipeLayoutsOn(v) {
+  return v !== false
 }
 
 // Structural equality for settings blobs (plain objects, arrays, primitives).

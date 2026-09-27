@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { DEVICE_ID, plexTextScaleOf, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
+import { DEVICE_ID, plexTextScaleOf, swipeLayoutsOn, useSettings, updateSettings, resetSettings } from '../../lib/settings.js'
 import { HUB, HUB_SOURCE, hubUrl } from '../../lib/hub.js'
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView, normalizeHomeView } from '../../shell/homeView.js'
@@ -595,6 +595,15 @@ export default function SettingsView() {
                 </option>
               ))}
             </select>
+          </Row>
+          <Row
+            label="Swipe between Today screens"
+            hint="Swipe left or right on Today for the next or previous layout. The screen keeps the one you land on."
+          >
+            <OnOffSelect
+              on={swipeLayoutsOn(display?.swipeLayouts)}
+              onChange={(on) => updateSettings({ display: { swipeLayouts: on } })}
+            />
           </Row>
           <Row
             label="Home view"

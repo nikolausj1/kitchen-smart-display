@@ -1,0 +1,124 @@
+/* TodayLayoutSwitch - the swipe surface around the Today layout, the slide
+ * from one layout to the next, and the pill that names the new one.
+ *
+ * Chrome 80-safe on purpose (Silk on the Echo Shows): no inset, no flex gap.
+ *
+ * Every layout root is position: fixed and fills the screen, so each pane is
+ * a fixed full-screen box as well. A pane carries a transform only while it
+ * slides; for those 260 ms it is the containing block of the layout's fixed
+ * root, and since the pane is the whole screen nothing inside it moves. */
+
+.tl-swipe,
+.tl-swipe__pane {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+/* With the gesture on, the browser keeps vertical panning (a scroller in a
+ * layout still scrolls) and hands sideways drags to the page as pointer
+ * events. Without this a touch drag is taken for a pan and cancelled. */
+.tl-swipe--on {
+  touch-action: pan-y pinch-zoom;
+}
+
+/* A mouse drag that starts on a photo or an icon would start the browser's
+ * own image drag, which cancels the swipe. */
+.tl-swipe--on img {
+  -webkit-user-drag: none;
+}
+
+/* The outgoing layout takes no taps while it leaves. */
+.tl-swipe__pane--out {
+  pointer-events: none;
+}
+
+/* The slide: 260 ms (SLIDE_MS in TodayLayoutSwitch.jsx), transform only.
+ * 'next' (a swipe to the left) moves both panes left, 'prev' right. */
+.tl-swipe__pane--in-next {
+  animation: tl-swipe-in-next 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.tl-swipe__pane--out-next {
+  animation: tl-swipe-out-next 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.tl-swipe__pane--in-prev {
+  animation: tl-swipe-in-prev 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.tl-swipe__pane--out-prev {
+  animation: tl-swipe-out-prev 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes tl-swipe-in-next {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes tl-swipe-out-next {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-100%, 0, 0); }
+}
+
+@keyframes tl-swipe-in-prev {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes tl-swipe-out-prev {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+/* The new layout's name, bottom centre, for 1.5 s (PILL_MS). No taps: one
+ * that lands on it reaches the layout as before. */
+.tl-swipe__pill {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, 4.5vh);
+  z-index: 2;
+  padding: 0.6em 1.3em;
+  border-radius: 999px;
+  background: rgba(14, 16, 18, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0.4em 1.6em rgba(0, 0, 0, 0.4);
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: clamp(15px, 1.5vw, 28px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  animation: tl-swipe-pill 1500ms ease both;
+}
+
+@keyframes tl-swipe-pill {
+  0% { opacity: 0; transform: translate(-50%, 0.5em); }
+  12% { opacity: 1; transform: translate(-50%, 0); }
+  80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
+
+@keyframes tl-swipe-pill-fade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Reduced motion: the switch swaps without the slide (the component skips
+ * it; this is the backstop) and the pill only fades. */
+@media (prefers-reduced-motion: reduce) {
+  .tl-swipe .tl-swipe__pane {
+    animation: none;
+  }
+
+  .tl-swipe .tl-swipe__pill {
+    animation-name: tl-swipe-pill-fade;
+  }
+}
