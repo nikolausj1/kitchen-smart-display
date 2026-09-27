@@ -68,6 +68,9 @@ import {
 // headline }], /api/state), or null while the house state does not carry
 // them (lib/houseState.js keeps only the keys it knows; the layouts then read
 // an alert off the headline). The spec layouts' alertActive rule reads it.
+// And schoolCalendar (chunk 4, the day count's school days): the hub's
+// /api/schoolcal payload (hooks/useSchoolCalendar.js: noSchoolRanges,
+// firstDays, lastDays), or null until it has answered; live in demo mode.
 //
 // weather: what the weather card, the forecast and the sun arc have always
 // read, { current, today, days, sunrise, sunset, forecastForHour, fetchedAt,
@@ -486,5 +489,7 @@ export default function useTodayData() {
     headline,
     airQuality,
     weatherAlerts,
+    // --- Blocks and clocks (chunk 4): the day count's school days. ---
+    schoolCalendar: calendar,
   }
 }

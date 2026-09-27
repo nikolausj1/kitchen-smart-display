@@ -10,6 +10,8 @@
 //                                      the box shadow, and the title override
 //   linearGradient(gradient, from, to) a box v2 gradient between two colours
 //                                      (the countdown tiles' cards use it too)
+//   shapeFill(props), shapeLine(props) a shape block's colour, and its line
+//                                      (chunk 4; boxLook draws the rest)
 //
 // Everything is absent at the defaults: no stylesheet, no class, no style, so
 // a box nobody styled draws exactly as it did before these props existed.
@@ -144,6 +146,47 @@ export function blurTintAlpha(blur) {
   return num4(Math.min(0.55, 0.15 + blur * 0.02))
 }
 
+// --- Blocks and clocks (chunk 4): the shape block -------------------------------
+//
+// A shape (layoutSpec.js type 'shape', knobs in panels/schemas.js) has no
+// content: the box v2 fill IS the shape, drawn by boxLook below like any
+// box's, with the shape's own fill colour in place of a preset's:
+//   fillPreset  'surface' (the default): the layout's card at the global card
+//               opacity (--tl-spec-card), with the card's hairline, so a
+//               fresh shape reads as a card; 'accent': the layout's accent;
+//               'custom': bg.color (none yet: the card)
+//   kind        'rect' (the default): the fill, gradient, opacity, border,
+//               shadow, blur and radius of any box; 'line': none of that, a
+//               2 px line across the box's middle (panels/ShapeBlock.jsx) in
+//               the fill colour at bg.opacity, with the box's shadow. A card
+//               colour line would vanish into the dark boards, so the line's
+//               "Card" is the card's own divider ink, --tl-rule (a joined
+//               card's hairline)
+//
+// shapeFill(props) -> { kind, color, card }: color is the CSS colour, card
+// whether it is the card's (which brings the card's hairline).
+export function shapeFill(props) {
+  const p = isObj(props) ? props : {}
+  const kind = p.kind === 'line' ? 'line' : 'rect'
+  const custom = p.fillPreset === 'custom' && isObj(p.bg) ? hex(p.bg.color) : null
+  if (p.fillPreset === 'accent') return { kind, color: 'var(--tl-accent)', card: false }
+  if (custom) return { kind, color: custom, card: false }
+  return { kind, color: kind === 'line' ? 'var(--tl-rule)' : 'var(--tl-spec-card)', card: true }
+}
+
+// shapeLine(props) -> the line's inline style (ShapeBlock), or null for a
+// rectangle: its colour, the fill opacity, the box's shadow.
+export function shapeLine(props) {
+  const p = isObj(props) ? props : {}
+  const f = shapeFill(p)
+  if (f.kind !== 'line') return null
+  const style = { backgroundColor: f.color }
+  const o = isObj(p.bg) && finite(p.bg.opacity) && p.bg.opacity < 1 ? Math.max(0, p.bg.opacity) : null
+  if (o != null) style.opacity = o
+  if (Object.prototype.hasOwnProperty.call(SHADOWS, p.shadow)) style.boxShadow = SHADOWS[p.shadow]
+  return style
+}
+
 // boxLook(props, type) -> {
 //   classes    extra classes for the box (SpecPanel.css)
 //   style      extra inline style (variables, font, colour)
@@ -158,12 +201,24 @@ export function boxLook(props, type) {
   const out = { classes: [], style: {}, fill: null, boxShadow: null, rounded: false, title: null }
   const preset = p.background
   const presetFill = preset === 'card' ? 'var(--tl-spec-card)' : preset === 'solid' ? 'var(--tl-surface-solid)' : null
+  // --- Blocks and clocks (chunk 4): a shape's fill is the shape, always
+  // drawn, in its own colour (shapeFill); a line shape draws no surface at
+  // all (its line is ShapeBlock's). ---
+  const shape = type === 'shape' ? shapeFill(p) : null
+  const line = !!shape && shape.kind === 'line'
 
   // The fill: a layer under the content (SpecPanel.css .tl-spec__fill), so its
   // opacity fades the fill alone. A colour replaces the preset's; without one
   // a gradient or an opacity works on the preset's own fill.
   const bg = isObj(p.bg) ? p.bg : null
-  if (bg) {
+  if (shape) {
+    if (!line) {
+      const gradient = linearGradient(bg && bg.gradient, shape.color, (bg && hex(bg.color2)) || 'transparent')
+      const o = bg && finite(bg.opacity) && bg.opacity < 1 ? Math.max(0, bg.opacity) : null
+      out.fill = { background: gradient || shape.color, opacity: o }
+      out.classes.push('tl-spec--fill')
+    }
+  } else if (bg) {
     const c1 = hex(bg.color) || presetFill
     const c2 = hex(bg.color2)
     const gradient = c1 || c2 ? linearGradient(bg.gradient, c1 || 'transparent', c2 || 'transparent') : null
@@ -179,15 +234,15 @@ export function boxLook(props, type) {
   // The frame: the border and the preset's hairline, drawn above the fill
   // (.tl-spec--frame::after); the box's own shadow is then the drop shadow
   // alone.
-  const border = isObj(p.border) ? p.border : null
+  const border = isObj(p.border) && !line ? p.border : null
   const bw = border && finite(border.width) && border.width > 0 ? Math.min(4, border.width) : 0
-  const shadow = Object.prototype.hasOwnProperty.call(SHADOWS, p.shadow) ? SHADOWS[p.shadow] : null
-  const blur = finite(p.blur) && p.blur > 0 ? Math.min(20, p.blur) : 0
+  const shadow = !line && Object.prototype.hasOwnProperty.call(SHADOWS, p.shadow) ? SHADOWS[p.shadow] : null
+  const blur = !line && finite(p.blur) && p.blur > 0 ? Math.min(20, p.blur) : 0
   if (out.fill || bw || shadow || blur) {
     out.rounded = true
     const frame = []
     if (bw) frame.push(`inset 0 0 0 max(1px, ${vw(bw)}) ${hex(border.color) || 'rgba(var(--tl-fg-rgb), 0.35)'}`)
-    if (presetFill) frame.push(EDGE)
+    if (shape ? shape.card : presetFill) frame.push(EDGE)
     if (frame.length) {
       out.classes.push('tl-spec--frame')
       out.style['--tl-spec-frame'] = frame.join(', ')

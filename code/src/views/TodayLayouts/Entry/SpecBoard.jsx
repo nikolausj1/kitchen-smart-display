@@ -32,6 +32,20 @@ import PhotoPanel from '../panels/PhotoPanel.jsx'
 import SchoolPanel from '../panels/SchoolPanel.jsx'
 import TextBlock from '../panels/TextBlock.jsx'
 import ImageBlock from '../panels/ImageBlock.jsx'
+// --- Blocks and clocks (chunk 4): the shape block, the flip clock, the
+// analog clock, the second clock, the date and the day count. The clocks read
+// d.now. The day count is worked out once a day (lib/dates.js dayCount, below),
+// and a count that cannot be made (school days with no last day of school
+// ahead) drops its box like the alert's, the editor keeping it with a note. ---
+import ShapeBlock from '../panels/ShapeBlock.jsx'
+import FlipClockPanel from '../panels/FlipClockPanel.jsx'
+import AnalogClockPanel from '../panels/AnalogClockPanel.jsx'
+import SecondClockPanel from '../panels/SecondClockPanel.jsx'
+import DatePanel from '../panels/DatePanel.jsx'
+import DayCountPanel from '../panels/DayCountPanel.jsx'
+import { dayCount, dayFromKey } from '../lib/dates.js'
+import { dateKey } from '../../../lib/countdown.js'
+// --- end blocks and clocks ---
 import { knobDefaults } from '../panels/schemas.js'
 import SpecPanel, { SpecScrims } from './SpecPanel.jsx'
 import { hexChannels } from './specStyles.js'
@@ -299,6 +313,24 @@ export default function SpecBoard({ d, layoutId, className, children }) {
     ruledOut = ruledOut ? `${ruledOut} alert` : 'alert'
   }
   // --- end weather panels ---
+  // --- Blocks and clocks (chunk 4): the day count, keyed on the day; no
+  // count, no box (the editor keeps it, with a note). ---
+  const dayCountPanel = shown.find((p) => p.type === 'daycount') || null
+  const dayCountShow = dayCountPanel ? knobsOf(dayCountPanel).show : null
+  const todayKey = d.now instanceof Date && !Number.isNaN(d.now.getTime()) ? dateKey(d.now) : ''
+  const schoolSettings = d.settings?.school
+  const schoolCalendar = d.schoolCalendar
+  const dayCountValue = useMemo(
+    () =>
+      dayCountShow
+        ? dayCount(dayCountShow, { now: dayFromKey(todayKey), school: schoolSettings, calendar: schoolCalendar })
+        : null,
+    [dayCountShow, todayKey, schoolSettings, schoolCalendar]
+  )
+  if (!EDIT_MODE && dayCountPanel && !dayCountValue) {
+    ruledOut = ruledOut ? `${ruledOut} daycount` : 'daycount'
+  }
+  // --- end blocks and clocks ---
   const panels = useMemo(() => {
     if (!ruledOut) return shown
     const out = ruledOut.split(' ')
@@ -372,6 +404,20 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             knobs={k}
           />
         )
+      // --- Blocks and clocks (chunk 4) ---
+      case 'flipclock':
+        return <FlipClockPanel now={d.now} knobs={k} />
+      case 'analog':
+        return <AnalogClockPanel now={d.now} knobs={k} align={p.props.align} valign={p.props.valign} />
+      case 'clock2':
+        return <SecondClockPanel now={d.now} knobs={k} />
+      case 'date':
+        return <DatePanel now={d.now} knobs={k} />
+      case 'daycount':
+        return <DayCountPanel count={dayCountValue} knobs={k} editing={EDIT_MODE} />
+      case 'shape':
+        return <ShapeBlock props={p.props} />
+      // --- end blocks and clocks ---
       case 'headline':
         return <HeadlinePanel headline={headline} now={d.now} knobs={k} />
       case 'weather':

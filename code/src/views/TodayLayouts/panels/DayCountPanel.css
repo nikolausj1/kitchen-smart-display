@@ -1,0 +1,77 @@
+/* DayCountPanel - a big number and a small label under it, centred in the
+ * box by design, aligned by the box's align (centre unless set).
+ *
+ * One size, --tl-daycount-u, the number's type, against the body (a size
+ * container): 44cqw keeps three digits inside the width ("365" is 1.91 em in
+ * Inter 600), 62cqh the number and its label inside the height (1.3 em
+ * tall, with air). Without container units, a share of the
+ * screen's height (see AirQualityChip.css for why the fallback stands
+ * outside the @supports block). Declared on the body, used only below it.
+ * Every size carries var(--tl-text-scale). Chrome 80 rules: no `inset`, no
+ * flex `gap`, no `aspect-ratio`. */
+
+.tl-daycount__body {
+  container-type: size;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 0;
+  --tl-daycount-u: 9vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-daycount__body {
+    --tl-daycount-u: min(44cqw, 62cqh);
+  }
+}
+
+.tl-daycount__number {
+  max-width: 100%;
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daycount-u));
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-daycount__label {
+  max-width: 100%;
+  margin-top: calc(var(--tl-daycount-u) * 0.08);
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-daycount-u) * 0.24));
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tl-fg-2);
+}
+
+/* The layout editor's note: a count it cannot make (school days with no last
+ * day of school). The screen drops the box instead (SpecBoard). */
+.tl-daycount__note {
+  max-width: 100%;
+  padding: 0 0.6em;
+  box-sizing: border-box;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 1.1vw, 20px));
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tl-fg-3);
+}
+
+/* --- The universal align (centre by default for the day count) ---------------- */
+
+.tl-spec--align-start .tl-daycount__body {
+  align-items: flex-start;
+  text-align: start;
+}
+
+.tl-spec--align-end .tl-daycount__body {
+  align-items: flex-end;
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ------------------------------------------ */
+
+.tl-knobs .tl-daycount__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-daycount-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

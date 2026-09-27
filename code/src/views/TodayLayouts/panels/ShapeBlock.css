@@ -1,0 +1,21 @@
+/* ShapeBlock - a shape's content: nothing for a rectangle (its box draws it,
+ * Entry/SpecPanel.css "The box v2 look"), a line across the middle of the
+ * box for a line. 2 px whatever the screen: a line that scaled with it would
+ * land between device pixels and blur. */
+
+.tl-shape {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tl-shape__line {
+  position: absolute;
+  top: calc(50% - 1px);
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+}

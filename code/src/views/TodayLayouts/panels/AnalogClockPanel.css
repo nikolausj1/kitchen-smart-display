@@ -1,0 +1,138 @@
+/* AnalogClockPanel - one SVG face (AnalogClockPanel.jsx), 200 units across,
+ * filling the box by its shorter side. Sizes are in the SVG's own units, so
+ * the face scales with the box and nothing here needs container units; the
+ * numerals follow the box's text scale (tokens.css --tl-text-scale) like any
+ * text.
+ *
+ * Inks, from the tokens: the face is the layout's card with its hairline
+ * (--tl-spec-card, --tl-spec-edge, the Board's and the Entry board's own),
+ * the marks the quieter text inks and the quarters the text colour, the
+ * hands per the handColor knob. Every mark and hand draws in currentColor,
+ * so an element style's colour on the face or the hands recolours them. */
+
+.tl-analog__body {
+  position: relative;
+  min-height: 0;
+}
+
+.tl-analog__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* --- The face ---------------------------------------------------------------- */
+
+.tl-analog__face {
+  color: var(--tl-fg-2);
+}
+
+.tl-analog__disc {
+  fill: var(--tl-spec-card, var(--tl-surface));
+  stroke: var(--tl-spec-edge, var(--tl-rule));
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-analog__mark {
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+
+.tl-analog__mark--m {
+  stroke-width: 1.1;
+  opacity: 0.62;
+}
+
+.tl-analog__mark--h {
+  stroke-width: 2.6;
+}
+
+.tl-analog__mark--q {
+  stroke-width: 4.6;
+  color: var(--tl-fg);
+}
+
+.tl-analog--minimal .tl-analog__mark--h {
+  stroke-width: 3;
+}
+
+.tl-analog--minimal .tl-analog__mark--q {
+  stroke-width: 5.2;
+}
+
+.tl-analog--numerals .tl-analog__mark--h {
+  stroke-width: 2;
+  opacity: 0.7;
+}
+
+.tl-analog--numerals .tl-analog__mark--q {
+  stroke-width: 3.2;
+  color: var(--tl-fg-2);
+}
+
+.tl-analog__numerals {
+  color: var(--tl-fg);
+}
+
+.tl-analog__num {
+  fill: currentColor;
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * 18px);
+  font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* --- The hands --------------------------------------------------------------- */
+
+.tl-analog__hands {
+  color: var(--tl-fg);
+}
+
+.tl-analog__hand {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+
+path.tl-analog__hand {
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+
+.tl-analog__sec {
+  color: var(--tl-accent);
+}
+
+.tl-analog__hand--second {
+  stroke-width: 1.4;
+}
+
+.tl-analog__hand--second-dot {
+  fill: currentColor;
+}
+
+.tl-analog__cap {
+  fill: currentColor;
+}
+
+/* The seconds hand's cap is its own colour. */
+.tl-analog__sec ~ .tl-analog__cap {
+  color: var(--tl-accent);
+}
+
+/* handColor: accent paints every hand in the accent, text every hand in the
+ * text colour; auto is the rules above. */
+.tl-analog--hands-accent .tl-analog__hands,
+.tl-analog--hands-accent .tl-analog__sec,
+.tl-analog--hands-accent .tl-analog__sec ~ .tl-analog__cap {
+  color: var(--tl-accent);
+}
+
+.tl-analog--hands-text .tl-analog__sec,
+.tl-analog--hands-text .tl-analog__sec ~ .tl-analog__cap {
+  color: var(--tl-fg);
+}

@@ -19,7 +19,12 @@ import './FlipClock.css'
 // showDate. Everything is sized from one variable, --tl-flip-u (the card
 // height), which FlipClock.css derives from the viewport; a host that wants the
 // clock in a box (a layout editor panel) overrides that one variable with
-// container units and nothing else changes.
+// container units and nothing else changes: the Flip clock panel
+// (panels/FlipClockPanel.jsx) does.
+//
+// Its parts carry the layout editor's data-edit keys (panels/schemas.js
+// PANEL_ELEMENTS 'flipclock'): hour (the hour card), minutes, tab and date.
+// Outside a spec layout they are plain attributes and change nothing.
 //
 // How a card flips. Each card is two static halves plus, only while it flips,
 // one leaf: the old digit's top half on its front, the new digit's bottom half
@@ -155,11 +160,11 @@ export default function FlipClock({ now, hour24 = false, showMeridiem = true, sh
       <div className="tl-flip__row" role="img" aria-label={t.label}>
         <div className="tl-flip__unit tl-flip__unit--hour">
           {tab && (
-            <div className="tl-flip__tab">
+            <div className="tl-flip__tab" data-edit="tab">
               <FlipCard kind="tab" value={t.meridiem} mountDelayMs={MOUNT_DELAY_MS.tab} />
             </div>
           )}
-          <div className="tl-flip__cards">
+          <div className="tl-flip__cards" data-edit="hour">
             <FlipCard kind="hour" value={t.hour} mountDelayMs={MOUNT_DELAY_MS.hour} />
             <Pins />
           </div>
@@ -170,7 +175,7 @@ export default function FlipClock({ now, hour24 = false, showMeridiem = true, sh
           <span className="tl-flip__dot tl-flip__dot--low" />
         </div>
 
-        <div className="tl-flip__unit tl-flip__unit--minutes">
+        <div className="tl-flip__unit tl-flip__unit--minutes" data-edit="minutes">
           <div className="tl-flip__cards">
             <FlipCard kind="digit" value={t.tens} mountDelayMs={MOUNT_DELAY_MS.tens} />
             <FlipCard kind="digit" value={t.ones} mountDelayMs={MOUNT_DELAY_MS.ones} />
@@ -179,7 +184,11 @@ export default function FlipClock({ now, hour24 = false, showMeridiem = true, sh
         </div>
       </div>
 
-      {date && <div className="tl-flip__date">{date}</div>}
+      {date && (
+        <div className="tl-flip__date" data-edit="date">
+          {date}
+        </div>
+      )}
     </div>
   )
 }
