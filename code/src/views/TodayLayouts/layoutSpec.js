@@ -80,7 +80,10 @@ function isVariantKey(k) {
 // --- Panel types -----------------------------------------------------------------
 //
 // kind 'panel': a functional panel, at most once per spec, id === type.
-// kind 'block': free content, any number, ids 'text-<4 hex>' / 'image-<4 hex>'.
+// kind 'block': free content, any number, ids 'text-<4 hex>' / 'image-<4 hex>'
+//          / 'shape-<4 hex>' (the shape, chunk 4: its own knobs are in
+//          PANEL_SCHEMAS like a panel's; the text and image blocks' props are
+//          BLOCK_SCHEMAS below).
 //
 // min      the smallest box a spec may hold, percent of the canvas. normalizeSpec
 //          clamps to it, and the editor's resize should stop there.
@@ -102,6 +105,42 @@ const BARE = { background: 'none', padding: 0 }
 
 const TYPE_TABLE = [
   { type: 'clock', label: 'Clock', kind: 'panel', min: { w: 6, h: 4 }, minPx: { w: 110, h: 40 }, box: { x: 30, y: 30, w: 40, h: 30 }, props: CARD },
+  // --- Blocks and clocks (docs/designs/panels-and-controls.md, chunk 4): on
+  // no default board. The flip clock and the analog face are their own
+  // objects (a case, a face), so their boxes draw nothing; the shape is a
+  // block, its box v2 fill is the shape (Entry/specStyles.js boxLook), so its
+  // box draws no preset either. ---
+  {
+    type: 'flipclock',
+    label: 'Flip clock',
+    kind: 'panel',
+    min: { w: 8, h: 6 },
+    minPx: { w: 110, h: 40 },
+    box: { x: 30, y: 35, w: 40, h: 30 },
+    props: { background: 'none', padding: 0, align: 'center' },
+  },
+  {
+    type: 'analog',
+    label: 'Analog clock',
+    kind: 'panel',
+    min: { w: 4, h: 6 },
+    minPx: { w: 48, h: 48 },
+    box: { x: 40, y: 35, w: 20, h: 30 },
+    props: { background: 'none', padding: 0, align: 'center' },
+  },
+  { type: 'clock2', label: 'Second clock', kind: 'panel', min: { w: 6, h: 5 }, minPx: { w: 90, h: 44 }, box: { x: 40, y: 43, w: 20, h: 14 }, props: CARD },
+  { type: 'date', label: 'Date', kind: 'panel', min: { w: 5, h: 3 }, minPx: { w: 60, h: 24 }, box: { x: 38, y: 44, w: 24, h: 12 }, props: CARD },
+  {
+    type: 'daycount',
+    label: 'Day count',
+    kind: 'panel',
+    min: { w: 5, h: 5 },
+    minPx: { w: 70, h: 50 },
+    box: { x: 42, y: 43, w: 16, h: 14 },
+    props: { background: 'card', padding: 1, align: 'center' },
+  },
+  { type: 'shape', label: 'Shape', kind: 'block', min: { w: 1, h: 1 }, minPx: null, box: { x: 40, y: 44, w: 20, h: 12 }, props: BARE },
+  // --- end blocks and clocks ---
   { type: 'weather', label: 'Weather', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 150, h: 52 }, box: { x: 35, y: 35, w: 30, h: 26 }, props: CARD },
   { type: 'forecast', label: 'Forecast', kind: 'panel', min: { w: 12, h: 10 }, minPx: { w: 180, h: 100 }, box: { x: 32, y: 30, w: 36, h: 40 }, props: CARD },
   // --- Weather panels (docs/designs/panels-and-controls.md, chunk 2): on no
@@ -273,7 +312,8 @@ export function panelType(type) {
 }
 
 function isBlockType(type) {
-  return type === 'text' || type === 'image'
+  // --- Blocks and clocks (chunk 4): the shape is a block too. ---
+  return type === 'text' || type === 'image' || type === 'shape'
 }
 
 // A spec is polled by every screen every 10 s: a runaway one stops here (per
@@ -800,9 +840,10 @@ function hex4(n) {
   return ('0000' + (n & 0xffff).toString(16)).slice(-4)
 }
 
-const BLOCK_ID_RE = /^(text|image)-[0-9a-f]{4}$/
+const BLOCK_ID_RE = /^(text|image|shape)-[0-9a-f]{4}$/
 
-// 'text-3fa9' for a text block, 'image-09c1' for an image block.
+// 'text-3fa9' for a text block, 'image-09c1' for an image block, 'shape-5d20'
+// for a shape.
 export function isValidBlockId(type, id) {
   return isBlockType(type) && typeof id === 'string' && BLOCK_ID_RE.test(id) && id.indexOf(`${type}-`) === 0
 }
@@ -877,9 +918,11 @@ function fieldValue(field, v, fallback) {
   }
 }
 
-// A functional panel's knob fields, universal (and box v2) keys left out.
+// A type's knob fields, universal (and box v2) keys left out: a functional
+// panel's, and a shape's (chunk 4). The text and image blocks have none:
+// their props are their own (BLOCK_SCHEMAS, normProps).
 function knobFieldsOf(type) {
-  if (isBlockType(type)) return []
+  if (has(BLOCK_SCHEMAS, type)) return []
   return fieldsOf(type).filter((f) => UNIVERSAL_KEYS.indexOf(f.key) < 0 && V2_KEYS.indexOf(f.key) < 0)
 }
 
@@ -1253,7 +1296,8 @@ function normVariants(raw, layoutId, baseGlobal) {
 //     font, accent, text, surfaceOpacity, radius: GLOBAL_SCHEMA's fields)
 //   - panels: unknown types dropped; a functional type kept once (the first),
 //     its id forced to its type; a block whose id is malformed or already
-//     taken gets a fresh, deterministic 'text-xxxx' / 'image-xxxx'
+//     taken gets a fresh, deterministic 'text-xxxx' / 'image-xxxx' /
+//     'shape-xxxx'
 //   - every number clamped to the contract's range and rounded (positions to
 //     POSITION_PLACES decimals), each box kept on the canvas at no less than its type's
 //     minimum size; missing props filled from the type's defaults in that
@@ -1334,7 +1378,7 @@ function randomHex4() {
   return hex4(Math.floor(Math.random() * 0x10000))
 }
 
-// newBlock('text' | 'image', overrides, takenIds?) -> a new, normalized block
+// newBlock('text' | 'image' | 'shape', overrides, takenIds?) -> a new, normalized block
 // with a fresh random id ('text-3fa9'). overrides may set any panel field and
 // any props (merged over the type's defaults); overrides.id is ignored. A new
 // text block reads "Text" so it is visible before it is edited. takenIds (a
@@ -1687,12 +1731,14 @@ export function visiblePanels(spec) {
 // the phase 1 "outside" card (weather, what to wear, air quality) is three such
 // panels in the default spec. Returns { [id]: { top, bottom } } for the joined
 // edges. Tolerance: 0.05% of the canvas, well under a pixel on every screen.
+// A shape (chunk 4) is never joined: its fill is its own surface, whatever
+// its background preset says.
 const JOIN_EPS = 0.05
 
 export function cardJoins(panels) {
   const out = {}
   const cards = (Array.isArray(panels) ? panels : []).filter(
-    (p) => p && !p.hidden && p.props && p.props.background !== 'none' && !hasBoxSurface(p.props)
+    (p) => p && !p.hidden && p.props && p.props.background !== 'none' && !hasBoxSurface(p.props) && p.type !== 'shape'
   )
   for (const a of cards) {
     for (const b of cards) {

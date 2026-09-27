@@ -127,6 +127,151 @@ export const PANEL_SCHEMAS = deepFreeze({
     ],
   },
 
+  // --- Blocks and clocks (docs/designs/panels-and-controls.md, chunk 4) ------
+  // The shape is a block (any number of them, layoutSpec.js BLOCK_TYPES);
+  // the rest are panels. The clocks read the layout's one `now`
+  // (useTodayData); the analog clock's seconds hand keeps its own tick.
+  shape: {
+    fields: [
+      select(
+        'kind',
+        'Shape',
+        [
+          ['rect', 'Rectangle'],
+          ['line', 'Line'],
+        ],
+        'rect',
+        null,
+        'Line: a 2 px line across the middle of the box, in the fill colour'
+      ),
+      select(
+        'fillPreset',
+        'Fill',
+        [
+          ['surface', 'Card'],
+          ['accent', 'Accent'],
+          ['custom', 'Custom'],
+        ],
+        'surface',
+        null,
+        "Card: the layout's card at its opacity. Custom: the fill colour under Fill and border"
+      ),
+    ],
+  },
+
+  flipclock: {
+    fields: [
+      toggle('hour24', '24-hour', false, 'hour', '00 to 23, and no AM / PM tab'),
+      toggle('showMeridiem', 'AM / PM tab', true, 'tab'),
+      toggle('showDate', 'Date', true, 'date'),
+      withExtras(
+        { key: 'scale', label: 'Scale', type: 'number', min: 0.5, max: 1.5, step: 0.05, unit: 'x', default: 1 },
+        null,
+        '1 fills the box; above it the box crops the clock'
+      ),
+    ],
+  },
+
+  analog: {
+    fields: [
+      select(
+        'style',
+        'Style',
+        [
+          ['minimal', 'Minimal'],
+          ['classic', 'Classic'],
+          ['numerals', 'Numerals'],
+        ],
+        'classic',
+        'face',
+        'Minimal: hour marks. Classic: minute marks too. Numerals: 1 to 12'
+      ),
+      toggle('showSeconds', 'Seconds hand', false, 'hands'),
+      select(
+        'handColor',
+        'Hands',
+        [
+          ['auto', 'Auto'],
+          ['accent', 'Accent'],
+          ['text', 'Text'],
+        ],
+        'auto',
+        'hands',
+        'Auto: the text colour, the seconds hand in the accent'
+      ),
+      withExtras({ key: 'faceOpacity', label: 'Face opacity', type: 'number', min: 0, max: 1, step: 0.05, default: 1 }, 'face', '0: the marks and hands alone'),
+    ],
+  },
+
+  clock2: {
+    fields: [
+      withExtras(
+        { key: 'timezone', label: 'Time zone', type: 'text', default: 'Europe/London', maxLength: 64, placeholder: 'e.g. Asia/Tokyo' },
+        'time',
+        "An IANA zone. One this screen does not know shows this screen's time, marked ?"
+      ),
+      withExtras({ key: 'label', label: 'Label', type: 'text', default: '', maxLength: 40, placeholder: "The zone's city" }, 'label', "Empty: the zone's city"),
+      toggle('hour24', '24-hour', false, 'time'),
+      toggle('showDate', 'Date', true, 'date'),
+      toggle('showOffset', 'Offset', true, 'offset', 'Hours ahead of or behind this screen, as +8h'),
+      size('size', 'Size'),
+    ],
+  },
+
+  date: {
+    fields: [
+      select(
+        'format',
+        'Format',
+        [
+          ['long', 'Saturday, September 26'],
+          ['medium', 'Sat, Sep 26'],
+          ['short', '9/26'],
+          ['dayname', 'Saturday'],
+          ['daynumber', 'Big day number'],
+        ],
+        'long',
+        'text',
+        'Big day number: the day large, the month small above it'
+      ),
+      toggle('showYear', 'Year', false, 'year', 'Not with the day name alone'),
+      size('size', 'Size', 'text'),
+      // The universal align, declared here as the text block does, so the
+      // inspector shows it with the date's own settings (centred by default).
+      select(
+        'align',
+        'Align',
+        [
+          ['start', 'Left'],
+          ['center', 'Centre'],
+          ['end', 'Right'],
+        ],
+        'center'
+      ),
+    ],
+  },
+
+  daycount: {
+    fields: [
+      select(
+        'show',
+        'Count',
+        [
+          ['weekOfYear', 'Week of the year'],
+          ['dayOfYear', 'Day of the year'],
+          ['daysLeftInYear', 'Days left this year'],
+          ['schoolDays', 'School days left'],
+        ],
+        'weekOfYear',
+        'number',
+        "Week: the ISO week (Monday first). School days: to the dashboard's last day of school, else the school calendar's; hidden when there is neither"
+      ),
+      withExtras({ key: 'label', label: 'Label', type: 'text', default: '', maxLength: 60, placeholder: 'Automatic' }, 'label', 'Empty: what the count is, as Week of the year'),
+      size('size', 'Size'),
+    ],
+  },
+  // --- end blocks and clocks ---
+
   weather: {
     fields: [
       size('tempSize', 'Temperature size', 'temp'),
@@ -529,6 +674,34 @@ export const PANEL_ELEMENTS = deepFreeze({
     { key: 'time', label: 'Time' },
     { key: 'date', label: 'Date' },
   ],
+  // --- Blocks and clocks (chunk 4). The shape has no content: its title is
+  // its only element. The date's line holds its parts, so it comes first. ---
+  shape: [TITLE],
+  flipclock: [
+    TITLE,
+    { key: 'hour', label: 'Hour' },
+    { key: 'minutes', label: 'Minutes' },
+    { key: 'tab', label: 'AM / PM tab' },
+    { key: 'date', label: 'Date' },
+  ],
+  analog: [TITLE, { key: 'face', label: 'Face' }, { key: 'numerals', label: 'Numerals' }, { key: 'hands', label: 'Hands' }],
+  clock2: [
+    TITLE,
+    { key: 'label', label: 'Label' },
+    { key: 'time', label: 'Time' },
+    { key: 'date', label: 'Date' },
+    { key: 'offset', label: 'Offset' },
+  ],
+  date: [
+    TITLE,
+    { key: 'text', label: 'Date' },
+    { key: 'weekday', label: 'Weekday' },
+    { key: 'month', label: 'Month' },
+    { key: 'day', label: 'Day' },
+    { key: 'year', label: 'Year' },
+  ],
+  daycount: [TITLE, { key: 'number', label: 'Number' }, { key: 'label', label: 'Label' }],
+  // --- end blocks and clocks ---
   weather: [
     TITLE,
     { key: 'updated', label: 'Updated' },

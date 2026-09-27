@@ -103,9 +103,10 @@ export function SpecScrims({ panels }) {
   ))
 }
 
-// The blocks draw no PanelFrame, so a custom title on one is drawn here.
+// The blocks draw no PanelFrame, so a custom title on one is drawn here (the
+// shape, chunk 4, included: its box v2 fill is the shape, specStyles.js).
 function isBlock(type) {
-  return type === 'text' || type === 'image'
+  return type === 'text' || type === 'image' || type === 'shape'
 }
 
 export default function SpecPanel({
