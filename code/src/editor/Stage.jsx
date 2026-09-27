@@ -36,7 +36,7 @@ import { unionPx } from './edits.js'
 import { HANDLES, HANDLE_AT, HANDLE_CURSOR, guideLines, guideLinesFor, guideTargets, moveRect, resizeRect } from './geometry.js'
 import { RuleIcon } from './icons.jsx'
 import { isBlockType } from './schema.js'
-import { frontToBack, minPctFor, pctToPx, pctToPxRound, pxToPctKeeping, typeLabel, whenSummary } from './spec.js'
+import { blockName, frontToBack, minPctFor, pctToPx, pctToPxRound, pxToPctKeeping, whenSummary } from './spec.js'
 
 const FIT_PAD = 24 // stage px around the canvas
 const DRAG_THRESHOLD = 3 // screen px before a press becomes a drag
@@ -64,6 +64,7 @@ export default function Stage({
   selectedElement,
   hoverId,
   labels,
+  names,
   mins,
   appState,
   elementName,
@@ -370,7 +371,7 @@ export default function Stage({
             ref={overlayRef}
             className={`ed-overlay${readOnly ? ' is-readonly' : ''}`}
             tabIndex={0}
-            aria-label="Layout canvas: click a panel to select it, click it again for a part of it, drag to move"
+            aria-label="Layout canvas: click a block to select it, click it again for a part of it, drag to move"
             style={{ cursor }}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -425,7 +426,7 @@ export default function Stage({
                 label={
                   dragging
                     ? null
-                    : `${selectionLabel(sel.p, labels)}${selEls.length ? ` › ${elementName?.(selectedElement) || selectedElement}` : ''}`
+                    : `${selectionLabel(sel.p, labels, names)}${selEls.length ? ` › ${elementName?.(selectedElement) || selectedElement}` : ''}`
                 }
                 handles={!sel.p.locked && !sel.p.hidden}
                 box={stagePx(sel.box)}
@@ -457,13 +458,13 @@ export default function Stage({
   )
 }
 
-// The bounds of several selected panels, with their count and size.
+// The bounds of several selected blocks, with their count and size.
 function GroupBox({ box, px, count, dragging, canvas, k }) {
   const readoutInside = box.top + box.height + 24 > canvas.h * k
   const r = { x: Math.round(px.x), y: Math.round(px.y), w: Math.round(px.w), h: Math.round(px.h) }
   return (
     <div className="ed-sel ed-sel--group" style={box}>
-      {!dragging && <div className={`ed-sel__label${box.top < 22 ? ' is-inside' : ''}`}>{count} panels</div>}
+      {!dragging && <div className={`ed-sel__label${box.top < 22 ? ' is-inside' : ''}`}>{count} blocks</div>}
       <div className={`ed-sel__readout${readoutInside ? ' is-inside' : ''}`}>
         X {r.x}  Y {r.y}  W {r.w}  H {r.h}
       </div>
@@ -471,9 +472,10 @@ function GroupBox({ box, px, count, dragging, canvas, k }) {
   )
 }
 
-function selectionLabel(p, labels) {
-  const type = typeLabel(p.type, labels)
-  const parts = [isBlockType(p.type) ? `${type} · ${p.id}` : type]
+// "Weather 2", "Shape · shape-5d20" (a block's id tells it apart on the stage).
+function selectionLabel(p, labels, names) {
+  const name = blockName(p, labels, names)
+  const parts = [isBlockType(p.type) ? `${name} · ${p.id}` : name]
   if (p.locked) parts.push('locked')
   if (p.hidden) parts.push('hidden')
   return parts.join(' · ')

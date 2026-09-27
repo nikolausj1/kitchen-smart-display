@@ -29,6 +29,16 @@
 // removed like text and image. A panel of a type the app does not know is
 // kept exactly as stored: not on the stage, not in any edit, dimmed in the
 // layers; the one thing to do with it is to remove it.
+//
+// Blocks (Justin, 2026-09-27): in the UI everything on a layout is a block
+// (the code, the spec and the messages keep "panel"). Delete (and Backspace,
+// and the inspector's Delete) takes the selection off the layout, one undo
+// step, whatever its type; the eye still hides. With a part of a block
+// selected, Delete hides that part. Any type may be on a layout any number
+// of times: Add block (AddMenu.jsx, catalog.js) lists every type the app
+// knows, grouped and searchable, and a type already there comes in as a
+// further instance, '<type>-<4 hex>', one grid step off the first; the
+// layers number them ("Weather 2"; spec.js instanceNames).
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Dayparts from './Dayparts.jsx'
@@ -40,6 +50,7 @@ import { Dialog } from './menus.jsx'
 import useAppBridge, { readRuleMarks } from './useAppBridge.js'
 import useEditorState from './useEditorState.js'
 import { finalSpec, newBlock, newPanel, sameLayout, samePanel, withVariant, withoutVariant } from './appSpec.js'
+import { buildCatalog } from './catalog.js'
 import {
   addPanel,
   alignPanels,
@@ -48,6 +59,7 @@ import {
   editGlobal,
   editPanels,
   followDayGlobal,
+  insertBefore,
   insertBehind,
   mapPanel,
   mapPanels,
@@ -75,6 +87,7 @@ import {
   HUB_SOURCE,
   REQUESTED_DEVICE,
   REQUESTED_LAYOUT,
+  appAsset,
   appFrame,
   editorUrlFor,
   fetchCountdownArt,
@@ -84,10 +97,11 @@ import {
   patchDeviceConfig,
 } from './hub.js'
 import {
-  blockTypes,
   elementLabel,
+  elementList,
   hasOwnProps,
   isBlockType,
+  isFunctionalType,
   isKnownType,
   knobDefaultsFor,
   knobFields,
@@ -98,10 +112,12 @@ import {
   DAYPART_LABELS,
   MAX_PANELS,
   VARIANT_PARTS,
+  blockName,
   clamp,
   elementAncestors,
   elementStyleOf,
   hasPart,
+  instanceNames,
   isDict,
   layoutMeta,
   makeBlock,
@@ -169,13 +185,22 @@ function allIds(spec) {
   return ids
 }
 
-// "7 panels · Morning, Evening" for a stored layout, "Default layout" for none.
+// "7 blocks · Morning, Evening" for a stored layout, "Default layout" for none.
 function describe(raw) {
   if (!isDict(raw) || !Array.isArray(raw.panels)) return 'Default layout'
   const n = raw.panels.length
   const parts = VARIANT_PARTS.filter((p) => isDict(raw.variants?.[p]) && Array.isArray(raw.variants[p].panels)).map((p) => DAYPART_LABELS[p])
-  return `${n} panel${n === 1 ? '' : 's'}${parts.length ? ` · ${parts.join(', ')}` : ''}`
+  return `${n} block${n === 1 ? '' : 's'}${parts.length ? ` · ${parts.join(', ')}` : ''}`
 }
+
+// "Weather", "Weather and Clock", "Weather, Clock and Text".
+function joinAnd(list) {
+  if (list.length < 2) return list.join('')
+  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+}
+
+// One above the highest z of a list (never past 999).
+const frontZ = (list) => Math.min(999, list.reduce((m, x) => Math.max(m, Number.isFinite(x.z) ? x.z : 0), 0) + 1)
 
 export default function Editor() {
   const [devices, setDevices] = useState(null)
@@ -210,6 +235,8 @@ export default function Editor() {
   const panels = partPanels(spec, part)
   const hasVariant = !spec || !!panels
   const selected = panels?.find((p) => p.id === state.selectedId) ?? null
+  // Every block's name on this part: "Weather", "Weather 2".
+  const names = useMemo(() => instanceNames(panels, state.labels), [panels, state.labels])
   // The app's types: which it knows changes when its ready arrives.
   const types = typeRegistry()
   // Several selected, in the order they were picked; never a type the app
@@ -451,16 +478,40 @@ export default function Editor() {
     const panel = panels?.find((x) => x.id === id)
     if (editable(panel)) onPanel(id, { [key]: !panel[key] })
   }
+  // Delete: the block off the layout, whatever its type, one undo step. A
+  // functional type the layout's default has (the Entry board's clock) comes
+  // back with Add block, in its default box.
   function onRemove(id) {
     const panel = panels?.find((x) => x.id === id)
-    actions.update((s, p) => removePanel(s, p, id))
     if (!panel) return
+    const name = blockName(panel, state.labels, names)
+    actions.update((s, p) => removePanel(s, p, id), { label: 'delete' })
     if (!isKnownType(panel.type)) {
-      const name = typeLabel(panel.type, state.labels).toLowerCase()
-      setNotice({ kind: 'info', text: `Removed ${panel.id}, a ${name} this app does not support. Undo brings it back.` })
-    } else if (!isBlockType(panel.type)) {
-      setNotice({ kind: 'info', text: `${typeLabel(panel.type, state.labels)} is off this layout; Add panel brings it back.` })
+      const kind = typeLabel(panel.type, state.labels).toLowerCase()
+      setNotice({ kind: 'info', text: `Removed ${panel.id}, a ${kind} this app does not support (undo with ⌘Z)`, undoable: true })
+    } else {
+      setNotice({ kind: 'info', text: `Removed ${name} (undo with ⌘Z)`, undoable: true })
     }
+  }
+
+  // Delete with several selected: all of them, one undo step.
+  function onRemoveGroup() {
+    const ids = group.map((p) => p.id)
+    if (!ids.length) return
+    const list = group.map((p) => blockName(p, state.labels, names))
+    actions.update((s, p) => removePanels(s, p, ids), { group: true, label: 'delete several' })
+    setNotice({ kind: 'info', text: `Removed ${list.length <= 3 ? joinAnd(list) : `${list.length} blocks`} (undo with ⌘Z)`, undoable: true })
+  }
+
+  // Undo and redo, from the keys or the top bar. A "Removed ... (undo with
+  // ⌘Z)" notice goes once it has been acted on.
+  const onUndo = () => {
+    actions.undo()
+    setNotice((n) => (n?.undoable ? null : n))
+  }
+  const onRedo = () => {
+    actions.redo()
+    setNotice((n) => (n?.undoable ? null : n))
   }
   // --- element styles, box v2, rules --------------------------------------------------
   const colorOk = (v) => v === null || v === undefined || !!normalizeColor(v, null)
@@ -487,7 +538,7 @@ export default function Editor() {
 
   function onResetElements(id) {
     actions.update((s, p) => mapPanel(s, p, id, withoutElementStyles()), { label: 'reset element styles' })
-    setNotice({ kind: 'info', text: 'Every element style of the panel removed.' })
+    setNotice({ kind: 'info', text: 'Every element style of the block removed.' })
   }
 
   function onBoxProp(id, path, value, field, run) {
@@ -510,9 +561,9 @@ export default function Editor() {
   // --- copy and paste style --------------------------------------------------------------
   function onCopyStyle() {
     if (!editable(selected)) return
-    const label = `${panelLabel(selected, state.labels)}${part !== 'day' ? ` (${DAYPART_LABELS[part]})` : ''}`
+    const label = `${blockName(selected, state.labels, names)}${part !== 'day' ? ` (${DAYPART_LABELS[part]})` : ''}`
     setStyleClip({ ...styleOf(selected), label, part })
-    setNotice({ kind: 'info', text: `Copied ${label}'s style. Paste style (⌥⌘V) puts it on another panel.` })
+    setNotice({ kind: 'info', text: `Copied ${label}'s style. Paste style (⌥⌘V) puts it on another block.` })
   }
 
   function onPasteStyle() {
@@ -521,9 +572,10 @@ export default function Editor() {
     const ids = targets.map((p) => p.id).filter((id) => !(id === styleClip?.id && part === styleClip?.part))
     if (!styleClip || !ids.length) return
     actions.update((s, p) => mapPanels(s, p, ids, withStyle(styleClip)), { group: true, label: 'paste style' })
+    const one = ids.length === 1 ? targets.find((t) => t.id === ids[0]) : null
     setNotice({
       kind: 'info',
-      text: `Pasted ${styleClip.label}'s style onto ${ids.length === 1 ? targets.find((t) => t.id === ids[0])?.id : `${ids.length} panels`}. Undo takes it back.`,
+      text: `Pasted ${styleClip.label}'s style onto ${one ? blockName(one, state.labels, names) : `${ids.length} blocks`}. Undo takes it back.`,
     })
   }
 
@@ -611,7 +663,7 @@ export default function Editor() {
     let text = `Added ${name} block ${made.id}.`
     if (where === 'behind') {
       text = sel.length
-        ? `Added ${name} ${made.id} behind ${sel.map((p) => panelLabel(p, state.labels)).join(', ')}, over their area.`
+        ? `Added ${name} ${made.id} behind ${sel.map((p) => panelLabel(p, state.labels, names)).join(', ')}, over their area.`
         : `Added ${name} ${made.id} at the back.`
     } else if (!hasOwnProps(type)) {
       text = `Added ${name} ${made.id} in front.`
@@ -619,41 +671,78 @@ export default function Editor() {
     setNotice({ kind: 'info', text })
   }
 
-  // Functional panels this part does not have, in the app's order.
-  const addable = useMemo(
-    () => (panels ? state.types.filter((t) => t.unique && !panels.some((p) => p.type === t.type)) : []),
-    [panels, state.types]
+  // The Add block menu: every type the app knows, grouped, with how many of
+  // each this part has (catalog.js).
+  const hasSelection = group.length > 1 || editable(selected)
+  const counts = useMemo(() => {
+    const c = {}
+    for (const p of panels || []) c[p.type] = (c[p.type] || 0) + 1
+    return c
+  }, [panels])
+  const catalog = useMemo(
+    () => buildCatalog({ known: types.known, counts, labels: state.labels, hasSelection, resolve: appAsset }),
+    [types, counts, state.labels, hasSelection]
   )
 
-  // Where the layout's own default has the panel, it goes back there with
-  // its default look; a panel the default lacks starts in the middle (the
-  // app's newPanel). Either way in front, and selected.
-  function onAddPanel(type) {
-    if (!panels || panels.length >= MAX_PANELS || panels.some((p) => p.type === type)) return
-    actions.update((s, p) => {
-      const list = partPanels(s, p)
-      if (!list || list.some((x) => x.type === type)) return s
-      const z = Math.min(999, list.reduce((m, x) => Math.max(m, Number.isFinite(x.z) ? x.z : 0), 0) + 1)
-      const made = newPanel(type, layoutId, z) || makePanel(type, list, state.mins)
-      return addPanel(s, p, made)
-    })
-    actions.select(type)
-    setNotice({ kind: 'info', text: `Added ${typeLabel(type, state.labels)}.` })
+  const onAddType = (type, where) => (isBlockType(type) ? onAdd(type, where) : onAddPanel(type))
+
+  // Where a further instance of a type goes: the first one's size, k grid
+  // steps right and down of it (k: how many there are already), on the
+  // canvas (a step left or up instead where there is no room).
+  function besideBox(first, k) {
+    const r = pctToPxRound(first, canvas)
+    const step = prefs.gridSize * k
+    const x = r.x + step + r.w <= canvas.w ? r.x + step : Math.max(0, r.x - step)
+    const y = r.y + step + r.h <= canvas.h ? r.y + step : Math.max(0, r.y - step)
+    return pxToPctKeeping(first, r, { x, y, w: r.w, h: r.h }, canvas)
   }
 
+  // A functional type from Add block. The first on the part goes where the
+  // layout's own default has it, with its default look, else where the type
+  // starts (the app's newPanel); a further instance, id '<type>-<4 hex>',
+  // comes in one grid step off the first. Either way in front, and selected.
+  // Made here, not in the recipe: the id may be random.
+  function onAddPanel(type) {
+    if (!panels || panels.length >= MAX_PANELS || !isFunctionalType(type)) return
+    const same = panels.filter((p) => p.type === type)
+    const first = panels.find((p) => p.id === type) || same[0] || null
+    // The bare id when the part has no block with it (the first instance).
+    const bare = !panels.some((p) => p.id === type)
+    const taken = allIds(spec)
+    const place = first ? { box: besideBox(first, same.length), z: frontZ(panels) } : { z: frontZ(panels) }
+    const got = newPanel(type, layoutId, { ...(place.box || {}), z: place.z }, taken, { bare })
+    const made = got?.panel || makePanel(type, panels, state.mins, bare ? type : newBlockId(type, taken), place)
+    // The bare id back while further instances are there: before them.
+    const before = bare && same.length ? same[0].id : null
+    actions.update((s, p) => (before ? insertBefore(s, p, made, before) : addPanel(s, p, made)), {
+      label: `add block (id from ${got?.idFrom || 'editor'})`,
+    })
+    actions.select(made.id)
+    const list = before ? panels.flatMap((x) => (x.id === before ? [made, x] : [x])) : [...panels, made]
+    const name = instanceNames(list, state.labels).get(made.id)
+    setNotice({ kind: 'info', text: first ? `Added ${name}, next to ${blockName(first, state.labels, names)}.` : `Added ${name}.` })
+  }
+
+  // Delete, Backspace: the selection off the layout (one undo step). With a
+  // part of a block selected, that part hides (an element cannot leave its
+  // block; its eye in the list shows it again).
   function deleteSelected() {
-    if (group.length > 1) {
-      // One step: blocks go, panels hide.
-      const blocks = group.filter((p) => isBlockType(p.type)).map((p) => p.id)
-      const rest = group.filter((p) => !blocks.includes(p.id)).map((p) => p.id)
-      actions.update((s, p) => removePanels(mapPanels(s, p, rest, withFields({ hidden: true })), p, blocks), { group: true, label: 'delete several' })
+    if (group.length > 1) return onRemoveGroup()
+    if (!selected) return
+    const key = state.selectedElement
+    if (key && isKnownType(selected.type)) {
+      const label = elementLabel(selected.type, key, reportedLabels)
+      const name = blockName(selected, state.labels, names)
+      if (!elementList(selected.type).some((e) => e.key === key)) {
+        setNotice({ kind: 'warn', text: `${label} cannot be hidden on its own. Esc selects ${name}; Delete then removes it.` })
+        return
+      }
+      if (elementStyleOf(selected, key).hidden === true) return
+      actions.update((s, p) => mapPanel(s, p, selected.id, withElementStyle(key, { hidden: true })), { label: 'hide element' })
+      setNotice({ kind: 'info', text: `Hid ${label} in ${name} (undo with ⌘Z)`, undoable: true })
       return
     }
-    if (!selected) return
-    // A block goes; so does a type the app does not know (hiding it would
-    // change it, and nothing else can be done with it). A panel hides.
-    if (isBlockType(selected.type) || !isKnownType(selected.type)) onRemove(selected.id)
-    else onPanel(selected.id, { hidden: true })
+    onRemove(selected.id)
   }
 
   function nudge(dx, dy) {
@@ -890,18 +979,18 @@ export default function Editor() {
     }
     if (mod && (key === 'z' || key === 'Z')) {
       e.preventDefault()
-      if (e.shiftKey) actions.redo()
-      else actions.undo()
+      if (e.shiftKey) onRedo()
+      else onUndo()
       return
     }
     if (mod && (key === 'y' || key === 'Y')) {
       e.preventDefault()
-      actions.redo()
+      onRedo()
       return
     }
     if (mod || e.altKey) return
     if (key === 'Escape') {
-      // Up one level: the part of a panel, the panel, nothing.
+      // Up one level: the part of a block, the block, nothing.
       if (state.selectedElement) {
         e.preventDefault()
         actions.selectElement(null)
@@ -964,7 +1053,7 @@ export default function Editor() {
   const selectionText = selected
     ? `${partText}${selected.id}${elName ? ` › ${elName}` : ''}: ${selPx.x}, ${selPx.y}, ${selPx.w} x ${selPx.h} px`
     : group.length > 1
-      ? `${partText}${group.length} panels: ${groupIds.join(', ')}`
+      ? `${partText}${group.length} blocks: ${groupIds.join(', ')}`
       : null
   const has = Object.fromEntries(VARIANT_PARTS.map((p) => [p, hasPart(spec, p)]))
   const copyTarget = copyAsk ? devices?.find((d) => d.id === copyAsk.targetId) : null
@@ -988,8 +1077,8 @@ export default function Editor() {
         onPrefs={onPrefs}
         canUndo={ed.canUndo}
         canRedo={ed.canRedo}
-        onUndo={actions.undo}
-        onRedo={actions.redo}
+        onUndo={onUndo}
+        onRedo={onRedo}
         canRevert={ed.dirty}
         onRevert={onRevert}
         canReset={!!state.draft && !!state.defaults && !ed.isDefault}
@@ -1002,7 +1091,7 @@ export default function Editor() {
         hasDraft={!!state.draft}
         arrange={
           group.length > 1 && !(spec && !panels)
-            ? { count: group.length, first: panelLabel(group[0], state.labels), onAlign, onDistribute, onMatch }
+            ? { count: group.length, first: blockName(group[0], state.labels, names), onAlign, onDistribute, onMatch }
             : null
         }
       />
@@ -1013,6 +1102,7 @@ export default function Editor() {
         selectedElement={state.selectedElement}
         hoverId={hover?.id ?? null}
         labels={state.labels}
+        names={names}
         disabled={!panels}
         readOnlyNote={
           spec && !panels
@@ -1020,17 +1110,14 @@ export default function Editor() {
             : null
         }
         canAdd={!!panels && panels.length < MAX_PANELS}
-        blocks={blockTypes()}
-        hasSelection={group.length > 1 || editable(selected)}
-        addable={addable}
+        catalog={catalog}
         onSelect={onLayerSelect}
         onSelectElement={actions.selectPath}
         onHover={onLayerHover}
         onToggle={onToggle}
         onToggleElement={onToggleElement}
         onReorder={onReorder}
-        onAdd={onAdd}
-        onAddPanel={onAddPanel}
+        onAdd={onAddType}
       />
       <main className="ed-main">
         {meta.variants && spec && !problem && (
@@ -1071,6 +1158,7 @@ export default function Editor() {
               selectedElement={state.selectedElement}
               hoverId={hover?.id ?? null}
               labels={state.labels}
+              names={names}
               mins={state.mins}
               appState={appState}
               elementName={(key) => (selected ? (key === state.selectedElement && elName) || elementLabel(selected.type, key, reportedLabels) : key)}
@@ -1109,6 +1197,7 @@ export default function Editor() {
         group={group}
         canvas={canvas}
         labels={state.labels}
+        names={names}
         mins={state.mins}
         art={art}
         onRefreshArt={loadArt}
@@ -1116,6 +1205,7 @@ export default function Editor() {
         onProps={onProps}
         onPanel={onPanel}
         onRemove={onRemove}
+        onRemoveGroup={onRemoveGroup}
         onResetKnobs={onResetKnobs}
         onBackdrop={onBackdrop}
         onGlobal={onGlobal}

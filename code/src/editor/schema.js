@@ -30,9 +30,10 @@
 // app's own exports, or the editor's fallbacks until those land).
 //
 // And for the panel types themselves: which types the app knows, and which
-// of them are blocks (free content, any number per layout, ids
-// '<type>-<4 hex>': text, image and, since chunk 4, the shape). Every other
-// type is a functional panel (at most once per layout, id === type). First
+// of them are blocks (free content, ids '<type>-<4 hex>': text, image and,
+// since chunk 4, the shape). Every other type is a functional panel (its
+// first instance's id is the type, any further one's '<type>-<4 hex>'; in the
+// UI every one of them is a block too). First
 // hit wins: the ready message (its `blockTypes` when it carries that list,
 // else its panelTypes marked kind 'block'; every panelType is a type it
 // knows), then the app's layoutSpec.js as bundled (PANEL_TYPE_LIST,
@@ -108,7 +109,7 @@ export const TEXT_SCALE_FIELD = {
   step: 0.05,
   unit: 'x',
   default: 1,
-  hint: "Multiplies every panel's",
+  hint: "Multiplies every block's",
 }
 
 const EMPTY = { fields: [] }
@@ -185,14 +186,20 @@ const BUILTIN_PANEL_TYPES = [
 const BUILTIN_BLOCK_TYPES = ['text', 'image']
 const isTypeName = (t) => typeof t === 'string' && t.length > 0 && t.length <= 64
 
-// { known: Set, blocks: [type] | null, labels: { type: label } } from a type
-// list ([{ type, label, kind: 'panel' | 'block', unique }] or ['clock', ...])
-// and a block list; blocks is null when neither says which are blocks. With
-// no type list, the types are `fallbackKnown` (and the blocks named). null
-// for no types at all.
+// { known: Set, blocks: [type] | null, labels: { type: label }, descriptions,
+// previews } from a type list ([{ type, label, kind: 'panel' | 'block',
+// unique, description?, preview? }] or ['clock', ...]) and a block list;
+// blocks is null when neither says which are blocks. description (one line
+// for the Add block menu) and preview (the path of its thumbnail in the app
+// build) are optional: the editor has its own (catalog.js). With no type
+// list, the types are `fallbackKnown` (and the blocks named). null for no
+// types at all.
+const TEXT_OF = (v, max) => (typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null)
 function cleanTypes(list, blockList, fallbackKnown) {
   const known = new Set()
   const labels = {}
+  const descriptions = {}
+  const previews = {}
   let blocks = null
   for (const t of Array.isArray(list) ? list : []) {
     const type = typeof t === 'string' ? t : isDict(t) ? t.type : null
@@ -200,6 +207,10 @@ function cleanTypes(list, blockList, fallbackKnown) {
     known.add(type)
     if (!isDict(t)) continue
     if (typeof t.label === 'string' && t.label.trim()) labels[type] = t.label.trim()
+    const description = TEXT_OF(t.description, 200)
+    if (description) descriptions[type] = description
+    const preview = TEXT_OF(t.preview, 300)
+    if (preview) previews[type] = preview
     const block = t.kind === 'block' || (t.kind == null && t.unique === false)
     if (block || t.kind === 'panel' || t.unique === true) {
       blocks = blocks || []
@@ -211,7 +222,7 @@ function cleanTypes(list, blockList, fallbackKnown) {
     blocks = [...new Set(blockList.filter(isTypeName))]
     for (const b of blocks) known.add(b)
   }
-  return known.size ? { known, blocks, labels } : null
+  return known.size ? { known, blocks, labels, descriptions, previews } : null
 }
 
 let bundledTypes = null
@@ -223,13 +234,22 @@ let readyTypes = null
 function resolveTypes() {
   const src = readyTypes || bundledTypes
   if (!src) {
-    return { known: new Set([...BUILTIN_PANEL_TYPES, ...BUILTIN_BLOCK_TYPES]), blocks: BUILTIN_BLOCK_TYPES, labels: {} }
+    return {
+      known: new Set([...BUILTIN_PANEL_TYPES, ...BUILTIN_BLOCK_TYPES]),
+      blocks: BUILTIN_BLOCK_TYPES,
+      labels: {},
+      descriptions: {},
+      previews: {},
+    }
   }
   const blocks = src.blocks || (bundledTypes?.blocks || BUILTIN_BLOCK_TYPES).filter((t) => src.known.has(t))
+  const merged = (k) => ({ ...(bundledTypes?.[k] || {}), ...(readyTypes?.[k] || {}) })
   return {
     known: new Set([...src.known, ...blocks]),
     blocks,
-    labels: { ...(bundledTypes?.labels || {}), ...(readyTypes?.labels || {}) },
+    labels: merged('labels'),
+    descriptions: merged('descriptions'),
+    previews: merged('previews'),
   }
 }
 
@@ -264,6 +284,13 @@ export const isFunctionalType = (type) => isKnownType(type) && !isBlockType(type
 // The app's name for a type ("Shape", "Flip clock"), or undefined.
 export const registeredTypeLabel = (type) => (isTypeName(type) && Object.prototype.hasOwnProperty.call(types.labels, type) ? types.labels[type] : undefined)
 
+// The app's own one-line description of a type and the path of its preview
+// thumbnail, when its type list gives them; else undefined (catalog.js has
+// the editor's).
+const own = (map, type) => (isTypeName(type) && Object.prototype.hasOwnProperty.call(map, type) ? map[type] : undefined)
+export const registeredTypeDescription = (type) => own(types.descriptions, type)
+export const registeredTypePreview = (type) => own(types.previews, type)
+
 // The v1 blocks (text, image), whose props are their content (Contract v1:
 // BLOCK_SCHEMAS above), not knobs: a shape's are knobs, like a panel's.
 export const hasOwnProps = (type) => Object.prototype.hasOwnProperty.call(BLOCK_SCHEMAS, type)
@@ -290,7 +317,7 @@ export function registerFromReady(msg) {
   // A ready naming its blocks but not its types keeps the types known so far.
   const knownSoFar = Array.isArray(msg?.blockTypes) ? (readyTypes || bundledTypes)?.known : null
   const t = cleanTypes(msg?.panelTypes, msg?.blockTypes, knownSoFar)
-  const key = (x) => (x ? [[...x.known].sort(), x.blocks, x.labels] : null)
+  const key = (x) => (x ? [[...x.known].sort(), x.blocks, x.labels, x.descriptions, x.previews] : null)
   const changed =
     JSON.stringify([table, g, c, key(t || readyTypes)]) !== JSON.stringify([fromReady, readyGlobal, readyContract, key(readyTypes)])
   if (Object.keys(table).length || g) {

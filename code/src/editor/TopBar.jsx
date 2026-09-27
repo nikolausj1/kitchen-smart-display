@@ -162,7 +162,7 @@ export default function TopBar({
           label="Sample data"
           checked={prefs.sample}
           onChange={(on) => onPrefs({ sample: on })}
-          title="Fill empty panels with made-up data so there is something to lay out"
+          title="Fill empty blocks with made-up data so there is something to lay out"
         />
         {arrange && <Arrange {...arrange} />}
         <span className="ed-spacer" />
@@ -192,7 +192,7 @@ function Arrange({ count, first, onAlign, onDistribute, onMatch }) {
     </button>
   )
   return (
-    <div className="ed-arrange" role="toolbar" aria-label="Arrange the selected panels">
+    <div className="ed-arrange" role="toolbar" aria-label="Arrange the selected blocks">
       <span className="ed-arrange__count">{count} selected</span>
       <span className="ed-arrange__group">{ALIGNS.slice(0, 3).map(([k, t]) => tool(k, t, () => onAlign(k)))}</span>
       <span className="ed-arrange__group">{ALIGNS.slice(3).map(([k, t]) => tool(k, t, () => onAlign(k)))}</span>

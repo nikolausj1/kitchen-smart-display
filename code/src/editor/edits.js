@@ -50,6 +50,20 @@ export const removePanels = (spec, part, ids) =>
 
 export const addPanel = (spec, part, panel) => editPanels(spec, part, (panels) => [...panels, panel])
 
+// A new panel right before `beforeId` in the list (its z unchanged: the list
+// order only breaks ties in paint order), else at the end. A type's first
+// instance, added back while further ones are there, goes before them, so
+// the list reads Weather, Weather 2 as the ids do.
+export function insertBefore(spec, part, panel, beforeId) {
+  return editPanels(spec, part, (panels) => {
+    const i = panels.findIndex((p) => p.id === beforeId)
+    if (i < 0) return [...panels, panel]
+    const out = panels.slice()
+    out.splice(i, 0, panel)
+    return out
+  })
+}
+
 // Of the panels whose id is in `ids`, the one drawn furthest back: the lowest
 // z, and for a tie the first in the list (paint order is z, then the list's
 // order, in the app and in frontToBack alike). null for none.

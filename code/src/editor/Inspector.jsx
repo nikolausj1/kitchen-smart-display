@@ -17,13 +17,15 @@
 //
 // Blocks come from the app's type list (schema.js): text and image show their
 // content (the text, the picture), a shape its own knobs (Shape, Fill) under
-// "Shape settings"; every block has Delete where a panel has Hide. The Type
+// "Shape settings". In the UI every panel is a block: the header names it as
+// the layers do ("Weather 2") and has Hide (or Show) and Delete for all of
+// them; Delete takes it off the layout (one undo step). The Type
 // section (font, text colour, vertical align) is for boxes with words of
 // their own: a type whose only element is its title (the shape) goes without
 // it, and its title takes an element style like any other.
 //
 // A panel of a type the app does not know: what it is, that it is kept as
-// saved, and Remove. Nothing else: the editor cannot know what it may hold.
+// saved, and Delete. Nothing else: the editor cannot know what it may hold.
 //
 // Several panels selected: what they are, and pasting a style onto all.
 //
@@ -50,7 +52,6 @@ import {
   globalFields,
   groupFields,
   hasOwnProps,
-  isBlockType,
   isKnownType,
   knobFields,
   ruleKind,
@@ -63,6 +64,7 @@ import {
   EVENING_RANGE,
   MAX_CONDITIONS,
   RANGES,
+  blockName,
   cleanBoxValue,
   elementStyleOf,
   isStyled,
@@ -144,6 +146,7 @@ function PanelInspector({
   part,
   canvas,
   labels,
+  names,
   mins,
   art,
   onRefreshArt,
@@ -174,11 +177,13 @@ function PanelInspector({
   const min = minPctFor(panel.type, mins)
   const minW = Math.ceil((min.w * canvas.w) / 100)
   const minH = Math.ceil((min.h * canvas.h) / 100)
-  const isBlock = isBlockType(panel.type)
   // Text and image: their fields are their content, the section is theirs.
   // Everything else (a shape, a panel): settings, with Reset knobs.
   const ownProps = hasOwnProps(panel.type)
+  // The type's name heads its settings ("Weather settings"); the block's own
+  // name ("Weather 2") heads the inspector.
   const title = typeLabel(panel.type, labels)
+  const name = blockName(panel, labels, names)
   const set = (patch, field) => onProps(id, patch, field)
   const fields = knobFields(panel.type)
   // A picture to pick: the image block's src.
@@ -225,8 +230,8 @@ function PanelInspector({
           <nav className="ed-crumbs" aria-label="Selection">
             {selectedElement ? (
               <>
-                <button type="button" className="ed-crumb" onClick={() => onSelectElement(null)} title="Back to the panel (Esc)">
-                  {title}
+                <button type="button" className="ed-crumb" onClick={() => onSelectElement(null)} title="Back to the block (Esc)">
+                  {name}
                 </button>
                 {between.map((key) => (
                   <span key={key} className="ed-crumb__step">
@@ -244,7 +249,7 @@ function PanelInspector({
                 <strong aria-current="true">{elLabel}</strong>
               </>
             ) : (
-              <strong>{title}</strong>
+              <strong>{name}</strong>
             )}
           </nav>
           <code>{id}</code>
@@ -259,27 +264,17 @@ function PanelInspector({
             onPasteStyle={onPasteStyle}
             onResetElements={() => onResetElements(id)}
           />
-          {isBlock ? (
-            <button type="button" className="ed-btn ed-btn--danger" onClick={() => onRemove(id)} title="Delete this block (Delete)">
-              Delete
-            </button>
-          ) : (
-            <>
-              {panel.hidden && (
-                <button
-                  type="button"
-                  className="ed-btn ed-btn--danger"
-                  onClick={() => onRemove(id)}
-                  title="Take this panel off the layout; Add panel brings it back"
-                >
-                  Remove from layout
-                </button>
-              )}
-              <button type="button" className="ed-btn" onClick={() => onPanel(id, { hidden: !panel.hidden })} title="Hide or show this panel (Delete hides)">
-                {panel.hidden ? 'Show' : 'Hide'}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className="ed-btn"
+            onClick={() => onPanel(id, { hidden: !panel.hidden })}
+            title={panel.hidden ? 'Show this block again' : 'Hide this block; it stays on the layout (its eye in the list does the same)'}
+          >
+            {panel.hidden ? 'Show' : 'Hide'}
+          </button>
+          <button type="button" className="ed-btn ed-btn--danger" onClick={() => onRemove(id)} title="Take this block off the layout (Delete); ⌘Z brings it back">
+            Delete
+          </button>
         </div>
       </header>
       {selectedElement && (
@@ -296,7 +291,7 @@ function PanelInspector({
       )}
       {selectedElement && !hasGroup && (
         <p className="ed-note ed-insp__note">
-          {title} has no settings of its own for {elLabel}; the panel's are below.
+          {title} has no settings of its own for {elLabel}; the block's are below.
         </p>
       )}
 
@@ -469,7 +464,7 @@ function PanelMenu({ panel, part, styled, styleClip, onCopyStyle, onPasteStyle, 
           </MenuItem>
           <MenuNote>
             {same || !styleClip
-              ? 'A style is the look (appearance, fill, type, element styles) and the rule; onto the same kind of panel its settings too.'
+              ? 'A style is the look (appearance, fill, type, element styles) and the rule; onto the same kind of block its settings too.'
               : `A style from ${styleClip.label} carries its look and rule; its settings only go onto another ${typeLabel(styleClip.type)}.`}
           </MenuNote>
         </>
@@ -550,7 +545,15 @@ const orderOf = (key) => {
   return i < 0 ? BOX_ORDER.length : i
 }
 // The editor's own hints, over the schema's.
-const BOX_HINTS = { blur: 'Shows as a tint on the Echo' }
+const BOX_HINTS = { blur: 'Shows as a tint on the Echo', valign: 'Top is the block as designed' }
+// The editor's own option names, over the schema's (the title's "as the
+// block has it" option).
+const BOX_OPTION_LABELS = { 'title.mode': { default: 'Default' } }
+function withOptionLabels(key, field) {
+  const names = BOX_OPTION_LABELS[key]
+  if (!names || !Array.isArray(field.options)) return field
+  return { ...field, options: field.options.map(([v, label, ...rest]) => [v, Object.prototype.hasOwnProperty.call(names, v) ? names[v] : label, ...rest]) }
+}
 // What an unset colour means, where the schema does not say.
 const BOX_NULL_LABELS = { color: 'Global', 'bg.color': 'Preset', 'bg.color2': 'Fade' }
 // Shown only when they mean something: the editor's rules, and the schema's
@@ -594,7 +597,7 @@ function BoxSections({ panel, onBoxProp, onFieldHover }) {
           const heading = groupName && sec.tops.length > 1 && (i === 0 || groupOf(fields[i - 1]) !== groupName) ? groupName : null
           const raw = getPath(panel.props, b.path)
           const v = cleanBoxValue(b.field, raw)
-          let field = BOX_HINTS[b.key] ? { ...b.field, hint: BOX_HINTS[b.key] } : b.field
+          let field = withOptionLabels(b.key, BOX_HINTS[b.key] ? { ...b.field, hint: BOX_HINTS[b.key] } : b.field)
           if (field.nullable && !field.nullLabel && BOX_NULL_LABELS[b.key]) field = { ...field, nullLabel: BOX_NULL_LABELS[b.key] }
           return (
             <div key={b.key} className="ed-boxfield">
@@ -693,7 +696,7 @@ function RulesSection({ panel, onWhen }) {
       <Menu
         className="ed-rules__add"
         disabled={full || !kinds.length}
-        title={full ? `At most ${MAX_CONDITIONS} conditions` : 'Show this panel only when…'}
+        title={full ? `At most ${MAX_CONDITIONS} conditions` : 'Show this block only when…'}
         label={conds.length ? 'Add condition' : 'Add a condition'}
       >
         {(close) =>
@@ -773,8 +776,8 @@ function ParamField({ param, value, onChange }) {
 
 // --- a type the app does not know ------------------------------------------------------
 
-// Read-only: what it is and where it sits (as stored), and Remove. It stays in
-// the layout exactly as saved until removed; an app build that knows the type
+// Read-only: what it is and where it sits (as stored), and Delete. It stays in
+// the layout exactly as saved until deleted; an app build that knows the type
 // draws it and edits it again.
 function UnsupportedInspector({ panel, canvas, labels, onRemove }) {
   const name = typeLabel(panel.type, labels)
@@ -791,9 +794,9 @@ function UnsupportedInspector({ panel, canvas, labels, onRemove }) {
             type="button"
             className="ed-btn ed-btn--danger"
             onClick={() => onRemove(panel.id)}
-            title="Take it off the layout (Delete); Undo brings it back"
+            title="Take it off the layout (Delete); ⌘Z brings it back"
           >
-            Remove
+            Delete
           </button>
         </div>
       </header>
@@ -815,13 +818,18 @@ function UnsupportedInspector({ panel, canvas, labels, onRemove }) {
 
 // --- several panels -----------------------------------------------------------------------
 
-function GroupInspector({ group, labels, styleClip, onPasteStyle, onSelect }) {
+function GroupInspector({ group, labels, names, styleClip, onPasteStyle, onSelect, onRemoveGroup }) {
   return (
     <div className="ed-insp">
       <header className="ed-insp__head">
         <div className="ed-insp__title">
-          <strong>{group.length} panels</strong>
+          <strong>{group.length} blocks</strong>
           <code>{group.map((p) => p.id).join(', ')}</code>
+        </div>
+        <div className="ed-insp__actions">
+          <button type="button" className="ed-btn ed-btn--danger" onClick={onRemoveGroup} title="Take these blocks off the layout (Delete); ⌘Z brings them back">
+            Delete
+          </button>
         </div>
       </header>
       <section className="ed-sec">
@@ -830,7 +838,7 @@ function GroupInspector({ group, labels, styleClip, onPasteStyle, onSelect }) {
           {group.map((p, i) => (
             <li key={p.id}>
               <button type="button" className="ed-link" onClick={() => onSelect(p.id)} title="Select just this one">
-                {panelLabel(p, labels)}
+                {panelLabel(p, labels, names)}
               </button>
               {i === 0 && <span className="ed-grouplist__first">first: Match width and height use its size</span>}
               {p.locked && <span className="ed-grouplist__first">locked: stays put</span>}
@@ -838,7 +846,7 @@ function GroupInspector({ group, labels, styleClip, onPasteStyle, onSelect }) {
           ))}
         </ul>
         <p className="ed-note">
-          Drag any of them to move them together. The arrange tools are in the top bar. Shift-click a panel to add it or take it out.
+          Drag any of them to move them together. The arrange tools are in the top bar. Shift-click a block to add it or take it out.
         </p>
       </section>
       <section className="ed-sec">
@@ -846,7 +854,7 @@ function GroupInspector({ group, labels, styleClip, onPasteStyle, onSelect }) {
         <button type="button" className="ed-btn" disabled={!styleClip} onClick={onPasteStyle}>
           {styleClip ? `Paste ${styleClip.label}'s style onto all` : 'Paste style onto all'}
         </button>
-        <p className="ed-note">{styleClip ? 'One undo step.' : 'Copy a style first: select one panel, its menu, Copy style (⌥⌘C).'}</p>
+        <p className="ed-note">{styleClip ? 'One undo step.' : 'Copy a style first: select one block, its menu, Copy style (⌥⌘C).'}</p>
       </section>
       <Keys />
     </div>
@@ -1043,9 +1051,9 @@ function Keys() {
         <dt>Arrows</dt>
         <dd>nudge 1 px, Shift 10 px</dd>
         <dt>Delete</dt>
-        <dd>hide a panel, remove a block</dd>
+        <dd>remove the block (⌘Z brings it back); with a part of it selected, hide that part</dd>
         <dt>Esc</dt>
-        <dd>up a level: part, panel, nothing; or cancel a drag</dd>
+        <dd>up a level: part, block, nothing; or cancel a drag</dd>
         <dt>⌘Z  ⇧⌘Z</dt>
         <dd>undo, redo</dd>
         <dt>⌥⌘C  ⌥⌘V</dt>

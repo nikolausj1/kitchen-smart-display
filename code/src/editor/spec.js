@@ -35,6 +35,15 @@
 // shape is a block like text and image. A panel of a type the app does not
 // know is kept exactly as stored (never dropped, never edited), and the
 // layers call it "not supported by this app".
+//
+// Any number of every type (the blocks rename, 2026-09-27; the screen side is
+// the app's normaliser): the first instance of a functional type keeps the
+// bare type id ('weather'), so every layout saved before is untouched; the
+// others are '<type>-<4 hex>' ('weather-3fa9'), the scheme the text, image
+// and shape blocks always had (they are suffixed from the first). The type of
+// an id is the part before its first '-', unless the id is itself a type. In
+// the UI everything on a layout is a "block"; the code keeps its names
+// (panels, panelLabel, PANEL_*), as do the spec keys and the messages.
 
 import {
   boxFields,
@@ -195,20 +204,37 @@ export function normalizeSrc(v) {
 
 const HEX4_RE = /^[0-9a-f]{4}$/
 
+// '<type>-<4 hex>' for any type: 'weather-3fa9', 'text-3fa9'.
+export const isSuffixedId = (type, id) =>
+  typeof type === 'string' &&
+  typeof id === 'string' &&
+  id.length === type.length + 5 &&
+  id.startsWith(`${type}-`) &&
+  HEX4_RE.test(id.slice(type.length + 1))
+
 // '<type>-<4 hex>' for a block type: 'text-3fa9', 'image-09c1', 'shape-5d20'.
 export function isValidBlockId(type, id) {
-  return (
-    isBlockType(type) &&
-    typeof id === 'string' &&
-    id.length === type.length + 5 &&
-    id.startsWith(`${type}-`) &&
-    HEX4_RE.test(id.slice(type.length + 1))
-  )
+  return isBlockType(type) && isSuffixedId(type, id)
+}
+
+// A functional type's ids: the bare type (its first instance) or suffixed.
+// A block's: suffixed only.
+export const isValidPanelId = (type, id) => (isBlockType(type) ? isSuffixedId(type, id) : id === type || isSuffixedId(type, id))
+
+// The type an id names: the id itself when it is a type the app knows
+// ('weather'), else the part before its first '-' ('weather-3fa9' ->
+// 'weather'); the whole id when it has no '-'.
+export function typeOfId(id) {
+  if (typeof id !== 'string' || !id) return null
+  if (isKnownType(id)) return id
+  const i = id.indexOf('-')
+  return i > 0 ? id.slice(0, i) : id
 }
 
 const hex4 = (n) => (n & 0xffff).toString(16).padStart(4, '0')
 
-// A fresh block id. Event handlers only: Math.random has no place in render.
+// A fresh '<type>-<4 hex>' id (a block, or a further instance of any type).
+// Event handlers only: Math.random has no place in render.
 export function newBlockId(type, taken) {
   for (let i = 0; i < 1000; i++) {
     const id = `${type}-${hex4(Math.floor(Math.random() * 0x10000))}`
@@ -390,18 +416,30 @@ function keepAsStored(raw, taken) {
   return cloneJson(raw)
 }
 
-function normalizePanel(raw, index, taken) {
+// The type a panel with no type string gets from its id, when the app knows
+// that type (a v1 functional panel was { id: 'clock' }); else null.
+function knownTypeOfId(id) {
+  const t = typeOfId(id)
+  return t && isKnownType(t) ? t : null
+}
+
+// taken: the ids given out so far; claimed: every valid id in the list, so a
+// repaired id never takes one a later panel carries by right.
+function normalizePanel(raw, index, taken, claimed) {
   if (!isDict(raw)) return null
-  const type =
-    typeof raw.type === 'string' ? raw.type : typeof raw.id === 'string' && isFunctionalType(raw.id) ? raw.id : null
+  const type = typeof raw.type === 'string' ? raw.type : knownTypeOfId(raw.id)
   if (type == null) return null
   if (!isKnownType(type)) return keepAsStored(raw, taken)
+  const busy = { has: (x) => taken.has(x) || claimed.has(x) }
   let id
-  if (isBlockType(type)) {
-    id = isValidBlockId(type, raw.id) && !taken.has(raw.id) ? raw.id : stableBlockId(type, taken, index)
+  if (isValidPanelId(type, raw.id) && !taken.has(raw.id)) {
+    id = raw.id
+  } else if (!isBlockType(type) && !busy.has(type)) {
+    // A functional panel with no id, or a malformed one: the bare type, as
+    // every functional panel's id was before instances.
+    id = type
   } else {
-    id = type // functional panels: id === type, each at most once
-    if (taken.has(id)) return null
+    id = stableBlockId(type, busy, index)
   }
   const z = Math.round(num(raw.z, ...RANGES.z, index + 1))
   const out = {
@@ -421,8 +459,14 @@ function normalizePanel(raw, index, taken) {
 function normalizePanels(list) {
   const taken = new Set()
   const panels = []
-  list.slice(0, MAX_PANELS).forEach((p, i) => {
-    const n = normalizePanel(p, i, taken)
+  const source = list.slice(0, MAX_PANELS)
+  const claimed = new Set()
+  for (const p of source) {
+    const type = isDict(p) ? (typeof p.type === 'string' ? p.type : knownTypeOfId(p.id)) : null
+    if (type && isKnownType(type) && isValidPanelId(type, p.id)) claimed.add(p.id)
+  }
+  source.forEach((p, i) => {
+    const n = normalizePanel(p, i, taken, claimed)
     if (n) {
       taken.add(n.id)
       panels.push(n)
@@ -543,14 +587,13 @@ export function pxToPctKeeping(startPct, startPx, rect, canvas) {
 }
 
 // From the app's ready message (panelTypes: ['clock', ...] or
-// [{ type, label, unique, min: { w, h } | minW, minH }]):
+// [{ type, label, min: { w, h } | minW, minH }]):
 //   mins    smallest box per type, percent (else DEFAULT_MIN_PCT)
 //   labels  friendlier names
-//   types   [{ type, label, unique }] in the app's order, for "Add panel"
+// (Which types there are, for Add block, is the type registry: schema.js.)
 export function panelTypeInfo(panelTypes) {
   const mins = {}
   const labels = {}
-  const types = []
   if (Array.isArray(panelTypes)) {
     for (const t of panelTypes) {
       if (!isDict(t)) continue
@@ -564,11 +607,9 @@ export function panelTypeInfo(panelTypes) {
       }
       const label = typeof t.label === 'string' && t.label.trim() ? t.label.trim() : null
       if (label) labels[type] = label
-      const unique = t.unique === true || t.kind === 'panel' || (t.unique == null && t.kind == null && isFunctionalType(type))
-      types.push({ type, label: label || TYPE_LABELS[type] || type, unique })
     }
   }
-  return { mins, labels, types }
+  return { mins, labels }
 }
 
 export const minPctFor = (type, mins) => mins?.[type] || { w: DEFAULT_MIN_PCT, h: DEFAULT_MIN_PCT }
@@ -594,11 +635,36 @@ export function restack(panels, frontFirstIds) {
 export const typeLabel = (type, labels) =>
   labels?.[type] || registeredTypeLabel(type) || TYPE_LABELS[type] || humanize(type) || String(type)
 
+// Every block's name in a part: its type's label, numbered from the second
+// instance on, in the list's order, when the list holds more than one of the
+// type ("Weather", "Weather 2", "Weather 3"). -> Map id -> name. Cheap (one
+// pass); the editor works it out once per render and hands it round.
+export function instanceNames(list, labels) {
+  const count = new Map()
+  const seen = new Map()
+  const out = new Map()
+  const panels = Array.isArray(list) ? list : []
+  for (const p of panels) count.set(p.type, (count.get(p.type) || 0) + 1)
+  for (const p of panels) {
+    const n = (seen.get(p.type) || 0) + 1
+    seen.set(p.type, n)
+    const base = typeLabel(p.type, labels)
+    out.set(p.id, count.get(p.type) > 1 && n > 1 ? `${base} ${n}` : base)
+  }
+  return out
+}
+
+// One block's name ("Weather 2"): from `names` (instanceNames) when it is
+// there, else its type's label.
+export const blockName = (p, labels, names) => names?.get?.(p?.id) || typeLabel(p?.type, labels)
+
 // What the layers call a panel of a type the app does not know.
 const UNSUPPORTED_NOTE = 'not supported by this app'
 
-export function panelLabel(p, labels) {
-  const base = typeLabel(p.type, labels)
+// The layers' line for a block: its name (numbered, when `names` is given)
+// and, for text, an image or a titled shape, what tells it apart.
+export function panelLabel(p, labels, names) {
+  const base = blockName(p, labels, names)
   if (!isKnownType(p.type)) return `${base} (${UNSUPPORTED_NOTE})`
   if (p.type === 'text') {
     const t = String(p.props?.text || '').replace(/\s+/g, ' ').trim()
@@ -645,20 +711,20 @@ export function makeBlock(type, panels, id, place = {}) {
   }
 }
 
-// A functional panel added back to a layout: twice its minimum size (capped
-// to the canvas), centred, on top.
-export function makePanel(type, panels, mins) {
+// A functional panel for Add block, when the bundled app cannot make the type
+// (appSpec.js newPanel is tried first): twice its minimum size (capped to the
+// canvas), centred, on top, unless `place` says where ({ box, z }, as
+// makeBlock). id: the bare type for the first instance, else '<type>-<4 hex>'.
+export function makePanel(type, panels, mins, id = type, place = {}) {
   const min = minPctFor(type, mins)
   const w = round2(clamp(min.w * 2, 1, 100))
   const h = round2(clamp(min.h * 2, 1, 100))
+  const box = isDict(place.box) ? normalizeBox(place.box) : { x: round2((100 - w) / 2), y: round2((100 - h) / 2), w, h }
   return {
-    id: type,
+    id,
     type,
-    x: round2((100 - w) / 2),
-    y: round2((100 - h) / 2),
-    w,
-    h,
-    z: Math.min(RANGES.z[1], topZ(panels)),
+    ...box,
+    z: Number.isFinite(place.z) ? clamp(Math.round(place.z), ...RANGES.z) : Math.min(RANGES.z[1], topZ(panels)),
     hidden: false,
     locked: false,
     props: normalizeProps(type, {}),

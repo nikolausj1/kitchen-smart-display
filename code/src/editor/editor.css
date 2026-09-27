@@ -585,15 +585,7 @@ select:disabled {
 }
 
 .ed-layers__add {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
   padding: 0 10px 8px;
-}
-
-.ed-layers__add .ed-btn {
-  justify-content: center;
-  padding: 0 6px;
 }
 
 .ed-layers__list {
@@ -1386,20 +1378,6 @@ select:disabled {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.ed-layers__addpanel {
-  grid-column: 1 / -1;
-}
-
-.ed-layers__addpanel > .ed-btn {
-  width: 100%;
-  justify-content: center;
-}
-
-.ed-layers__addpanel .ed-menu__list {
-  left: 0;
-  right: 0;
-  min-width: 0;
-}
 
 /* --- dialog, toast ------------------------------------------------------------ */
 
@@ -2015,30 +1993,8 @@ select:disabled {
 }
 
 /* --- panels and controls, chunk 4: block types from the app ------------------
- * One Add button per block type; any block but text and image (the shape) is
- * a small menu, behind the selection or in front. A panel of a type the app
- * does not know is listed dimmed and cannot be edited. */
-
-.ed-layers__addpanel.is-half {
-  grid-column: auto;
-}
-
-.ed-layers__addblock > .ed-btn {
-  width: 100%;
-  justify-content: center;
-}
-
-.ed-layers__addblock .ed-menu__list {
-  min-width: 100%;
-  width: max-content;
-  max-width: 240px;
-}
-
-/* A menu in the right-hand column opens leftwards, inside the column. */
-.ed-layers__addblock:nth-child(even) .ed-menu__list {
-  left: auto;
-  right: 0;
-}
+ * A panel of a type the app does not know is listed dimmed and cannot be
+ * edited. */
 
 .ed-layer.is-unsupported .ed-layer__name,
 .ed-layer.is-unsupported .ed-layer__icon {
@@ -2062,4 +2018,195 @@ select:disabled {
 
 .ed-insp__unsupported code {
   font-size: 11px;
+}
+
+/* --- blocks: Add block (2026-09-27) --------------------------------------------
+ * One button at the top of the Blocks column; its menu (AddMenu.jsx) sits in
+ * a portal at a fixed position, so the column's scrolling cannot clip it: the
+ * search field on top, the groups under it with a hairline between them, a
+ * row per type with its thumbnail, its name and one line on what it shows. */
+
+.ed-addmenu__button {
+  width: 100%;
+  justify-content: center;
+}
+
+.ed-addmenu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--ed-panel-2);
+  border: 1px solid var(--ed-line-2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+.ed-addmenu__search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ed-line);
+  color: var(--ed-faint);
+}
+
+.ed-addmenu__search input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--ed-line);
+  border-radius: var(--ed-radius);
+  background: var(--ed-panel);
+  color: var(--ed-ink);
+}
+
+.ed-addmenu__search input:focus {
+  outline: none;
+  border-color: var(--ed-accent);
+}
+
+.ed-addmenu__search input::placeholder {
+  color: var(--ed-faint);
+}
+
+.ed-addmenu__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 6px 6px;
+}
+
+.ed-addmenu__group + .ed-addmenu__group {
+  margin-top: 4px;
+  padding-top: 2px;
+  border-top: 1px solid var(--ed-line);
+}
+
+.ed-addmenu__head {
+  padding: 7px 6px 3px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ed-muted);
+}
+
+.ed-addmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ed-addmenu__item.is-active {
+  background: var(--ed-accent-2);
+  color: #fff;
+}
+
+.ed-addmenu__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.ed-addmenu__label {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ed-addmenu__desc {
+  color: var(--ed-muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ed-addmenu__item.is-active .ed-addmenu__desc {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ed-addmenu__count {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--ed-line-2);
+  border-radius: 8px;
+  color: var(--ed-faint);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.ed-addmenu__item.is-active .ed-addmenu__count {
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.ed-addmenu__empty {
+  padding: 14px 8px;
+  color: var(--ed-muted);
+}
+
+.ed-addmenu__foot {
+  flex: none;
+  padding: 6px 10px;
+  border-top: 1px solid var(--ed-line);
+  color: var(--ed-faint);
+  font-size: 11px;
+}
+
+/* A thumbnail: the preview picture over a neutral tile with the type's
+ * initial, which is all that shows until the picture has loaded (and when
+ * there is none). */
+.ed-thumb {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--ed-stage);
+  box-shadow: inset 0 0 0 1px var(--ed-line-2);
+}
+
+.ed-thumb__initial {
+  color: var(--ed-faint);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ed-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+}
+
+.ed-thumb.has-image img {
+  opacity: 1;
+}
+
+.ed-thumb.has-image .ed-thumb__initial {
+  visibility: hidden;
+}
+
+.ed-addmenu__item.is-active .ed-thumb {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }

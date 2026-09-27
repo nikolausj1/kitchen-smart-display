@@ -59,7 +59,6 @@ function initialState(deviceId, layoutId, picked = CANVAS_PRESETS[0]) {
     defaults: null,
     mins: {},
     labels: {},
-    types: [],
     dayparts: DAYPARTS,
     draft: null,
     past: [],
@@ -202,9 +201,9 @@ function reducer(s, a) {
 
     case 'appReady': {
       const defaults = readSpec(a.defaultSpec, s.layoutId)
-      const { mins, labels, types } = panelTypeInfo(a.panelTypes)
+      const { mins, labels } = panelTypeInfo(a.panelTypes)
       const parts = Array.isArray(a.dayparts) ? DAYPARTS.filter((p) => p === 'day' || a.dayparts.includes(p)) : s.dayparts
-      return withDraft({ ...s, defaults: defaults ?? s.defaults, mins, labels, types, dayparts: parts })
+      return withDraft({ ...s, defaults: defaults ?? s.defaults, mins, labels, dayparts: parts })
     }
 
     case 'update': {

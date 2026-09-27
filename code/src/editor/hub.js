@@ -71,6 +71,20 @@ export function appFrame(deviceId, layoutId) {
   }
 }
 
+// A file of the app build (code/public, e.g. previews/weather.png) as the
+// preview app sees it: beside the page the iframe loads, so the hub's own in
+// production (the hub serves the build) and the ?app= page's in development.
+// path: relative to the app ('previews/x.png'; a leading '/' is dropped).
+export function appAsset(path) {
+  const rel = String(path || '').replace(/^\/+/, '')
+  try {
+    const page = APP_OVERRIDE ? new URL(APP_OVERRIDE, window.location.href) : new URL('/', `${HUB}/`)
+    return new URL(rel, new URL('.', page)).href
+  } catch {
+    return `/${rel}`
+  }
+}
+
 // This page for another screen or layout: same hub/app overrides. Absolute,
 // so history.replaceState cannot resolve it against anything else. A null
 // layout leaves ?layout= out (the screen's own Today layout decides).

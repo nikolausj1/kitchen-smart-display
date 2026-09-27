@@ -135,6 +135,23 @@ export function ChevronIcon({ open }) {
   )
 }
 
+export function PlusIcon() {
+  return (
+    <svg {...base}>
+      <path d="M8 3v10M3 8h10" />
+    </svg>
+  )
+}
+
+export function SearchIcon() {
+  return (
+    <svg {...base} width={14} height={14}>
+      <circle cx="7" cy="7" r="4.2" />
+      <path d="M10.2 10.2l3.3 3.3" />
+    </svg>
+  )
+}
+
 export function MoreIcon() {
   return (
     <svg {...base}>

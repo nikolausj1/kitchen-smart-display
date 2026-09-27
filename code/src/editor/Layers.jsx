@@ -1,15 +1,14 @@
-// Layers - the left-hand column: every panel and block of the day part on
+// Layers - the left-hand column, "Blocks": everything on the day part on
 // show, front to back (the top row is drawn in front). Click selects,
-// Shift-click adds a panel to the selection or takes it out, the eye hides,
+// Shift-click adds a block to the selection or takes it out, the eye hides,
 // the lock stops drag and resize, drag a row (or use the arrows) to restack.
+// Every panel is a "block" in the UI (the code keeps its names); a type with
+// more than one on the part is numbered in list order ("Weather",
+// "Weather 2"; `names`, spec.js instanceNames).
 //
-// One Add button per block type the app has (`blocks`, from the type
-// registry): Add text and Add image put a new block in the middle of the
-// canvas, in front; any other block (Add shape) is a small menu, "behind
-// selection" (just behind the selected panels and over their area: the card
-// behind a group; at the back when nothing is selected) or "in front". Add
-// panel lists the functional panels this part does not have (each appears at
-// most once per layout) and puts the one chosen there too.
+// Add block (AddMenu.jsx) lists every type the app knows, grouped, whether or
+// not the layout has one already (another is a further instance), with the
+// shape twice: in front, or behind the selection.
 //
 // A panel of a type the app does not know is listed dimmed, "Shape (not
 // supported by this app)": the app draws nothing for it and the editor keeps
@@ -23,6 +22,7 @@
 // ("shows: school morning").
 
 import { useState } from 'react'
+import AddMenu from './AddMenu.jsx'
 import {
   BlockIcon,
   ChevronIcon,
@@ -39,9 +39,8 @@ import {
   UnlockIcon,
   UpIcon,
 } from './icons.jsx'
-import { Menu, MenuItem, MenuNote } from './menus.jsx'
-import { elementList, hasOwnProps, isBlockType, isKnownType } from './schema.js'
-import { elementStyleOf, frontToBack, isStyled, panelLabel, styledCount, typeLabel, whenSummary } from './spec.js'
+import { elementList, isBlockType, isKnownType } from './schema.js'
+import { elementStyleOf, frontToBack, isStyled, panelLabel, styledCount, whenSummary } from './spec.js'
 
 const BLOCK_ICONS = { text: TextIcon, image: ImageIcon, shape: ShapeIcon }
 
@@ -50,58 +49,6 @@ function TypeIcon({ type }) {
   if (!isBlockType(type)) return <PanelIcon />
   const Icon = BLOCK_ICONS[type] || BlockIcon
   return <Icon />
-}
-
-// The v1 blocks first, as they always were, then the others in the app's order.
-function addOrder(blocks) {
-  const first = ['text', 'image'].filter((t) => blocks.includes(t))
-  return [...first, ...blocks.filter((t) => !first.includes(t))]
-}
-
-// Add text, Add image: in front. Any other block: behind the selection, or in
-// front.
-function AddBlock({ type, labels, canAdd, hasSelection, onAdd }) {
-  const Icon = BLOCK_ICONS[type] || BlockIcon
-  const name = typeLabel(type, labels).toLowerCase()
-  if (hasOwnProps(type)) {
-    return (
-      <button type="button" className="ed-btn" disabled={!canAdd} onClick={() => onAdd(type, 'front')}>
-        <Icon /> Add {name}
-      </button>
-    )
-  }
-  return (
-    <Menu
-      className="ed-layers__addblock"
-      disabled={!canAdd}
-      title={`Put a new ${name} on the layout, behind the selection or in front`}
-      label={
-        <>
-          <Icon /> Add {name}
-        </>
-      }
-    >
-      {(close) => (
-        <>
-          <MenuItem
-            close={close}
-            onSelect={() => onAdd(type, 'behind')}
-            title={hasSelection ? 'Just behind the selected panels, over their area' : 'Nothing is selected: at the back of the layout'}
-          >
-            Add {name} behind selection
-          </MenuItem>
-          <MenuItem close={close} onSelect={() => onAdd(type, 'front')} title="In front of everything, in the middle">
-            Add {name} in front
-          </MenuItem>
-          <MenuNote>
-            {hasSelection
-              ? "Behind the selection: over the selected panels' area, just behind them. A card behind a group."
-              : 'Nothing is selected, so behind selection puts it at the back of the layout.'}
-          </MenuNote>
-        </>
-      )}
-    </Menu>
-  )
 }
 
 // Depth of an element in its panel's list, from the parents the list names.
@@ -125,12 +72,11 @@ export default function Layers({
   selectedElement,
   hoverId,
   labels,
+  names,
   disabled,
   readOnlyNote,
   canAdd,
-  blocks,
-  hasSelection,
-  addable,
+  catalog,
   onSelect,
   onSelectElement,
   onHover,
@@ -138,7 +84,6 @@ export default function Layers({
   onToggleElement,
   onReorder,
   onAdd,
-  onAddPanel,
 }) {
   const ordered = panels ? frontToBack(panels) : []
   // Restacking moves the panels the app knows; one it does not know keeps
@@ -172,40 +117,21 @@ export default function Layers({
   }
 
   return (
-    <aside className="ed-layers" aria-label="Layers">
+    <aside className="ed-layers" aria-label="Blocks">
       <div className="ed-side__head">
-        <h2>Layers</h2>
+        <h2>Blocks</h2>
         <span className="ed-side__meta">{selectedIds.length > 1 ? `${selectedIds.length} of ${ordered.length} selected` : ordered.length}</span>
       </div>
       <div className="ed-layers__add">
-        {addOrder(blocks).map((t) => (
-          <AddBlock key={t} type={t} labels={labels} canAdd={canAdd} hasSelection={hasSelection} onAdd={onAdd} />
-        ))}
-        <Menu
-          className={`ed-layers__addpanel${blocks.length % 2 ? ' is-half' : ''}`}
+        <AddMenu
+          groups={catalog}
           disabled={!canAdd}
-          title="Put a panel this layout does not have on it"
-          label={
-            <>
-              <PanelIcon /> Add panel
-            </>
-          }
-        >
-          {(close) =>
-            addable.length ? (
-              addable.map((t) => (
-                <MenuItem key={t.type} close={close} onSelect={() => onAddPanel(t.type)}>
-                  {t.label}
-                </MenuItem>
-              ))
-            ) : (
-              <MenuNote>Every panel is on this layout already. A hidden one comes back with its eye.</MenuNote>
-            )
-          }
-        </Menu>
+          title="Put a block on this layout: a clock, the weather, the calendar, text, a picture…"
+          onPick={(it) => onAdd(it.type, it.where)}
+        />
       </div>
       {readOnlyNote && <p className="ed-side__empty">{readOnlyNote}</p>}
-      <ul className="ed-layers__list" aria-label="Layers, front to back">
+      <ul className="ed-layers__list" aria-label="Blocks, front to back">
         {ordered.map((p) => {
           const supported = isKnownType(p.type)
           // Where it stands among the panels that restack (not a type the app does not know).
@@ -278,7 +204,7 @@ export default function Layers({
                     onSelect(p.id, e.shiftKey)
                   }}
                 >
-                  <span className="ed-layer__label">{panelLabel(p, labels)}</span>
+                  <span className="ed-layer__label">{panelLabel(p, labels, names)}</span>
                 </button>
                 {styled > 0 && (
                   <span className="ed-badge" title={`${styled} element${styled === 1 ? '' : 's'} styled`}>

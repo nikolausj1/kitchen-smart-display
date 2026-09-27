@@ -13,9 +13,12 @@
 //   samePanel(a, b, layoutId)   the same for one panel (the save keeps a panel
 //                               it did not change exactly as stored)
 //   withVariant / withoutVariant  day-part variants, the app's own helpers
-//   newPanel(type, layoutId, z) a functional panel for "Add panel": that
+//   newPanel(type, layoutId, overrides, takenIds, { bare })
+//                               a functional panel for Add block: that
 //                               layout's default box and props for the type,
-//                               or the type's own starting box
+//                               or the type's own starting box, with the
+//                               multi-instance id (the bare type, or
+//                               '<type>-<4 hex>' when the part has one)
 //   newBlock(type, overrides, takenIds)
 //                               a block from the app's own newBlock (a shape:
 //                               its starting box and props), or null when the
@@ -41,10 +44,19 @@
 // A namespace import on purpose: the chunk 1 exports are being added to the
 // app module alongside this editor work, and `app.X` is simply undefined
 // where a named import of a missing export would break the build.
+//
+// Instances (any number of every type, 2026-09-27) are built on both sides
+// at once: an app module whose normaliser still keeps one panel of a
+// functional type (and forces its id to the type) is never handed a further
+// instance of it ('weather-3fa9'), which it would drop or, first in the list,
+// take for the bare one. Such a panel keeps the editor's copy, like a type
+// the module does not know. Asked per type (keepsInstances), since a module
+// may repeat some types only (the Home Assistant panels came first);
+// APP_EXPORTS.instances says whether it repeats the clock, i.e. every type.
 
 import * as app from '../views/TodayLayouts/layoutSpec.js'
-import { globalFields, registerBundledContract, registerBundledTypes } from './schema.js'
-import { hasPart, isValidBlockId, normalizeSpec } from './spec.js'
+import { globalFields, isBlockType, registerBundledContract, registerBundledTypes } from './schema.js'
+import { hasPart, isSuffixedId, isValidBlockId, newBlockId, normalizeSpec } from './spec.js'
 import { deepEqual, isDict } from './util.js'
 
 // --- the chunk 1 contract: fallbacks ---------------------------------------------
@@ -172,12 +184,34 @@ const FALLBACK_RULE_KINDS = [
   { kind: 'countdownWithin', label: 'Countdown within', param: 'days' },
 ]
 
-// Which of the four the bundled app module exports itself.
+// Does the bundled normaliser keep a further instance of this functional
+// type, id and all? (One that predates instances keeps the first only.)
+const keeps = new Map()
+function keepsInstances(type) {
+  if (keeps.has(type)) return keeps.get(type)
+  let ok
+  try {
+    const probe = [
+      { id: type, type, x: 1, y: 1, w: 40, h: 40, z: 1, props: {} },
+      { id: `${type}-0f0f`, type, x: 50, y: 50, w: 40, h: 40, z: 2, props: {} },
+    ]
+    const out = app.normalizeSpec({ panels: probe }, { defaultSpec: null, layoutId: 'entry' })
+    ok = !!out && Array.isArray(out.panels) && out.panels.map((p) => p.id).join() === `${type},${type}-0f0f`
+  } catch {
+    ok = false
+  }
+  keeps.set(type, ok)
+  return ok
+}
+
+// Which of the four the bundled app module exports itself, and whether it
+// takes instances.
 export const APP_EXPORTS = {
   elementStyleSchema: app.ELEMENT_STYLE_SCHEMA != null,
   boxSchema: app.BOX_SCHEMA != null,
   fonts: app.FONTS != null,
   ruleKinds: app.RULE_KINDS != null,
+  instances: keepsInstances('clock'),
 }
 
 export const ELEMENT_STYLE_SCHEMA = app.ELEMENT_STYLE_SCHEMA ?? FALLBACK_ELEMENT_STYLE_SCHEMA
@@ -200,6 +234,11 @@ registerBundledTypes(
 // Does the bundled app module know the type? (An app module without
 // panelType: as before, it is handed everything.)
 const appKnows = (type) => (typeof app.panelType === 'function' ? !!app.panelType(type) : true)
+
+// Can the bundled normaliser take this panel as it is? Its type, and for a
+// functional type's further instance ('weather-3fa9') a module that keeps
+// instances of that type. A block's ids were always suffixed.
+const appTakes = (p) => isDict(p) && appKnows(p.type) && (isBlockType(p.type) || p.id === p.type || keepsInstances(p.type))
 
 // --- the spec -----------------------------------------------------------------------
 
@@ -244,9 +283,9 @@ function carryOver(mine, theirs) {
   return out
 }
 
-// The spec with only the panels the bundled app knows, for its normaliser.
+// The spec with only the panels the bundled app can take, for its normaliser.
 function onlyKnown(spec) {
-  const keep = (list) => (Array.isArray(list) ? list.filter((p) => appKnows(p.type)) : list)
+  const keep = (list) => (Array.isArray(list) ? list.filter(appTakes) : list)
   const out = { ...spec, panels: keep(spec.panels) }
   if (isDict(spec.variants)) {
     out.variants = {}
@@ -265,11 +304,11 @@ function onlyKnown(spec) {
 function putBack(mineList, theirList) {
   const mine = Array.isArray(mineList) ? mineList : []
   const theirs = Array.isArray(theirList) ? theirList : []
-  const known = mine.filter((p) => appKnows(p.type))
+  const known = mine.filter(appTakes)
   if (known.length === mine.length) return theirs
-  if (known.length !== theirs.length) return [...theirs, ...mine.filter((p) => !appKnows(p.type))]
+  if (known.length !== theirs.length) return [...theirs, ...mine.filter((p) => !appTakes(p))]
   let i = 0
-  return mine.map((p) => (appKnows(p.type) ? theirs[i++] : p))
+  return mine.map((p) => (appTakes(p) ? theirs[i++] : p))
 }
 
 function withUnknown(mine, theirs) {
@@ -333,10 +372,30 @@ export function withoutVariant(spec, part) {
   return isDict(out) && Array.isArray(out.panels) && !hasPart(out, part) ? out : spec
 }
 
-// A functional panel for "Add panel", in front (z), or null.
-export function newPanel(type, layoutId, z) {
-  const p = app.newPanel(type, { z }, { layoutId })
-  return isDict(p) && p.id === type ? p : null
+// A functional panel for Add block, or null when the bundled app does not
+// make the type (spec.js makePanel then). overrides: { z } and, for a further
+// instance, its box. The id follows the instance scheme: `bare` (the part has
+// no panel with the type's own id) wants the type itself; otherwise a
+// '<type>-<4 hex>' clear of takenIds (a Set: every id of the layout, all day
+// parts). The app's newPanel(type, overrides, { layoutId, takenIds }) makes
+// that id itself for a type it repeats (the contract: a suffixed id when the
+// bare one is taken); for a type it does not repeat yet it answers with the
+// bare id whatever, and the id is made here instead.
+//   -> { panel, idFrom: 'app' | 'editor' } | null
+export function newPanel(type, layoutId, overrides, takenIds, { bare = true } = {}) {
+  const taken = takenIds instanceof Set ? takenIds : new Set()
+  // Asked of the app with no taken ids when the bare id is free in the part
+  // (so it answers with the bare id), with the layout's otherwise.
+  let p
+  try {
+    p = app.newPanel(type, overrides, { layoutId, takenIds: bare ? new Set() : taken })
+  } catch {
+    p = null
+  }
+  if (!isDict(p) || p.type !== type) return null
+  if (bare) return { panel: p.id === type ? p : { ...p, id: type }, idFrom: p.id === type ? 'app' : 'editor' }
+  if (isSuffixedId(type, p.id) && !taken.has(p.id)) return { panel: p, idFrom: 'app' }
+  return { panel: { ...p, id: newBlockId(type, taken) }, idFrom: 'editor' }
 }
 
 // A block from the app's own newBlock: its starting box and props for the
