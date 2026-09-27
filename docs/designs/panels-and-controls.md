@@ -2,7 +2,7 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-27
-version: 1.6
+version: 1.7
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, ha-blocks, repeated-blocks, hourly, agenda, previews, echo-show, frameserver]
 ---
@@ -358,7 +358,7 @@ arrive through the editor's Add panel:
   Curve (`curve`: a line through the temperatures in a band above the
   numbers, the current hour's dot in the accent); `showRain` on (every
   hour's chance, in the accent from 20 %, muted below); `showFeelsLike` and
-  `showWind` off; `size`. Elements: title, hour, icon, curve, temp, feels,
+  `showWind` off; `size`. Elements: title, hour, icon, curve, temp, feels, `iconSize` 0.5..2.5 (default 1, added 2026-09-27) scales the icons' cap.
   rain, wind, empty ("No hourly forecast yet").
 - **Forecast, Bars**: the daily forecast's new `style`, "Side by side"
   (`rows`, the default, as it always was) or "Bars" (`band`): a day per

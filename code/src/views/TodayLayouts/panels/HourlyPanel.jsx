@@ -112,6 +112,7 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
 
   const style = {
     '--tl-hr-size': String(k.size),
+    '--tl-hr-icon': String(num(k.iconSize) || 1),
     '--tl-hr-cols': String(Math.max(1, grid.cols)),
     '--tl-hr-rows': String(Math.max(1, grid.rows)),
   }

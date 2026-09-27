@@ -62,12 +62,12 @@
 
 /* The icon takes what its row leaves (the flexible track) and never more
  * than its size, so a tight row shrinks it rather than letting it spill over
- * the hour or the curve. */
+ * the hour or the curve. The Icon size knob (--tl-hr-icon) scales that cap. */
 .tl-hr__icon {
   grid-row: 2;
   align-self: stretch;
   min-height: 0;
-  width: min(calc(var(--tl-hr-col) * 0.58), calc(var(--tl-hr-rowh) * 0.3));
+  width: min(calc(var(--tl-hr-col) * 0.58 * var(--tl-hr-icon, 1)), calc(var(--tl-hr-rowh) * 0.3 * var(--tl-hr-icon, 1)));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -79,7 +79,7 @@
 .tl-hr__icon .weather-icon-img {
   width: 100%;
   height: 100%;
-  max-height: min(calc(var(--tl-hr-col) * 0.58), calc(var(--tl-hr-rowh) * 0.3));
+  max-height: min(calc(var(--tl-hr-col) * 0.58 * var(--tl-hr-icon, 1)), calc(var(--tl-hr-rowh) * 0.3 * var(--tl-hr-icon, 1)));
   object-fit: contain;
   display: block;
 }

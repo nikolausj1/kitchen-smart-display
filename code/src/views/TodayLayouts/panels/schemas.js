@@ -468,6 +468,7 @@ export const PANEL_SCHEMAS = deepFreeze({
       toggle('showFeelsLike', 'Feels like', false, 'feels'),
       toggle('showWind', 'Wind', false, 'wind'),
       size('size', 'Size'),
+      size('iconSize', 'Icon size', 'icon'),
     ],
   },
 
