@@ -19,8 +19,12 @@ import {
   conditionValue,
   conditionsColumns,
   curveLevels,
+  HOURLY_STEPS,
+  HOURLY_UNTIL,
   fmtHour,
+  hourlyColumns,
   hourlyGrid,
+  hourlyTitle,
   hoursFrom,
   nextHourStrip,
   pickAlert,
@@ -50,6 +54,69 @@ test('hoursFrom: from the hour now is in, skipping hours already over', () => {
   // Past the feed's end, or no feed: nothing.
   assert.deepEqual(hoursFrom(HOURS, at(12, 0, 29), 6), [])
   assert.deepEqual(hoursFrom(null, at(15), 6), [])
+})
+
+// --- The hourly knobs: step and range ------------------------------------------------
+
+const labels = (list, now) => list.map((e, i) => (i === 0 && e.time.slice(0, 13) === stamp(now).slice(0, 13) ? 'Now' : fmtHour(e.time)))
+
+test('hourlyColumns: at the defaults, and at any step of 1, exactly the hours the strip always showed', () => {
+  const now = at(15, 5)
+  assert.deepEqual(hourlyColumns(HOURS, now, {}), hoursFrom(HOURS, now, 12))
+  assert.deepEqual(hourlyColumns(HOURS, now, null), hoursFrom(HOURS, now, 12))
+  for (const hours of [6, 7, 12, 24]) {
+    assert.deepEqual(hourlyColumns(HOURS, now, { step: 1, range: 'hours', hours }), hoursFrom(HOURS, now, hours), `hours ${hours}`)
+  }
+  // Out of range or not a number: the panel's own old reading (6..24, 12).
+  assert.equal(hourlyColumns(HOURS, now, { hours: 99 }).length, 24)
+  assert.equal(hourlyColumns(HOURS, now, { hours: 2 }).length, 6)
+  assert.equal(hourlyColumns(HOURS, now, { hours: 'x' }).length, 12)
+  assert.deepEqual(HOURLY_STEPS, [1, 2, 3, 4])
+  assert.deepEqual(HOURLY_UNTIL, { min: 18, max: 24, default: 22 })
+})
+
+test('hourlyColumns: rest of day at 1:20 pm, every 3 hours: Now, 3 PM, 6 PM, 9 PM', () => {
+  const now = at(13, 20)
+  const rest = (step, untilHour) => labels(hourlyColumns(HOURS, now, { range: 'untilHour', step, untilHour }), now)
+  assert.deepEqual(rest(3, 22), ['Now', '3 PM', '6 PM', '9 PM'])
+  assert.deepEqual(rest(2, 22), ['Now', '2 PM', '4 PM', '6 PM', '8 PM', '10 PM'])
+  assert.deepEqual(rest(4, 22), ['Now', '4 PM', '8 PM'])
+  assert.deepEqual(rest(1, 18), ['Now', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM'])
+  // Midnight (24) is tomorrow's first hour, the last column.
+  assert.deepEqual(rest(3, 24), ['Now', '3 PM', '6 PM', '9 PM', '12 AM'])
+  // The default end is 10 pm; a value that is not an hour on offer reads as it.
+  assert.deepEqual(rest(3, undefined), rest(3, 22))
+  assert.deepEqual(rest(3, 30), rest(3, 22))
+  assert.equal(hourlyTitle({ range: 'untilHour' }), 'Rest of day')
+  assert.equal(hourlyTitle({ range: 'hours' }), 'Hourly')
+  assert.equal(hourlyTitle(null), 'Hourly')
+})
+
+test('hourlyColumns: late in the evening only what is left, never tomorrow', () => {
+  const rest = (h, m, untilHour = 22, step = 3, day = 26) =>
+    labels(hourlyColumns(HOURS, at(h, m, day), { range: 'untilHour', step, untilHour }), at(h, m, day))
+  assert.deepEqual(rest(20, 10), ['Now', '9 PM'])
+  assert.deepEqual(rest(21, 30), ['Now'])
+  assert.deepEqual(rest(21, 30, 22, 2), ['Now', '10 PM'])
+  assert.deepEqual(rest(22, 30), ['Now'])
+  // Past the end hour itself: still the current reading, nothing after it.
+  assert.deepEqual(rest(23, 10), ['Now'])
+  // Just past midnight the new day is the day: through its 10 pm.
+  assert.deepEqual(rest(0, 20, 22, 4, 27), ['Now', '4 AM', '8 AM', '12 PM', '4 PM', '8 PM'])
+  // No clock, no feed: nothing.
+  assert.deepEqual(hourlyColumns(HOURS, null, { range: 'untilHour' }), [])
+  assert.deepEqual(hourlyColumns(null, at(13, 20), { range: 'untilHour' }), [])
+})
+
+test('hourlyColumns: the next hours at a step: the clock hours the step divides, past midnight too', () => {
+  // 12 hours from 1:20 pm run through 12 am; every 3 hours of them.
+  assert.deepEqual(labels(hourlyColumns(HOURS, at(13, 20), { range: 'hours', hours: 12, step: 3 }), at(13, 20)), ['Now', '3 PM', '6 PM', '9 PM', '12 AM'])
+  // From 10:30 pm, every 4 hours on the clock: 12, 4 and 8 am.
+  assert.deepEqual(labels(hourlyColumns(HOURS, at(22, 30), { hours: 12, step: 4 }), at(22, 30)), ['Now', '12 AM', '4 AM', '8 AM'])
+  // At 3 pm on the dot, 3 pm is Now and the next is 6 pm.
+  assert.deepEqual(labels(hourlyColumns(HOURS, at(15, 0), { hours: 6, step: 3 }), at(15, 0)), ['Now', '6 PM'])
+  // A step that is not one of 1 to 4 reads as every hour.
+  assert.deepEqual(hourlyColumns(HOURS, at(13, 20), { step: 7 }), hoursFrom(HOURS, at(13, 20), 12))
 })
 
 test('fmtHour: 12-hour labels from the stamp, no zone involved', () => {

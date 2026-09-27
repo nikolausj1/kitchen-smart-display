@@ -12,7 +12,7 @@ import {
   FUNCTIONAL_TYPES,
   PANEL_SCHEMA_TABLE,
   PANEL_TYPES,
-  isRepeatId,
+  isInstanceId,
   knobsOf,
   newPanel,
   normalizeSpec,
@@ -22,17 +22,16 @@ import { HA_PANEL_TYPES } from './panels/haParts.js'
 
 const TYPES = ['hastatus', 'habutton', 'hachips', 'hapicker']
 
-test('the four are panels that repeat, with their labels', () => {
+test('the four are panels, with their labels; like every type they repeat, with no flag of their own', () => {
   assert.deepEqual([...HA_PANEL_TYPES], TYPES)
   TYPES.forEach((t) => {
     assert.equal(PANEL_TYPES[t].kind, 'panel', t)
-    assert.equal(PANEL_TYPES[t].unique, false, t)
-    assert.equal(PANEL_TYPES[t].repeat, true, t)
+    // A functional panel: its first instance holds the bare type as its id.
+    assert.equal(PANEL_TYPES[t].unique, true, t)
     assert.ok(FUNCTIONAL_TYPES.includes(t), t)
   })
-  // Every other functional type is still unique, and says nothing of repeating.
-  assert.equal(PANEL_TYPES.clock.unique, true)
-  assert.equal('repeat' in PANEL_TYPES.clock, false)
+  // The Home Assistant types' own `repeat` flag is gone: every type repeats.
+  Object.values(PANEL_TYPES).forEach((t) => assert.equal('repeat' in t, false, t.type))
   assert.deepEqual(TYPES.map((t) => PANEL_TYPES[t].label), ['HA status', 'HA button', 'HA chips', 'HA picker'])
   assert.deepEqual(TYPES.map((t) => PANEL_TYPES[t].minPx), [
     { w: 120, h: 44 },
@@ -49,7 +48,8 @@ test('their knobs, defaults and elements', () => {
   assert.deepEqual(keys('hachips'), ['entities', 'size', 'showLabels'])
   assert.deepEqual(keys('hapicker'), ['entity', 'action', 'size', 'wrap'])
   assert.deepEqual(knobDefaults('hastatus'), { entity: '', showLabel: true, showSince: true, size: 1, layout: 'row' })
-  assert.deepEqual(knobDefaults('habutton'), { action: '', size: 1, style: 'filled', showState: true })
+  // The state under the label is off until asked for (Justin, 2026-09-27).
+  assert.deepEqual(knobDefaults('habutton'), { action: '', size: 1, style: 'filled', showState: false })
   assert.deepEqual(knobDefaults('hachips'), { entities: '', size: 1, showLabels: true })
   assert.deepEqual(knobDefaults('hapicker'), { entity: '', action: '', size: 1, wrap: true })
   assert.deepEqual(elementKeysOf('hastatus'), ['title', 'icon', 'label', 'state', 'since', 'empty'])
@@ -86,19 +86,19 @@ test('Add panel: each lands in its starting box; the button draws no box of its 
   assert.deepEqual(box('hapicker', 'board'), ['hapicker', 15, 42, 70, 16, 10, 'card', 1])
 })
 
-test('several of one: the bare type once, then <type>-<4 hex>; ids kept, repaired, deterministic', () => {
+test('several of one: the bare type once, then <type>-<4 hex>; ids kept, made, duplicates dropped, deterministic', () => {
   const box = { x: 1, y: 1, w: 20, h: 16 }
   const spec = normalizeSpec(
     {
       panels: [
         { id: 'hastatus', type: 'hastatus', ...box, props: { entity: 'cover.garage_door_controller' } },
         { id: 'hastatus-3fa9', type: 'hastatus', ...box, props: { entity: 'person.justin' } },
-        { id: 'hastatus', type: 'hastatus', ...box, props: { entity: 'person.sheena' } }, // a repeat of the bare id
-        { id: 'weird', type: 'hastatus', ...box, props: { entity: 'lock.front_door' } },
+        { id: 'hastatus', type: 'hastatus', ...box, props: { entity: 'person.sheena' } }, // the bare id again: a true duplicate
+        { id: 'weird', type: 'hastatus', ...box, props: { entity: 'lock.front_door' } }, // outside the scheme: given one
         { type: 'habutton', ...box, props: { action: 'away-on' } },
         { id: 'habutton-00aa', type: 'habutton', ...box, props: { action: 'garage-toggle' } },
         { type: 'clock', ...box },
-        { type: 'clock', ...box }, // a second clock: still dropped
+        { type: 'clock', ...box }, // a second clock: kept, as a further instance
       ],
     },
     { layoutId: 'entry' }
@@ -106,24 +106,27 @@ test('several of one: the bare type once, then <type>-<4 hex>; ids kept, repaire
   const ids = spec.panels.map((p) => p.id)
   assert.equal(ids.length, 7)
   assert.deepEqual(ids.slice(0, 2), ['hastatus', 'hastatus-3fa9'])
-  assert.ok(isRepeatId('hastatus', ids[2]) && ids[2] !== 'hastatus' && ids[2] !== 'hastatus-3fa9')
-  assert.ok(isRepeatId('hastatus', ids[3]) && new Set(ids.slice(0, 4)).size === 4)
-  assert.deepEqual(ids.slice(4), ['habutton', 'habutton-00aa', 'clock'])
+  assert.ok(isInstanceId('hastatus', ids[2]) && ids[2] !== 'hastatus' && ids[2] !== 'hastatus-3fa9')
+  assert.deepEqual(ids.slice(3, 6), ['habutton', 'habutton-00aa', 'clock'])
+  assert.ok(isInstanceId('clock', ids[6]) && ids[6] !== 'clock')
+  assert.equal(new Set(ids).size, 7)
   assert.deepEqual(
-    spec.panels.slice(0, 4).map((p) => knobsOf(p).entity),
-    ['cover.garage_door_controller', 'person.justin', 'person.sheena', 'lock.front_door']
+    spec.panels.slice(0, 3).map((p) => knobsOf(p).entity),
+    ['cover.garage_door_controller', 'person.justin', 'lock.front_door']
   )
   assert.deepEqual(normalizeSpec(spec, { layoutId: 'entry' }), spec)
-  assert.ok(!isRepeatId('clock', 'clock-0f0f') && !isRepeatId('hastatus', 'hastatus-3FA9') && !isRepeatId('hastatus', 'habutton'))
+  assert.ok(isInstanceId('clock', 'clock-0f0f') && isInstanceId('clock', 'clock'))
+  assert.ok(!isInstanceId('hastatus', 'hastatus-3FA9') && !isInstanceId('hastatus', 'habutton'))
 })
 
-test('Add panel: a second of a repeating type gets a fresh suffixed id', () => {
+test('Add panel: the bare type while it is free, else a fresh suffixed id, for every functional type', () => {
   const first = newPanel('hastatus', null, { layoutId: 'entry', takenIds: ['clock', 'agenda'] })
   assert.equal(first.id, 'hastatus')
   const second = newPanel('hastatus', null, { layoutId: 'entry', takenIds: new Set(['hastatus', 'hastatus-3fa9']) })
-  assert.ok(isRepeatId('hastatus', second.id) && second.id !== 'hastatus' && second.id !== 'hastatus-3fa9')
-  // Any other functional type is its type, whatever is taken.
-  assert.equal(newPanel('clock', null, { layoutId: 'entry', takenIds: ['clock'] }).id, 'clock')
+  assert.ok(isInstanceId('hastatus', second.id) && second.id !== 'hastatus' && second.id !== 'hastatus-3fa9')
+  // The clock too, now: a second one is a further instance.
+  const clock2 = newPanel('clock', null, { layoutId: 'entry', takenIds: ['clock'] })
+  assert.ok(isInstanceId('clock', clock2.id) && clock2.id !== 'clock')
 })
 
 test('on no default board', () => {

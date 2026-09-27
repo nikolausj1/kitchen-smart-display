@@ -3,7 +3,7 @@ import PanelFrame from './PanelFrame.jsx'
 import FreshnessStamp from './FreshnessStamp.jsx'
 import { CalendarLegend } from './CalendarParts.jsx'
 import { panelKnobs } from './schemas.js'
-import { agendaColumns, agendaDayCount, clampInt, localDateKey } from './agendaDays.js'
+import { agendaColumns, agendaDayCount, agendaRowFit, clampInt, localDateKey } from './agendaDays.js'
 import { fmtTime } from '../lib/format.js'
 import { agendaItems, clockParts, hour24Of, legendOf, splitPaint } from '../lib/calendarViews.js'
 import './AgendaPanel.css'
@@ -45,16 +45,24 @@ export { sliceAgendaDays } from './agendaDays.js'
 // event on two calendars once, both colours on its bar), colorBy ('none':
 // neutral bars and washes). screenHour24: the screen's 12 or 24 hour setting,
 // for 'auto'.
+//
+// The row layouts and headers (knobs too, 2026-09-27), each at its default the
+// agenda as it always was: rowLayout 'side' (the time in its column beside
+// the title), 'stacked' (the time in small capitals on its own line over the
+// title) or 'timeRight' (the time at the row's right edge, quieter);
+// titleLines 1 or 2 (then an ellipsis); dayHeader 'caps', 'bold' (the day
+// in its own words, bold) or 'compact' (smaller capitals, no rule); rowGap
+// 0..2, the gap between rows. A knob off its default adds a class
+// (AgendaPanel.css), so at the defaults the DOM and the styles are unchanged.
 
 const MAX_ITEMS = 6
 
-// The row budget (AgendaPanel.css): N two-line rows and the "+N more" line
-// take N x 3.06em + 1.2em, and six of them are what the 4.9cqh cap on the row
-// size was set for. Other row counts scale that cap by this, so the worst day
-// still fits; six is exactly 1. `extra`: lines a row carries past its title
-// (a place, a description), about 1.1em each.
-function rowsFit(rows, extra = 0) {
-  return Math.round((((MAX_ITEMS * 3.06 + 1.2) / (rows * (3.06 + extra * 1.1) + 1.2)) * 10000)) / 10000
+// The row layouts' classes; 'side' is the agenda's own and has none.
+const ROW_LAYOUT_CLASS = { stacked: 'tl-agenda--stacked', timeRight: 'tl-agenda--time-right' }
+const HEADER_CLASS = { bold: 'tl-agenda--head-bold', compact: 'tl-agenda--head-compact' }
+
+function own(map, key) {
+  return typeof key === 'string' && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null
 }
 
 function pad2(n) {
@@ -213,6 +221,11 @@ export default function AgendaPanel({
   const legendOn = !!k && !!k.legend && k.colorBy !== 'none'
   const legend = useMemo(() => (legendOn ? legendOf(calendars, allEvents(days)) : null), [legendOn, calendars, days])
   const extraLines = opts ? (opts.showLocation ? 1 : 0) + (opts.showDescription ? 1 : 0) : 0
+  const layoutClass = k ? own(ROW_LAYOUT_CLASS, k.rowLayout) : null
+  const headerClass = k ? own(HEADER_CLASS, k.dayHeader) : null
+  const titleLines = k && Number(k.titleLines) === 1 ? 1 : 2
+  const gapNum = k ? Number(k.rowGap) : NaN
+  const rowGap = Number.isFinite(gapNum) ? Math.min(2, Math.max(0, gapNum)) : 1
   // The first column is marked as today only when it is today.
   const firstIsToday = !k || (todayKey != null ? list[0]?.dateKey === todayKey : k.startDay !== 'tomorrow')
 
@@ -224,7 +237,15 @@ export default function AgendaPanel({
   const showStamp = hasAny && (stale || connected === false)
   const lastIndex = list.length - 1
 
-  const cls = ['tl-agenda', k ? 'tl-knobs' : '', k && !k.showColorBars ? 'tl-agenda--nobars' : '']
+  const cls = [
+    'tl-agenda',
+    k ? 'tl-knobs' : '',
+    k && !k.showColorBars ? 'tl-agenda--nobars' : '',
+    layoutClass || '',
+    titleLines === 1 ? 'tl-agenda--lines1' : '',
+    headerClass || '',
+    rowGap !== 1 ? 'tl-agenda--gap' : '',
+  ]
     .filter(Boolean)
     .join(' ')
   const style = k
@@ -232,9 +253,12 @@ export default function AgendaPanel({
         '--tl-agenda-row': String(k.rowSize),
         '--tl-agenda-head': String(k.headerSize),
         '--tl-agenda-gap': String(k.columnGap),
-        '--tl-agenda-fit': String(rowsFit(maxRows, extraLines)),
+        '--tl-agenda-fit': String(
+          agendaRowFit({ rows: maxRows, extraLines, titleLines, rowGap, stacked: layoutClass === ROW_LAYOUT_CLASS.stacked })
+        ),
       }
     : undefined
+  if (style && rowGap !== 1) style['--tl-agenda-rowgap'] = String(rowGap)
   // One column per day the knobs ask for, filled or not, so the board keeps
   // its shape while the calendar loads.
   const gridStyle = k ? { gridTemplateColumns: `repeat(${agendaDayCount(k)}, minmax(0, 1fr))` } : undefined

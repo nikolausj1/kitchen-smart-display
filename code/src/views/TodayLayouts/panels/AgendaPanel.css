@@ -279,3 +279,118 @@
 .tl-agenda__body > .tl-cal-legend {
   flex: 0 0 auto;
 }
+
+/* --- Row layouts, title lines, day headers, row gap (the knobs, 2026-09-27) --- *
+ * Each rule styles a class AgendaPanel adds only when its knob is off the
+ * default, so the agenda at its defaults draws exactly as it always has. The
+ * row budget (agendaDays.js agendaRowFit) counts the title lines, the gap and
+ * the stacked time line, so the worst day still fits. */
+
+/* rowGap: the gap between rows, a multiple of its 0.3em. */
+.tl-agenda--gap .tl-agenda__items {
+  gap: calc(0.3em * var(--tl-agenda-rowgap, 1));
+}
+
+/* titleLines 1: one line of title, then an ellipsis. */
+.tl-agenda--lines1 .tl-agenda__title {
+  -webkit-line-clamp: 1;
+}
+
+/* rowLayout 'stacked': the time in small capitals on its own line over the
+ * title, the colour bar down both. */
+.tl-agenda--stacked .tl-agenda__item {
+  grid-template-columns: 0.2em minmax(0, 1fr);
+}
+
+.tl-agenda--stacked .tl-agenda__bar {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.tl-agenda--stacked .tl-agenda__time {
+  grid-column: 2;
+  grid-row: 1;
+  margin-bottom: 0.06em;
+  font-size: max(10px, 0.8em);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tl-agenda--stacked .tl-agenda__ampm {
+  margin-left: 0.25em;
+  font-size: 1em;
+}
+
+.tl-agenda--stacked .tl-agenda__title,
+.tl-agenda--stacked .tl-agenda__main {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+/* An all-day row with no label has no time line at all. */
+.tl-agenda--stacked .tl-agenda__time:empty {
+  display: none;
+}
+
+/* The end on the same line, after a dash. */
+.tl-agenda--stacked .tl-agenda__end {
+  display: inline;
+  font-size: 1em;
+  line-height: inherit;
+}
+
+.tl-agenda--stacked .tl-agenda__end::before {
+  content: '\2013';
+  margin: 0 0.3em;
+}
+
+/* rowLayout 'timeRight': the title first, the time at the row's right edge,
+ * smaller and in the quietest ink. */
+.tl-agenda--time-right .tl-agenda__item {
+  grid-template-columns: 0.2em minmax(0, 1fr) auto;
+}
+
+.tl-agenda--time-right .tl-agenda__time {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  text-align: right;
+  font-size: 0.86em;
+  color: var(--tl-fg-3);
+}
+
+.tl-agenda--time-right .tl-agenda__time--allday {
+  font-size: 0.64em;
+}
+
+.tl-agenda--time-right .tl-agenda__title,
+.tl-agenda--time-right .tl-agenda__main {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* dayHeader 'bold': the day in its own words ("Today", "Wednesday"), bold. */
+.tl-agenda--head-bold .tl-agenda__label {
+  font-size: 1.18em;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* dayHeader 'compact': smaller capitals, no rule, less room under them. */
+.tl-agenda--head-compact .tl-agenda__head {
+  padding-bottom: 0.1em;
+  border-bottom-color: transparent;
+}
+
+.tl-agenda--head-compact .tl-agenda__label {
+  font-size: 0.8em;
+  letter-spacing: 0.1em;
+}
+
+.tl-agenda--head-compact .tl-agenda__grid {
+  row-gap: clamp(4px, 0.6vh, 10px);
+  row-gap: clamp(4px, 1.3cqh, 10px);
+}

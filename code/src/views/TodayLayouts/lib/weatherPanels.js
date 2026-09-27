@@ -70,6 +70,62 @@ export function hoursFrom(hourly, now, n) {
   return out
 }
 
+// --- Which hours the strip shows: its step and its end (the hourly knobs) ---
+
+// The steps a strip can take between its columns, in hours.
+export const HOURLY_STEPS = [1, 2, 3, 4]
+// The last hour a "rest of day" strip may end on: 18 (6 pm) to 24 (midnight).
+export const HOURLY_UNTIL = { min: 18, max: 24, default: 22 }
+
+// A whole number in [lo, hi], else the fallback.
+function intIn(v, lo, hi, fallback) {
+  const n = Math.round(Number(v))
+  return Number.isFinite(n) && n >= lo && n <= hi ? n : fallback
+}
+
+// hourlyColumns(hourly, now, knobs) -> the feed entries the strip shows, in
+// order: the hour `now` is in (the strip's "Now", with the current reading),
+// then every step hour on the clock after it, the hours whose clock hour is
+// a multiple of the step (at 1:20 pm with a step of 3: 3, 6 and 9 pm; past
+// midnight the count goes on from 12 am), up to the strip's end:
+//   range 'hours'      the `hours`-th hour from this one (12: this hour and
+//                      the 11 after it), so a step of 1 is exactly the hours
+//                      the strip always showed (hoursFrom)
+//   range 'untilHour'  today's `untilHour` o'clock, through that hour (22:
+//                      the 10 pm hour; 24: midnight): the last column is the
+//                      last step hour at or before it, and late in the
+//                      evening only "Now" is left, never tomorrow's hours
+// knobs: panels/schemas.js 'hourly' (step 1..4, range, hours 6..24,
+// untilHour 18..24); a value that is not one reads as its default.
+export function hourlyColumns(hourly, now, knobs) {
+  const k = isObj(knobs) ? knobs : {}
+  const step = intIn(k.step, 1, HOURLY_STEPS[HOURLY_STEPS.length - 1], 1)
+  let list
+  if (k.range === 'untilHour') {
+    if (!(now instanceof Date) || Number.isNaN(now.getTime())) return []
+    const until = intIn(k.untilHour, HOURLY_UNTIL.min, HOURLY_UNTIL.max, HOURLY_UNTIL.default)
+    const endKey = localHourKey(new Date(now.getFullYear(), now.getMonth(), now.getDate(), until, 0, 0, 0))
+    const nowKey = localHourKey(now)
+    // From just past midnight to tomorrow's first hour is 25 hours (26 on the
+    // night the clocks go back).
+    list = hoursFrom(hourly, now, 26).filter((e, i) => {
+      const key = e.time.slice(0, 13)
+      return key <= endKey || (i === 0 && key === nowKey)
+    })
+  } else {
+    const n = Math.min(24, Math.max(6, Math.round(Number(k.hours)) || 12))
+    list = hoursFrom(hourly, now, n)
+  }
+  if (step === 1) return list
+  return list.filter((e, i) => i === 0 || stampHour(e.time) % step === 0)
+}
+
+// The strip's header: "Rest of day" while it runs to an hour of the day,
+// else "Hourly".
+export function hourlyTitle(knobs) {
+  return isObj(knobs) && knobs.range === 'untilHour' ? 'Rest of day' : 'Hourly'
+}
+
 // hourlyGrid(total, columns, widthPx, minColPx) -> { cols, rows }: how many
 // columns a row of the strip has and how many rows the hours wrap into.
 // columns 6, 8 or 12 is exactly that many per row (12 hours at 8: a row of 8

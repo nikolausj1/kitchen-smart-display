@@ -389,9 +389,57 @@ export const PANEL_SCHEMAS = deepFreeze({
 
   // --- Weather panels (docs/designs/panels-and-controls.md, chunk 2) ---------
   // The hub's one weather feed (hooks/useHubWeather.js), through useTodayData.
+  // Which hours (lib/weatherPanels.js hourlyColumns): "Now", then every
+  // `step` hours on the clock, for the next `hours` hours or through today's
+  // `untilHour` ("Rest of day", which the header then says). At the defaults
+  // (every hour, the next 12) the strip is what it always was. `showIf`
+  // names the range each end belongs to, for an inspector that reads it.
   hourly: {
     fields: [
-      count('hours', 'Hours', 6, 24, 12, null, 'From this hour'),
+      select(
+        'range',
+        'Show',
+        [
+          ['hours', 'Next hours'],
+          ['untilHour', 'Rest of day'],
+        ],
+        'hours',
+        null,
+        'Rest of day: from now through the hour set below'
+      ),
+      { ...count('hours', 'Hours', 6, 24, 12, null, 'From this hour (Show: Next hours)'), showIf: { range: 'hours' } },
+      {
+        ...select(
+          'untilHour',
+          'Until',
+          [
+            [18, '6 pm'],
+            [19, '7 pm'],
+            [20, '8 pm'],
+            [21, '9 pm'],
+            [22, '10 pm'],
+            [23, '11 pm'],
+            [24, 'Midnight'],
+          ],
+          22,
+          null,
+          'Through that hour (Show: Rest of day)'
+        ),
+        showIf: { range: 'untilHour' },
+      },
+      select(
+        'step',
+        'Every',
+        [
+          [1, '1 h'],
+          [2, '2 h'],
+          [3, '3 h'],
+          [4, '4 h'],
+        ],
+        1,
+        'hour',
+        'Now, then the hours on the clock the step divides: every 3 h is 3, 6, 9 pm'
+      ),
       select(
         'columns',
         'Columns',
@@ -535,6 +583,43 @@ export const PANEL_SCHEMAS = deepFreeze({
       toggle('dimPast', 'Dim finished', true, 'rows'),
       factor('columnGap', 'Column gap'),
       toggle('showColorBars', 'Colour bars', true, 'rows'),
+      // --- Row layouts (2026-09-27): each default is the agenda as it was ---
+      select(
+        'rowLayout',
+        'Row layout',
+        [
+          ['side', 'Time beside'],
+          ['stacked', 'Time above'],
+          ['timeRight', 'Time right'],
+        ],
+        'side',
+        'rows',
+        "Time above: in small capitals over the title. Time right: at the row's end, quieter"
+      ),
+      select(
+        'titleLines',
+        'Title lines',
+        [
+          [1, 'One'],
+          [2, 'Two'],
+        ],
+        2,
+        'rows',
+        'Past them the title ends in an ellipsis'
+      ),
+      select(
+        'dayHeader',
+        'Day header',
+        [
+          ['caps', 'Capitals'],
+          ['bold', 'Bold'],
+          ['compact', 'Compact'],
+        ],
+        'caps',
+        'header',
+        'Bold: the day in its own words. Compact: smaller, with no rule'
+      ),
+      withExtras({ key: 'rowGap', label: 'Row gap', type: 'number', min: 0, max: 2, step: 0.1, unit: 'x', default: 1 }, 'rows'),
       // --- Calendar views (chunk 3): the shared options, off by default ---
       ...calendarOptions([
         ['showLocation', 'location'],
@@ -842,7 +927,7 @@ export const PANEL_SCHEMAS = deepFreeze({
         'filled',
         null
       ),
-      toggle('showState', 'State', true, 'state', "Its entity's state, under the label"),
+      toggle('showState', 'State', false, 'state', "Its entity's state, under the label"),
     ],
   },
 

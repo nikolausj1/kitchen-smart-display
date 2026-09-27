@@ -80,11 +80,19 @@ function isVariantKey(k) {
 
 // --- Panel types -----------------------------------------------------------------
 //
-// kind 'panel': a functional panel, at most once per spec, id === type.
-// kind 'block': free content, any number, ids 'text-<4 hex>' / 'image-<4 hex>'
-//          / 'shape-<4 hex>' (the shape, chunk 4: its own knobs are in
-//          PANEL_SCHEMAS like a panel's; the text and image blocks' props are
-//          BLOCK_SCHEMAS below).
+// Any number of every type (2026-09-27): a layout may hold two weathers or
+// three agendas, each an instance with its own box, knobs and styles. The ids
+// follow the instance scheme the layout editor uses:
+//   kind 'panel'  a functional panel: its first instance keeps the bare type
+//                 as its id ('weather', so every layout saved before reads as
+//                 it did), each further one is '<type>-<4 hex>' ('weather-3fa9')
+//   kind 'block'  free content: '<type>-<4 hex>' from the first ('text-3fa9',
+//                 'image-09c1', 'shape-5d20'). The shape's own knobs are in
+//                 PANEL_SCHEMAS like a panel's (chunk 4); the text and image
+//                 blocks' props are BLOCK_SCHEMAS below
+// The type of an id is the part before its first '-', unless the id itself
+// is a type (typeOfId, isInstanceId). Knobs, elements and defaults stay per
+// type.
 //
 // min      the smallest box a spec may hold, percent of the canvas. normalizeSpec
 //          clamps to it, and the editor's resize should stop there.
@@ -100,12 +108,6 @@ function isVariantKey(k) {
 // box      where the type lands (percent) in a layout whose default has no
 //          such panel (the editor's "Add panel"), and props what it starts
 //          with there. A layout's own default panel wins over both.
-// repeat   a functional panel a layout may hold more than once (the Home
-//          Assistant panels, chunk 5: an indicator or a button per thing):
-//          the first keeps the bare type as its id ('hastatus'), each further
-//          one is '<type>-<4 hex>' ('hastatus-3fa9'), the instance scheme the
-//          layout editor uses. Every other functional type: once, the first
-//          wins.
 
 const CARD = { background: 'card', padding: 1 }
 const BARE = { background: 'none', padding: 0 }
@@ -198,10 +200,10 @@ const TYPE_TABLE = [
   // default board; they arrive through Add panel. The button is its own face,
   // so its box draws nothing. Their "Too small" rules sit in their own
   // stylesheets (panels/HaStatusPanel.css and the others). ---
-  { type: 'hastatus', label: 'HA status', kind: 'panel', repeat: true, min: { w: 6, h: 5 }, minPx: { w: 120, h: 44 }, box: { x: 40, y: 42, w: 20, h: 16 }, props: CARD },
-  { type: 'habutton', label: 'HA button', kind: 'panel', repeat: true, min: { w: 5, h: 5 }, minPx: { w: 80, h: 48 }, box: { x: 42, y: 41, w: 16, h: 18 }, props: BARE },
-  { type: 'hachips', label: 'HA chips', kind: 'panel', repeat: true, min: { w: 8, h: 4 }, minPx: { w: 120, h: 30 }, box: { x: 25, y: 44, w: 50, h: 12 }, props: CARD },
-  { type: 'hapicker', label: 'HA picker', kind: 'panel', repeat: true, min: { w: 12, h: 6 }, minPx: { w: 200, h: 44 }, box: { x: 15, y: 42, w: 70, h: 16 }, props: CARD },
+  { type: 'hastatus', label: 'HA status', kind: 'panel', min: { w: 6, h: 5 }, minPx: { w: 120, h: 44 }, box: { x: 40, y: 42, w: 20, h: 16 }, props: CARD },
+  { type: 'habutton', label: 'HA button', kind: 'panel', min: { w: 5, h: 5 }, minPx: { w: 80, h: 48 }, box: { x: 42, y: 41, w: 16, h: 18 }, props: BARE },
+  { type: 'hachips', label: 'HA chips', kind: 'panel', min: { w: 8, h: 4 }, minPx: { w: 120, h: 30 }, box: { x: 25, y: 44, w: 50, h: 12 }, props: CARD },
+  { type: 'hapicker', label: 'HA picker', kind: 'panel', min: { w: 12, h: 6 }, minPx: { w: 200, h: 44 }, box: { x: 15, y: 42, w: 70, h: 16 }, props: CARD },
   // --- end Home Assistant ---
   { type: 'text', label: 'Text', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 30, y: 44, w: 40, h: 12 }, props: null },
   { type: 'image', label: 'Image', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 40, y: 32, w: 20, h: 36 }, props: null },
@@ -289,23 +291,21 @@ export const GLOBAL_SCHEMA_COPY = deepFreeze({ fields: cloneJson(globalFields())
 
 // The list, as sent to the editor in sd-edit:ready (panelTypes). schema is
 // { fields, elements } (the same shape as PANEL_SCHEMAS[type], with the
-// type's data-edit sub-elements), or null. A functional type that repeats
-// (the table's `repeat`) is not unique, and says so with repeat: true.
+// type's data-edit sub-elements), or null. unique: a functional panel (kind
+// 'panel'), whose first instance holds the bare type as its id. Since every
+// type repeats it no longer limits how many a layout holds; it stays for a
+// reader of the list that predates `kind`.
 export const PANEL_TYPE_LIST = deepFreeze(
-  TYPE_TABLE.map((t) => {
-    const out = {
-      type: t.type,
-      label: t.label,
-      kind: t.kind,
-      unique: t.kind === 'panel' && !t.repeat,
-      min: { ...t.min },
-      minPx: t.minPx ? { ...t.minPx } : null,
-      padShape: t.padShape ? t.padShape.slice() : [1, 1],
-      schema: schemaFor(t.type),
-    }
-    if (t.kind === 'panel' && t.repeat) out.repeat = true
-    return out
-  })
+  TYPE_TABLE.map((t) => ({
+    type: t.type,
+    label: t.label,
+    kind: t.kind,
+    unique: t.kind === 'panel',
+    min: { ...t.min },
+    minPx: t.minPx ? { ...t.minPx } : null,
+    padShape: t.padShape ? t.padShape.slice() : [1, 1],
+    schema: schemaFor(t.type),
+  }))
 )
 
 // The same, keyed by type. Look types up with panelType(), which ignores
@@ -336,8 +336,28 @@ const TYPE_EXTRAS = TYPE_TABLE.reduce((acc, t) => {
   return acc
 }, {})
 
-// The type's entry from PANEL_TYPES, or null for anything else.
-export function panelType(type) {
+// The type an id names, by the instance scheme: the id itself when it is a
+// type ('weather'), else the part before its first '-' ('weather-3fa9' and
+// 'weather-zz' -> 'weather', 'text-00aa' -> 'text'); null when that is no
+// type this build knows. Types are own keys only: a stored "constructor" must
+// not find Object's.
+export function typeOfId(id) {
+  if (typeof id !== 'string' || !id) return null
+  if (has(PANEL_TYPES, id)) return id
+  const i = id.indexOf('-')
+  const t = i > 0 ? id.slice(0, i) : null
+  return t && has(PANEL_TYPES, t) ? t : null
+}
+
+// The type's entry from PANEL_TYPES, or null for anything else. Handed an
+// instance id it follows the scheme: panelType('weather-3fa9') is the weather's.
+export function panelType(typeOrId) {
+  const t = typeOfId(typeOrId)
+  return t ? PANEL_TYPES[t] : null
+}
+
+// The entry of a type named exactly (no id resolution), or null.
+function exactType(type) {
   return typeof type === 'string' && has(PANEL_TYPES, type) ? PANEL_TYPES[type] : null
 }
 
@@ -547,7 +567,7 @@ export const BOX_SCHEMA = deepFreeze({
         ['middle', 'Middle'],
         ['bottom', 'Bottom'],
       ],
-      hint: 'Top is the panel as designed',
+      hint: 'Top is the block as designed',
     },
     {
       key: 'title.mode',
@@ -556,7 +576,7 @@ export const BOX_SCHEMA = deepFreeze({
       label: 'Title',
       default: 'default',
       options: [
-        ['default', 'Panel'],
+        ['default', 'Default'],
         ['custom', 'Custom'],
         ['none', 'None'],
       ],
@@ -855,8 +875,9 @@ function text(v) {
   return v.length > TEXT_MAX_LENGTH ? v.slice(0, TEXT_MAX_LENGTH) : v
 }
 
-// FNV-1a, 32 bit. Deterministic ids for blocks whose id is malformed, so
-// normalizeSpec stays a pure function (the same bad input, the same repair).
+// FNV-1a, 32 bit. Deterministic ids for panels whose id is missing or outside
+// the instance scheme, so normalizeSpec stays a pure function (the same bad
+// input, the same repair).
 function hash32(str) {
   let h = 0x811c9dc5
   for (let i = 0; i < str.length; i++) {
@@ -887,19 +908,43 @@ function repairedBlockId(type, seed, taken) {
   return `${type}-0000` // 65536 blocks of one type: not a real spec
 }
 
-// --- Home Assistant (chunk 5): functional panels that repeat (TYPE_TABLE
-// `repeat`): the bare type ('hastatus') for one of them, '<type>-<4 hex>'
-// ('hastatus-3fa9') for each other. ---
-function repeats(t) {
-  return !!t && t.kind === 'panel' && TYPE_EXTRAS[t.type] && TYPE_EXTRAS[t.type].repeat === true
+// --- Instance ids (any number of every type) ------------------------------------
+
+const HEX4_RE = /^[0-9a-f]{4}$/
+
+// '<type>-<4 hex>': a further instance of a functional type, or any block.
+function isSuffixedId(type, id) {
+  return (
+    typeof id === 'string' &&
+    id.length === type.length + 5 &&
+    id.indexOf(`${type}-`) === 0 &&
+    HEX4_RE.test(id.slice(type.length + 1))
+  )
 }
 
-// 'hastatus' or 'hastatus-3fa9' for a type that repeats.
-export function isRepeatId(type, id) {
-  if (typeof type !== 'string' || typeof id !== 'string' || !repeats(panelType(type))) return false
-  return id === type || (id.length === type.length + 5 && id.indexOf(`${type}-`) === 0 && /^[0-9a-f]{4}$/.test(id.slice(type.length + 1)))
+// Does `id` follow the instance scheme for `type` (a type named exactly)? A
+// functional panel's id is its bare type (the first instance: 'weather') or
+// '<type>-<4 hex>' ('weather-3fa9'); a block's is '<type>-<4 hex>' only
+// ('text-00aa'). Lower-case hex, as every writer makes them.
+export function isInstanceId(type, id) {
+  const t = exactType(type)
+  if (!t || typeof id !== 'string') return false
+  if (id === type) return t.kind === 'panel'
+  return isSuffixedId(type, id)
 }
-// --- end Home Assistant ---
+
+// A Set of ids from a Set, an array, or nothing.
+function idSet(v) {
+  return v instanceof Set ? v : new Set(Array.isArray(v) ? v : [])
+}
+
+// A fresh '<type>-<4 hex>' clear of `taken` (anything with has()): random,
+// else the deterministic repair's pick.
+function freshId(type, taken) {
+  let id = `${type}-${randomHex4()}`
+  for (let i = 0; i < 64 && taken.has(id); i++) id = `${type}-${randomHex4()}`
+  return taken.has(id) ? repairedBlockId(type, `${type}:new:${taken.size || 0}`, taken) : id
+}
 
 // --- Knob values ---------------------------------------------------------------
 
@@ -1259,7 +1304,7 @@ function normProps(raw, type, layoutId) {
 }
 
 // One panel, or null when it cannot be one (unknown type). The id is decided
-// by the caller (functional: the type; block: validated or repaired).
+// by the caller (normPanels: the instance scheme).
 function normPanel(raw, type, id, layoutId) {
   const t = panelType(type)
   const box = defaultBoxFor(type, layoutId)
@@ -1287,44 +1332,51 @@ function normPanel(raw, type, id, layoutId) {
   return out
 }
 
-// A panel list (the base's or a variant's).
+// The type of a stored panel: its `type` when that names a type exactly; with
+// no type string, the type its id names (a v1 functional panel could be just
+// { id: 'clock' }). null: none this build knows, and the panel is dropped.
+function storedType(p) {
+  if (typeof p.type === 'string') return exactType(p.type) ? p.type : null
+  return typeOfId(p.id)
+}
+
+// A panel list (the base's or a variant's), any number of every type:
+//   - an instance whose id follows the scheme (isInstanceId) keeps it, as
+//     saved; never renamed
+//   - the same id a second time is a true duplicate: dropped, the first kept
+//   - a panel with no id, or one outside the scheme, gets one: a functional
+//     panel its bare type while no panel in the list holds it (Contract v1's
+//     { type: 'clock' }), else a fresh, deterministic '<type>-<4 hex>'
+//     (repairedBlockId) clear of every id in the list
+// Every id the scheme allows is claimed before any is made, so a made id can
+// never take one a later panel carries by right; and the result's ids are
+// unique, which is what keeps two instances' boxes, scoped styles and
+// rectangles apart (Entry/SpecPanel data-box, editBridge.js).
 function normPanels(list, layoutId) {
   const source = list.slice(0, MAX_PANELS)
-  const panels = []
-  const seenFunctional = new Set()
-  // Valid block ids are claimed first, so a repaired id can never steal one
-  // that a later block legitimately carries.
-  const takenIds = new Set()
+  const claimed = new Set()
   source.forEach((p) => {
-    if (isDict(p) && (isValidBlockId(p.type, p.id) || isRepeatId(p.type, p.id))) takenIds.add(p.id)
+    if (!isDict(p)) return
+    const type = storedType(p)
+    if (type && isInstanceId(type, p.id)) claimed.add(p.id)
   })
-
-  const usedBlockIds = new Set()
+  const used = new Set()
+  const busy = { has: (id) => claimed.has(id) || used.has(id) }
+  const panels = []
   source.forEach((p, index) => {
     if (!isDict(p)) return
-    const type = typeof p.type === 'string' ? p.type : ''
-    const t = panelType(type)
-    if (!t) return // unknown type: dropped
+    const type = storedType(p)
+    if (!type) return // unknown type: dropped
     let id
-    if (repeats(t)) {
-      // A repeating panel keeps its id when it is one and still free; else
-      // the bare type when no panel claims it, else a fresh suffixed id.
-      if (isRepeatId(type, p.id) && !usedBlockIds.has(p.id)) id = p.id
-      else if (!takenIds.has(type)) id = type
-      else id = repairedBlockId(type, `${type}:${index}:${typeof p.id === 'string' ? p.id : ''}`, takenIds)
-      takenIds.add(id)
-      usedBlockIds.add(id)
-    } else if (t.kind === 'panel') {
-      if (seenFunctional.has(type)) return // a second clock: the first wins
-      seenFunctional.add(type)
-      id = type
-    } else if (isValidBlockId(type, p.id) && !usedBlockIds.has(p.id)) {
+    if (isInstanceId(type, p.id)) {
+      if (used.has(p.id)) return // a true duplicate: the first wins
       id = p.id
+    } else if (PANEL_TYPES[type].kind === 'panel' && !busy.has(type)) {
+      id = type
     } else {
-      id = repairedBlockId(type, `${type}:${index}:${typeof p.id === 'string' ? p.id : ''}`, takenIds)
-      takenIds.add(id)
+      id = repairedBlockId(type, `${type}:${index}:${typeof p.id === 'string' ? p.id : ''}`, busy)
     }
-    if (t.kind === 'block') usedBlockIds.add(id)
+    used.add(id)
     panels.push(normPanel(p, type, id, layoutId))
   })
   return panels
@@ -1378,10 +1430,14 @@ function normVariants(raw, layoutId, baseGlobal) {
 //   - not an object, or no panels array: a fresh copy of defaultSpec
 //   - version forced to 2; canvas and global filled and clamped (global gains
 //     font, accent, text, surfaceOpacity, radius: GLOBAL_SCHEMA's fields)
-//   - panels: unknown types dropped; a functional type kept once (the first),
-//     its id forced to its type; a block whose id is malformed or already
-//     taken gets a fresh, deterministic 'text-xxxx' / 'image-xxxx' /
-//     'shape-xxxx'
+//   - panels: unknown types dropped (a panel with no type string takes the
+//     type its id names); any number of every type (normPanels): an instance
+//     whose id follows the scheme keeps it as saved (a functional type's bare
+//     type or '<type>-<4 hex>', a block's '<type>-<4 hex>'), the same id a
+//     second time is a true duplicate and dropped (the first kept), and a
+//     panel with no id or one outside the scheme gets one (a functional
+//     panel its bare type while no panel holds it, else a fresh,
+//     deterministic '<type>-<4 hex>')
 //   - every number clamped to the contract's range and rounded (positions to
 //     POSITION_PLACES decimals), each box kept on the canvas at no less than its type's
 //     minimum size; missing props filled from the type's defaults in that
@@ -1471,10 +1527,7 @@ function randomHex4() {
 export function newBlock(type, overrides, takenIds) {
   if (!isBlockType(type)) return null
   const o = isDict(overrides) ? overrides : {}
-  const taken = takenIds instanceof Set ? takenIds : new Set(Array.isArray(takenIds) ? takenIds : [])
-  let id = `${type}-${randomHex4()}`
-  for (let i = 0; i < 64 && taken.has(id); i++) id = `${type}-${randomHex4()}`
-  if (taken.has(id)) id = repairedBlockId(type, `${type}:new:${taken.size}`, taken)
+  const id = freshId(type, idSet(takenIds))
   const box = defaultBoxFor(type)
   const seed = type === 'text' ? { text: 'Text' } : {}
   return normPanel(
@@ -1485,28 +1538,22 @@ export function newBlock(type, overrides, takenIds) {
 }
 
 // newPanel(type, overrides, { layoutId, takenIds }) -> a normalized
-// functional panel (id === type) for the editor's "Add panel": its box and
-// props are that layout's default for the type, or the type's own starting box
-// (centred, above the built-in panels) and a card. overrides may set any panel
-// field and any props. null for a type that is not a functional panel. A type
-// that repeats (the Home Assistant panels) whose bare id is among takenIds (a
-// Set or an array of the layout's ids) gets a fresh '<type>-<4 hex>' instead.
+// functional panel for the editor's "Add block": its box and props are that
+// layout's default for the type, or the type's own starting box (centred,
+// above the built-in panels) and a card. overrides may set any panel field
+// and any props (overrides.id is ignored). The id follows the instance
+// scheme: the bare type when takenIds (a Set or an array of the layout's ids)
+// does not hold it, else a fresh '<type>-<4 hex>' clear of them. null for a
+// type that is not a functional panel (a block is newBlock's).
 export function newPanel(type, overrides, options) {
-  const t = panelType(type)
+  const t = exactType(type)
   if (!t || t.kind !== 'panel') return null
   const o = isDict(overrides) ? overrides : {}
   const opts = isDict(options) ? options : {}
   const layoutId = layoutIdOf(opts.layoutId)
   const box = defaultBoxFor(type, layoutId)
-  let id = type
-  if (repeats(t)) {
-    const taken = opts.takenIds instanceof Set ? opts.takenIds : new Set(Array.isArray(opts.takenIds) ? opts.takenIds : [])
-    if (taken.has(type)) {
-      id = `${type}-${randomHex4()}`
-      for (let i = 0; i < 64 && taken.has(id); i++) id = `${type}-${randomHex4()}`
-      if (taken.has(id)) id = repairedBlockId(type, `${type}:new:${taken.size}`, taken)
-    }
-  }
+  const taken = idSet(opts.takenIds)
+  const id = taken.has(type) ? freshId(type, taken) : type
   return normPanel(
     { ...box, hidden: false, locked: false, ...o, props: isDict(o.props) ? o.props : {} },
     type,

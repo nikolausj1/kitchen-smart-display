@@ -55,7 +55,7 @@ STALE_SONOS_BASE=http://localhost:5005
 # The web app FrameServer serves, in upload order: index.html and build.json
 # go last (see the hub target). Not stub-photos/: the hub serves photos from
 # its own photos dir.
-HUB_APP_FILES=(assets icons favicon.svg silence.wav silence.mp3 editor.html index.html build.json)
+HUB_APP_FILES=(assets icons previews favicon.svg silence.wav silence.mp3 editor.html index.html build.json)
 TARGET="${1:-all}"
 
 case "$TARGET" in

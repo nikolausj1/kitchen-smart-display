@@ -9,8 +9,9 @@ import {
   RAIN_FLOOR,
   curveLevels,
   fmtHour,
+  hourlyColumns,
   hourlyGrid,
-  hoursFrom,
+  hourlyTitle,
   localHourKey,
   pctOf,
   tempRange,
@@ -26,12 +27,17 @@ import './HourlyPanel.css'
 // column, when it is this hour, shows the current reading (d.weather.current)
 // so it agrees with the weather card beside it.
 //
-// knobs (panels/schemas.js 'hourly'): hours 6..24, columns 'auto' | 6 | 8 |
-// 12 (hours past the columns wrap to another row; auto fits the box, in
-// balanced rows), style 'columns' | 'curve' (a line through the temperatures
-// behind the columns, in a band above the numbers), showRain (every hour's
-// chance; from 20 % in the accent, muted below), showFeelsLike, showWind,
-// size (the words and numbers; icons and the curve are art).
+// knobs (panels/schemas.js 'hourly'): which hours (lib/weatherPanels.js
+// hourlyColumns): range 'hours' (the next `hours`, 6..24) or 'untilHour'
+// (through today's `untilHour`, 18..24, the header then saying "Rest of
+// day"), and step 1..4 ("Now", then every step hour on the clock: 3, 6, 9
+// pm); columns 'auto' | 6 | 8 | 12 (hours past the columns wrap to another
+// row; auto fits the box, in balanced rows), style 'columns' | 'curve' (a
+// line through the temperatures behind the columns, in a band above the
+// numbers), showRain (every hour's chance; from 20 % in the accent, muted
+// below), showFeelsLike, showWind, size (the words and numbers; icons and
+// the curve are art). At the defaults (every hour, the next 12) the strip is
+// what it always was.
 //
 // attribution: the Apple Weather mark while the feed is WeatherKit's.
 
@@ -75,12 +81,11 @@ function Curve({ levels, cols, nowIndex }) {
 
 export default function HourlyPanel({ hourly, current, now, knobs, attribution = null }) {
   const k = panelKnobs('hourly', knobs) || knobDefaults('hourly')
-  const n = Math.min(24, Math.max(6, Math.round(Number(k.hours)) || 12))
   const curve = k.style === 'curve'
   const areaRef = useRef(null)
   const box = useBoxSize(areaRef)
 
-  const list = hoursFrom(hourly, now, n)
+  const list = hourlyColumns(hourly, now, k)
   const nowKey = now instanceof Date && !Number.isNaN(now.getTime()) ? localHourKey(now) : null
   const cur = current || null
   const hours = list.map((e, i) => {
@@ -113,7 +118,7 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
 
   return (
     <PanelFrame
-      title="Hourly"
+      title={hourlyTitle(k)}
       className={`tl-hr tl-knobs${curve ? ' tl-hr--curve' : ''}`}
       bodyClassName="tl-hr__body"
       style={style}

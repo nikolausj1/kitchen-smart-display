@@ -50,3 +50,32 @@ export function agendaColumns(given, knobs, now) {
   const whole = todayKey != null ? list.length > 0 && !!list[0] && list[0].dateKey === todayKey : list.length > days
   return whole ? sliceAgendaDays(list, knobs) : list.slice(0, days)
 }
+
+// --- The row budget -------------------------------------------------------------
+//
+// AgendaPanel.css caps the row size at 4.9cqh of a day's list, which fits six
+// rows of two-line titles plus the "+N more" line: a default row is 3.06em (2
+// x 1.22em of title, 0.32em of padding, a 0.3em gap), the "+N more" line
+// 1.2em. Another count or shape of row scales that cap by the ratio of the two
+// budgets, so the worst day still fits; six default rows are exactly 1.
+//   rows        rows per day (rowsPerDay)
+//   extraLines  lines a row carries past its title (a place, a description),
+//               about 1.1em each
+//   titleLines  1 or 2 (2): 1.22em a line
+//   rowGap      the gap's multiplier (1: 0.3em)
+//   stacked     the time on its own line over the title (rowLayout
+//               'stacked'): 0.8em type at 1.2 lines and its margin, 1em
+export const AGENDA_BASE_ROWS = 6
+export const AGENDA_ROW_EM = 3.06
+export const AGENDA_STACKED_TIME_EM = 1
+
+export function agendaRowFit(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {}
+  const rows = clampInt(o.rows, 1, 20, AGENDA_BASE_ROWS)
+  const extra = Number.isFinite(o.extraLines) ? o.extraLines : 0
+  const lines = o.titleLines === 1 ? 1 : 2
+  const gap = Number.isFinite(o.rowGap) ? Math.min(2, Math.max(0, o.rowGap)) : 1
+  // Every term is 0 at the defaults, so the default row is 3.06 exactly.
+  const row = AGENDA_ROW_EM + (lines - 2) * 1.22 + (gap - 1) * 0.3 + (o.stacked ? AGENDA_STACKED_TIME_EM : 0)
+  return Math.round(((AGENDA_BASE_ROWS * AGENDA_ROW_EM + 1.2) / (rows * (row + extra * 1.1) + 1.2)) * 10000) / 10000
+}

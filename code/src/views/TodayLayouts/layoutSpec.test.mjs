@@ -16,14 +16,18 @@ import {
   cardJoins,
   clockDaypart,
   hasBoxSurface,
+  isInstanceId,
   isSchoolMorning,
   knobsOf,
+  newBlock,
   newPanel,
   normalizeElementStyles,
   normalizeSpec,
   normalizeWhen,
+  panelType,
   ruleKindsUsed,
   ruleMatches,
+  typeOfId,
 } from './layoutSpec.js'
 import { GLOBAL_SCHEMA, PANEL_ELEMENTS, PANEL_SCHEMAS, elementKeysOf } from './panels/schemas.js'
 
@@ -436,9 +440,188 @@ test('the single countdown normalises its knobs: a known pick, a title match of 
       { id: 'countdown', type: 'countdown', props: { pick: 'title' } },
     ],
   })
-  // One per layout, the first kept.
+  // The same id twice is a true duplicate: the first kept.
   assert.equal(spec.panels.length, 1)
   const p = spec.panels[0].props
   assert.deepEqual([p.pick, p.titleMatch.length, p.layout], ['next', 80, 'stacked'])
   assert.deepEqual(normalizeSpec(spec), spec)
+})
+
+// --- Any number of every type: the instance scheme (2026-09-27) ---------------------
+
+const ids = (spec) => spec.panels.map((p) => p.id)
+
+test('typeOfId and panelType follow the scheme: the id itself when a type, else the part before the first dash', () => {
+  assert.equal(typeOfId('weather'), 'weather')
+  assert.equal(typeOfId('weather-3fa9'), 'weather')
+  assert.equal(typeOfId('weather-zz'), 'weather')
+  assert.equal(typeOfId('text-00aa'), 'text')
+  assert.equal(typeOfId('hastatus-3fa9'), 'hastatus')
+  for (const junk of ['bogus', 'bogus-3fa9', '-3fa9', 'constructor', 'toString-0001', '', null, 5, {}]) {
+    assert.equal(typeOfId(junk), null, String(junk))
+  }
+  assert.equal(panelType('weather-3fa9'), PANEL_TYPES.weather)
+  assert.equal(panelType('agenda'), PANEL_TYPES.agenda)
+  assert.equal(panelType('shape-5d20').kind, 'block')
+  assert.equal(panelType('constructor'), null)
+})
+
+test('isInstanceId: a functional type its bare type or <type>-<4 hex>; a block the suffixed form only', () => {
+  assert.ok(isInstanceId('weather', 'weather'))
+  assert.ok(isInstanceId('weather', 'weather-3fa9'))
+  assert.ok(isInstanceId('clock', 'clock-0000'))
+  assert.ok(isInstanceId('text', 'text-00aa'))
+  assert.ok(!isInstanceId('text', 'text'))
+  assert.ok(!isInstanceId('shape', 'shape'))
+  assert.ok(!isInstanceId('weather', 'weather-3FA9'))
+  assert.ok(!isInstanceId('weather', 'weather-3fa'))
+  assert.ok(!isInstanceId('weather', 'weather-3fa9a'))
+  assert.ok(!isInstanceId('weather', 'weathers-3fa9'))
+  assert.ok(!isInstanceId('weather', 'clock'))
+  assert.ok(!isInstanceId('weather-3fa9', 'weather-3fa9'))
+  assert.ok(!isInstanceId('bogus', 'bogus'))
+  assert.ok(!isInstanceId('weather', null))
+})
+
+test('every type is repeatable: no type carries a repeat flag; a functional type is `unique` only in its bare first id', () => {
+  for (const t of PANEL_TYPE_LIST) {
+    assert.equal('repeat' in t, false, t.type)
+    assert.equal(t.unique, t.kind === 'panel', t.type)
+  }
+})
+
+test('normalizeSpec keeps every instance, ids as saved, in order, each with its own knobs', () => {
+  const spec = normalizeSpec({
+    panels: [
+      { id: 'weather', type: 'weather', x: 1, y: 1, w: 30, h: 20, props: { layout: 'stacked' } },
+      { id: 'agenda', type: 'agenda', x: 1, y: 40, w: 40, h: 40, props: { days: 2 } },
+      { id: 'weather-3fa9', type: 'weather', x: 40, y: 1, w: 30, h: 20, props: { tempSize: 1.4 } },
+      { id: 'agenda-beef', type: 'agenda', x: 50, y: 40, w: 40, h: 40, props: { days: 1, rowLayout: 'stacked', dayHeader: 'compact' } },
+      { id: 'agenda-0001', type: 'agenda', x: 50, y: 10, w: 40, h: 25, props: { rowLayout: 'timeRight', titleLines: 1, rowGap: 0.5 } },
+    ],
+  })
+  assert.deepEqual(ids(spec), ['weather', 'agenda', 'weather-3fa9', 'agenda-beef', 'agenda-0001'])
+  const k = Object.fromEntries(spec.panels.map((p) => [p.id, knobsOf(p)]))
+  assert.deepEqual([k.weather.layout, k['weather-3fa9'].layout, k['weather-3fa9'].tempSize], ['stacked', 'horizontal', 1.4])
+  assert.deepEqual([k.agenda.days, k['agenda-beef'].days, k['agenda-0001'].days], [2, 1, 3])
+  assert.deepEqual([k.agenda.rowLayout, k['agenda-beef'].rowLayout, k['agenda-0001'].rowLayout], ['side', 'stacked', 'timeRight'])
+  assert.deepEqual([k['agenda-beef'].dayHeader, k['agenda-0001'].titleLines, k['agenda-0001'].rowGap], ['compact', 1, 0.5])
+  assert.deepEqual(normalizeSpec(spec), spec)
+})
+
+test('a saved id is never renamed: a further instance alone keeps its suffix, and no made id takes one carried later', () => {
+  // Only the second weather is left (the first was deleted): it stays weather-3fa9.
+  assert.deepEqual(ids(normalizeSpec({ panels: [{ id: 'weather-3fa9', type: 'weather' }] })), ['weather-3fa9'])
+  // A panel with no id comes first; the bare id belongs to the later one.
+  const spec = normalizeSpec({ panels: [{ type: 'weather' }, { id: 'weather', type: 'weather' }] })
+  assert.equal(spec.panels[1].id, 'weather')
+  assert.ok(isInstanceId('weather', spec.panels[0].id) && spec.panels[0].id !== 'weather')
+  // With no one holding it, a panel with no id (or one outside the scheme) takes the bare type.
+  assert.deepEqual(ids(normalizeSpec({ panels: [{ type: 'clock' }, { id: 'Clock-1', type: 'weather' }] })), ['clock', 'weather'])
+  // Deterministic: the same input, the same made ids.
+  assert.deepEqual(normalizeSpec({ panels: [{ type: 'weather' }, { id: 'weather', type: 'weather' }] }), spec)
+})
+
+test('a true duplicate (the same id twice) is dropped, the first kept, for panels and blocks alike', () => {
+  const spec = normalizeSpec({
+    panels: [
+      { id: 'weather', type: 'weather', props: { layout: 'stacked' } },
+      { id: 'weather', type: 'weather', props: { layout: 'horizontal' } },
+      { id: 'weather-3fa9', type: 'weather' },
+      { id: 'weather-3fa9', type: 'weather', x: 50 },
+      { id: 'text-00aa', type: 'text', props: { text: 'first' } },
+      { id: 'text-00aa', type: 'text', props: { text: 'second' } },
+    ],
+  })
+  assert.deepEqual(ids(spec), ['weather', 'weather-3fa9', 'text-00aa'])
+  assert.equal(spec.panels[0].props.layout, 'stacked')
+  assert.equal(spec.panels[2].props.text, 'first')
+  // The first duplicate wins in a variant too.
+  const v = normalizeSpec({ panels: [], variants: { evening: { panels: [{ id: 'clock-0f0f', type: 'clock' }, { id: 'clock-0f0f', type: 'clock', x: 50 }, { id: 'clock', type: 'clock' }] } } })
+  assert.deepEqual(v.variants.evening.panels.map((p) => p.id), ['clock-0f0f', 'clock'])
+  assert.notEqual(v.variants.evening.panels[0].x, 50)
+})
+
+test('a panel with no type takes the type its id names (a v1 functional panel); an unknown one is dropped', () => {
+  const spec = normalizeSpec({ panels: [{ id: 'clock' }, { id: 'weather-3fa9' }, { id: 'bogus-0001' }, { id: 'constructor' }, { type: 'weather-3fa9' }] })
+  assert.deepEqual(spec.panels.map((p) => [p.id, p.type]), [
+    ['clock', 'clock'],
+    ['weather-3fa9', 'weather'],
+  ])
+})
+
+test('the ids that come out are unique whatever goes in, and a second pass keeps them', () => {
+  // A seeded jumble of good, duplicated, malformed and missing ids.
+  let s = 7
+  const rnd = (n) => {
+    s = (s * 1103515245 + 12345) % 2147483648
+    return s % n
+  }
+  const types = ['weather', 'agenda', 'clock', 'text', 'shape', 'hourly']
+  const idFor = (t) => [t, `${t}-3fa9`, `${t}-00aa`, `${t}-XYZ`, undefined, 'weird', 'clock'][rnd(7)]
+  for (let round = 0; round < 50; round++) {
+    const panels = []
+    const n = 1 + rnd(14)
+    for (let i = 0; i < n; i++) {
+      const type = types[rnd(types.length)]
+      const id = idFor(type)
+      panels.push(id === undefined ? { type } : { id, type })
+    }
+    const once = normalizeSpec({ panels })
+    const got = ids(once)
+    assert.equal(new Set(got).size, got.length, JSON.stringify(panels))
+    once.panels.forEach((p) => assert.ok(isInstanceId(p.type, p.id), `${p.type} ${p.id}`))
+    assert.deepEqual(normalizeSpec(once), once)
+  }
+})
+
+test('newPanel: the bare type while it is free, else a fresh suffixed id clear of every taken one', () => {
+  assert.equal(newPanel('weather', null, { layoutId: 'entry' }).id, 'weather')
+  assert.equal(newPanel('weather', null, { layoutId: 'entry', takenIds: ['clock', 'weather-3fa9'] }).id, 'weather')
+  const taken = new Set(['weather', 'weather-3fa9'])
+  for (let i = 0; i < 20; i++) {
+    const p = newPanel('weather', { id: 'weather' }, { layoutId: 'entry', takenIds: taken })
+    assert.ok(isInstanceId('weather', p.id) && !taken.has(p.id), p.id)
+    taken.add(p.id)
+  }
+  // An array of taken ids works the same; a second agenda looks like the first.
+  const second = newPanel('agenda', null, { layoutId: 'entry', takenIds: ['agenda'] })
+  const first = DEFAULT_ENTRY_SPEC.panels.find((p) => p.id === 'agenda')
+  assert.ok(isInstanceId('agenda', second.id) && second.id !== 'agenda')
+  assert.deepEqual({ ...second, id: 'agenda' }, JSON.parse(JSON.stringify(first)))
+  // Only functional types, named exactly.
+  assert.equal(newPanel('text', null, {}), null)
+  assert.equal(newPanel('weather-3fa9', null, {}), null)
+  // Blocks keep their own maker, clear of the taken ids.
+  const b = newBlock('shape', null, ['shape-0000'])
+  assert.ok(isInstanceId('shape', b.id) && b.id !== 'shape-0000')
+})
+
+test('two instances never share a box: cards join by id, and each keeps its own', () => {
+  const panels = normalizeSpec({
+    panels: [
+      { id: 'weather', type: 'weather', x: 10, y: 10, w: 30, h: 20, props: { background: 'card' } },
+      { id: 'weather-3fa9', type: 'weather', x: 10, y: 30, w: 30, h: 20, props: { background: 'card' } },
+      { id: 'weather-0001', type: 'weather', x: 60, y: 30, w: 30, h: 20, props: { background: 'card' } },
+    ],
+  }).panels
+  assert.deepEqual(cardJoins(panels), { weather: { top: false, bottom: true }, 'weather-3fa9': { top: true, bottom: false } })
+})
+
+// --- The editor's words at the source (2026-09-27) ------------------------------------
+
+test('the box schema says block, and the header option that keeps the block its own is Default', () => {
+  const valign = BOX_SCHEMA.fields.find((f) => f.key === 'valign')
+  assert.equal(valign.hint, 'Top is the block as designed')
+  const title = BOX_SCHEMA.fields.find((f) => f.key === 'title.mode')
+  assert.deepEqual(title.options, [
+    ['default', 'Default'],
+    ['custom', 'Custom'],
+    ['none', 'None'],
+  ])
+  // No user-facing word in the type list or the box schema says "panel".
+  const words = []
+  PANEL_TYPE_LIST.forEach((t) => words.push(t.label))
+  BOX_SCHEMA.fields.forEach((f) => words.push(f.label, f.hint || '', ...(f.options || []).map((o) => String(o[1]))))
+  words.forEach((w) => assert.ok(!/\bpanels?\b/i.test(w), w))
 })

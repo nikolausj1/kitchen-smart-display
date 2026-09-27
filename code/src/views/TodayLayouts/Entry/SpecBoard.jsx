@@ -124,12 +124,21 @@ import './SpecPanel.css'
 //     the countdowns. In the layout editor rules are not applied: every panel
 //     is drawn, a ruled one marked data-rule for the editor.
 //
+// Any number of every type (layoutSpec.js, the instance scheme): everything
+// below that is per type works per box, keyed by the box's id. Each box has
+// its own knobs (so two agendas cut their own days, two day counts count
+// their own thing), a box that cannot draw drops alone (an alert box, a day
+// count), and every calendar box joins the one calendar window the board asks
+// for. Each photo box keeps its own interval (its knob, else the screen's
+// slideshow interval) and its own shuffle.
+//
 // The departure countdown. A layout with its own departure panel shows it
 // there, always. Without one it borrows a box, as the two built-in boards
 // always have: the countdowns box during a school morning (the Entry board's
 // rule: the whole morning window, or a manual timer at any hour), else the
 // now-playing box while a countdown actually runs (the Board's rule). One box
-// at most.
+// at most: with several, the first countdowns (or now-playing) box in the
+// spec's list, whatever the stacking.
 //
 // In the layout editor (?edit=1 inside its frame) editBridge.js reports where
 // each box and each marked sub-element landed.
@@ -219,14 +228,23 @@ function departureInNowPlaying(d) {
   return d.timer?.mode === 'active' && !d.school?.noSchool
 }
 
-// Which box borrows the departure countdown: 'countdowns', 'nowplaying' or
-// null (none, or the layout has its own departure panel).
-function departureHost(panels, d) {
-  const types = new Set(panels.map((p) => p.type))
-  if (types.has('departure')) return null
-  if (types.has('countdowns') && departureInCountdowns(d)) return 'countdowns'
-  if (types.has('nowplaying') && departureInNowPlaying(d)) return 'nowplaying'
-  return null
+// Which box borrows the departure countdown: the id of a countdowns box or a
+// now-playing box, or null (none, or the layout has a departure panel of its
+// own). panels: the boxes drawn; order: the spec's panel list (view.panels),
+// which decides the first of several, whatever their stacking.
+function departureHost(panels, order, d) {
+  if (panels.some((p) => p.type === 'departure')) return null
+  const drawn = new Set(panels.map((p) => p.id))
+  const first = (type) => {
+    for (let i = 0; i < order.length; i++) {
+      const p = order[i]
+      if (p && p.type === type && drawn.has(p.id)) return p.id
+    }
+    return null
+  }
+  const countdowns = departureInCountdowns(d) ? first('countdowns') : null
+  if (countdowns) return countdowns
+  return departureInNowPlaying(d) ? first('nowplaying') : null
 }
 
 // Until the hub publishes a headline (or when it has not confirmed one today)
@@ -324,27 +342,39 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       .map((p) => p.id)
       .join(' ')
   }
-  // --- Weather panels (chunk 2): no alert in force, no banner box. ---
-  if (!EDIT_MODE && !pickAlert(d.weather?.alerts, d.now) && shown.some((p) => p.type === 'alert')) {
-    ruledOut = ruledOut ? `${ruledOut} alert` : 'alert'
+  // --- Weather panels (chunk 2): no alert in force, no banner: every alert
+  // box is dropped. ---
+  if (!EDIT_MODE && shown.some((p) => p.type === 'alert') && !pickAlert(d.weather?.alerts, d.now)) {
+    shown.forEach((p) => {
+      if (p.type === 'alert') ruledOut = ruledOut ? `${ruledOut} ${p.id}` : p.id
+    })
   }
   // --- end weather panels ---
-  // --- Blocks and clocks (chunk 4): the day count, keyed on the day; no
-  // count, no box (the editor keeps it, with a note). ---
-  const dayCountPanel = shown.find((p) => p.type === 'daycount') || null
-  const dayCountShow = dayCountPanel ? knobsOf(dayCountPanel).show : null
+  // --- Blocks and clocks (chunk 4): the day counts, keyed on the day, one
+  // per kind of count the board's day-count boxes show; a box whose count
+  // cannot be made is dropped (the editor keeps it, with a note). ---
+  const dayCountShows = []
+  shown.forEach((p) => {
+    if (p.type !== 'daycount') return
+    const show = knobsOf(p).show
+    if (dayCountShows.indexOf(show) < 0) dayCountShows.push(show)
+  })
+  const dayCountShowsKey = dayCountShows.length ? JSON.stringify(dayCountShows) : ''
   const dayCountKey = d.now instanceof Date && !Number.isNaN(d.now.getTime()) ? dateKey(d.now) : ''
   const schoolSettings = d.settings?.school
   const schoolCalendar = d.schoolCalendar
-  const dayCountValue = useMemo(
-    () =>
-      dayCountShow
-        ? dayCount(dayCountShow, { now: dayFromKey(dayCountKey), school: schoolSettings, calendar: schoolCalendar })
-        : null,
-    [dayCountShow, dayCountKey, schoolSettings, schoolCalendar]
-  )
-  if (!EDIT_MODE && dayCountPanel && !dayCountValue) {
-    ruledOut = ruledOut ? `${ruledOut} daycount` : 'daycount'
+  const dayCounts = useMemo(() => {
+    if (!dayCountShowsKey) return null
+    const out = {}
+    JSON.parse(dayCountShowsKey).forEach((show) => {
+      out[show] = dayCount(show, { now: dayFromKey(dayCountKey), school: schoolSettings, calendar: schoolCalendar })
+    })
+    return out
+  }, [dayCountShowsKey, dayCountKey, schoolSettings, schoolCalendar])
+  if (!EDIT_MODE && dayCounts) {
+    shown.forEach((p) => {
+      if (p.type === 'daycount' && !dayCounts[knobsOf(p).show]) ruledOut = ruledOut ? `${ruledOut} ${p.id}` : p.id
+    })
   }
   // --- end blocks and clocks ---
   const panels = useMemo(() => {
@@ -369,33 +399,41 @@ export default function SpecBoard({ d, layoutId, className, children }) {
     return out
   }, [panels])
 
-  const agendaKnobs = knobs.agenda || null
+  const agendas = useMemo(() => panels.filter((p) => p.type === 'agenda'), [panels])
   // --- Calendar views (chunk 3): the window the board's calendar panels
-  // need, and the agenda's days when it skips the empty ones (from two weeks
-  // of them). ---
+  // need (the union of every calendar box's), and, for an agenda that skips
+  // the empty days, two weeks of days to find its own in. ---
   useCalendarWindow(boardCalendarNeed(panels, knobs, d.now))
   const nowOk = d.now instanceof Date && !Number.isNaN(d.now.getTime())
   const todayKey = nowOk ? dateKey(d.now) : null
   // A day's events that are over leave it (futureOnly) by the minute.
   const minute = nowOk ? Math.floor(d.now.getTime() / 60000) : null
-  const skipEmpty = !!agendaKnobs && agendaKnobs.showEmptyDays === false
+  const skipEmpty = agendas.some((p) => knobs[p.id] && knobs[p.id].showEmptyDays === false)
   const calEvents = d.calendar?.events
   const scanDays = useMemo(
     () => (skipEmpty && todayKey ? buildAgendaDays(calEvents, keyToDate(todayKey), AGENDA_SCAN_DAYS) : null),
     [skipEmpty, calEvents, todayKey]
   )
   // --- end calendar views ---
+  // Each agenda box's days, by id: its knobs' cut of the days from today.
   const agendaDays = useMemo(() => {
-    if (!agendaKnobs) return d.agendaDays
-    // --- Calendar views (chunk 3) ---
-    if (scanDays) return daysWithEvents(scanDays, agendaKnobs, minute == null ? null : new Date(minute * 60000))
-    // --- end calendar views ---
-    return sliceAgendaDays(d.agendaDays, agendaKnobs)
-  }, [d.agendaDays, agendaKnobs, scanDays, minute])
+    const out = {}
+    agendas.forEach((p) => {
+      const k = knobs[p.id]
+      if (!k) out[p.id] = d.agendaDays
+      // --- Calendar views (chunk 3) ---
+      else if (scanDays && k.showEmptyDays === false) {
+        out[p.id] = daysWithEvents(scanDays, k, minute == null ? null : new Date(minute * 60000))
+      }
+      // --- end calendar views ---
+      else out[p.id] = sliceAgendaDays(d.agendaDays, k)
+    })
+    return out
+  }, [agendas, knobs, d.agendaDays, scanDays, minute])
 
   const headline = d.headline || fallbackHeadline(d.greeting)
   const cal = d.calendar
-  const host = departureHost(panels, d)
+  const host = departureHost(panels, view.panels, d)
   const toggleTravel = EDIT_MODE ? noop : d.timer?.actions?.toggleTravel
 
   function departure(k) {
@@ -434,7 +472,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       case 'date':
         return <DatePanel now={d.now} knobs={k} />
       case 'daycount':
-        return <DayCountPanel count={dayCountValue} knobs={k} editing={EDIT_MODE} />
+        return <DayCountPanel count={dayCounts ? dayCounts[k.show] || null : null} knobs={k} editing={EDIT_MODE} />
       case 'shape':
         return <ShapeBlock props={p.props} />
       // --- end blocks and clocks ---
@@ -524,7 +562,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       case 'agenda':
         return (
           <AgendaPanel
-            days={agendaDays}
+            days={agendaDays[p.id]}
             now={d.now}
             connected={cal?.connected ?? null}
             fetchedAt={cal?.fetchedAt ?? null}
@@ -556,13 +594,13 @@ export default function SpecBoard({ d, layoutId, className, children }) {
       }
       // --- end calendar views ---
       case 'countdowns':
-        return host === 'countdowns' ? departure(DEPARTURE_KNOBS) : <CountdownsPanel countdowns={d.countdowns} knobs={k} />
+        return host === p.id ? departure(DEPARTURE_KNOBS) : <CountdownsPanel countdowns={d.countdowns} knobs={k} />
       case 'countdown':
         return <CountdownPanel countdowns={d.countdowns} knobs={k} />
       case 'departure':
         return departure(k)
       case 'nowplaying':
-        return host === 'nowplaying' ? departure(DEPARTURE_KNOBS) : <NowPlayingPanel music={d.music} now={d.now} knobs={k} />
+        return host === p.id ? departure(DEPARTURE_KNOBS) : <NowPlayingPanel music={d.music} now={d.now} knobs={k} />
       case 'photo':
         // d.photos.photos keeps its identity between ticks, which is what
         // lets PhotoPanel's memo hold through the 1 Hz re-render.
@@ -625,7 +663,7 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             textScale={layoutTextScale(view, p)}
             join={joins[p.id] || null}
             hover={hoverId === p.id}
-            borrowed={host === p.type}
+            borrowed={host === p.id}
             rule={EDIT_MODE && !!p.when}
           >
             {content(p)}

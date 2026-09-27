@@ -1,0 +1,456 @@
+{
+ "what": "The layout editor Add block menu thumbnails: each block type alone on a 1920x1080 Entry board at the box Add block starts it in, the demo data, cut out 320 px wide",
+ "made": "code/scripts/render-previews.mjs",
+ "commit": "fb15104",
+ "dirty": true,
+ "clock": "2026-10-15T10:10:00-07:00",
+ "canvas": {
+  "w": 1920,
+  "h": 1080
+ },
+ "width": 320,
+ "files": [
+  {
+   "type": "clock",
+   "file": "clock.png",
+   "w": 320,
+   "h": 101,
+   "bytes": 6356,
+   "box": {
+    "x": 2.4,
+    "y": 3,
+    "w": 54.58,
+    "h": 30.63
+   }
+  },
+  {
+   "type": "flipclock",
+   "file": "flipclock.png",
+   "w": 320,
+   "h": 135,
+   "bytes": 29824,
+   "box": {
+    "x": 30,
+    "y": 35,
+    "w": 40,
+    "h": 30
+   }
+  },
+  {
+   "type": "analog",
+   "file": "analog.png",
+   "w": 320,
+   "h": 270,
+   "bytes": 15678,
+   "box": {
+    "x": 40,
+    "y": 35,
+    "w": 20,
+    "h": 30
+   }
+  },
+  {
+   "type": "clock2",
+   "file": "clock2.png",
+   "w": 320,
+   "h": 127,
+   "bytes": 6511,
+   "box": {
+    "x": 40,
+    "y": 43,
+    "w": 20,
+    "h": 14
+   }
+  },
+  {
+   "type": "date",
+   "file": "date.png",
+   "w": 320,
+   "h": 90,
+   "bytes": 5300,
+   "box": {
+    "x": 38,
+    "y": 44,
+    "w": 24,
+    "h": 12
+   }
+  },
+  {
+   "type": "daycount",
+   "file": "daycount.png",
+   "w": 320,
+   "h": 158,
+   "bytes": 5919,
+   "box": {
+    "x": 42,
+    "y": 43,
+    "w": 16,
+    "h": 14
+   }
+  },
+  {
+   "type": "shape",
+   "file": "shape.png",
+   "w": 320,
+   "h": 108,
+   "bytes": 924,
+   "box": {
+    "x": 40,
+    "y": 44,
+    "w": 20,
+    "h": 12
+   }
+  },
+  {
+   "type": "weather",
+   "file": "weather.png",
+   "w": 320,
+   "h": 93,
+   "bytes": 7537,
+   "box": {
+    "x": 58.08,
+    "y": 3,
+    "w": 39.52,
+    "h": 20.4
+   }
+  },
+  {
+   "type": "forecast",
+   "file": "forecast.png",
+   "w": 320,
+   "h": 200,
+   "bytes": 15617,
+   "box": {
+    "x": 32,
+    "y": 30,
+    "w": 36,
+    "h": 40
+   }
+  },
+  {
+   "type": "hourly",
+   "file": "hourly.png",
+   "w": 320,
+   "h": 90,
+   "bytes": 8150,
+   "box": {
+    "x": 20,
+    "y": 34,
+    "w": 60,
+    "h": 30
+   }
+  },
+  {
+   "type": "conditions",
+   "file": "conditions.png",
+   "w": 320,
+   "h": 202,
+   "bytes": 14076,
+   "box": {
+    "x": 34,
+    "y": 30,
+    "w": 32,
+    "h": 36
+   }
+  },
+  {
+   "type": "precip",
+   "file": "precip.png",
+   "w": 320,
+   "h": 108,
+   "bytes": 5050,
+   "box": {
+    "x": 25,
+    "y": 34,
+    "w": 50,
+    "h": 30
+   }
+  },
+  {
+   "type": "alert",
+   "file": "alert.png",
+   "w": 320,
+   "h": 27,
+   "bytes": 2134,
+   "box": {
+    "x": 20,
+    "y": 3,
+    "w": 60,
+    "h": 9
+   }
+  },
+  {
+   "type": "sunmoon",
+   "file": "sunmoon.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 11344,
+   "box": {
+    "x": 34,
+    "y": 34,
+    "w": 32,
+    "h": 32
+   }
+  },
+  {
+   "type": "wear",
+   "file": "wear.png",
+   "w": 320,
+   "h": 66,
+   "bytes": 5598,
+   "box": {
+    "x": 58.08,
+    "y": 23.4,
+    "w": 39.52,
+    "h": 14.45
+   }
+  },
+  {
+   "type": "airquality",
+   "file": "airquality.png",
+   "w": 320,
+   "h": 35,
+   "bytes": 1983,
+   "box": {
+    "x": 58.08,
+    "y": 37.85,
+    "w": 39.52,
+    "h": 7.65
+   }
+  },
+  {
+   "type": "headline",
+   "file": "headline.png",
+   "w": 320,
+   "h": 33,
+   "bytes": 3631,
+   "box": {
+    "x": 2.4,
+    "y": 35.59,
+    "w": 54.58,
+    "h": 9.91
+   }
+  },
+  {
+   "type": "agenda",
+   "file": "agenda.png",
+   "w": 320,
+   "h": 164,
+   "bytes": 10589,
+   "box": {
+    "x": 2.4,
+    "y": 47.45,
+    "w": 54.58,
+    "h": 49.55
+   }
+  },
+  {
+   "type": "upnext",
+   "file": "upnext.png",
+   "w": 320,
+   "h": 281,
+   "bytes": 17751,
+   "box": {
+    "x": 34,
+    "y": 25,
+    "w": 32,
+    "h": 50
+   }
+  },
+  {
+   "type": "daylist",
+   "file": "daylist.png",
+   "w": 320,
+   "h": 450,
+   "bytes": 20461,
+   "box": {
+    "x": 36,
+    "y": 15,
+    "w": 28,
+    "h": 70
+   }
+  },
+  {
+   "type": "weekgrid",
+   "file": "weekgrid.png",
+   "w": 320,
+   "h": 134,
+   "bytes": 8546,
+   "box": {
+    "x": 3,
+    "y": 20,
+    "w": 94,
+    "h": 70
+   }
+  },
+  {
+   "type": "monthgrid",
+   "file": "monthgrid.png",
+   "w": 320,
+   "h": 264,
+   "bytes": 12591,
+   "box": {
+    "x": 20,
+    "y": 6,
+    "w": 60,
+    "h": 88
+   }
+  },
+  {
+   "type": "countdowns",
+   "file": "countdowns.png",
+   "w": 320,
+   "h": 226,
+   "bytes": 14032,
+   "box": {
+    "x": 58.08,
+    "y": 47.45,
+    "w": 39.52,
+    "h": 49.55
+   }
+  },
+  {
+   "type": "countdown",
+   "file": "countdown.png",
+   "w": 320,
+   "h": 270,
+   "bytes": 22914,
+   "box": {
+    "x": 40,
+    "y": 35,
+    "w": 20,
+    "h": 30
+   }
+  },
+  {
+   "type": "departure",
+   "file": "departure.png",
+   "w": 320,
+   "h": 240,
+   "bytes": 10002,
+   "box": {
+    "x": 35,
+    "y": 30,
+    "w": 30,
+    "h": 40
+   }
+  },
+  {
+   "type": "nowplaying",
+   "file": "nowplaying.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 14464,
+   "box": {
+    "x": 34,
+    "y": 34,
+    "w": 32,
+    "h": 32
+   }
+  },
+  {
+   "type": "photo",
+   "file": "photo.png",
+   "w": 320,
+   "h": 225,
+   "bytes": 13256,
+   "box": {
+    "x": 30,
+    "y": 25,
+    "w": 40,
+    "h": 50
+   }
+  },
+  {
+   "type": "school",
+   "file": "school.png",
+   "w": 320,
+   "h": 180,
+   "bytes": 12806,
+   "box": {
+    "x": 35,
+    "y": 35,
+    "w": 30,
+    "h": 30
+   }
+  },
+  {
+   "type": "hastatus",
+   "file": "hastatus.png",
+   "w": 320,
+   "h": 144,
+   "bytes": 8380,
+   "box": {
+    "x": 40,
+    "y": 42,
+    "w": 20,
+    "h": 16
+   }
+  },
+  {
+   "type": "habutton",
+   "file": "habutton.png",
+   "w": 320,
+   "h": 203,
+   "bytes": 7999,
+   "box": {
+    "x": 42,
+    "y": 41,
+    "w": 16,
+    "h": 18
+   }
+  },
+  {
+   "type": "hachips",
+   "file": "hachips.png",
+   "w": 320,
+   "h": 43,
+   "bytes": 3401,
+   "box": {
+    "x": 25,
+    "y": 44,
+    "w": 50,
+    "h": 12
+   }
+  },
+  {
+   "type": "hapicker",
+   "file": "hapicker.png",
+   "w": 320,
+   "h": 41,
+   "bytes": 2992,
+   "box": {
+    "x": 15,
+    "y": 42,
+    "w": 70,
+    "h": 16
+   }
+  },
+  {
+   "type": "text",
+   "file": "text.png",
+   "w": 320,
+   "h": 54,
+   "bytes": 2581,
+   "box": {
+    "x": 30,
+    "y": 44,
+    "w": 40,
+    "h": 12
+   }
+  },
+  {
+   "type": "image",
+   "file": "image.png",
+   "w": 320,
+   "h": 324,
+   "bytes": 6957,
+   "box": {
+    "x": 40,
+    "y": 32,
+    "w": 20,
+    "h": 36
+   }
+  }
+ ]
+}

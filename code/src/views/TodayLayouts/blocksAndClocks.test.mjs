@@ -106,10 +106,13 @@ test('a shape is a block: any number, ids shape-<4 hex>, a bare box of 20 x 12',
   assert.deepEqual([a.x, a.y, a.w, a.h, a.z], [40, 44, 20, 12, 10])
   assert.deepEqual([a.props.background, a.props.padding, a.props.kind, a.props.fillPreset], ['none', 0, 'rect', 'surface'])
   assert.equal(b.props.kind, 'line')
+  // A malformed id is made anew; the same id a second time is a true
+  // duplicate, dropped (the first kept), as for every type.
   const spec = normalizeSpec({ panels: [a, b, { id: 'shape-zz', type: 'shape' }, { id: a.id, type: 'shape' }] })
-  assert.equal(spec.panels.length, 4)
+  assert.equal(spec.panels.length, 3)
   assert.ok(spec.panels.every((p) => p.type === 'shape' && /^shape-[0-9a-f]{4}$/.test(p.id)))
-  assert.equal(new Set(spec.panels.map((p) => p.id)).size, 4)
+  assert.deepEqual(spec.panels.slice(0, 2).map((p) => p.id), [a.id, b.id])
+  assert.equal(new Set(spec.panels.map((p) => p.id)).size, 3)
   assert.deepEqual(normalizeSpec(spec), spec)
 })
 
