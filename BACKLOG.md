@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-26
-version: 7.7
+version: 7.8
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,7 +87,7 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Panels and controls (chunk 1 BUILT 2026-09-26; the hub halves of chunks 2 and 5 BUILT)
+### Panels and controls (chunks 1 and 2 BUILT 2026-09-26; chunk 5's hub half BUILT)
 
 The layout editor's next round, decided against Justin's DAKboard screens:
 generic element styles on every panel (hide, size, weight, colour, spacing,
@@ -100,17 +100,23 @@ above a gradient card; Up next, Day list, Week grid and Month grid calendar
 views; shape and clock blocks; Home Assistant panels.
 Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`.
 
-**Built and deployed to the hub 2026-09-26 12:49 (build `2fcca07`):** chunk
-1, the editor foundations (element styles, box v2, fonts, visibility rules,
-multi-select, copy and paste style; as built in
+**Built and deployed to the hub 2026-09-26.** At 12:49 (build `2fcca07`):
+chunk 1, the editor foundations (element styles, box v2, fonts, visibility
+rules, multi-select, copy and paste style; as built in
 `docs/designs/layout-editor.md`, "As built, chunk 1"); chunk 2's hub half,
 one weather feed at `GET /api/weather`, on WeatherKit with Open-Meteo as the
 automatic fallback; chunk 5's hub half, the Home Assistant layer (connected,
-13 entities, 10 actions, actions off behind a dashboard switch). See Recently
-Shipped. **Next:** chunk 2's app half (the app's weather hooks onto
-`/api/weather`, the Apple attribution on the screens, the weather panels, the
-countdown tiles), then chunk 3. Chunk 5's panels follow the first real
-action with Justin and the dashboard PIN.
+13 entities, 10 actions, actions off behind a dashboard switch). At 15:31
+(build `0f13224`): the rest of chunk 2, the screens on the hub's feed, the
+Hourly forecast, Conditions, Rain chance and Weather alert panels, the
+forecast's Bars style, Apple's mark, the Art above countdown tiles with a
+`color:` marker, and the single Countdown panel. See Recently Shipped.
+**Chunk 2 is done** but for small follow-ups (Shared / infrastructure: the
+hub's travel default, the weather panels follow-ups, shrink by default,
+the WeatherKit alert spot-check). **Next:** chunk 3, the calendar views
+(Up next, Day list, Week grid, Month grid); then chunk 4, blocks and
+clocks. Chunk 5's panels follow the first real Home Assistant action with
+Justin and the dashboard PIN.
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -622,14 +628,61 @@ progress bar). Remaining:
   hand-written fixture. At the first alert WeatherKit reports for the house,
   check `GET /api/weather`'s `alerts`: a readable event name, one entry
   where the NWS sends the same alert (deduped by event and end), and the
-  headline's line. Design: `docs/designs/panels-and-controls.md`, chunk 2.
+  headline's line; and, since the 15:31 deploy the same day, the Weather
+  alert panel on any screen that has one: red for a warning, amber
+  otherwise, its "until", and Apple's mark only on WeatherKit's copy.
+  Design: `docs/designs/panels-and-controls.md`, chunk 2.
+- **Hub travel default reads the old hour** (TODO, from chunk 2,
+  2026-09-26) - `frameserver/lib/travelDefault.mjs` still fetches
+  Open-Meteo itself and reads the weather code stamped at the walking
+  departure hour, which in Open-Meteo's convention describes the hour
+  before it; the app's own fallback travel default (used only until the
+  hub answers) now reads the feed's hour starting at the departure hour,
+  so the two can disagree about the same morning. Move the hub's onto the
+  weather feed (`lib/weather.mjs`, the hour starting at the departure
+  hour) and drop its own fetch. Design:
+  `docs/designs/panels-and-controls.md`, "What remains of chunk 2".
+- **Weather panels follow-ups** (POLISH, from chunk 2, 2026-09-26) - (1)
+  the default Entry board draws the weather card and what to wear flush as
+  one card, and each carries Apple's mark in its corner, so the card says
+  "Apple Weather" twice: one mark per shared card; (2) while a screen is on
+  the direct Open-Meteo fallback (the feed never answered, or is more than
+  90 minutes old) the Hourly forecast and Rain chance panels show their
+  empty states, the Weather alert banner stays away even with an alert in
+  force (the headline still carries it), and Conditions shows "--" beyond
+  the card's few readings, since the fallback fetches only what the old
+  hooks drew; (3) the mark can be clicked in the layout editor (it carries
+  `data-edit="attribution"`), though any style on it is dropped by design.
+  Design: `docs/designs/panels-and-controls.md`, "What remains of chunk
+  2".
+- **Shrink to fit by default for single values** (POLISH, from the
+  2026-09-26 decision) - decided: text that does not fit shrinks or wraps,
+  never truncates, shrink being the default for single values. Chunk 1
+  kept every default as designed, pixel for pixel, so a headline past its
+  line or a long agenda title still ends in an ellipsis until its element
+  is set to Shrink to fit. Make shrink the default where a value sits on
+  one line, accepting that boards change where text was cut off. Design:
+  `docs/designs/panels-and-controls.md`, chunk 1 and "What remains of
+  chunk 2".
+- **Countdown Art follow-ups** (POLISH, from the countdown tiles,
+  2026-09-26) - the Minnesota map has no one colour and samples khaki for
+  an Art above tile: give its event a `color:` line; the backpack PNG
+  carries a faint watermark in its transparent area, which shows on the
+  black backdrop (`_review/layout-editor/tiles-artabove-black-1920.png`):
+  clean it in the "Countdown Art" album. Both matter only once a screen's
+  countdowns use Art above (the default tile style is still Card). Design:
+  `docs/designs/panels-and-controls.md`, "As built: the app half and the
+  tiles".
 - **Kitchen Pi and Apple TV not redeployed on 2026-09-26** (TODO, with the
-  next Pi deploy) - that day's deploys were the hub only (build `2fcca07`),
-  and neither needs anything from them: the kitchen Pi serves its own bundle
-  (`812242f`, 2026-09-25) and shows Framed Today, so chunk 1's styles and
-  rules matter there only once it shows a spec layout; the Apple TV reads
-  nothing new (`/api/weather` is there for it later). The next `./deploy.sh
-  pi` brings the kitchen level.
+  next Pi deploy) - that day's deploys were the hub only (builds `2fcca07`
+  at 12:49 and `0f13224` at 15:31). The kitchen Pi serves its own bundle
+  (`812242f`, 2026-09-25) and shows Framed Today: chunk 1's styles and
+  rules matter there only once it shows a spec layout, but its Framed Today
+  and the slideshow's time widget still fetch Open-Meteo themselves, with
+  no Apple mark, where the Echos now read the hub's WeatherKit feed. The
+  next `./deploy.sh pi` brings the kitchen level (its 8 am icon then shows
+  the hour from 8, as on the Echos). The Apple TV reads nothing new
+  (`/api/weather` is there for it later).
 - **Countdown helpers** (SKIPPED 2026-09-25, kept as an option) - helpers
   around the countdown tiles, which today come only from the `countdown`
   marker typed into an event's description (`entry-board.md`). Not built in
@@ -669,6 +722,44 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-26 - Apple's weather mark cannot be styled or hidden.** The
+  WeatherKit licence asks for the Apple Weather mark wherever Apple's data
+  shows, so the mark carries `data-edit="attribution"` (the editor can
+  point at it) but is deliberately left out of `PANEL_ELEMENTS`: the spec
+  normaliser drops any element style for it, and its size is fixed at 12
+  to 14 px whatever the box's text scale. It shows exactly while the data
+  is WeatherKit's (never for Open-Meteo, never on an NWS alert), and
+  Settings prints the legal link in full because the Echo cannot follow
+  one. Design: `docs/designs/panels-and-controls.md`, chunk 2.
+- **2026-09-26 - A countdown tile's colour: the marker, then the art, then
+  the calendar.** On the Art above tiles and the single countdown, the
+  default colour source (Auto) takes the event's `color:` marker, else a
+  colour sampled from its Countdown Art, else its calendar's colour, else
+  the layout's accent; Marker never reads the art, Calendar reads neither.
+  The order is the plan's: a colour someone typed, then the art's, then
+  the calendar's. Only the sampled colour is adjusted for white text
+  (contrast 3 or more); a marker or calendar colour is drawn as chosen.
+  The sample takes the art's dominant hue, not a plain average, which
+  turned multicoloured art to mud. Design:
+  `docs/designs/panels-and-controls.md`, chunk 2.
+- **2026-09-26 - The weather feed's hours start at local midnight, and each
+  is the hour starting at its time.** `hourly` in `GET /api/weather` runs
+  from today's local midnight to 48 hours past the current hour, so a
+  screen loaded in the afternoon still has this morning's slots; the
+  headline rules see only the hours not yet over. Every entry describes
+  the hour that starts at its stamp: WeatherKit's hours already do, and
+  Open-Meteo's code, rain chance and gusts, stamped at the hour's end, are
+  moved back one. The Framed Today's 8 am icon therefore shows the sky
+  from 8 to 9 am, where the old direct fetch showed 7 to 8 am (the
+  temperature is the 8:00 reading in both). Design:
+  `docs/designs/panels-and-controls.md`, chunk 2.
+- **2026-09-26 - Screens ask Open-Meteo themselves only when the hub's
+  feed is 90 minutes stale.** A screen's weather hooks fetch Open-Meteo
+  only once their first poll of the hub has settled, and only while the
+  feed has never answered or its data is more than 90 minutes old: six of
+  the hub's 15-minute refreshes, not a blip. A stale feed keeps showing
+  until the fallback has something newer, so the switch never blanks a
+  panel. Design: `docs/designs/panels-and-controls.md`, chunk 2.
 - **2026-09-26 - Home Assistant actions start off, behind a dashboard
   switch.** The hub's action route has no authentication beyond being on the
   LAN, and the whitelist holds the garage and the front door lock, so
@@ -1003,6 +1094,39 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-26 - Chunk 2, the app half: the screens on the hub's weather
+  feed, four weather panels, Apple's mark** (hub deployed 15:31, build
+  `0f13224`; the Echos take it on their next reload; the kitchen Pi and
+  the Apple TV were not redeployed). Every weather reader on a web screen
+  shares one store polling `GET /api/weather` (every 5 minutes and on
+  waking, cached 12 hours), with the direct Open-Meteo fetch kept only for
+  a feed that never answered or is more than 90 minutes old; every
+  existing view draws 0 px different on the same weather (ten scenarios).
+  New in the editor's Add panel: Hourly forecast (6 to 24 hours, in
+  columns or with a temperature line; rain, feels like, wind), Conditions
+  (feels like, humidity, wind, gusts, UV, pressure, visibility, dew point,
+  sunrise, sunset, cloud cover, row by row), Rain chance (12 to 48 hours
+  of bars with a 50 % line, and WeatherKit's next hour by the minute,
+  "Rain likely in 11 min") and Weather alert (the most severe alert, red
+  or amber, gone when there is none); and the forecast's Bars style.
+  Apple's mark wherever WeatherKit's data draws (not stylable, by design)
+  and the legal link in Settings. Hub: the hours now start at local
+  midnight, so a screen loaded in the afternoon has this morning's slots.
+  21 new app tests, 6 on the hub. Design:
+  `docs/designs/panels-and-controls.md`, "As built: the app half and the
+  tiles". Shots: `_review/layout-editor/wx-*`.
+- **2026-09-26 - Countdown tiles, DAKboard's look, and a single countdown**
+  (hub deployed 15:31, build `0f13224`). A fourth tile style, Art above:
+  the art above a coloured gradient card, dipping into its top edge, with
+  art size, overlap, gradient and colour-source knobs. The colour comes
+  from a new `color:` marker in the event's description (`#rgb`,
+  `#rrggbb` or one of eleven names), else from the art (its dominant hue,
+  made readable under white text), else from the calendar. A new
+  Countdown panel shows one countdown big (the next, or one by title), its
+  art above or to the left. The other tile styles draw as before. 30 new
+  app tests, 16 on the hub. Design: `docs/designs/panels-and-controls.md`;
+  the marker: `docs/designs/entry-board.md`. Shots:
+  `_review/layout-editor/tiles-*`.
 - **2026-09-26 - Layout editor chunk 1: the editor foundations** (hub
   deployed 12:49, build `2fcca07`; the Echos take it on their next reload;
   the kitchen Pi and the Apple TV were not redeployed and need nothing from
@@ -1361,8 +1485,8 @@ Newest first.
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
 - **Branches not on GitHub (2026-09-26)** - `main` matches `origin/main`
-  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (85
-  commits over `main` at `2fcca07`, with Mixtape and the Today layouts
+  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (95
+  commits over `main` at `0f13224`, with Mixtape and the Today layouts
   inside it) exist only locally. Merging waits on the Mixtape label pick;
   pushing does not have to.
 - **Secrets on the Mac and the hub** - `~/.config/smart-display/` holds

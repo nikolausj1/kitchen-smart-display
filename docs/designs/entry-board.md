@@ -2,9 +2,9 @@
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
 modified: 2026-09-26
-version: 1.4
+version: 1.5
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, headline, weather, nws, legibility, scrims, frameserver]
+tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
 ---
 
 # Entry board
@@ -29,8 +29,10 @@ the same screen can later run on the kitchen or a ROADOM.
   shared to it, read-only). No OAuth consent flow, no token expiry.
 - **Countdowns are marked by hand** in an event's description, never picked
   automatically: `countdown` (30 days by default), `countdown 14`,
-  `countdown = 14 days`, `countdown: 2 weeks`; optional `label: ...` and
-  `image: <name>`; an emoji in the title is a fallback icon.
+  `countdown = 14 days`, `countdown: 2 weeks`; optional `label: ...`,
+  `image: <name>` and, since 2026-09-26, `color: <name or hex>` (the
+  art-above tile's colour; "Countdown art", below); an emoji in the title
+  is a fallback icon.
 - **Countdown art is an Immich album, "Countdown Art"**: PNGs with
   transparent backgrounds (backpacks, cakes, cabins, planes, state shapes,
   faces). The hub syncs the originals hourly; keywords come from the file name
@@ -101,7 +103,7 @@ setting, five columns starting tomorrow, needs six days.
               allDay, start, end, startDate, endDate, status } ],
   countdowns: [ { id, title, date: 'YYYY-MM-DD', daysLeft, leadDays,
                   image: '/countdown-art/<file>' | null, emoji: string | null,
-                  calendarLabel, color } ]
+                  calendarLabel, color, tileColor: '#rrggbb' | null } ]
 }
 ```
 
@@ -113,6 +115,8 @@ setting, five columns starting tomorrow, needs six days.
 - `countdowns` scans a wider window (60 days) for events whose description
   carries the marker, keeps those with `0 <= daysLeft <= leadDays`, sorts by
   date, caps at `countdownMax`. Multi-day events count to the start.
+  `color` is the event's calendar colour (the tiles' edge, the dashboard's
+  dot); `tileColor` is the `color:` marker's (below), null without one.
 - Google is fetched at most every 5 minutes (per process cache, plus a disk
   cache `calendar-cache.json` so a restart serves the last copy at once).
   Authentication: a JWT signed RS256 with Node's `crypto` (no dependency),
@@ -143,6 +147,29 @@ matches a `name` (case-insensitive, extension optional); otherwise the first
 art entry, longest matching keyword first, whose keyword appears as a whole
 word in the lowercased event title; otherwise null (the tile shows the
 emoji, or a calendar glyph).
+
+The tile colour (since 2026-09-26; `panels-and-controls.md`, chunk 2): the
+marker also takes `color: <value>` (or `colour:`), on its own line like
+`label:` and `image:`: `#rgb`, `#rrggbb` or one of eleven names in any
+case, each a mid-tone that white text reads on (WCAG contrast 3.25 to 4.96
+against white):
+
+| name | colour | name | colour |
+|---|---|---|---|
+| red | `#d9453d` | indigo | `#5b61e0` |
+| orange | `#e06a1b` | purple | `#8e4ed8` |
+| yellow | `#b8860b` | pink | `#db4a8a` |
+| green | `#2f9e44` | brown | `#9a6a45` |
+| teal | `#0d9488` | gray (grey works) | `#6b7280` |
+| blue | `#2f7fe8` | | |
+
+Anything else is ignored, as if the line were not there. The hub sends the
+colour as the countdown's `tileColor` (`TILE_COLORS` and `tileColor()` in
+`lib/countdowns.mjs`); `color` stays the calendar's. Only the countdown
+tiles' Art above style and the single Countdown panel read it: on their
+default colour source (Auto) the marker wins, then a colour sampled from
+the art, then the calendar's colour. Art with no one colour, like the
+Minnesota map (it samples khaki), is what the marker is for.
 
 ### Headline, weather alerts and air quality in `/api/state`
 
@@ -270,7 +297,9 @@ label "Entry board", in `registry.js`, `kioskMode.js` VALID_LAYOUTS and
 - Panels (pure, tokens only, `PanelFrame`): `AgendaPanel({ days, now })` with
   `days = [{ dateKey, label, events }]`, all-day items first, a coloured bar
   per calendar; `CountdownsPanel({ countdowns })` tiles: art (or emoji or
-  glyph), title, the number, "DAYS" / "DAY" / "TODAY"; `HeadlinePanel({
+  glyph), title, the number, "DAYS" / "DAY" / "TODAY" (since 2026-09-26
+  also the Art above style, and a single `CountdownPanel`;
+  `panels-and-controls.md`, chunk 2); `HeadlinePanel({
   headline, now })`; `AirQualityChip({ airQuality })`.
 - `HeadlinePanel` by kind: an `alert` line has its dot and its words in
   `--tl-alert` (the palette's amber, `--tl-band-orange`, so a layout that

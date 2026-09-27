@@ -1,10 +1,10 @@
 ---
 title: "Today layouts - Board, Briefing, Ambient, Entry board, Flip clock"
 created: 2026-09-04
-modified: 2026-09-25
-version: 1.2
+modified: 2026-09-26
+version: 1.3
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec]
+tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns]
 ---
 
 # Today layouts
@@ -15,7 +15,10 @@ how to add another. Board, Briefing and Ambient were built overnight
 2026-08-31); review artifacts: `_review/today-layouts/`. Since then: the Entry
 board (2026-09-24, `entry-board.md`); the Board and the Entry board drawn from
 a per-screen layout spec that the layout editor edits (2026-09-24,
-`layout-editor.md`); and the Flip clock (2026-09-24, below).
+`layout-editor.md`); the Flip clock (2026-09-24, below); and five more
+panel types for the spec layouts, four weather panels and a single
+countdown, with the screens' weather now from the hub's feed (2026-09-26,
+`panels-and-controls.md`, chunk 2).
 
 ## The one decision that shaped everything
 
@@ -32,17 +35,20 @@ hook feeds them. `views/TodayLayouts/`:
     lib/agenda.js             agenda and countdown helpers for the Entry board (pure)
     lib/lumaSampler.js        how bright a photo is, cell by cell (the Entry backdrop)
     lib/backdropLuma.js       adaptive darkness from that grid (pure; backdropLuma.test.mjs)
+    lib/weatherPanels.js      the weather panels' parts: hours, curve, rain, alerts (pure; weatherPanels.test.mjs)
+    lib/tileColor.js          an art-above countdown card's colour: marker, art, calendar (tileColor.test.mjs)
     data/useTodayData.js      THE hook: composes every existing hook + useDailyForecast + demo fixtures
-    data/useDailyForecast.js  second Open-Meteo call: current, 7 days, sunrise/sunset (cached 12h)
-    data/demo.js              ?demo=1 fixtures (only fill what live data leaves empty)
+    data/useDailyForecast.js  current, 7 days, sunrise/sunset from the hub's weather feed (Open-Meteo as fallback)
+    data/demo.js              ?demo=1 fixtures (only fill what live data leaves empty; ?demoWeather=1 forces the weather)
     data/demoMode.js          the demo switch as a store (?demo=1, or the editor's Sample data)
     data/wmo.js               WMO weather-code lookups (mirrors hooks/useWeather.js)
     panels/PanelFrame.jsx     shared chrome: optional label row + body
     panels/FreshnessStamp.jsx "just now" / "3 min ago" / "as of 12:36 pm"
     panels/schemas.js         every panel's knobs, as plain data (the layout editor's inspector)
-    panels/<Name>Panel.jsx    Clock, WeatherNow, Forecast, SunMoon, WhatToWear, Departure, NowPlaying,
-                              Photo, School, Agenda, Countdowns, Headline; also AirQualityChip,
-                              TextBlock, ImageBlock
+    panels/<Name>Panel.jsx    Clock, WeatherNow, Forecast, Hourly, Conditions, Precip, Alert, SunMoon,
+                              WhatToWear, Departure, NowPlaying, Photo, School, Agenda, Countdowns,
+                              Countdown, Headline; also AirQualityChip, TextBlock, ImageBlock,
+                              CountdownCard (the art-above card), WeatherAttribution (Apple's mark)
     Board/  Briefing/  Ambient/   one <Name>Layout.jsx + .css each
     Entry/                    EntryLayout, EntryBackdrop, SpecBoard (draws any spec layout),
                               SpecPanel (one box)
@@ -67,9 +73,15 @@ without saving it (`lib/kioskMode.js` `REQUESTED_LAYOUT`).
 
 `useTodayData()` returns `{ now, demo, greeting, settings, weather, moon, school,
 timer, wear, music, photos, calendar, agendaDays, countdowns, headline,
-airQuality }`; the exact field list is documented at the top of
-`useTodayData.js` (the last five are the Entry board's, `entry-board.md`).
-Three things worth knowing:
+airQuality, weatherAlerts }`; the exact field list is documented at the top
+of `useTodayData.js` (calendar through airQuality are the Entry board's,
+`entry-board.md`; weatherAlerts feeds the `alertActive` visibility rule).
+Since 2026-09-26 `weather` also carries the hub's whole weather feed for the
+weather panels (`source`, `hourly` from local midnight, `daily`,
+`nextHour`, `alerts`, `sun`, `moon`, `attribution`), and its `current`
+gains humidity, dew point, gusts, wind direction, pressure, visibility, UV
+and cloud cover (`panels-and-controls.md`, chunk 2). Three things worth
+knowing:
 
 - `now` ticks at 1 Hz; every other object is memoised on its real inputs so a
   tick does not churn identities. PhotoPanel is `React.memo` and keeps its
@@ -81,8 +93,10 @@ Three things worth knowing:
   the same code, so no layout can fight over what the TV shows.
 - `?demo=1` fakes a Sonos track, a lunch, two activities, an 18-minute
   countdown, calendar events, countdowns, a headline and an air quality
-  reading; weather and photos stay live unless the live fetch has nothing. The
-  layout editor's Sample data flips the same switch (`data/demoMode.js`).
+  reading; weather and photos stay live unless the live fetch has nothing
+  (the demo weather is a whole hub feed, with rain in the next hour and a
+  wind advisory; `?demoWeather=1` shows it over live weather). The layout
+  editor's Sample data flips the same switch (`data/demoMode.js`).
 
 ## Rules the panels live by
 
