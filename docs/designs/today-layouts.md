@@ -2,9 +2,9 @@
 title: "Today layouts - Board, Briefing, Ambient, Entry board, Flip clock"
 created: 2026-09-04
 modified: 2026-09-27
-version: 1.4
+version: 1.5
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns, calendar-views, blocks, clocks, shape]
+tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns, calendar-views, blocks, clocks, shape, home-assistant, repeated-blocks, swipe]
 ---
 
 # Today layouts
@@ -20,7 +20,10 @@ panel types for the spec layouts, four weather panels and a single
 countdown, with the screens' weather now from the hub's feed (2026-09-26,
 `panels-and-controls.md`, chunk 2); and ten more on 2026-09-27, four
 calendar views and six blocks and clocks, the shape a block like text and
-image (`panels-and-controls.md`, chunks 3 and 4).
+image (`panels-and-controls.md`, chunks 3 and 4). Later on 2026-09-27: the
+four Home Assistant blocks (`panels-and-controls.md`, chunk 5), any type
+on a layout any number of times ("Layout core" there), and swiping between
+the layouts on a touch screen (below).
 
 ## The one decision that shaped everything
 
@@ -29,7 +32,8 @@ hook feeds them. `views/TodayLayouts/`:
 
     tokens.css                theme variables + base classes; every panel reads ONLY these
     registry.js               layout ids and labels (plain data, imported by Settings)
-    TodayLayoutSwitch.jsx     id -> component; 'framed' renders the untouched views/TodayView
+    TodayLayoutSwitch.jsx     id -> component; 'framed' renders the untouched views/TodayView; the swipe's slide and pill
+    useLayoutSwipe.js         what counts as a swipe between layouts, and which way (useLayoutSwipe.test.mjs)
     layoutSpec.js             the layout spec: types, the two default boards, normalizeSpec, day parts (pure)
     editBridge.js             the app's half of the layout editor's message channel
     lib/format.js             time / date / data-age formatting shared by all panels
@@ -53,10 +57,11 @@ hook feeds them. `views/TodayLayouts/`:
     panels/<Name>Panel.jsx    Clock, WeatherNow, Forecast, Hourly, Conditions, Precip, Alert, SunMoon,
                               WhatToWear, Departure, NowPlaying, Photo, School, Agenda, Countdowns,
                               Countdown, Headline, UpNext, DayList, WeekGrid, MonthGrid, FlipClock,
-                              AnalogClock, SecondClock, Date, DayCount; also AirQualityChip,
-                              TextBlock, ImageBlock, ShapeBlock (the shape), CountdownCard (the
-                              art-above card), CalendarParts (the calendar views' colour bar, dot
-                              and legend), WeatherAttribution (Apple's mark)
+                              AnalogClock, SecondClock, Date, DayCount, HaStatus, HaButton, HaChips,
+                              HaPicker; also AirQualityChip, TextBlock, ImageBlock, ShapeBlock (the
+                              shape), CountdownCard (the art-above card), CalendarParts (the calendar
+                              views' colour bar, dot and legend), WeatherAttribution (Apple's mark),
+                              HaIcon; haParts.js, the Home Assistant blocks' pure parts (haParts.test.mjs)
     Board/  Briefing/  Ambient/   one <Name>Layout.jsx + .css each
     Entry/                    EntryLayout, EntryBackdrop, SpecBoard (draws any spec layout),
                               SpecPanel (one box)
@@ -75,13 +80,64 @@ so each screen keeps its own choice through the hub's per-device config:
 `framed`, `board`, `briefing`, `ambient`, `entry` (Entry board) or `clock`
 (Flip clock). Settings > Today screen > Layout, or the dashboard's Today
 layout select. `?layout=<id>` in the URL previews one for that page load
-without saving it (`lib/kioskMode.js` `REQUESTED_LAYOUT`).
+without saving it (`lib/kioskMode.js` `REQUESTED_LAYOUT`). On a touch
+screen a swipe on Today also picks one, and saves it (below).
+
+## Swiping between layouts (built 2026-09-27)
+
+A swipe to the left on Today shows the next layout, a swipe to the right
+the previous one, in `registry.js` `LAYOUT_IDS` order (Framed, Board,
+Briefing, Ambient, Entry board, Flip clock), wrapping at both ends; the
+screen keeps the one it lands on. Commit `4d54930`, deployed with the hub
+2026-09-27 10:42 (build `736683e`): the Echos have it from the reload that
+follows every hub deploy, the kitchen Pi from its next `./deploy.sh pi`.
+
+- `useLayoutSwipe.js` decides what is a swipe, with pointer events, so a
+  finger (Silk on the Echos, Chromium on the Pi) and a mouse take one path.
+  A swipe starts on a pointerdown with the main button or the first finger
+  (a second finger calls it off), never on a control by the shell's tap
+  rule (a button, a link, a form field, a `role=listbox` such as the
+  timer's wheels, anything marked `data-interactive`) nor inside anything
+  that scrolls sideways. Whichever axis passes 10 px first decides, a tie
+  going to vertical; vertical calls it off, as does the browser taking the
+  pointer for a scroll of its own (`pointercancel`). On release it commits
+  at 80 px across, or on a flick of 40 px moving faster than 0.6 px/ms the
+  same way over the last 100 ms, in both cases flatter than 2:1 (|dx| more
+  than twice |dy|). Nothing moves under the finger.
+- `TodayLayoutSwitch.jsx` does the rest: the old layout slides out and the
+  new one in over 260 ms (transforms only; an instant swap under reduced
+  motion), a pill at the bottom centre names the new one for 1.5 s
+  ("Framed", not "Framed (original)"), and the choice is saved as the
+  screen's `display.todayLayout` through `updateSettings`, as the Settings
+  select saves it (the store's settings POST of the device scope, debounced
+  400 ms), so it holds after a reload and shows on the dashboard. A swipe
+  during a slide is ignored. A swipe ends a `?layout=` preview: the screen
+  then shows, and keeps, what it was swiped to.
+- The click that follows a committed swipe (within 250 ms) is swallowed, so
+  a swipe never opens the menu pill; a tap without movement reaches the
+  shell as before (nothing calls `preventDefault`). The container is
+  `touch-action: pan-y pinch-zoom`, so vertical scrolling stays the
+  browser's.
+- Not in the layout editor's preview (`?edit=1`, which must never change a
+  screen's settings) and not on the legacy web TV (`?kiosk=tv`, a remote):
+  there the layout renders bare, as before. A dimmed or gated screen needs
+  no rule of its own: the dim overlay and the Echo's start gate sit above
+  Today and take the touch that wakes it.
+- `display.swipeLayouts` (device scope, default on; anything but `false`
+  reads as on, `swipeLayoutsOn` in `lib/settings.js`) turns it off per
+  screen: Settings > Today screen > "Swipe between Today screens". The
+  dashboard has no row for it yet (BACKLOG).
+- Verified in touch-emulated Chrome at 1280x800 and 960x480, 50 of 50
+  checks. 7 new tests (`useLayoutSwipe.test.mjs`: the thresholds, the axis
+  lock, the release velocity, the direction, flicks, the wrap through the
+  registry order, the control rule). Shots:
+  `_review/today-layouts/swipe-*.png`, indexed in that folder's README.
 
 ## The data contract
 
 `useTodayData()` returns `{ now, demo, greeting, settings, weather, moon, school,
 timer, wear, music, photos, calendar, agendaDays, countdowns, headline,
-airQuality, weatherAlerts, schoolCalendar }`; the exact field list is documented at the top
+airQuality, weatherAlerts, schoolCalendar, ha }`; the exact field list is documented at the top
 of `useTodayData.js` (calendar through airQuality are the Entry board's,
 `entry-board.md`; weatherAlerts feeds the `alertActive` visibility rule).
 Since 2026-09-26 `weather` also carries the hub's whole weather feed for the
@@ -92,7 +148,11 @@ and cloud cover (`panels-and-controls.md`, chunk 2). Since 2026-09-27
 `calendar` also carries `range`, the dates the hub's answer covers (a
 calendar view never calls a day outside it empty), and `schoolCalendar` is
 the hub's `/api/schoolcal`, for the day count's school days
-(`panels-and-controls.md`, chunks 3 and 4). Three things worth knowing:
+(`panels-and-controls.md`, chunks 3 and 4). Also since 2026-09-27, `ha` is
+the Home Assistant snapshot the HA blocks read (`hooks/useHomeAssistant.js`:
+the whitelist's states, labels, kinds and actions, and whether actions are
+on; a demo whitelist under `?demo=1`; `panels-and-controls.md`, chunk 5).
+Three things worth knowing:
 
 - `now` ticks at 1 Hz; every other object is memoised on its real inputs so a
   tick does not churn identities. PhotoPanel is `React.memo` and keeps its
@@ -167,22 +227,30 @@ stacked flush draw as one card divided by hairlines. The default specs
 reproduce the old grids: the Board exactly at 1280x800 (the Echo Show 10),
 the Entry board at 1920x1080 (the Echo Show 15), each within a few pixels at
 the other size. The departure countdown borrows the countdowns box on a
-school morning and the now-playing box while a countdown runs, unless the
-layout has a departure panel of its own. The layout component still calls
+school morning and the now-playing box while a countdown runs (with
+several, the first in the spec's list), unless the layout has a departure
+panel of its own. The layout component still calls
 `useTodayData()` once and hands the result to `SpecBoard`; the Entry board
 adds its backdrop (`EntryBackdrop`) as SpecBoard's child. The spec, the knobs
 and the editor: `layout-editor.md`.
 
 Beyond the two boards' own panels, a spec layout can take, through the
-editor: the weather panels (Hourly forecast, Conditions, Rain chance,
-Weather alert) and the single Countdown since 2026-09-26; the calendar
-views (`upnext` Up next, `daylist` Day list, `weekgrid` Week grid,
-`monthgrid` Month grid) and the clocks and dates (`flipclock` Flip clock,
-`analog` Analog clock, `clock2` Second clock, `date` Date, `daycount` Day
-count) since 2026-09-27, each at most once per layout; and, besides text
-and image blocks, any number of `shape` blocks (Add shape), since
-2026-09-27. None is on a default board. Knobs, elements and starting boxes:
-`panels-and-controls.md`, chunks 2 to 4.
+editor's Add block: the weather panels (Hourly forecast, Conditions, Rain
+chance, Weather alert) and the single Countdown since 2026-09-26; the
+calendar views (`upnext` Up next, `daylist` Day list, `weekgrid` Week
+grid, `monthgrid` Month grid), the clocks and dates (`flipclock` Flip
+clock, `analog` Analog clock, `clock2` Second clock, `date` Date,
+`daycount` Day count), the shape and the Home Assistant blocks
+(`hastatus` HA status, `habutton` HA button, `hachips` HA chips,
+`hapicker` HA picker) since 2026-09-27; and text and image blocks. Since
+the layout core (2026-09-27) any type may be on a layout any number of
+times, each instance with its own box and knobs: the first of a
+functional type keeps the bare type as its id, further ones are
+`<type>-<4 hex>`. None is on a default board. Knobs, elements and starting
+boxes: `panels-and-controls.md`, chunks 2 to 5 and "Layout core"; the
+editor calls everything on a layout a block (`layout-editor.md`, "As
+built, 2026-09-27: blocks, Delete, the Add block menu, repeated
+blocks").
 
 ## Flip clock (built 2026-09-24, full width 2026-09-25)
 
@@ -259,7 +327,8 @@ edge with its hairlines dropped.
 
 Layout: one folder with `<Name>Layout.jsx` (default export, no props, one
 `useTodayData()` call, root `tl-root tl-<name>`) and `.css`; add the id to
-`registry.js` and the component to `TodayLayoutSwitch.jsx`, to
+`registry.js` (its place in `LAYOUT_IDS` is its place in the swipe order)
+and the component to `TodayLayoutSwitch.jsx`, to
 `VALID_LAYOUTS` in `lib/kioskMode.js`, and to the dashboard's Today layout
 select (`frameserver/admin.html`). Panel: `panels/<Name>Panel.jsx` + `.css`,
 props in, `PanelFrame` around it, tokens only.
@@ -274,9 +343,16 @@ box), its knobs and sub-elements in `panels/schemas.js` (`PANEL_SCHEMAS`,
 `content()`, and its `minPx` as a container query in `Entry/SpecPanel.css`
 (or in its own stylesheet, as the calendar views keep theirs). A new block
 type is a `TYPE_TABLE` row of `kind: 'block'`, which puts it in
-`BLOCK_TYPES`. The editor learns new types, and which of them are blocks,
-from the app's `sd-edit:ready` (since 2026-09-27; `layout-editor.md`, "As
-built, chunk 4 and the shape block").
+`BLOCK_TYPES` (`isBlockType` and `BLOCK_ID_RE` in `layoutSpec.js` name
+the blocks too); since any type repeats (2026-09-27), a new type need be a
+block only when it is free content with no first instance of its own. The
+editor learns new types, and which of them are blocks, from the app's
+`sd-edit:ready` (since 2026-09-27; `layout-editor.md`, "As built, chunk 4
+and the shape block"). For the Add block menu, give a new type its group
+and one-line description in `editor/catalog.js` (`ADD_GROUPS`,
+`DESCRIPTIONS`; else it lands under Other with none) and a thumbnail:
+`node code/scripts/render-previews.mjs --puppeteer ~/.cache/sd-previews
+--only <type>` (`layout-editor.md`, "The previews").
 
 ## Verifying without touching the kitchen
 
@@ -304,3 +380,5 @@ different ways between launches, which otherwise reads as a change.
 - A next-meeting line with the flip clock. The flip clock itself became a
   panel for the spec layouts on 2026-09-27 (`flipclock`; "Flip clock",
   above).
+- A dashboard row for `display.swipeLayouts` (Settings has one); tracked
+  in BACKLOG.

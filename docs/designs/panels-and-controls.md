@@ -2,14 +2,14 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-27
-version: 1.5
+version: 1.6
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, echo-show, frameserver]
+tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, ha-blocks, repeated-blocks, hourly, agenda, previews, echo-show, frameserver]
 ---
 
 # Panels and controls
 
-**Status: chunks 1 to 4 built and deployed. Chunk 1 went to the hub
+**Status: all five chunks built and deployed. Chunk 1 went to the hub
 2026-09-26 at 12:49 (build `2fcca07`; as built in `layout-editor.md`, "As
 built, chunk 1 (2026-09-26)") with the hub halves of chunk 2 (the one
 weather feed, on Apple WeatherKit) and chunk 5 (Home Assistant, actions
@@ -19,9 +19,18 @@ forecast's Bars style, Apple's mark) and the countdown tiles followed at
 and clocks, with the editor's shape support) went to the hub 2026-09-27 at
 01:34 (build `88877f9`); as built under each below, and the editor's half
 of chunk 4 in `layout-editor.md`, "As built, chunk 4 and the shape block
-(2026-09-27)". Not built: chunk 5's panels, which follow the first real
-Home Assistant action. What is left of chunks 3 and 4 is at the end of
-chunk 4.** The plan of record for the layout editor's
+(2026-09-27)". Chunk 5's screen side (the HA status, HA button, HA chips
+and HA picker blocks) went to the hub 2026-09-27 at 10:42 (build
+`736683e`), with the layout core (any number of every type, the hourly
+forecast's step and Rest of day, the agenda's row layouts, the Add block
+menu's thumbnails: "Layout core", after chunk 5) and the editor's blocks
+round (`layout-editor.md`, "As built, 2026-09-27: blocks, Delete, the Add
+block menu, repeated blocks"). What remains: the first real Home Assistant
+action with Justin present and then the dashboard's actions switch (until
+then every HA button and picker draws disabled); the camera snapshot and
+shopping list blocks; a dashboard row for the Today swipe setting and the
+dashboard PIN. The smaller leftovers are at the end of each chunk.** The
+plan of record for the layout editor's
 next round, decided in conversation with Justin against his DAKboard
 screens (calendar, time, weather and countdown settings). Builds on
 `layout-editor.md` (Contract v2, panel schemas, day-part variants) and
@@ -771,8 +780,9 @@ editor's half (block types from the app, the shape in the editor, types it
 does not know kept as stored) is `layout-editor.md`, "As built, chunk 4 and
 the shape block (2026-09-27)". Where the build differs from the plan: the
 shape is one block with a Rectangle or Line kind rather than two blocks;
-the second clock is a panel, so one per layout; the date and the day count
-(week number, day of the year, days left, school days left) are panels.
+the second clock is a panel, so one per layout (any number since the
+layout core, 2026-09-27, below); the date and the day count (week number,
+day of the year, days left, school days left) are panels.
 
 The plan as written:
 
@@ -839,7 +849,8 @@ Add panel.
   own time, with a muted "?" after the label and no offset); `label` (up to
   40 characters; empty, the zone's city); `hour24` (off); `showDate` (on);
   `showOffset` (on: "+8h", "+5:30h", a minus sign for behind); `size`.
-  Elements: title, label, time, date, offset. A panel, so one per layout.
+  Elements: title, label, time, date, offset. A panel, so one per layout
+  as built; any number since the layout core ("Layout core", below).
 - **Date** (`date`, `panels/DatePanel.jsx`): today's date alone, as large
   as its box allows. Knobs: `format` long ("Saturday, September 26", the
   default), medium ("Sat, Sep 26"), short ("9/26"), dayname ("Saturday")
@@ -894,14 +905,13 @@ Add panel.
   next month's own last day or two on the 1st, and a few leading days of
   the current month's grid late in some months ("The month grid at the
   hub's edges", above). BACKLOG, "Month grid past the hub's window".
-- **The second clock as a block**, if a board wants more than one other
-  time zone: as a panel it is one per layout, and the editor takes any
-  block type the app names since this chunk. BACKLOG, "Second clock as a
-  block".
+- **The second clock as a block**: settled without one on 2026-09-27.
+  Since the layout core any type repeats, so a board holds a second clock
+  per time zone (`clock2`, `clock2-<4 hex>`); the BACKLOG item is closed.
 - **A real WeatherKit alert**, still open from chunk 2: BACKLOG,
   "WeatherKit alert spot-check".
 
-## Chunk 5: Home Assistant (hub half BUILT 2026-09-26; panels not built)
+## Chunk 5: Home Assistant (BUILT: the hub half 2026-09-26, the screen side 2026-09-27; actions wait on Justin)
 
 Received 2026-09-26: the LAN URL and a long-lived token from the dedicated
 local-only user `frameserver`, validated from the Mac and from the hub
@@ -1008,16 +1018,262 @@ real Home Assistant.
 - Tests: 35 new (`frameserver/test/homeAssistant.test.mjs`); with the
   weather feed's the hub suite is 468.
 
+### As built: the screen side (2026-09-27)
+
+Committed as `fb15104` (the button's `showState` default settled in
+`736683e`) and deployed with the hub 2026-09-27 10:42 (build `736683e`);
+the Echos take it on their next reload, and the kitchen Pi (its own
+bundle) and the Apple TV were not redeployed. None of the four is on a
+default board: they arrive through Add block's Home group, any number of
+each. The dashboard's actions switch is still off, so on a screen every
+button and picker draws disabled, and the hub's action log was still empty
+at 13:05 that day: nothing has been sent to the house.
+
+| type | label | starting box (x, y, w x h, %) | minimum (%) | "Too small" under | box |
+|---|---|---|---|---|---|
+| `hastatus` | HA status | 40, 42, 20 x 16 | 6 x 5 | 120 x 44 px | card |
+| `habutton` | HA button | 42, 41, 16 x 18 | 5 x 5 | 80 x 48 px | none (the button is its own face) |
+| `hachips` | HA chips | 25, 44, 50 x 12 | 8 x 4 | 120 x 30 px | card |
+| `hapicker` | HA picker | 15, 42, 70 x 16 | 12 x 6 | 200 x 44 px | card |
+
+`TYPE_TABLE` in `layoutSpec.js` holds those; the knobs and elements are in
+`panels/schemas.js`, the pure parts in `panels/haParts.js` (words, tones,
+icons, the hold's timing, the refusals, the editor's options), and each
+block's "Too small" rule in its own stylesheet (`panels/HaStatusPanel.css`
+and the others).
+
+- **HA status** (`hastatus`, `panels/HaStatusPanel.jsx`): one entity as an
+  indicator: an icon by its kind, its label (the dashboard's, else Home
+  Assistant's friendly name), its state as a word and "since 4:12 pm"
+  ("since Sat 9:40 pm" within the week, "since Sep 12" before). Knobs:
+  `entity`, `showLabel` and `showSince` (on), `size`, `layout` Side by side
+  (`row`, the default) or Stacked. Elements: title, icon, label, state,
+  since, empty. Nothing on it is tappable.
+- **HA button** (`habutton`, `panels/HaButtonPanel.jsx`): one whitelisted
+  action, its entity's icon, its label and a hint line. A tap action fires
+  on release, on the button (a finger may stray 12 px); a hold action (the
+  whitelist's `confirm: hold`: the garage, unlocking the door) fires once
+  the press has lasted 1.2 s, a ring filling round the icon meanwhile, and
+  letting go early or sliding off cancels. While the hub answers, the icon
+  is a spinner; a press that went through shows a check for 1.5 s; a
+  refused one says why for 6 s: "Buttons are off on the dashboard" (403),
+  "Try again in a moment" (429), "Not on the whitelist" (404), else "Home
+  Assistant unreachable". Knobs: `action`, `size`, `style` Filled or
+  Outline, `showState` (the entity's state under the label; off by default
+  since `736683e`). Elements: title, icon, label, state, hint. It is a
+  `<button>` marked `data-interactive`, so a tap never opens the menu and
+  never starts a swipe.
+- **HA chips** (`hachips`, `panels/HaChipsPanel.jsx`): several entities as
+  small chips in a row that wraps, each its icon, label and state word in
+  the status block's tones. Knobs: `entities`, entity ids separated by
+  commas (at most 16; the editor has no multi-select), empty for every
+  mode on the whitelist; `size`; `showLabels` (on). An id not on the
+  whitelist gets a grey chip saying so. Elements: title, chip, label,
+  state, empty. Nothing on it is tappable.
+- **HA picker** (`hapicker`, `panels/HaPickerPanel.jsx`): an
+  `input_select` as a segmented control, the current option lit (the day
+  part override: Auto, Morning, Day, Afternoon, Evening, Late Evening,
+  Night, Overnight). A tap on another option runs the whitelisted action
+  that sets that select and takes an option, sending `data.option`: the one
+  the `action` knob names, else (Automatic) the first on the whitelist that
+  does (`daypart-set`). A tapped option shows a spinner while the hub
+  answers, then an outline until the select's state moves off the old
+  option (given up after 30 s). Knobs: `entity`, `action`, `size`, `wrap`
+  (on: the options run onto more rows). Elements: title, option, hint.
+- The words (`haStateWord`): Closed, Open or "Open 40%" (a cover part
+  way), Opening, Closing; Locked, Unlocked, Jammed; Home, Away or the
+  zone's name; On, Off; a select's option as written; a sensor's value
+  with its unit ("72.4°F"); a binary sensor's by its device class (Open and
+  Closed, Detected and Clear); Unavailable, Unknown. The tones (`haTone`):
+  calm for the safe states (closed, locked, home, off, and a select's
+  option or a sensor's value), amber for open, unlocked, away and on, and
+  grey with no state or whenever Home Assistant is not connected, the since
+  line then saying "Home Assistant offline" or "Hub unreachable".
+- Honest about the rest: "Choose an entity" (a select, an action) with
+  nothing chosen, "Not on the whitelist" for an id the dashboard no longer
+  lists, "Waiting for Home Assistant" until the first answer. Words that do
+  not fit wrap, then shrink (`panels/useHaFit.js`), never truncate.
+- **Disabled, and nothing posted**, while the dashboard's actions switch is
+  off, the hub or Home Assistant is down, or the action is off the
+  whitelist; the hint says which. Should the switch go off inside the
+  snapshot's minute, the hub's 403 says so.
+- **The store** (`hooks/useHomeAssistant.js`, pure parts in
+  `lib/haState.js`): the whitelist's states from the house state
+  (`/api/state.ha`, every 10 s on every screen; `lib/houseState.js` now
+  carries it, never cached) merged with the hub's snapshot (`GET
+  /api/ha/state`: each entity's label, kind and unit, the actions, and
+  whether actions are on), each entity reading the fresher of the two. The
+  snapshot is fetched only while something needs it: at once and then once
+  a minute while a board shows a Home Assistant block (`useHaPolling`) or
+  the layout editor's bridge is open, at once after any press, and every 3
+  s for 30 s after a press that went through, so the thing pressed updates
+  fast. A board without one asks for none. `runHaAction` posts `{
+  actionId, screen, data? }` to `/api/ha/action` (the screen's device id)
+  and never retries, a 429 least of all. The layout editor's preview
+  (`?edit=1`) never posts; `?demo=1` shows a demo whitelist whose presses
+  only animate.
+- **The editor's live options**: the entity and action knobs are declared
+  as text (the spec cannot know the whitelist), and `editBridge.js` sends
+  them in its ready as selects of the live whitelist, id to label (hold
+  actions marked "(hold)"; a first option None, or Automatic for the
+  picker's action), an id the saved layout holds that is off the whitelist
+  kept as "<id> (not on the whitelist)". The chips' ids stay text, their
+  hint listing the whitelist. The bridge keeps the whitelist polled and
+  sends a fresh ready when the options change.
+- **Verified** against a mock hub (`_review/layout-editor/ha-proof-report.json`):
+  a tap posts 2 ms after release; a hold released at 0.6 s posts nothing;
+  held on, one post at 1203 ms; the picker posts `data.option`
+  ("Evening"); a 429 is not retried; after an ok, 11 fast polls over 30 s
+  and none after; `?edit=1` posts nothing. Pixel diffs against the build
+  before, nothing set: 0 px on the Entry board at 1920x1080 and 1280x800;
+  the Board's difference at 1280x800 is its weather icons' raster noise, as
+  large between two loads of one build; and no default board asked for
+  `/api/ha/state` (`ha-diff-results.json`). Tests: 41 new
+  (`panels/haParts.test.mjs` 23, `lib/haState.test.mjs` 9,
+  `haPanels.test.mjs` 9). Shots: `_review/layout-editor/ha-*.png`, indexed
+  in that folder's README.
+
 ### What remains of chunk 5
 
-- The panels: indicator chip, button with hold-to-confirm, toggle, sensor
-  value, presence chips, camera snapshot, the shopping list.
-- The first real action, with Justin present, then the switch.
+- The first real action, with Justin present, then the dashboard's
+  "Allow actions from screens" switch. Until it is on, every HA button and
+  picker on a screen draws disabled ("Buttons are off on the dashboard").
 - The dashboard PIN, before the switch stays on.
 - Justin to confirm two choices in the seed: "Turn off downstairs" as
   `light.turn_off` on the `light.downstairs` group (no script or scene of
   that name exists), and the basement as the room group
   `light.basement_basement` rather than `light.basement_light_switch`.
+- The plan's last two blocks: a camera snapshot (a snapshot route on the
+  hub; the doorbell cameras on the whitelist) and the shopping list
+  (`todo.shopping_list`). The rest of the plan's list is covered: a toggle
+  is a button on a toggle action (Guest mode, Basement light), and a
+  sensor's value and presence show on the status block and the chips (the
+  Awair sensors are not on the whitelist yet).
+- Smaller, in BACKLOG: a multi-select field for the chips' entities.
+
+## Layout core (BUILT, deployed 2026-09-27)
+
+Not a chunk of the plan: what the editor's blocks round needed of the app,
+and two sets of knobs, built as `736683e` and deployed with the hub
+2026-09-27 10:42 (build `736683e`). The editor's half is
+`layout-editor.md`, "As built, 2026-09-27: blocks, Delete, the Add block
+menu, repeated blocks". At the defaults every board draws as it did.
+
+### Any number of every type
+
+- A layout may hold two weathers or three agendas, each an instance with
+  its own box, knobs, element styles and rule; knobs, elements and defaults
+  stay per type. Ids (`layoutSpec.js`): a functional type's first instance
+  keeps the bare type (`weather`), so every layout saved before reads
+  unchanged; further ones are `<type>-<4 hex>` (`weather-3fa9`); text,
+  image and shape blocks are suffixed from the first. `typeOfId(id)` is the
+  id itself when it is a type, else the part before its first `-`;
+  `isInstanceId(type, id)` says whether an id follows the scheme for a
+  type.
+- `normalizeSpec` keeps every id the scheme allows exactly as saved (never
+  renamed), drops a true duplicate (the same id twice: the first wins), and
+  gives a panel with no id, or one outside the scheme, the bare type while
+  no panel in the list holds it (Contract v1's `{ type: 'clock' }`), else a
+  deterministic `<type>-<4 hex>` clear of every id in the list. Ids the
+  scheme allows are claimed first, so a made id never takes one a later
+  panel carries by right. It is idempotent: a 50-round fuzz test of good,
+  duplicated, malformed and missing ids.
+- `newPanel(type, overrides, { layoutId, takenIds })` hands out the bare
+  type while it is free, else a fresh suffixed id clear of the taken ones.
+  The Home Assistant types' own `repeat` flag, from chunk 5's first commit,
+  is gone: every type repeats. The type list the editor gets still marks a
+  functional type `unique` (its bare id belongs to its first instance), for
+  a reader that predates `kind`.
+- `Entry/SpecBoard.jsx` works per box wherever it worked per type:
+  - The departure countdown still borrows one box (`departureHost`): the
+    first countdowns box drawn, in the spec's list order, during a school
+    morning or a manual timer, else the first now-playing box drawn while a
+    countdown runs, whatever their ids or stacking; a layout with a
+    departure block of its own, any instance, lends none.
+  - An alert box with no alert in force, and a day count that cannot be
+    counted, drop alone, each box judged by its own knobs.
+  - Each agenda cuts its own days; every calendar block joins the one
+    calendar window the board asks for; each photo block keeps its own
+    interval and shuffle.
+  - Each box is `data-box="<id>"`, so two instances never share a box, a
+    card join or a scoped element style, and the bridge reports each by id
+    with its elements.
+
+### The hourly forecast: every N hours, or the rest of the day
+
+- `step` "Every" 1, 2, 3 or 4 hours (1): "Now", then the hours on the clock
+  the step divides (at 1:20 pm with 3: Now, 3 PM, 6 PM, 9 PM; past
+  midnight the count goes on from 12 am).
+- `range` "Show": Next hours (`hours`, the default, with `hours` 6 to 24,
+  12) or Rest of day (`untilHour`, with `untilHour` "Until" 18 to 24, 6 pm
+  to midnight, default 22): from now through that hour, the last column the
+  last step hour at or before it, never tomorrow's; late in the evening
+  only Now is left. The header then says "Rest of day" instead of
+  "Hourly".
+- At the defaults the strip is the one it always was (`lib/weatherPanels.js`
+  `hourlyColumns`, `hourlyTitle`). The schema marks each range's own field
+  with `showIf`, which the inspector does not yet honour on a type's fields,
+  so Hours and Until both show (BACKLOG).
+
+### The agenda's rows
+
+- `rowLayout` "Row layout": Time beside (`side`, as it always was), Time
+  above (`stacked`: the time in small capitals over the title) or Time
+  right (`timeRight`: at the row's end, quieter).
+- `titleLines` One or Two (2), then an ellipsis; `dayHeader` Capitals
+  (`caps`, as before), Bold (the day in its own words) or Compact (smaller,
+  no rule); `rowGap` 0 to 2 (1), a multiplier of the gap between rows.
+- Each default is the agenda as it was, pixel for pixel: a knob off its
+  default adds a class, so at the defaults the DOM and the styles are
+  unchanged. The row size's cap follows the row's shape
+  (`panels/agendaDays.js` `agendaRowFit`), so the worst day still fits:
+  Time above costs about a quarter of the row size at the same rows per
+  day.
+
+### Smaller
+
+- The box schema's words say block: "Top is the block as designed", and
+  the block title's first option is "Default", not "Panel". The editor's
+  own overrides for those two are now redundant (BACKLOG).
+- HA buttons no longer show their entity's state by default
+  (`habutton.showState` off).
+- The Add block menu's thumbnails: `code/scripts/render-previews.mjs`
+  renders a 320 px preview of every type from the demo data into
+  `code/public/previews/` (34 PNGs, 0.9 to 29 KB, byte-identical from run
+  to run, no family photo, and `index.json`), which the hub serves beside
+  the app (`deploy.sh` `HUB_APP_FILES` gained `previews`). How it draws and
+  how to run it: `layout-editor.md`, "The previews". Sheet:
+  `_review/layout-editor/core-previews-sheet.png`.
+
+### Verified
+
+- Pixel diffs against the build before (`fb15104`), nothing set and every
+  board its built-in default, software raster, three loads a build: 0 px in
+  all nine pairs for the Entry board at 1920x1080 and 1280x800, its demo at
+  1920x1080 and Briefing at 1920x1080. The Board at 1280x800 differs by up
+  to 71 px over six loads a build, in the band across its forecast and its
+  sun and moon, where its SVG weather icons rasterise a little differently
+  from load to load in either build (two loads of this build differ as
+  much; 6 of the 36 cross pairs are identical), as seen since chunk 2
+  (`_review/layout-editor/core-diff-results.json`).
+- Runtime checks on the built app (`core-proofs.json`): with no alert in
+  force two alert boxes drop, each on its own, and with one both draw; two
+  day counts count their own things, and one that cannot be counted drops
+  only its box; two agendas show 3 days and 1; on a school morning the
+  first countdowns box in the list borrows the departure, whatever the ids
+  or stacking; with a countdown running the first now-playing box borrows
+  it and the other plays on; with a departure instance on the layout no box
+  borrows; the bridge reports each instance by id; a scoped style reaches
+  only its own instance.
+- Tests: 19 new (`layoutSpec.test.mjs` 11, `lib/weatherPanels.test.mjs` 4,
+  `panels/agendaDays.test.mjs` 4). The app's suite is 265, all passing in
+  the house's time zone; two weather tests from chunk 2
+  (`lib/weatherPanels.test.mjs`, "hoursFrom" and "rain labels") fail with
+  the machine in Pacific/Auckland, because their fixture's hours, built in
+  local time, cross New Zealand's clock change at 2 am on 2026-09-27
+  (BACKLOG).
+- Shots: `_review/layout-editor/core-*.png`, indexed in that folder's
+  README.
 
 ## Justin's part for WeatherKit (done 2026-09-26)
 
@@ -1044,5 +1300,7 @@ returned, attribution URL present.
 
 Chunk 1 L; chunk 2 M plus S per panel; chunk 3 L; chunk 4 S each; chunk 5 M.
 Order: 1, 2, 3, then 4 and 5 as their inputs allow. Chunks 1 and 2 were
-done 2026-09-26 and chunks 3 and 4 on 2026-09-27; chunk 5's panels remain,
-after the first real Home Assistant action.
+done 2026-09-26, and chunks 3 and 4 and chunk 5's screen side on
+2026-09-27, with the layout core. What is left of chunk 5 is the first
+real Home Assistant action and the switch, and the camera snapshot and
+shopping list blocks.

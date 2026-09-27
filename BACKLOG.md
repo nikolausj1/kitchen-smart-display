@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-27
-version: 7.9
+version: 8.0
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,7 +87,7 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Panels and controls (chunks 1 to 4 BUILT 2026-09-26/27; chunk 5's hub half BUILT)
+### Panels and controls (all five chunks BUILT 2026-09-26/27; the first real Home Assistant action waits on Justin)
 
 The layout editor's next round, decided against Justin's DAKboard screens:
 generic element styles on every panel (hide, size, weight, colour, spacing,
@@ -117,14 +117,23 @@ grid, Month grid, DAKboard's calendar options as knobs on every calendar
 panel, the agenda included, and a hub window from 31 days back to 60
 ahead), and chunk 4, blocks and clocks (the shape block, the flip clock as
 a panel, an analog clock, a second clock, a date and a day count), with
-the editor taking its block types from the app. See Recently Shipped.
-**Chunks 1 to 4 are done** but for small follow-ups (Shared /
-infrastructure: the hub's travel default, the weather panels follow-ups,
-shrink by default, the WeatherKit alert spot-check, a screen's 12 or 24
-hour setting, the month grid past the hub's window, the second clock as a
-block). **What remains of the round:** chunk 5's panels, after the first
-real Home Assistant action with Justin and the dashboard PIN; then the
-ideas (the backlog's and the STATUS Ideas Shelf).
+the editor taking its block types from the app. At 10:42 on 2026-09-27
+(build `736683e`): chunk 5's screen side, the HA status, HA button, HA
+chips and HA picker blocks, with the layout core (any number of every
+type, the hourly forecast's step and Rest of day, the agenda's row
+layouts, the Add block menu's thumbnails) and the editor's blocks round
+(Block as the word, Delete removes, one grouped Add block menu). See
+Recently Shipped. **All five chunks are built**, but for small follow-ups
+(Shared / infrastructure: the hub's travel default, the weather panels
+follow-ups, shrink by default, the WeatherKit alert spot-check, a screen's
+12 or 24 hour setting, the month grid past the hub's window, `showIf` on a
+type's own knobs, the inspector's redundant overrides, a multi-select for
+the HA chips, the Auckland test fixture). **What remains of the round:**
+the first real Home Assistant action with Justin present, then the
+dashboard's actions switch (until then every HA button and picker on a
+screen draws disabled) and the dashboard PIN; the camera snapshot and
+shopping list blocks; a dashboard row for the Today swipe; then the ideas
+(the backlog's and the STATUS Ideas Shelf).
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -142,7 +151,10 @@ day-part tabs, the Board as a spec layout, history, copy to another screen)
 overnight 2026-09-24/25. What is left is polish: "Layout editor nits" under
 Shared / infrastructure. Chunk 1 of the next round (Panels and controls,
 above) extended it on 2026-09-26, and chunk 4 on 2026-09-27 (block types
-from the app, the shape block, panels of unknown types kept as stored).
+from the app, the shape block, panels of unknown types kept as stored),
+then the blocks round the same day (everything on a layout is a block,
+Delete removes, one grouped Add block menu with thumbnails, any type any
+number of times; hub 10:42, build `736683e`).
 Design and as-built record: `docs/designs/layout-editor.md`.
 
 ### Mixtape: cassette deck Now Playing (BUILT 2026-09-24, on the TV, in review)
@@ -227,7 +239,10 @@ checklist: `_review/today-layouts/README.md`. Merged into `feature/echo-hub`
 and deployed with it on 2026-09-24, so every web screen can pick them (not
 merged to `main`). Since then the Board is drawn from a layout spec and can be
 tuned in the layout editor, and two more layouts joined: the Entry board and
-the Flip clock (`today-layouts.md`).
+the Flip clock (`today-layouts.md`). Since 2026-09-27 a swipe on a touch
+screen's Today moves to the next or previous layout and keeps it
+(`today-layouts.md`, "Swiping between layouts"; on the Echos now, on the
+kitchen with its next deploy).
 
 Still open from the original topic: which layout (if any) gets the Apple TV
 port; auto-select by time of day (Framed inside the school window, a layout
@@ -602,18 +617,51 @@ progress bar). Remaining:
   the WeatherKit keys), and the header of `lib/homeAssistant.mjs` and the
   `/api/ha/action` route's comment list the statuses from before the actions
   switch (it answers 403, and a service off the allowlist 400).
-- **Home Assistant indicators and buttons on the Entry board** (hub layer
-  BUILT 2026-09-26; panels TODO) - Home Assistant states at a glance by the
-  front door, and a few actions. The hub half shipped 2026-09-26
-  (`frameserver/lib/homeAssistant.mjs`: a WebSocket subscription, a
-  dashboard-edited whitelist seeded with 13 entities and 10 actions,
+- **The editor honours `showIf` only on box fields** (POLISH, from the
+  layout core, 2026-09-27) - `panels/schemas.js` marks the hourly
+  forecast's Hours with `showIf: { range: 'hours' }` and its Until with
+  `showIf: { range: 'untilHour' }`, but the inspector reads `showIf` only
+  on the box schema's own fields (`editor/Inspector.jsx`, where the block
+  title's text shows only for Custom), so both always show, whatever Show
+  says. Honour it on a type's own knobs too. Design:
+  `docs/designs/panels-and-controls.md`, "Layout core".
+- **Drop the inspector's redundant overrides** (POLISH, from the layout
+  core, 2026-09-27) - `editor/Inspector.jsx` overrides the box schema's
+  vertical-align hint (`BOX_HINTS.valign`, "Top is the block as designed")
+  and the block title's first option (`BOX_OPTION_LABELS`, "Default").
+  Since `736683e` the app's schema says the same, so drop both and
+  `withOptionLabels` and leave the schema the one source. Design:
+  `docs/designs/layout-editor.md`, "As built, 2026-09-27: blocks, Delete,
+  the Add block menu, repeated blocks".
+- **Home Assistant indicators and buttons on the Entry board** (BUILT: the
+  hub layer 2026-09-26, the blocks 2026-09-27; see Recently Shipped) - Home
+  Assistant states at a glance by the front door, and a few actions. The
+  hub half (`frameserver/lib/homeAssistant.mjs`: a WebSocket subscription,
+  a dashboard-edited whitelist seeded with 13 entities and 10 actions,
   per-service allowlists, rate limits, an action log, actions off behind a
-  dashboard switch; see Recently Shipped). Left: the panel types for the
-  spec layouts (indicator chip, button with hold-to-confirm on anything that
-  opens the house, toggle, sensor value, presence chips, camera snapshot,
-  the shopping list), after the first real action and the dashboard PIN
-  below. The same layer is the way in for the items blocked on Home
-  Assistant (the doorbell, presence dimming). Design:
+  dashboard switch) and the screen side (the HA status, HA button, HA chips
+  and HA picker blocks, for any spec layout, any number of each) are built.
+  None is on a board yet (13:10 on 2026-09-27), and the buttons draw
+  disabled until the first real action and the switch below. What is left
+  of the plan is the next item. The same layer is the way in for the items
+  blocked on Home Assistant (the doorbell, presence dimming). Design:
+  `docs/designs/panels-and-controls.md`, chunk 5.
+- **Camera snapshot and shopping list blocks** (TODO, the rest of chunk 5,
+  from 2026-09-27) - the two blocks of the Home Assistant plan not built
+  with the others: a camera snapshot (a snapshot route on the hub; the
+  doorbell cameras on the whitelist) and the shopping list
+  (`todo.shopping_list` on the whitelist). The rest of the plan's list is
+  covered: a toggle is a button on a toggle action, and a sensor's value
+  and presence show on the status block and the chips. The STATUS Ideas
+  Shelf's doorbell snapshot is the version that jumps in on a ring. Design:
+  `docs/designs/panels-and-controls.md`, "What remains of chunk 5".
+- **A multi-select field for the HA chips** (POLISH, from chunk 5,
+  2026-09-27) - HA chips take their entities as a comma-separated list of
+  ids (`hachips.entities`, at most 16; empty is every mode on the
+  whitelist), because the editor has no multi-select field; the field's
+  hint lists the whitelist's ids. A pick list of the whitelist, built from
+  the live options the other HA knobs already get in the bridge's ready
+  (`panels/haParts.js` `withHaOptions`), would do. Design:
   `docs/designs/panels-and-controls.md`, chunk 5.
 - **First real Home Assistant action, with Justin present** (VERIFY, from
   2026-09-26) - no service call has ever reached Home Assistant. With Justin
@@ -623,7 +671,9 @@ progress bar). Remaining:
   then switch it off again, or leave it on once the dashboard PIN is in
   place. Also his to confirm: "Turn off downstairs" as `light.turn_off` on
   the `light.downstairs` group, and the basement as `light.basement_basement`
-  rather than `light.basement_light_switch`.
+  rather than `light.basement_light_switch`. The screens' HA buttons and
+  picker, built 2026-09-27, draw disabled until the switch is on; the hub's
+  action log was still empty at 13:05 that day.
 - **Dashboard PIN** (DECISION, now before Home Assistant actions go on) - the
   hub has no login (LAN-only by design), so anyone on the network can change
   every screen from `/admin` and the editor, and, once the dashboard's
@@ -664,6 +714,17 @@ progress bar). Remaining:
   `data-edit="attribution"`), though any style on it is dropped by design.
   Design: `docs/designs/panels-and-controls.md`, "What remains of chunk
   2".
+- **Two weather tests fail in Pacific/Auckland** (POLISH, from chunk 2,
+  found 2026-09-27) - in `code/src/views/TodayLayouts/lib/weatherPanels.test.mjs`,
+  "hoursFrom: from the hour now is in, skipping hours already over" and
+  "rain labels: every 3 hours to a day, every 6 past it, Now first" build
+  their 48 feed hours in local time from 1 pm on 2026-09-26, which in New
+  Zealand crosses the clock change at 2 am on 2026-09-27: the stamps skip 2
+  am and repeat 3 am, so with the machine in Pacific/Auckland the twelfth
+  hour reads 03:00 and the labels count 10, not 9. The fixture is at fault,
+  not the code: build it from a fixed offset, or on dates with no clock
+  change in the zones tested. The suite passes in the house's zone (265 of
+  265).
 - **Shrink to fit by default for single values** (POLISH, from the
   2026-09-26 decision) - decided: text that does not fit shrinks or wraps,
   never truncates, shrink being the default for single values. Chunk 1
@@ -690,6 +751,12 @@ progress bar). Remaining:
   `screenHour24`, the prop they already take (`Entry/SpecBoard.jsx` passes
   none today). Design: `docs/designs/panels-and-controls.md`, chunk 3,
   "The shared options".
+- **Dashboard row for the Today swipe** (TODO, from 2026-09-27) -
+  `display.swipeLayouts` (device scope, default on) has a Settings row,
+  "Swipe between Today screens", but none on the dashboard's screen card.
+  Add one beside the Today layout select (`frameserver/admin.html`), so a
+  screen's swiping can be set from the Mac like its layout. Design:
+  `docs/designs/today-layouts.md`, "Swiping between layouts".
 - **Month grid past the hub's window** (POLISH, from chunk 3, 2026-09-27) -
   the month grid is always six weeks, and the hub serves 60 days ahead and
   31 back, which a grid can outrun: the next month's grid needs up to 73
@@ -706,25 +773,24 @@ progress bar). Remaining:
   (`MAX_DAYS`, `MAX_PAST`) and `lib/calendarViews.js` (`HUB_MAX_DAYS`,
   `HUB_MAX_PAST`). Design: `docs/designs/panels-and-controls.md`, chunk 3,
   "The month grid at the hub's edges".
-- **Second clock as a block** (DECISION, from chunk 4, 2026-09-27) - the
-  second clock is a panel, so a layout holds one other time zone. If a
-  board wants several (the grandparents, a trip), make it a block like the
-  shape: a `TYPE_TABLE` row of `kind: 'block'` in `layoutSpec.js`, its
-  knobs unchanged; the editor takes any block type the app names since
-  chunk 4. Justin's call whether one is enough. Design:
-  `docs/designs/panels-and-controls.md`, chunk 4.
-- **Kitchen Pi and Apple TV not redeployed on 2026-09-26** (TODO, with the
-  next Pi deploy) - that day's deploys were the hub only (builds `2fcca07`
-  at 12:49 and `0f13224` at 15:31), and so was 2026-09-27's (`88877f9` at
-  01:34: the calendar views, blocks and clocks). The kitchen Pi serves its
+- **Second clock as a block** (DONE 2026-09-27, no block needed) - since
+  the layout core any type repeats, so a board holds a second clock per
+  time zone (`clock2`, then `clock2-<4 hex>`), each with its own zone and
+  label. Design: `docs/designs/panels-and-controls.md`, "Layout core".
+- **Kitchen Pi and Apple TV not redeployed on 2026-09-26 and 27** (TODO,
+  with the next Pi deploy) - those days' deploys were the hub only (builds
+  `2fcca07` at 12:49 and `0f13224` at 15:31 on 2026-09-26, `88877f9` at
+  01:34 and `736683e` at 10:42 on 2026-09-27). The kitchen Pi serves its
   own bundle (`812242f`, 2026-09-25) and shows Framed Today: chunk 1's
-  styles and rules, and the new panels of chunks 2 to 4, matter there only
-  once it shows a spec layout, but its Framed Today and the slideshow's
-  time widget still fetch Open-Meteo themselves, with no Apple mark, where
-  the Echos now read the hub's WeatherKit feed. The
-  next `./deploy.sh pi` brings the kitchen level (its 8 am icon then shows
-  the hour from 8, as on the Echos). The Apple TV reads nothing new
-  (`/api/weather` is there for it later).
+  styles and rules, the new blocks of chunks 2 to 5 and the layout core
+  matter there only once it shows a spec layout, but its Framed Today and
+  the slideshow's time widget still fetch Open-Meteo themselves, with no
+  Apple mark, where the Echos now read the hub's WeatherKit feed. The next
+  `./deploy.sh pi` brings the kitchen level (its 8 am icon then shows the
+  hour from 8, as on the Echos) and brings the Today swipe to its touch
+  screen: from then a swipe on the kitchen's Today changes and keeps its
+  layout, unless Settings turns swiping off there. The Apple TV reads
+  nothing new (`/api/weather` is there for it later).
 - **Countdown helpers** (SKIPPED 2026-09-25, kept as an option) - helpers
   around the countdown tiles, which today come only from the `countdown`
   marker typed into an event's description (`entry-board.md`). Not built in
@@ -748,11 +814,12 @@ progress bar). Remaining:
   TV mirrors later.
 - **Multi-room Sonos** - affects kitchen controller and TV.
 - **Home Assistant** - auto-launch, doorbell camera, presence dimming all depend on
-  it; so would the Entry board's indicators and buttons (discussed 2026-09-25).
+  it; the web screens' Home Assistant blocks read it through the hub since
+  2026-09-27 (their actions off until the first real press with Justin).
 - **Auto-show Now Playing** - one rule set should govern kitchen and TV.
 - **Today layouts** - Framed vs the panel board, chosen per screen through the
-  hub's existing per-device settings. Subsumes the deferred "Configurable Today
-  panels" idea.
+  hub's existing per-device settings, or by a swipe on a touch screen since
+  2026-09-27. Subsumes the deferred "Configurable Today panels" idea.
 - **Data freshness** - one `fetchedAt` convention and one way to render it,
   across every service on both surfaces.
 
@@ -764,6 +831,46 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-27 - Any number of every type, with ids that never move.** A
+  layout may hold any type any number of times, each instance with its own
+  box and knobs. A functional type's first instance keeps the bare type as
+  its id, so every saved layout reads unchanged; further ones are
+  `<type>-<4 hex>`, which the editor draws clear of every id in the
+  layout's base and day parts; text, image and shape stay suffixed from the
+  first. `normalizeSpec` never renames an id the scheme allows and drops
+  only a true duplicate (the first wins). Ids are opaque to Copy layout and
+  paste style, and names such as "Weather 2" are the editor's, never
+  stored. Supersedes "The second clock is a panel, one per layout" (below,
+  the same day): a board holds as many second clocks as it wants. Design:
+  `docs/designs/panels-and-controls.md`, "Layout core".
+- **2026-09-27 - An HA button does not show its entity's state by
+  default.** `habutton.showState` is off unless set (it was on in the first
+  commit, `fb15104`): a button draws its icon, its label and its hint, and
+  the state under the label is a per-button choice. Design:
+  `docs/designs/panels-and-controls.md`, chunk 5.
+- **2026-09-27 - Delete removes a block; with a part selected it hides the
+  part.** Delete, Backspace and the inspector's Delete take the selection
+  off the layout, whatever its type, as one undo step (before, Delete hid a
+  functional panel and removed only text, image and shape blocks). With a
+  part of a block selected, Delete hides that part, Figma's rule. Hiding a
+  whole block stays the eye's job. Design: `docs/designs/layout-editor.md`,
+  "As built, 2026-09-27: blocks, Delete, the Add block menu, repeated
+  blocks".
+- **2026-09-27 - Block is the word.** Justin chose it, DAKboard's term: in
+  the layout editor everything on a layout is a block (the Blocks column,
+  Add block, "Weather settings", "Removed Weather"). "Panel" stays only in
+  code identifiers, the spec's `panels` key and `kind: 'panel'`, the
+  `data-panel-id` attribute and one console warning, so nothing stored or
+  sent changed. Design: `docs/designs/layout-editor.md`, as above.
+- **2026-09-27 - A swipe on Today changes the screen's layout, and it
+  sticks.** On a touch screen a swipe left or right on Today moves to the
+  next or previous layout (the registry's order, wrapping) and saves it as
+  that screen's `display.todayLayout` through the normal settings path, as
+  the Settings select does: it holds after a reload and shows on the
+  dashboard, rather than being a passing preview. `display.swipeLayouts`
+  (default on) turns the gesture off per screen; it is never on in the
+  layout editor's preview or on the legacy web TV. Design:
+  `docs/designs/today-layouts.md`, "Swiping between layouts".
 - **2026-09-27 - A day count that cannot be counted drops its box, like
   the alert banner.** School days left needs a last day of school ahead
   (the dashboard's `shared.school.lastDay` while it is not past, else the
@@ -1181,6 +1288,69 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-27 - Layout core: any block repeats, the hourly forecast's
+  step and rest of day, the agenda's row layouts, the Add block previews**
+  (hub deployed 10:42, build `736683e`; the Echos take it on their reload;
+  the kitchen Pi and the Apple TV were not redeployed). Any number of every
+  type on a layout: the first instance of a functional type keeps the bare
+  id, further ones are `<type>-<4 hex>`; `normalizeSpec` keeps every id as
+  saved and drops only true duplicates (idempotent, fuzz-tested);
+  `newPanel` hands out the next free id; the board works per box (the
+  departure borrowing the first countdowns or now-playing box in list
+  order, alert and day-count boxes dropping alone, each agenda its own
+  days, each photo its own interval). Hourly forecast: Every 1 to 4 hours,
+  and Rest of day, through 6 pm to midnight. Agenda: the time beside, above
+  or right, one or two title lines, a Capitals, Bold or Compact day header,
+  a row gap; every default pixel-identical. HA buttons no longer show their
+  state by default. A dev script renders the Add block menu's 34
+  thumbnails into `code/public/previews/`, shipped with the app. 19 new
+  tests (the app's suite is 265); 0 px on the Entry board, its demo and
+  Briefing. Design: `docs/designs/panels-and-controls.md`, "Layout core".
+  Shots: `_review/layout-editor/core-*`.
+- **2026-09-27 - Chunk 5, the screen side: the Home Assistant blocks** (hub
+  deployed 10:42, build `736683e`; commit `fb15104`). HA status (an
+  entity's icon, label, state word and "since 4:12 pm"), HA button (tap,
+  or hold 1.2 s with a filling ring; a spinner, a check, and refusals in
+  words: "Buttons are off on the dashboard", "Try again in a moment", "Not
+  on the whitelist", "Home Assistant unreachable"), HA chips (several
+  entities, every mode by default) and HA picker (a select as a segmented
+  control, sending `data.option`); calm, amber or grey. One store merges
+  the house state with `/api/ha/state`, polled only while a board shows
+  one, and fast for 30 s after a press; a press never retries and never
+  goes from the editor or the demo. The buttons draw disabled while the
+  dashboard's switch is off, which it is, so nothing has been sent to the
+  house: the switch waits on the first real action with Justin. The
+  editor's entity and action knobs are selects of the live whitelist. 41
+  new tests; at the defaults 0 px on the Entry board (the Board only its
+  usual weather-icon noise), and no default board asks for
+  `/api/ha/state`. Design: `docs/designs/panels-and-controls.md`, chunk 5,
+  "As built: the screen side". Shots: `_review/layout-editor/ha-*`.
+- **2026-09-27 - Layout editor: blocks, Delete, the Add block menu,
+  repeated blocks** (hub deployed 10:42, build `736683e`; commit
+  `51a1184`). Justin chose Block, DAKboard's word, and every string the
+  editor shows says it. Delete or Backspace removes the selected block or
+  group as one undo step ("Removed Weather (undo with ⌘Z)"); with a part
+  selected it hides the part. One Add block button opens a grouped,
+  searchable menu (Clocks and dates, Weather, Calendar, Countdowns, Home,
+  Media, Blocks, Other) with a description and a thumbnail per type and
+  "2 on layout" tags. Any type can be added again: "Weather 2" comes in a
+  grid step off the first. 8 new editor tests. Design:
+  `docs/designs/layout-editor.md`, "As built, 2026-09-27: blocks, Delete,
+  the Add block menu, repeated blocks". Shots:
+  `_review/layout-editor/blocks-editor-*`.
+- **2026-09-27 - Swipe between Today layouts** (hub deployed 10:42, build
+  `736683e`; commit `4d54930`; on the Echos from their reload, on the
+  kitchen Pi from its next deploy). A swipe left or right on Today moves to
+  the next or previous layout with a 260 ms slide and a pill naming it, and
+  the screen keeps it (`display.todayLayout`, saved as the Settings select
+  saves it). 80 px, or a 40 px flick above 0.6 px/ms, flatter than 2:1;
+  never from a control or a sideways scroller; off in the editor and on the
+  web TV; a dimmed screen's first touch only wakes it; the swipe's own
+  click never opens the menu. Settings has "Swipe between Today screens"
+  (`display.swipeLayouts`, on by default); the dashboard does not yet. 7
+  new tests; 50 of 50 checks in touch-emulated Chrome at 1280x800 and
+  960x480. Design: `docs/designs/today-layouts.md`, "Swiping between
+  layouts". Shots: `_review/today-layouts/swipe-*`.
 - **2026-09-27 - Chunk 4, blocks and clocks, with the editor's shape
   support** (hub deployed 01:34, build `88877f9`; the Echos take it on
   their next reload; the kitchen Pi and the Apple TV were not
@@ -1613,8 +1783,8 @@ Newest first.
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
 - **Branches not on GitHub (2026-09-27)** - `main` matches `origin/main`
-  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (105
-  commits over `main` at `88877f9`, with Mixtape and the Today layouts
+  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (110
+  commits over `main` at `736683e`, with Mixtape and the Today layouts
   inside it) exist only locally. Merging waits on the Mixtape label pick;
   pushing does not have to.
 - **Secrets on the Mac and the hub** - `~/.config/smart-display/` holds

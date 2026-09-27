@@ -2,9 +2,9 @@
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
 modified: 2026-09-27
-version: 1.8
+version: 1.9
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules, block-types, shape]
+tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules, block-types, shape, blocks, add-block-menu, repeated-blocks, previews]
 ---
 
 # Layout editor
@@ -17,12 +17,18 @@ chunk 1: element styles, box v2, fonts, visibility rules, multi-select, copy
 and paste style) deployed to the hub 2026-09-26 12:49 (build `2fcca07`).
 Its chunk 4 half (block types from the app, the shape block, panels of
 types the app does not know kept as stored) deployed to the hub 2026-09-27
-01:34 (build `88877f9`).** Open a screen's card on the dashboard and press
+01:34 (build `88877f9`). Blocks (everything on a layout is a block in the
+editor, Delete removes, one grouped Add block menu with thumbnails, any
+type any number of times) deployed to the hub 2026-09-27 10:42 (build
+`736683e`).** Open a screen's card on the dashboard and press
 Edit layout (it opens the Today layout that screen is on), or go to
 `http://nuc.local:8095/editor/?device=echo-show15`. What was built, and where
 it differs from the contracts: "As built" under each contract below, then
-"As built, chunk 1 (2026-09-26)" and "As built, chunk 4 and the shape block
-(2026-09-27)" at the end. Review shots: `_review/layout-editor/`.
+"As built, chunk 1 (2026-09-26)", "As built, chunk 4 and the shape block
+(2026-09-27)" and "As built, 2026-09-27: blocks, Delete, the Add block menu,
+repeated blocks" at the end; the last replaces what the sections before it
+say about a panel appearing once per layout, Delete hiding and the Add
+buttons. Review shots: `_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
@@ -910,3 +916,183 @@ and chunk 1 stay the reference; nothing stored changed shape.
   undo. All 36 checks passed.
 - Shots: `_review/layout-editor/shape-editor-*.png`, indexed in that
   folder's README.
+
+## As built, 2026-09-27: blocks, Delete, the Add block menu, repeated blocks
+
+Built on `feature/echo-hub` (the editor in `51a1184`, the app's half in
+`736683e`: `panels-and-controls.md`, "Layout core") and deployed to the hub
+2026-09-27 10:42 (build `736683e`); the Echos take it on the reload that
+follows every hub deploy. Justin chose the word: everything on a layout is
+a block, DAKboard's term. What this replaces in the sections above: a
+functional panel at most once per layout (Contract v1, "The spec"; "Panel
+type registry"); Delete hiding a panel (The controls; the steps 3 and 4 and
+chunk 1 records); Add text, Add image, Add shape and Add panel (steps 3 and
+4; chunk 4's "Adding blocks"); and the unsupported type's Remove, now
+Delete. Nothing stored changed shape: a layout saved before reads, and
+saves, exactly as it did.
+
+### The word
+
+- Every string the editor shows says block: the left column is "Blocks"
+  with its count ("Blocks 8", "2 of 8 selected"), Add block, "Weather
+  settings" over a type's knobs, "Removed Weather (undo with ⌘Z)", "7 blocks
+  · Morning, Evening" in History, "2 blocks: wear, airquality" in the status
+  bar, "Show this block only when…", and the Keys card ("Delete: remove the
+  block (⌘Z brings it back); with a part of it selected, hide that part").
+- The inspector's header names the selected block as the layers do
+  ("Weather 2", its id under it), with Hide (or Show) and Delete for every
+  type; a type's knobs sit under "<type> settings".
+- "Panel" survives only where nobody reads it: code identifiers (`panels`,
+  `panelLabel`, `PANEL_*`), the spec's `panels` key and the `kind: 'panel'`
+  value in the app's type list (the contract), the `data-panel-id`
+  attribute on each box, and one developer console warning ("one action
+  moved several panels"). The app's box schema says block too since
+  `736683e` ("Top is the block as designed"; the block title's first option
+  is "Default"), so the inspector's own overrides for those two are
+  redundant (Left for later, below).
+
+### Ids and names
+
+- The instance scheme, the same in the app (`layoutSpec.js`: `typeOfId`,
+  `isInstanceId`, `newPanel`) and in the editor (`editor/spec.js`:
+  `typeOfId`, `isValidPanelId`, `newBlockId`): a functional type's first
+  instance keeps the bare type as its id (`weather`), so every layout saved
+  before reads unchanged; each further instance is `<type>-<4 hex>`
+  (`weather-3fa9`). Text, image and shape blocks are suffixed from the
+  first (`text-3fa9`), as they always were. The type of an id is the id
+  itself when it is a type, else the part before its first `-`.
+- A further instance's id is random and drawn clear of every id in the
+  layout, the base and every day part (`allIds`), so a new id is never one
+  that another part already holds; the bare id goes to the first instance
+  on the part being edited. A part made as a copy (a Morning from Day)
+  holds the copied ids, bare and suffixed, as it always has.
+- Names are the editor's alone and never stored: the type's label, numbered
+  from the second instance in the part's list order when the part holds
+  more than one ("Weather", "Weather 2", "Weather 3"; `instanceNames`), in
+  the layers, the inspector, the notices and the arrange bar. Take the
+  first away and the next one reads "Weather".
+- Where a new one goes: the first of a type on the part where the layout's
+  own default has it, with its default look, else at the type's starting
+  box (the app's `newPanel`); a further instance at the first one's size, k
+  grid steps right and down of it (k: how many the part already has; a step
+  left or up where the canvas runs out), in front and selected, with
+  "Added Weather 2, next to Weather." A bare id added back while further
+  instances are on the part goes into the list just before them.
+- Ids are opaque to Copy layout and to paste style: Copy layout to another
+  screen writes this screen's saved layout, ids and all, merged by id as
+  before; paste style matches by type, so a weather's knobs paste onto any
+  weather.
+
+### Delete
+
+- Delete, Backspace or the inspector's Delete takes the selected block off
+  the layout, whatever its type, as one undo step, and the status says so:
+  "Removed Weather 2 (undo with ⌘Z)", a notice that goes once undo or redo
+  is used. Several selected go together in one step: "Removed What to wear
+  and Air quality (undo with ⌘Z)", or "Removed 4 blocks" from four on.
+  Before, Delete hid a functional panel and removed only text, image and
+  shape blocks.
+- With a part of a block selected (clicked into, or picked in the Elements
+  tree), Delete hides that part instead, Figma's rule: its element style
+  `hidden`, one undo step, "Hid Date in Clock (undo with ⌘Z)"; its eye in
+  the tree shows it again. A part that cannot be hidden on its own says so
+  and leaves the block alone (Esc selects the block; Delete then removes
+  it).
+- Hiding a whole block is what it was: its eye in the list, or Hide in the
+  inspector, keeps it on the layout, undrawn.
+- A functional type the layout's default has (the Entry board's clock)
+  comes back through Add block, in its default box with its default look.
+- A block of a type this app does not know: Delete removes it, as Remove
+  did.
+
+### The Add block menu
+
+- One Add block button at the top of the Blocks column opens the menu
+  (`editor/AddMenu.jsx`): a search field, then every type the app knows in
+  groups with a hairline between them, each row a thumbnail, the type's
+  label and a one-line description, and "on layout" or "2 on layout" where
+  the part already has some. Picking a row adds one (a further instance
+  when the part has one already).
+- What it lists is `editor/catalog.js`. The groups, in order
+  (`ADD_GROUPS`): Clocks and dates (clock, flip clock, analog clock, second
+  clock, date, day count), Weather (weather, forecast, hourly forecast,
+  conditions, rain chance, weather alert, sun and moon, what to wear, air
+  quality), Calendar (agenda, up next, day list, week grid, month grid,
+  headline), Countdowns (countdowns, countdown, departure), Home (HA
+  status, HA button, HA chips, HA picker, school), Media (now playing,
+  photo) and Blocks (text, image, shape), then Other for any type the app
+  knows that no group names (a newer app's). A group's types the app does
+  not know are left out.
+- The descriptions are `DESCRIPTIONS` in the same file ("The time in
+  another time zone", "A button that runs a home action"), unless the
+  app's type list gives one of its own (none does yet).
+- The shape is listed twice: Shape, in front, and "Shape behind selection",
+  just behind the selected blocks and over their area (a card behind a
+  group), or at the back with nothing selected: the two ways Add shape
+  offered.
+- The search field keeps the focus and matches the labels and the group
+  names, every word, case and accents ignored ("cal" leaves the Calendar
+  group). Up and Down move the highlight (wrapping), Page Up and Page Down
+  jump six rows, Enter adds, Esc closes and gives the button its focus
+  back, Tab closes. It is a combobox over a listbox, so a screen reader
+  follows the highlight, drawn in a portal under the button (the column
+  scrolls and would clip it), as tall as the window allows.
+- Thumbnails: `previews/<type>.png` beside the app the preview frame loads
+  (`hub.js` `appAsset`: the hub's own in production, the `?app=` page's in
+  development), laid over a tile with the type's initial only once the
+  picture has loaded, so a missing one never shows as a broken image.
+
+### The previews
+
+- `code/scripts/render-previews.mjs` draws them: a tool for the Mac, run by
+  hand after a change to how a block looks, the PNGs then committed; it is
+  not part of the build. It builds the app in memory with Vite and serves
+  it through Chrome's request interception (no server; every hub request is
+  answered there with a 404 but the photo manifest and the pictures, which
+  the script draws, so no family photo lands in the repo). It loads the app
+  as the editor does (`?edit=1&layout=entry`) with the demo's data
+  (`?demo=1&demoWeather=1`), the clock frozen at Thu 2026-10-15 10:10 am in
+  America/Los_Angeles and `Math.random` seeded; for each type it sends the
+  editor's draft of that type alone at its starting box over the black
+  backdrop and cuts the box out 320 px wide.
+- Output: 34 PNGs, 0.9 to 29 KB, byte-identical from run to run, and
+  `index.json` (each type's file, size, bytes and box, and the commit they
+  were made at), in `code/public/previews/`. Vite copies them into
+  `dist/previews/`, `deploy.sh` ships the folder with the app (`previews`
+  joined `HUB_APP_FILES`), and the hub serves them at `/previews/<type>.png`.
+- Usage: `npm install --prefix ~/.cache/sd-previews puppeteer-core` once
+  (deliberately not a dependency of the repo), then `node
+  code/scripts/render-previews.mjs --puppeteer ~/.cache/sd-previews`;
+  `--only hourly,agenda` redraws some and keeps the rest, `--out <dir>`
+  writes elsewhere. It exits 1 if a type fails to draw.
+
+### Verified
+
+- Tests: 8 new in the editor (`editor/instances.test.mjs`): ids and types,
+  the normaliser keeping every instance and repairing a duplicate, a read
+  and save with two weathers (untouched blocks byte for byte), delete and
+  undo (the block gone from the PATCH, then back byte-identical), a second
+  instance's id clear of every part with the app's type and look, the
+  names, the catalogue (the groups in order, the shape twice, the counts)
+  and Other. The app's half and its 19 tests: `panels-and-controls.md`,
+  "Layout core". The app's suite is 265 with them (`node --test
+  'code/src/**/*.test.mjs'`).
+- Shots against a mock hub holding dev-mac's Entry board, in Chrome at
+  1600x1000: the Blocks column, the menu and its search, a second weather,
+  a delete and its status, a group delete, a hidden part, instances on a
+  Morning part, History and Copy layout counting blocks, the thumbnails,
+  and two HA status blocks (`_review/layout-editor/blocks-editor-*.png`);
+  the thumbnails on one sheet (`core-previews-sheet.png`). Indexed in that
+  folder's README.
+
+### Left for later (in BACKLOG)
+
+- The inspector honours a field's `showIf` only on the box's own fields,
+  so the hourly forecast's Hours and Until both always show whatever its
+  Show; honour it on a type's fields too.
+- `BOX_HINTS.valign` and `BOX_OPTION_LABELS['title.mode']` in
+  `editor/Inspector.jsx` now repeat what the app's box schema says; drop
+  them (and `withOptionLabels`).
+- The HA chips take their entities as a comma-separated list of ids,
+  because the editor has no multi-select field; one would make it a pick
+  list of the whitelist.
