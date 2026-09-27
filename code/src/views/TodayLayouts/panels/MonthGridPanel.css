@@ -1,0 +1,256 @@
+/* MonthGridPanel - six weeks of seven days (MonthGridPanel.jsx; the cells are
+ * lib/calendarViews.js monthGrid's).
+ *
+ * The body is a size container for the month's label and the weekdays; the
+ * grid is its own, so a cell's type follows one cell (100cqw / 7 wide,
+ * 100cqh / 6 tall): its date, and its titles divided by --tl-month-lines
+ * (from the JSX: the date, the titles and a "+n"). Every text element is its
+ * base times a factor times var(--tl-text-scale). Fallbacks first, container
+ * units under @supports. Chrome 80 rules: no flex gap, no `inset`, no
+ * aspect-ratio. */
+
+.tl-month__body {
+  container-type: size;
+  container-name: month;
+  --tl-month-label-px: clamp(14px, 2.6vh, 36px);
+  --tl-month-wd-px: clamp(9px, 1.2vh, 15px);
+  --tl-month-num-px: clamp(9px, 1.5vh, 22px);
+  --tl-month-ev-px: clamp(8px, 1.15vh, 16px);
+  --tl-month-dot: clamp(4px, 0.7vh, 11px);
+}
+
+@supports (height: 1cqh) {
+  .tl-month__body {
+    --tl-month-label-px: clamp(14px, min(4.4cqw, 6.5cqh), 40px);
+    --tl-month-wd-px: clamp(9px, min(1.9cqw, 2.8cqh), 16px);
+    /* Used inside the grid: one cell. */
+    --tl-month-num-px: clamp(9px, min(calc(100cqw / 7 * 0.14), calc(100cqh / 6 * 0.2)), 26px);
+    --tl-month-ev-px: clamp(8px, min(calc(100cqw / 7 * 0.085), calc(100cqh / 6 / var(--tl-month-lines, 3) / 1.25)), 18px);
+    --tl-month-dot: clamp(5px, min(calc(100cqw / 7 * 0.075), calc(100cqh / 6 * 0.12)), 16px);
+  }
+}
+
+.tl-month__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  margin-bottom: 0.3em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-label-px));
+}
+
+.tl-month__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-label-px));
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--tl-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-month__note {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: 1em;
+  text-align: right;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-label-px) * 0.5);
+  color: var(--tl-fg-2);
+}
+
+.tl-month__note--quiet {
+  color: var(--tl-fg-3);
+}
+
+.tl-month__stamp {
+  flex: 0 0 auto;
+  margin-left: 1em;
+}
+
+.tl-month__weekdays {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.tl-month__wd {
+  min-width: 0;
+  padding-left: 0.5em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-wd-px));
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-month__grid {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  container-type: size;
+  container-name: month-grid;
+}
+
+.tl-month__cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.25em 0.3em 0.2em;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--tl-rule);
+  border-left: 1px solid var(--tl-rule);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-num-px));
+}
+
+.tl-month__cell:nth-child(7n + 1) {
+  border-left-color: transparent;
+}
+
+.tl-month__num {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 0 0.28em;
+  border-radius: 1em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-num-px));
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tl-fg-2);
+}
+
+.tl-month__cell--today .tl-month__num {
+  background: var(--tl-accent);
+  color: var(--tl-bg);
+}
+
+.tl-month__cell--today {
+  background: rgba(var(--tl-fg-rgb), 0.05);
+}
+
+/* The days of the months either side: there, and quiet. */
+.tl-month__cell--other > * {
+  opacity: 0.35;
+}
+
+.tl-month--dimpast .tl-month__cell--past .tl-month__num {
+  color: var(--tl-fg-3);
+}
+
+/* --- Dots ------------------------------------------------------------------------ */
+
+.tl-month__dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  margin-top: 0.3em;
+  padding-left: 0.28em;
+}
+
+.tl-month__dot {
+  width: var(--tl-month-dot);
+  height: var(--tl-month-dot);
+  margin: 0 calc(var(--tl-month-dot) * 0.45) calc(var(--tl-month-dot) * 0.3) 0;
+}
+
+.tl-month__dot--past {
+  opacity: 0.45;
+}
+
+.tl-month__dots .tl-month__more {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-num-px) * 0.62);
+  line-height: 1;
+  color: var(--tl-fg-3);
+}
+
+/* --- Titles ---------------------------------------------------------------------- */
+
+.tl-month__events {
+  min-width: 0;
+  margin-top: 0.15em;
+}
+
+.tl-month__ev {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  margin-top: 0.12em;
+  border-radius: 0.3em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-ev-px));
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-month__ev--allday {
+  background: var(--tl-month-tint, var(--tl-surface-2));
+}
+
+.tl-month--nocolor .tl-month__ev--allday {
+  background: var(--tl-surface-2);
+}
+
+.tl-month__evbar {
+  flex: 0 0 auto;
+  width: 0.22em;
+  margin-right: 0.3em;
+  border-radius: 0.3em;
+}
+
+.tl-month__evtime {
+  flex: 0 0 auto;
+  margin-right: 0.3em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-ev-px) * 0.9);
+  color: var(--tl-fg-2);
+}
+
+/* One line each: a month cell has no room for more (the "+n" says there is
+ * more of the day, not of a title). */
+.tl-month__evtitle {
+  min-width: 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-ev-px));
+  color: var(--tl-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-month__ev--past {
+  opacity: 0.45;
+}
+
+.tl-month__events .tl-month__more {
+  margin-top: 0.1em;
+  padding-left: 0.5em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-month-ev-px) * 0.9);
+  line-height: 1.2;
+  color: var(--tl-fg-3);
+}
+
+.tl-month__body > .tl-cal-legend {
+  flex: 0 0 auto;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") -------------------------------------- */
+
+.tl-knobs.tl-month .tl-month__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-month-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx for 'monthgrid'; keep the two in step) -- */
+
+@container tl-spec (width < 240px) or (height < 200px) {
+  .tl-spec--monthgrid > .tl-spec__content { display: none; }
+  .tl-spec.tl-spec--monthgrid > .tl-panel--small { display: flex; }
+}

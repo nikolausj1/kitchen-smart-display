@@ -1,0 +1,66 @@
+/* CalendarParts - the calendar panels' shared pieces (CalendarParts.jsx):
+ * the colour bar and dot, the legend, the message. Tokens only; a calendar's
+ * colour is data and arrives inline. Chrome 80 rules: no flex gap, no
+ * `inset`, no aspect-ratio. */
+
+/* A bar in the event's colour (inline), else the neutral ink. */
+.tl-cal-bar {
+  display: block;
+  align-self: stretch;
+  border-radius: 1em;
+  background: var(--tl-fg-3);
+}
+
+.tl-cal-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--tl-fg-3);
+}
+
+/* --- The legend ----------------------------------------------------------- */
+
+.tl-cal-legend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  margin-top: calc(var(--tl-pad) * 0.5);
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 1.35vh, 18px));
+  line-height: 1.3;
+  color: var(--tl-fg-2);
+}
+
+.tl-cal-legend__item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  margin-right: 1.2em;
+  white-space: nowrap;
+}
+
+.tl-cal-legend__dot {
+  flex: 0 0 auto;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.45em;
+  border-radius: 50%;
+}
+
+/* --- The message ------------------------------------------------------------ */
+
+/* "Calendar not connected": a step brighter than the quiet kind, as the
+ * agenda's (AgendaPanel.css). */
+.tl-cal-message {
+  margin: auto;
+  padding: 0.5em 0;
+  text-align: center;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(13px, 2vh, 28px));
+  line-height: 1.3;
+  color: var(--tl-fg-2);
+}
+
+.tl-cal-message--quiet {
+  color: var(--tl-fg-3);
+}

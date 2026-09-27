@@ -127,6 +127,15 @@ const TYPE_TABLE = [
   },
   { type: 'headline', label: 'Headline', kind: 'panel', min: { w: 6, h: 2.5 }, minPx: { w: 110, h: 20 }, box: { x: 20, y: 44, w: 60, h: 12 }, props: CARD },
   { type: 'agenda', label: 'Agenda', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 300, h: 90 }, box: { x: 20, y: 25, w: 60, h: 50 }, props: CARD },
+  // --- Calendar views (docs/designs/panels-and-controls.md, chunk 3): on no
+  // default board; they arrive through Add panel. The week and month grids
+  // are for a wide screen (the Echo Show 15); their "Too small" rules sit in
+  // their own stylesheets (panels/WeekGridPanel.css and the others). ---
+  { type: 'upnext', label: 'Up next', kind: 'panel', min: { w: 12, h: 12 }, minPx: { w: 160, h: 100 }, box: { x: 34, y: 25, w: 32, h: 50 }, props: CARD },
+  { type: 'daylist', label: 'Day list', kind: 'panel', min: { w: 10, h: 14 }, minPx: { w: 150, h: 110 }, box: { x: 36, y: 15, w: 28, h: 70 }, props: CARD },
+  { type: 'weekgrid', label: 'Week grid', kind: 'panel', min: { w: 30, h: 24 }, minPx: { w: 360, h: 180 }, box: { x: 3, y: 20, w: 94, h: 70 }, props: CARD },
+  { type: 'monthgrid', label: 'Month grid', kind: 'panel', min: { w: 20, h: 24 }, minPx: { w: 240, h: 200 }, box: { x: 20, y: 6, w: 60, h: 88 }, props: CARD },
+  // --- end calendar views ---
   // Also the departure countdown's box during a school morning (as on the phase
   // 1 board), so its minimum covers that panel too. The tiles are the cards.
   { type: 'countdowns', label: 'Countdowns', kind: 'panel', min: { w: 8, h: 10 }, minPx: { w: 140, h: 110 }, box: { x: 30, y: 30, w: 40, h: 40 }, props: BARE },

@@ -50,7 +50,10 @@ import {
 // music, photos, calendar, agendaDays, countdowns, headline, airQuality,
 // weatherAlerts }. The Entry board's five (docs/designs/entry-board.md):
 //   calendar    the hooks/useCalendar.js snapshot: { events, countdowns,
-//               calendars, connected, fetchedAt, error, stale }
+//               calendars, connected, fetchedAt, error, stale, range }
+//               (range: the dates the events cover; the calendar views,
+//               docs/designs/panels-and-controls.md chunk 3, widen it with
+//               the store's wantCalendarWindow, through SpecBoard)
 //   agendaDays  [{ dateKey, date, label: 'Today' | 'Tomorrow' | weekday,
 //               events: [{ key, id, title, allDay, start, end, color, tint,
 //               calendarLabel }] }] for today and the next AGENDA_DAYS_MAX - 1
@@ -94,8 +97,9 @@ const FLAGS = readFlags()
 
 // Days of agenda handed to the layouts: the agenda's widest setting, five
 // columns starting tomorrow, needs six. Keep it in step with the days the
-// calendar hook asks the hub for (hooks/useCalendar.js DAYS, also 6): a day
-// past those would read "Nothing scheduled" whatever the calendar holds.
+// calendar store asks the hub for by default (hooks/calendarWindow.js
+// DEFAULT_WINDOW, also 6): a day past those would read "Nothing scheduled"
+// whatever the calendar holds.
 const AGENDA_DAYS_MAX = 6
 
 // The feed keys when there is no feed: one frozen object each, so memos hold.
@@ -431,6 +435,8 @@ export default function useTodayData() {
   // The family calendar. The demo fixture always wins in demo mode (unlike the
   // weather): the headline fixture names one of its events, and a design shot
   // should not depend on, or publish, whatever the family has on this week.
+  // It carries six weeks for the calendar views and its own `range`
+  // (data/demo.js demoCalendar).
   const calendarOut = useMemo(() => {
     if (!demo) return liveCalendar
     return {

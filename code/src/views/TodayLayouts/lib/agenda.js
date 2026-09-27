@@ -15,6 +15,9 @@ import { fmtDayLong } from './format.js'
 
 export const AGENDA_DAYS = 3
 
+const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i
 const FUNC_COLOR_RE = /^(rgb|hsl)a?\([\d\s.,%/+-]+\)$/i
@@ -76,6 +79,9 @@ function cleanTitle(v) {
 }
 
 // One row of a day column: plain data plus Dates, nothing to parse in render.
+// The calendar views' options (lib/calendarViews.js, chunk 3) read the rest:
+// calendarId, alsoOn (the hub's other calendars for an invitation) and the
+// raw location and description; startDate / endDate as the hub sent them.
 function toItem(ev, key, index, start, end) {
   const color = cleanColor(ev.color)
   const id = ev.id == null ? `i${index}` : String(ev.id)
@@ -89,6 +95,12 @@ function toItem(ev, key, index, start, end) {
     color,
     tint: tintOf(color, 0.22),
     calendarLabel: typeof ev.calendarLabel === 'string' ? ev.calendarLabel : null,
+    calendarId: typeof ev.calendarId === 'string' ? ev.calendarId : null,
+    startDate: typeof ev.startDate === 'string' ? ev.startDate : null,
+    endDate: typeof ev.endDate === 'string' ? ev.endDate : null,
+    alsoOn: Array.isArray(ev.alsoOn) ? ev.alsoOn : null,
+    location: typeof ev.location === 'string' ? ev.location : null,
+    description: typeof ev.description === 'string' ? ev.description : null,
   }
 }
 
@@ -101,9 +113,11 @@ function byAllDayThenStart(a, b) {
 
 // buildAgendaDays(events, today) -> [{ dateKey, date, label, events }] for
 // today and the next two days. label is 'Today', 'Tomorrow', then the weekday
-// name. An all-day event lands on every day it covers; a timed event on its
-// startDate (the local date of its start when startDate is missing). Within a
-// day: all-day first, then by start. The hub's order breaks ties.
+// name, and from a week out the date too ('Sat, Oct 3': the agenda that skips
+// empty days looks two weeks ahead). An all-day event lands on every day it
+// covers; a timed event on its startDate (the local date of its start when
+// startDate is missing). Within a day: all-day first, then by start. The
+// hub's order breaks ties.
 export function buildAgendaDays(events, today, count = AGENDA_DAYS) {
   const list = Array.isArray(events) ? events : []
   const firstKey = dateKey(today)
@@ -127,7 +141,14 @@ export function buildAgendaDays(events, today, count = AGENDA_DAYS) {
     out.push({
       dateKey: key,
       date,
-      label: i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : fmtDayLong(date),
+      label:
+        i === 0
+          ? 'Today'
+          : i === 1
+            ? 'Tomorrow'
+            : i < 7
+              ? fmtDayLong(date)
+              : `${DAY_SHORT[date.getDay()]}, ${MONTH_SHORT[date.getMonth()]} ${date.getDate()}`,
       events: items,
     })
   }

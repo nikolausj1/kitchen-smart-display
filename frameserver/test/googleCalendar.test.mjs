@@ -1,20 +1,29 @@
 // googleCalendar.test.mjs - the pure parts of the Google Calendar integration.
 //
-// createGoogleCalendar() itself (auth, HTTP fetch, disk cache, the refresh
-// scheduler) is a stateful factory with real network and filesystem side
-// effects; it is intentionally NOT exercised here. This file covers the pure
-// functions it is built from: the settings reader, the fetch window, the
+// Mostly the pure functions createGoogleCalendar() is built from: the
+// settings reader, the fetch window and the route's query and range, the
 // per-item normalizers (Google's raw shape and the test/fixture shape), the
-// wire mapper, and the small pure helpers used to compose a snapshot.
+// wire mapper, and the small pure helpers used to compose a snapshot. At the
+// end, one pass of the factory itself against a local mock of Google (its
+// `endpoints` option): the window it asks for, the cache it writes and reads
+// back, and the snapshot's dedupe across calendars.
 
 import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { generateKeyPairSync, createVerify } from 'node:crypto'
+import { createServer } from 'node:http'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  PAST_DAYS,
+  WINDOW_DAYS,
+  calendarQuery,
+  calendarRange,
   calendarSettings,
+  createGoogleCalendar,
+  dedupe,
   fetchWindow,
   normalizeGoogleEvent,
   normalizeFixtureEvent,
@@ -58,17 +67,56 @@ describe('calendarSettings', () => {
 })
 
 describe('fetchWindow', () => {
-  it('spans local midnight today to local midnight `days` later', () => {
+  it('spans local midnight `past` days back to local midnight `days` later', () => {
     const now = new Date(2026, 8, 24, 15, 30)
-    const w = fetchWindow(now, 60)
+    const w = fetchWindow(now, 60, 0)
     assert.equal(w.timeMin, new Date(2026, 8, 24).toISOString())
+    assert.equal(w.timeMax, new Date(2026, 8, 24 + 60).toISOString())
+    const back = fetchWindow(now, 10, 5)
+    assert.equal(back.timeMin, new Date(2026, 8, 19).toISOString())
+    assert.equal(back.timeMax, new Date(2026, 9, 4).toISOString())
+  })
+
+  it('defaults to one window: 31 days back (the month grid) to 60 ahead (the countdowns)', () => {
+    assert.equal(WINDOW_DAYS, 60)
+    assert.equal(PAST_DAYS, 31)
+    const now = new Date(2026, 8, 24, 15, 30)
+    const w = fetchWindow(now)
+    assert.equal(w.timeMin, new Date(2026, 7, 24).toISOString()) // Aug 24, 31 days before Sep 24
     assert.equal(w.timeMax, new Date(2026, 8, 24 + 60).toISOString())
   })
 
-  it('defaults to the 60-day countdown window', () => {
-    const now = new Date(2026, 8, 24, 15, 30)
-    const w = fetchWindow(now)
-    assert.equal(w.timeMax, new Date(2026, 8, 24 + 60).toISOString())
+  it('counts calendar days, not 24-hour steps, across a DST change', () => {
+    // US DST ends Sun 2026-11-01: still local midnights on both sides.
+    const w = fetchWindow(new Date(2026, 10, 20, 9), 3, 31)
+    const min = new Date(w.timeMin)
+    assert.equal(min.getHours(), 0)
+    assert.equal(min.getDate(), 20)
+    assert.equal(min.getMonth(), 9)
+  })
+})
+
+describe('calendarQuery', () => {
+  it('reads days 1..60 (default 3) and past 0..31 (default 0) from the query strings', () => {
+    assert.deepEqual(calendarQuery({}), { days: 3, past: 0 })
+    assert.deepEqual(calendarQuery({ days: '6', past: null }), { days: 6, past: 0 })
+    assert.deepEqual(calendarQuery({ days: '42', past: '31' }), { days: 42, past: 31 })
+    assert.deepEqual(calendarQuery({ days: '14' }), { days: 14, past: 0 }) // the old cap no longer applies
+  })
+
+  it('clamps out-of-range values and ignores junk', () => {
+    assert.deepEqual(calendarQuery({ days: '0', past: '-4' }), { days: 1, past: 0 })
+    assert.deepEqual(calendarQuery({ days: '400', past: '90' }), { days: 60, past: 31 })
+    assert.deepEqual(calendarQuery({ days: 'lots', past: '' }), { days: 3, past: 0 })
+    assert.deepEqual(calendarQuery({ days: '7.9', past: '2x' }), { days: 7, past: 2 })
+  })
+})
+
+describe('calendarRange', () => {
+  it('names the local dates a query covers, to exclusive', () => {
+    const now = new Date(2026, 8, 26, 23, 59)
+    assert.deepEqual(calendarRange(now, { days: 6, past: 0 }), { from: '2026-09-26', to: '2026-10-02' })
+    assert.deepEqual(calendarRange(now, { days: 42, past: 31 }), { from: '2026-08-26', to: '2026-11-07' })
   })
 })
 
@@ -203,7 +251,47 @@ describe('publicEvent', () => {
       startDate: '2026-01-01',
       endDate: '2026-01-02',
       status: 'confirmed',
+      alsoOn: [],
     })
+  })
+
+  it('passes alsoOn through and drops internal bookkeeping', () => {
+    const also = [{ calendarId: 'b@x', calendarLabel: 'B', color: '#4a90e2' }]
+    const wire = publicEvent({ id: 'x', title: 'T', allDay: true, startDate: '2026-01-01', endDate: '2026-01-02', uid: 'u', recurringEventId: 'r', alsoOn: also })
+    assert.deepEqual(wire.alsoOn, also)
+    assert.equal('uid' in wire, false)
+    assert.equal('recurringEventId' in wire, false)
+  })
+})
+
+describe('dedupe', () => {
+  const at9 = new Date(2026, 8, 24, 9).toISOString()
+  const ev = (calendarId, extra = {}) => ({
+    id: `${calendarId}-e`, uid: 'inv@google.com', calendarId, calendarLabel: calendarId.toUpperCase(), color: `#${calendarId}${calendarId}${calendarId}`,
+    title: 'Dinner', allDay: false, start: at9, startDate: '2026-09-24', endDate: '2026-09-25', ...extra,
+  })
+
+  it('keeps the first copy of an invitation and notes the other calendars on it, in order', () => {
+    const list = [ev('a'), ev('b'), ev('c')]
+    const out = dedupe(list)
+    assert.equal(out.length, 1)
+    assert.equal(out[0].calendarId, 'a')
+    assert.deepEqual(out[0].alsoOn, [
+      { calendarId: 'b', calendarLabel: 'B', color: '#bbb' },
+      { calendarId: 'c', calendarLabel: 'C', color: '#ccc' },
+    ])
+    // The cached copies are not touched.
+    assert.equal(list[0].alsoOn, undefined)
+  })
+
+  it('does not note a repeat from the same calendar, and keeps different starts apart', () => {
+    const out = dedupe([ev('a'), ev('a', { id: 'again' }), ev('b', { start: new Date(2026, 8, 25, 9).toISOString() })])
+    assert.equal(out.length, 2)
+    assert.equal(out[0].alsoOn, undefined)
+  })
+
+  it('keeps events without any id', () => {
+    assert.equal(dedupe([{ title: 'x' }, { title: 'x' }]).length, 2)
   })
 })
 
@@ -240,6 +328,13 @@ describe('eventsForDays', () => {
   it('keeps events overlapping [now, now+days), exclusive at both ends', () => {
     const ids = eventsForDays(events, { now: new Date(2026, 8, 24), days: 3 }).map((e) => e.id)
     assert.deepEqual(ids, ['straddle-start', 'inside', 'straddle-end'])
+  })
+
+  it('reaches `past` days back as well', () => {
+    const ids = eventsForDays(events, { now: new Date(2026, 8, 24, 18), days: 1, past: 4 }).map((e) => e.id)
+    assert.deepEqual(ids, ['before', 'straddle-start', 'inside'])
+    const none = eventsForDays(events, { now: new Date(2026, 8, 24), days: 1, past: 3 }).map((e) => e.id)
+    assert.deepEqual(none, ['straddle-start', 'inside'])
   })
 })
 
@@ -299,5 +394,140 @@ describe('readServiceAccount', () => {
     const p = join(dir, 'adir')
     await mkdir(p)
     assert.throws(() => readServiceAccount(p))
+  })
+})
+
+// --- The past days reach no one who did not ask ---------------------------------
+
+describe('the window back (past days) and the other readers of the cache', () => {
+  // Saturday 2026-09-26, 3 pm. The cache now holds a month back: last
+  // Saturday's party, a birthday marked as a countdown that is over, a long
+  // trip that ended yesterday.
+  const now = new Date(2026, 8, 26, 15, 0)
+  const iso = (d, h, m = 0) => new Date(2026, 8, d, h, m).toISOString()
+  const past = [
+    { id: 'p1', title: 'Party', allDay: false, start: iso(19, 17), end: iso(19, 19), startDate: '2026-09-19', endDate: '2026-09-20', description: null },
+    { id: 'p2', title: 'Birthday', allDay: true, start: null, end: null, startDate: '2026-09-12', endDate: '2026-09-13', description: 'countdown 30' },
+    { id: 'p3', title: 'Trip', allDay: true, start: null, end: null, startDate: '2026-09-20', endDate: '2026-09-26', description: null },
+  ]
+  const today = [{ id: 't1', title: 'Soccer', allDay: false, start: iso(26, 17), end: iso(26, 18), startDate: '2026-09-26', endDate: '2026-09-27', description: null }]
+
+  it('the headline reads only today and tomorrow', async () => {
+    const { headlineFor } = await import('../lib/headline.mjs')
+    assert.deepEqual(headlineFor({ now, events: past.concat(today) }), headlineFor({ now, events: today }))
+    assert.equal(headlineFor({ now, events: past }).kind, 'daypart')
+  })
+
+  it('the countdowns skip what is over', async () => {
+    const { buildCountdowns } = await import('../lib/countdowns.mjs')
+    assert.deepEqual(buildCountdowns(past, { now }), [])
+  })
+
+  it('the route leaves them out unless asked', () => {
+    assert.deepEqual(eventsForDays(past.concat(today), { now, days: 6 }).map((e) => e.id), ['t1'])
+    assert.deepEqual(eventsForDays(past.concat(today), { now, days: 6, past: 31 }).map((e) => e.id), ['p1', 'p2', 'p3', 't1'])
+  })
+})
+
+// --- The factory against a local mock of Google ------------------------------------
+
+describe('createGoogleCalendar (mock Google)', () => {
+  let dir
+  let server
+  let base
+  const requests = []
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
+  const now = new Date()
+  const day = (n, h = 9) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + n, h).toISOString()
+  // Two calendars. The invitation is on both (one iCalUID); b also has an
+  // event from three weeks ago, which only the past days bring in.
+  const items = {
+    'a@x': [{ id: 'inv-a', iCalUID: 'inv@google.com', summary: 'Dinner', start: { dateTime: day(1, 18) }, end: { dateTime: day(1, 20) } }],
+    'b@x': [
+      { id: 'inv-b', iCalUID: 'inv@google.com', summary: 'Dinner', start: { dateTime: day(1, 18) }, end: { dateTime: day(1, 20) } },
+      { id: 'old', summary: 'Three weeks ago', start: { dateTime: day(-21) }, end: { dateTime: day(-21, 10) } },
+    ],
+  }
+
+  before(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'gcal-mock-'))
+    await writeFile(join(dir, 'key.json'), JSON.stringify({
+      client_email: 'svc@example.iam.gserviceaccount.com',
+      private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+      private_key_id: 'k1',
+    }))
+    server = createServer((req, res) => {
+      const u = new URL(req.url, 'http://127.0.0.1')
+      requests.push(u)
+      res.setHeader('Content-Type', 'application/json')
+      if (u.pathname === '/token') return res.end(JSON.stringify({ access_token: 'tok', expires_in: 3600 }))
+      const cal = decodeURIComponent(u.pathname.split('/')[2] || '')
+      return res.end(JSON.stringify({ items: items[cal] || [] }))
+    })
+    await new Promise((r) => server.listen(0, '127.0.0.1', r))
+    base = `http://127.0.0.1:${server.address().port}`
+  })
+
+  after(async () => {
+    await new Promise((r) => server.close(r))
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  const shared = { calendar: { calendars: [{ id: 'a@x', label: 'A', color: '#e0457b' }, { id: 'b@x', label: 'B', color: '#4a90e2' }] } }
+
+  it('asks Google for one window, 31 days back to 60 ahead, caches it, and dedupes across calendars', async () => {
+    const cal = createGoogleCalendar({
+      dir,
+      getShared: () => shared,
+      keyFile: join(dir, 'key.json'),
+      log: () => {},
+      endpoints: { token: `${base}/token`, events: `${base}/calendars` },
+    })
+    cal.start()
+    await cal.refresh('test')
+    cal.stop()
+
+    const listCalls = requests.filter((u) => u.pathname.endsWith('/events'))
+    assert.equal(listCalls.length, 2)
+    const w = fetchWindow(now)
+    for (const u of listCalls) {
+      assert.equal(u.searchParams.get('timeMin'), w.timeMin)
+      assert.equal(u.searchParams.get('timeMax'), w.timeMax)
+      assert.equal(u.searchParams.get('singleEvents'), 'true')
+    }
+
+    const snap = cal.snapshot(shared)
+    assert.equal(snap.connected, true)
+    const titles = snap.events.map((e) => e.title)
+    assert.deepEqual(titles, ['Three weeks ago', 'Dinner'])
+    const dinner = snap.events[1]
+    assert.equal(dinner.calendarId, 'a@x')
+    assert.deepEqual(dinner.alsoOn, [{ calendarId: 'b@x', calendarLabel: 'B', color: '#4a90e2' }])
+    // The route's windows: the default leaves the past out, past=31 brings it in.
+    assert.deepEqual(eventsForDays(snap.events, { now, days: 6 }).map((e) => e.title), ['Dinner'])
+    assert.deepEqual(eventsForDays(snap.events, { now, days: 6, past: 31 }).map((e) => e.title), ['Three weeks ago', 'Dinner'])
+
+    const file = JSON.parse(readFileSync(join(dir, 'calendar-cache.json'), 'utf8'))
+    assert.deepEqual(file.window, w)
+    assert.equal(file.calendars['b@x'].events.length, 2)
+  })
+
+  it('restores a cache written before the window had past days (no `window` key)', async () => {
+    const old = { savedAt: now.toISOString(), calendars: { 'a@x': { ok: true, fetchedAt: now.toISOString(), error: null, events: [
+      { id: 'e1', calendarId: 'a@x', title: 'Soccer', allDay: false, start: day(0, 17), end: day(0, 18), startDate: calendarRange(now).from, endDate: calendarRange(now, { days: 1 }).to },
+    ] } } }
+    const cacheDir = await mkdtemp(join(tmpdir(), 'gcal-old-'))
+    await writeFile(join(cacheDir, 'calendar-cache.json'), JSON.stringify(old))
+    const cal = createGoogleCalendar({
+      dir: cacheDir,
+      getShared: () => shared,
+      keyFile: join(cacheDir, 'no-key.json'),
+      log: () => {},
+    })
+    const restored = cal.start()
+    cal.stop()
+    assert.equal(restored.events, 1)
+    assert.equal(restored.fetchedAt, now.toISOString())
+    await rm(cacheDir, { recursive: true, force: true })
   })
 })

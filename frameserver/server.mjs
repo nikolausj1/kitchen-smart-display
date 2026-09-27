@@ -29,7 +29,8 @@
 //   GET|POST /api/flags, POST /api/flags/resolve, /api/flags/import
 //                                     photo-flag queue (lib/flags.mjs)
 //   GET  /api/sonos/*                 proxy to node-sonos-http-api
-//   GET  /api/calendar?days=N         Google Calendar agenda + countdown tiles
+//   GET  /api/calendar?days=N&past=P  Google Calendar events + countdown tiles:
+//                                     days 1..60 ahead, past 0..31 back
 //                                     (lib/googleCalendar.mjs, lib/countdowns.mjs)
 //   GET  /api/countdown-art           the Countdown Art index (lib/countdownArt.mjs)
 //   POST /api/countdown-art/refresh   sync it from Immich now (409 if one is running)
@@ -89,7 +90,14 @@ import { acceptStatePost, composeState } from './lib/houseState.mjs'
 import { createTravelDefault } from './lib/travelDefault.mjs'
 import { createFlags } from './lib/flags.mjs'
 import { MAX_REPORT_BYTES, createHealth } from './lib/health.mjs'
-import { calendarSettings, createGoogleCalendar, eventsForDays, publicEvent } from './lib/googleCalendar.mjs'
+import {
+  calendarQuery,
+  calendarRange,
+  calendarSettings,
+  createGoogleCalendar,
+  eventsForDays,
+  publicEvent,
+} from './lib/googleCalendar.mjs'
 import { buildCountdowns } from './lib/countdowns.mjs'
 import { ART_EXTS, createCountdownArt } from './lib/countdownArt.mjs'
 import { createAirQuality } from './lib/airQuality.mjs'
@@ -519,7 +527,8 @@ function currentState(now = new Date()) {
     travelDefault: travel.current(now),
   })
   // The Entry board's line, the same on every screen: headline.mjs over every
-  // cached event (60 days; it needs today's and tomorrow's), the hub's own
+  // cached event (31 days back to 60 ahead; it needs today's and tomorrow's,
+  // and reads nothing earlier), the hub's own
   // forecast (lib/hubWeather.mjs's adapter over lib/weather.mjs) and the
   // alerts NWS and WeatherKit both report, merged and deduped
   // (lib/weather.mjs's getWeather().alerts); the alerts in force, most severe
@@ -536,15 +545,15 @@ function currentState(now = new Date()) {
   return state
 }
 
-// GET /api/calendar?days=N: 1..14, default 3.
-function calendarDays(raw) {
-  const n = Number.parseInt(raw ?? '', 10)
-  return Number.isFinite(n) ? Math.min(14, Math.max(1, n)) : 3
-}
-
+// GET /api/calendar?days=N&past=P (calendarQuery): `days` 1..60 ahead,
+// default 3; `past` 0..31 back, default 0. The app asks for 6 and 0 (the
+// agenda) unless a calendar view on screen wants more (hooks/useCalendar.js).
+//
 // Answers from the cache the 5-minute refresh keeps; never waits on Google.
-// `events` is the window only; countdowns look at everything cached (60 days).
-function calendarResponse(now, days) {
+// `events` is the window only, sorted by start; `from` and `to` are the local
+// dates it covers (to exclusive); countdowns look at everything cached from
+// today on (60 days ahead), whatever the window.
+function calendarResponse(now, { days, past }) {
   const shared = readRegistry().shared
   calendar.noteShared(shared)
   const snap = calendar.snapshot(shared)
@@ -556,8 +565,10 @@ function calendarResponse(now, days) {
     // without a (readable) key file, or in fixture mode.
     serviceAccount: snap.serviceAccount,
     days,
+    past,
+    ...calendarRange(now, { days, past }),
     calendars: snap.calendars,
-    events: eventsForDays(snap.events, { now, days }).map(publicEvent),
+    events: eventsForDays(snap.events, { now, days, past }).map(publicEvent),
     countdowns: buildCountdowns(snap.events, {
       now,
       artIndex: art.items(),
@@ -1055,7 +1066,8 @@ async function handle(req, res) {
   // --- Entry board: calendar, countdown art ---
   if (path === '/api/calendar') {
     if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
-    return json(res, 200, calendarResponse(new Date(), calendarDays(url.searchParams.get('days'))))
+    const query = calendarQuery({ days: url.searchParams.get('days'), past: url.searchParams.get('past') })
+    return json(res, 200, calendarResponse(new Date(), query))
   }
 
   if (path === '/api/countdown-art') {

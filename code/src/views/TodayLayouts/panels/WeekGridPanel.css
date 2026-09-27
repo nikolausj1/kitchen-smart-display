@@ -1,0 +1,432 @@
+/* WeekGridPanel - a column per day, a row per hour (WeekGridPanel.jsx; the
+ * positions are lib/calendarViews.js weekGrid's, as fractions).
+ *
+ *   heads    the day headers              (sized against the body)
+ *   band     all-day and multi-day bars   (the body)
+ *   area     hour labels and the columns  (its own size container: an
+ *            event's type follows one column's width and one hour's height)
+ *
+ * The gutter left of the days (the hour labels' room) is 3.4em of the grid's
+ * own font, which every row inherits as a length, so the three rows' columns
+ * line up. Sizes: unscaled bases (--tl-week-*-px) resolved where they are
+ * used; every text element is its base times a factor times
+ * var(--tl-text-scale), so the size knob and an element's own size compose
+ * (tokens.css "Panel knobs"). Fallbacks first, container units under
+ * @supports. Chrome 80 rules: no flex gap, no `inset`, no aspect-ratio. */
+
+.tl-week__body {
+  container-type: size;
+  container-name: week;
+  --tl-week-head-px: clamp(10px, 1.3vh, 18px);
+  --tl-week-bar-px: clamp(9px, 1.25vh, 17px);
+  --tl-week-block-px: clamp(9px, 1.3vh, 17px);
+  --tl-week-compact-px: clamp(9px, 1.2vh, 16px);
+  --tl-week-hour-px: clamp(9px, 1.1vh, 14px);
+}
+
+@supports (height: 1cqh) {
+  .tl-week__body {
+    --tl-week-head-px: clamp(10px, min(calc(100cqw / var(--tl-week-days, 7) * 0.075), 3.4cqh), 20px);
+    --tl-week-bar-px: clamp(9px, min(calc(100cqw / var(--tl-week-days, 7) * 0.068), 3cqh), 18px);
+    /* Used inside the area: its width and one hour's height. */
+    --tl-week-block-px: clamp(9px, min(calc(100cqw / var(--tl-week-days, 7) * 0.08), calc(100cqh / var(--tl-week-hours, 14) * 0.4)), 20px);
+    /* Compact: one line an event, so an hour holds more of it. */
+    --tl-week-compact-px: clamp(9px, min(calc(100cqw / var(--tl-week-days, 7) * 0.07), calc(100cqh / var(--tl-week-hours, 14) * 0.6)), 18px);
+    --tl-week-hour-px: clamp(9px, min(1.8cqw, calc(100cqh / var(--tl-week-hours, 14) * 0.38)), 15px);
+  }
+}
+
+.tl-week__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-head-px));
+}
+
+.tl-week__line-row {
+  display: flex;
+  min-width: 0;
+}
+
+.tl-week__gutter {
+  flex: 0 0 auto;
+  width: 3.4em;
+  position: relative;
+  overflow: hidden;
+}
+
+.tl-week--nolabels .tl-week__gutter {
+  width: 0;
+}
+
+.tl-week__days {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--tl-week-days, 7), minmax(0, 1fr));
+  position: relative;
+}
+
+/* --- Day headers ---------------------------------------------------------- */
+
+.tl-week__heads {
+  flex: 0 0 auto;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.tl-week__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.tl-week__wd {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-head-px) * 0.78);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+}
+
+.tl-week__dn {
+  margin-top: 0.1em;
+  padding: 0 0.32em;
+  border-radius: 1em;
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-head-px) * 1.45);
+  font-weight: 600;
+  color: var(--tl-fg-2);
+}
+
+.tl-week__head--today .tl-week__wd {
+  color: var(--tl-fg);
+}
+
+.tl-week__head--today .tl-week__dn {
+  background: var(--tl-accent);
+  color: var(--tl-bg);
+}
+
+.tl-week--dimpast .tl-week__head--past {
+  opacity: 0.5;
+}
+
+/* Compact: the day on one line. */
+.tl-week--compact .tl-week__head {
+  flex-direction: row;
+  justify-content: center;
+  align-items: baseline;
+}
+
+.tl-week--compact .tl-week__dn {
+  margin: 0 0 0 0.3em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-head-px) * 1.05);
+}
+
+/* --- The all-day band ---------------------------------------------------------- */
+
+.tl-week__allday {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+/* Bars in rows of --tl-week-bar-h (1.6em of the band's own font, the one
+ * length the rows and their bars share). */
+.tl-week__band {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0.25em 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-bar-px));
+  --tl-week-bar-h: 1.6em;
+  height: calc(var(--tl-week-bar-h) * var(--tl-week-band-rows, 1));
+}
+
+.tl-week__bar {
+  position: absolute;
+  height: calc(var(--tl-week-bar-h) - 2px);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-week-tint, var(--tl-surface-2));
+}
+
+.tl-week--nocolor .tl-week__bar {
+  background: var(--tl-surface-2);
+}
+
+.tl-week__bar .tl-week__bbar {
+  width: 0.24em;
+  border-radius: 0;
+}
+
+.tl-week__bartitle {
+  min-width: 0;
+  padding: 0 0.4em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-bar-px));
+  font-weight: 600;
+  color: var(--tl-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Running on before the first day or past the last: that end square. */
+.tl-week__bar--from {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.tl-week__bar--on {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tl-week__barmore {
+  position: absolute;
+  height: var(--tl-week-bar-h);
+  padding-left: 0.5em;
+  box-sizing: border-box;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-bar-px) * 0.85);
+  line-height: 1.8;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+}
+
+/* --- Hours and columns ----------------------------------------------------------- */
+
+.tl-week__area {
+  flex: 1 1 0;
+  min-height: 0;
+  container-type: size;
+  container-name: week-area;
+}
+
+.tl-week__hours {
+  align-self: stretch;
+}
+
+/* Each label just under its hour's line, right-aligned in the gutter. */
+.tl-week__hour {
+  position: absolute;
+  right: 0.45em;
+  margin-top: 0.15em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-hour-px));
+  line-height: 1;
+  color: var(--tl-fg-3);
+  white-space: nowrap;
+}
+
+.tl-week__cols {
+  align-self: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.tl-week__rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--tl-rule);
+  pointer-events: none;
+}
+
+.tl-week__col {
+  position: relative;
+  min-width: 0;
+  border-left: 1px solid var(--tl-rule);
+}
+
+.tl-week__col--today {
+  background: rgba(var(--tl-fg-rgb), 0.035);
+}
+
+/* An event: its colour's tint, a bar in the colour, the time over the title. */
+.tl-week__block {
+  position: absolute;
+  display: flex;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-week-tint, var(--tl-surface-2));
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-block-px));
+  line-height: 1.2;
+  z-index: 1;
+}
+
+.tl-week--nocolor .tl-week__block {
+  background: var(--tl-surface-2);
+}
+
+.tl-week__block .tl-week__bbar {
+  flex: 0 0 auto;
+  width: 0.24em;
+  border-radius: 0;
+}
+
+.tl-week__btext {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.18em 0.32em;
+  overflow: hidden;
+}
+
+.tl-week__btime {
+  display: block;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-block-px) * 0.82);
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tl-week__btitle {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-block-px));
+  font-weight: 600;
+  color: var(--tl-fg);
+  overflow-wrap: anywhere;
+}
+
+.tl-week__bloc {
+  display: block;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-block-px) * 0.8);
+  color: var(--tl-fg-2);
+  overflow-wrap: anywhere;
+}
+
+/* Cut by the hours or by midnight: that edge square, and dashed. */
+.tl-week__block--cliptop {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: 1px dashed var(--tl-fg-3);
+}
+
+.tl-week__block--clipbottom {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 1px dashed var(--tl-fg-3);
+}
+
+.tl-week__block--past,
+.tl-week__bar--past {
+  opacity: 0.45;
+}
+
+/* A short block: the time before the title, one line, an ellipsis if the
+ * title does not fit (the block's length is the event's; it cannot grow). */
+.tl-week__block--short .tl-week__btime,
+.tl-week__block--short .tl-week__btitle {
+  display: inline;
+}
+
+.tl-week__block--short .tl-week__btext {
+  padding-top: 0.08em;
+  padding-bottom: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Compact: shorter rows. One line per event, the time before the title, the
+ * type sized for one line an hour (--tl-week-compact-px), not two. */
+.tl-week--compact .tl-week__block {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-compact-px));
+}
+
+.tl-week--compact .tl-week__btext {
+  padding: 0.06em 0.28em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tl-week--compact .tl-week__btime,
+.tl-week--compact .tl-week__btitle,
+.tl-week--compact .tl-week__bloc {
+  display: inline;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-compact-px));
+}
+
+.tl-week--compact .tl-week__btime {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-compact-px) * 0.85);
+}
+
+.tl-week--compact .tl-week__bloc {
+  margin-left: 0.4em;
+}
+
+.tl-week__more {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-surface-2);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-week-block-px) * 0.9);
+  font-weight: 600;
+  color: var(--tl-fg-2);
+  z-index: 1;
+}
+
+/* The time now, across today's column. */
+.tl-week__now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--tl-accent);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tl-week__now::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tl-accent);
+}
+
+.tl-week__message {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.tl-week__body > .tl-cal-legend {
+  flex: 0 0 auto;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") -------------------------------------- */
+
+.tl-knobs .tl-week__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-week-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx for 'weekgrid'; keep the two in step) --- */
+
+@container tl-spec (width < 360px) or (height < 180px) {
+  .tl-spec--weekgrid > .tl-spec__content { display: none; }
+  .tl-spec.tl-spec--weekgrid > .tl-panel--small { display: flex; }
+}

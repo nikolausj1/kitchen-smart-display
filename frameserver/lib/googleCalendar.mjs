@@ -11,9 +11,10 @@
 // minute before it expires. The key file is read on every refresh, so adding
 // or replacing it needs no restart.
 //
-// Events: each calendar in shared.calendar.calendars, from local midnight
-// today to local midnight 60 days out (the agenda shows 3 days, countdowns
-// look 60 ahead), recurring events expanded by Google (singleEvents=true),
+// Events: each calendar in shared.calendar.calendars, one window from local
+// midnight 31 days back (PAST_DAYS: the month grid's first weeks) to local
+// midnight 60 days out (WINDOW_DAYS: countdowns look 60 ahead, the calendar
+// views up to 60), recurring events expanded by Google (singleEvents=true),
 // every page. Normalized to the shape GET /api/calendar serves:
 //
 //   { id, calendarId, calendarLabel, color, title, description, location,
@@ -31,14 +32,21 @@
 //
 // Dropped: cancelled events and Workspace "working location" entries. The
 // same event on two calendars (an invitation between Justin and Sheena) is
-// listed once, from the first calendar in the registry's order.
+// listed once, from the first calendar in the registry's order; the other
+// calendars it was on ride along as `alsoOn` ([{ calendarId, calendarLabel,
+// color }], [] for most events), so a screen that consolidates can draw every
+// calendar's colour (docs/designs/panels-and-controls.md, chunk 3).
 //
 // Refreshed every 5 minutes, at startup, and as soon as the list of calendar
 // ids in the registry changes. Labels and colours are joined at read time, so
 // a dashboard rename shows at once without a fetch. Each calendar keeps its
 // own last good copy: an unshared or mistyped calendar reports an error
 // without blanking the other. Also cached on disk (calendar-cache.json) so a
-// restart serves the last copy at once.
+// restart serves the last copy at once. The cache file is { savedAt,
+// window: { timeMin, timeMax }, calendars }; `window` (added with the past
+// days, 2026-09-26) is informational, and a file without it (the 60-day
+// window from today) reads the same, its past days simply missing until the
+// first fetch.
 //
 // No key file and no fixture: connected false, error 'no service account
 // key', no events, logged at most once per 10 minutes. The routes work either
@@ -60,7 +68,11 @@ import { fetchWithTimeout, isDict, readJsonFile, writeJsonFileAtomic } from './i
 export const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
 export const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 export const EVENTS_BASE = 'https://www.googleapis.com/calendar/v3/calendars'
+// The one window every fetch covers: WINDOW_DAYS forward (the countdowns look
+// 60 days ahead; GET /api/calendar serves up to `days=60`) and PAST_DAYS back
+// (`past=31`: a month grid of the current month).
 export const WINDOW_DAYS = 60
+export const PAST_DAYS = 31
 export const NO_KEY = 'no service account key'
 export const CALENDAR_DEFAULTS = Object.freeze({ calendars: [], countdownLeadDays: 30, countdownMax: 3 })
 const REFRESH_MS = 5 * 60 * 1000
@@ -130,12 +142,32 @@ function timedEndDate(start, end) {
   return addDays(dateKey(last), 1)
 }
 
-// The Google request window: local midnight today to local midnight `days` on.
-export function fetchWindow(now = new Date(), days = WINDOW_DAYS) {
+// The Google request window: local midnight `past` days before today to
+// local midnight `days` after it. Google keeps an event that overlaps it at
+// all (timeMin filters on the end, timeMax on the start).
+export function fetchWindow(now = new Date(), days = WINDOW_DAYS, past = PAST_DAYS) {
   const y = now.getFullYear()
   const m = now.getMonth()
   const d = now.getDate()
-  return { timeMin: new Date(y, m, d).toISOString(), timeMax: new Date(y, m, d + days).toISOString() }
+  return { timeMin: new Date(y, m, d - past).toISOString(), timeMax: new Date(y, m, d + days).toISOString() }
+}
+
+// GET /api/calendar's query: `days` 1..60 forward (default 3) and `past`
+// 0..31 back (default 0), whole numbers; anything else is the default.
+export function calendarQuery({ days, past } = {}) {
+  const d = Number.parseInt(days ?? '', 10)
+  const p = Number.parseInt(past ?? '', 10)
+  return {
+    days: Number.isFinite(d) ? Math.min(WINDOW_DAYS, Math.max(1, d)) : 3,
+    past: Number.isFinite(p) ? Math.min(PAST_DAYS, Math.max(0, p)) : 0,
+  }
+}
+
+// The local dates a query covers: from (inclusive) and to (exclusive), as
+// 'YYYY-MM-DD'.
+export function calendarRange(now = new Date(), { days = 3, past = 0 } = {}) {
+  const today = dateKey(now)
+  return { from: addDays(today, -past), to: addDays(today, days) }
 }
 
 // --- events ----------------------------------------------------------------------
@@ -222,6 +254,7 @@ const validEvent = (e) =>
   (e.allDay || (typeof e.start === 'string' && !Number.isNaN(Date.parse(e.start))))
 
 // The wire shape, exactly; internal bookkeeping (uid, recurringEventId) stays in.
+// alsoOn: the other listed calendars the same event was on (dedupe below).
 export function publicEvent(e) {
   return {
     id: e.id ?? null,
@@ -237,6 +270,7 @@ export function publicEvent(e) {
     startDate: e.startDate,
     endDate: e.endDate,
     status: e.status ?? 'confirmed',
+    alsoOn: Array.isArray(e.alsoOn) ? e.alsoOn : [],
   }
 }
 
@@ -250,24 +284,41 @@ export function sortEvents(list) {
     String(a.title).localeCompare(String(b.title)))
 }
 
-// First copy wins: callers pass events in registry calendar order.
-function dedupe(list) {
-  const seen = new Set()
-  return list.filter((e) => {
+// First copy wins: callers pass events in registry calendar order. A later
+// copy on another calendar (an invitation between two listed calendars: the
+// same iCalUID and start) is dropped, and its calendar is noted on the copy
+// kept as `alsoOn: [{ calendarId, calendarLabel, color }]`, in registry
+// order. The cached events are never mutated: a kept copy that gains one is
+// a new object.
+export function dedupe(list) {
+  const at = new Map() // key -> index in out
+  const out = []
+  for (const e of list) {
     const uid = e.uid || e.id
-    if (!uid) return true
+    if (!uid) {
+      out.push(e)
+      continue
+    }
     const k = `${uid}|${e.allDay ? e.startDate : e.start}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
+    const i = at.get(k)
+    if (i == null) {
+      at.set(k, out.length)
+      out.push(e)
+      continue
+    }
+    const kept = out[i]
+    const also = Array.isArray(kept.alsoOn) ? kept.alsoOn : []
+    if (e.calendarId && e.calendarId !== kept.calendarId && !also.some((c) => c.calendarId === e.calendarId)) {
+      out[i] = { ...kept, alsoOn: also.concat({ calendarId: e.calendarId, calendarLabel: e.calendarLabel ?? null, color: e.color ?? null }) }
+    }
+  }
+  return out
 }
 
-// Events on any day of today .. today + days - 1 (local).
-export function eventsForDays(events, { now = new Date(), days = 3 } = {}) {
-  const first = dateKey(now)
-  const end = addDays(first, days) // exclusive
-  return events.filter((e) => e.startDate < end && e.endDate > first)
+// Events on any day of today - past .. today + days - 1 (local).
+export function eventsForDays(events, { now = new Date(), days = 3, past = 0 } = {}) {
+  const { from, to } = calendarRange(now, { days, past })
+  return events.filter((e) => e.startDate < to && e.endDate > from)
 }
 
 // --- auth ------------------------------------------------------------------------
@@ -469,10 +520,10 @@ export function createGoogleCalendar({
     }
   }
 
-  function persist() {
+  function persist(window) {
     if (!cacheFile || fixtureFile) return
     try {
-      writeJsonFileAtomic(cacheFile, { savedAt: new Date().toISOString(), calendars: byCal })
+      writeJsonFileAtomic(cacheFile, { savedAt: new Date().toISOString(), window: window ?? null, calendars: byCal })
     } catch (e) {
       log(`[calendar] could not write ${cacheFile}: ${e.message}`)
     }
@@ -530,7 +581,7 @@ export function createGoogleCalendar({
       pageToken = str(data.nextPageToken)
       if (!pageToken) return items
     }
-    throw new Error(`more than ${MAX_PAGES * 250} events in ${WINDOW_DAYS} days; is this the right calendar?`)
+    throw new Error(`more than ${MAX_PAGES * 250} events in ${PAST_DAYS + WINDOW_DAYS} days; is this the right calendar?`)
   }
 
   async function fetchGoogle(cfg) {
@@ -580,7 +631,7 @@ export function createGoogleCalendar({
         : { ok: false, fetchedAt: prev?.fetchedAt ?? null, error: calendarError(r.err, key.clientEmail), events: prev?.events ?? [] }
     }
     byCal = next // calendars no longer listed drop out here
-    persist()
+    persist(window)
   }
 
   // Returns true when it (re)loaded the file.

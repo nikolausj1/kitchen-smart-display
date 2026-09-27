@@ -1,0 +1,235 @@
+/* UpNextPanel - the next event large, then the events after it by day
+ * (UpNextPanel.jsx).
+ *
+ * Sizes. Two unscaled bases, each a length resolved where it is used: the
+ * next event's (--tl-upnext-next-px) against the body, a size container, and
+ * the rows' (--tl-upnext-row-px) against the rows' own part of it, divided by
+ * --tl-upnext-lines (from the JSX: a line per row and per day label), so the
+ * rows the panel shows fit. Every text element's font size is its base times
+ * a factor times var(--tl-text-scale), never an em of its parent, so the
+ * size knobs and a size set on any one element (props.elements) compose as
+ * tokens.css "Panel knobs" says. The first declaration of each base is the
+ * fallback for an engine without container units; the @supports block holds
+ * the real one (AgendaPanel.css). Chrome 80 rules: no flex gap, no `inset`,
+ * no aspect-ratio; spacing is margins and grid column gaps. */
+
+.tl-upnext__body {
+  container-type: size;
+  container-name: upnext;
+  --tl-upnext-next-px: clamp(16px, 3.2vh, 44px);
+  --tl-upnext-row-px: clamp(11px, 1.9vh, 24px);
+}
+
+@supports (height: 1cqh) {
+  .tl-upnext__body {
+    --tl-upnext-next-px: clamp(16px, min(10cqw, 11cqh), 52px);
+    --tl-upnext-row-px: clamp(11px, min(5.4cqw, calc(100cqh / var(--tl-upnext-lines, 8))), 26px);
+  }
+}
+
+/* --- The next event ------------------------------------------------------- */
+
+.tl-upnext__next {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 0.13em minmax(0, 1fr);
+  column-gap: 0.4em;
+  min-width: 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-next-px));
+}
+
+.tl-upnext__bar {
+  grid-column: 1;
+  margin: 0.08em 0;
+}
+
+.tl-upnext__main {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* Two lines at most, as the agenda's titles: a long title wraps rather than
+ * losing its end, but never takes the panel. */
+.tl-upnext__title {
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-next-px));
+  font-weight: 600;
+  line-height: 1.12;
+  color: var(--tl-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tl-upnext__when,
+.tl-upnext__in,
+.tl-upnext__time {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-next-px) * 0.5);
+}
+
+.tl-upnext__when {
+  margin-top: 0.4em;
+  line-height: 1.3;
+  color: var(--tl-fg-2);
+}
+
+.tl-upnext__in {
+  font-weight: 600;
+  color: var(--tl-accent);
+}
+
+.tl-upnext__sep {
+  color: var(--tl-fg-3);
+}
+
+.tl-upnext__loc {
+  margin-top: 0.25em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-next-px) * 0.44);
+  line-height: 1.3;
+  color: var(--tl-fg-2);
+  overflow-wrap: anywhere;
+}
+
+.tl-upnext__desc {
+  margin-top: 0.25em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-next-px) * 0.4);
+  line-height: 1.3;
+  color: var(--tl-fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* --- The events after it -------------------------------------------------- */
+
+.tl-upnext__rows {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  container-type: size;
+  overflow: hidden;
+  margin-top: calc(var(--tl-pad) * 0.6);
+  padding-top: calc(var(--tl-pad) * 0.45);
+  border-top: 1px solid var(--tl-rule);
+}
+
+.tl-upnext__list {
+  min-width: 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px));
+}
+
+.tl-upnext__group + .tl-upnext__group {
+  margin-top: 0.3em;
+}
+
+.tl-upnext__day {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px) * 0.66);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: var(--tl-fg-3);
+}
+
+/* Bar, time, title; the time column fixed so titles line up whatever the
+ * hour ("9:00 am" and "12:30 pm"), wider when it holds the end too. */
+.tl-upnext__row {
+  display: grid;
+  grid-template-columns: 0.2em 4.15em minmax(0, 1fr);
+  column-gap: 0.5em;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.1em 0.4em 0.1em 0;
+  border-radius: var(--tl-radius-sm);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px));
+  line-height: 1.25;
+}
+
+.tl-upnext--h24 .tl-upnext__row {
+  grid-template-columns: 0.2em 3em minmax(0, 1fr);
+}
+
+.tl-upnext--ends .tl-upnext__row {
+  grid-template-columns: 0.2em 8.8em minmax(0, 1fr);
+}
+
+.tl-upnext--ends.tl-upnext--h24 .tl-upnext__row {
+  grid-template-columns: 0.2em 5.8em minmax(0, 1fr);
+}
+
+/* All-day rows are washed in their calendar's colour, as in the agenda. */
+.tl-upnext__row--allday {
+  background: var(--tl-upnext-tint, var(--tl-surface-2));
+}
+
+.tl-upnext__rtime {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px));
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "12:30" and a small "pm", as in the agenda (4.15em column). */
+.tl-upnext__ampm {
+  margin-left: 0.1em;
+  font-size: 0.68em;
+}
+
+.tl-upnext--ends .tl-upnext__rtime {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px) * 0.86);
+}
+
+.tl-upnext__row--allday .tl-upnext__rtime {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px) * 0.64);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tl-fg);
+}
+
+.tl-upnext__rtitle {
+  min-width: 0;
+  color: var(--tl-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tl-upnext__more {
+  margin-top: 0.2em;
+  padding-left: 0.7em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-upnext-row-px) * 0.8);
+  line-height: 1.5;
+  color: var(--tl-fg-3);
+}
+
+/* The legend at the foot, however little the rest takes. */
+.tl-upnext__body > .tl-cal-legend {
+  margin-top: auto;
+  padding-top: calc(var(--tl-pad) * 0.5);
+}
+
+/* --- Knobs (tokens.css "Panel knobs") -------------------------------------- */
+
+.tl-knobs .tl-upnext__next {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-upnext-next, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+.tl-knobs .tl-upnext__rows {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-upnext-row, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx for 'upnext'; keep the two in step) ----- */
+
+@container tl-spec (width < 160px) or (height < 100px) {
+  .tl-spec--upnext > .tl-spec__content { display: none; }
+  .tl-spec.tl-spec--upnext > .tl-panel--small { display: flex; }
+}

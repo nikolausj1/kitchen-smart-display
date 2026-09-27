@@ -343,17 +343,19 @@ function dayOffset(base, offsetDays) {
   return d
 }
 
-function demoTimed(base, id, cal, title, offsetDays, [h1, m1], [h2, m2]) {
+// endOffsetDays: the day it ends, for an event that runs past midnight
+// (default: the day it starts). extra: location, description.
+function demoTimed(base, id, cal, title, offsetDays, [h1, m1], [h2, m2], extra = {}, endOffsetDays = offsetDays) {
   const start = atTime(base, offsetDays, { hour: h1, minute: m1 })
-  const end = atTime(base, offsetDays, { hour: h2, minute: m2 })
+  const end = atTime(base, endOffsetDays, { hour: h2, minute: m2 })
   return {
     id,
     calendarId: cal.id,
     calendarLabel: cal.label,
     color: cal.color,
     title,
-    description: '',
-    location: '',
+    description: extra.description || '',
+    location: extra.location || '',
     allDay: false,
     start: start.toISOString(),
     end: end.toISOString(),
@@ -382,28 +384,145 @@ function demoAllDay(base, id, cal, title, offsetDays, lengthDays) {
   }
 }
 
-// demoCalendar(today) -> { events, countdowns, calendars }: eight events over
-// three days (one all-day event spans tomorrow and the day after, so it shows
-// in two columns), and two countdowns - one whose art is a hub path that does
-// not exist, so the tile's fallback runs, and one with an emoji. Each carries
-// a marker colour (`tileColor`, the hub's palette purple and green: what
-// `color: purple` and `color: green` in an event's description send), which
-// only the art-above tiles draw; the other tile styles draw as before.
+// --- The calendar views' six weeks (chunk 3) --------------------------------
+//
+// A plausible family calendar from three weeks before the demo's day to three
+// weeks after (DEMO_SPAN), so ?demo=1 fills every calendar view: a week of
+// regular things by weekday (DEMO_WEEK), a few one-offs, some that overlap
+// (four at 5 pm three days out: two side by side and "+2" in the week grid),
+// all-day events across several days (grandparents visiting, a nine-day fall
+// break), a trip timed across three days (drawn with the all-day ones), and
+// one dinner on both calendars (for `consolidate`). The three days the agenda
+// shows by default (today and the next two) keep the eight events above
+// untouched, so the demo Entry board is as it was.
+const DEMO_SPAN = { back: 21, ahead: 21 } // days -21 .. +20
+
+const DEMO_PLACES = {
+  field: 'Magnolia Playfield South, 2518 34th Ave W, Seattle, WA 98199',
+  pool: 'Queen Anne Pool, 1920 1st Ave W, Seattle, WA 98119',
+  school: 'Lawton Elementary School, 4000 27th Ave W, Seattle, WA 98199',
+  market: 'Ballard Farmers Market, 5345 Ballard Ave NW, Seattle, WA 98107',
+  piano: 'Magnolia Music Studio, 3213 W McGraw St, Seattle, WA 98199',
+}
+
+// By weekday (0 Sunday): [calendar 'j' | 's', title, start, end, place?, description?].
+const DEMO_WEEK = {
+  0: [
+    ['j', 'Pancake breakfast', [8, 30], [9, 30]],
+    ['s', 'Grocery run', [16, 0], [17, 0]],
+  ],
+  1: [
+    ['s', 'Chase piano lesson', [16, 0], [16, 45], 'piano'],
+    ['j', 'Vinny soccer practice', [17, 0], [18, 0], 'field', 'Bring shin guards and water'],
+  ],
+  2: [
+    ['s', 'Swim lessons', [16, 30], [17, 15], 'pool'],
+    ['s', 'Book club', [19, 0], [21, 0], null, 'This month: The Overstory'],
+  ],
+  3: [
+    ['j', 'Chase coding club', [15, 30], [16, 30], 'school'],
+    ['j', 'Recycling out', [20, 0], [20, 15]],
+  ],
+  4: [
+    ['s', 'Yoga', [7, 0], [8, 0]],
+    ['j', 'Vinny soccer practice', [17, 0], [18, 15], 'field', 'Bring shin guards and water'],
+  ],
+  5: [
+    ['s', 'Coffee with Priya', [10, 0], [11, 0]],
+    ['j', 'Pizza night', [18, 0], [19, 30]],
+  ],
+  6: [
+    ['j', 'Soccer game', [9, 0], [10, 0], 'field', 'Arrive 20 minutes early'],
+    ['s', 'Farmers market', [10, 30], [12, 0], 'market'],
+  ],
+}
+
+function demoWeekDay(base, offset, cals) {
+  const d = dayOffset(base, offset)
+  return (DEMO_WEEK[d.getDay()] || []).map(([c, title, from, to, place, description], i) =>
+    demoTimed(base, `demo-w${offset}-${i}`, c === 's' ? cals.sheena : cals.justin, title, offset, from, to, {
+      location: place ? DEMO_PLACES[place] : '',
+      description,
+    })
+  )
+}
+
+// The one-offs, by day from the demo's day.
+function demoOneOffs(base, { justin, sheena }) {
+  return [
+    demoAllDay(base, 'demo-books', justin, 'Library books due', -4, 1),
+    demoTimed(base, 'demo-denver', justin, 'Justin in Denver', -10, [9, 0], [18, 0], { location: 'Denver, CO' }, -8),
+    demoAllDay(base, 'demo-picture', sheena, 'Picture day', -15, 1),
+    demoTimed(base, 'demo-haircut', sheena, 'Vinny haircut', -2, [11, 0], [11, 30]),
+    // Four at once, three days out.
+    demoTimed(base, 'demo-carpool', justin, 'Carpool pickup', 3, [17, 0], [17, 30]),
+    demoTimed(base, 'demo-call', sheena, 'Call with Grandma', 3, [17, 0], [17, 45]),
+    demoTimed(base, 'demo-ptc', sheena, 'Parent-teacher conference', 3, [17, 15], [17, 45], { location: DEMO_PLACES.school }),
+    demoTimed(base, 'demo-cleaners', justin, 'Pick up dry cleaning', 3, [17, 20], [17, 40]),
+    // The same dinner on both calendars: consolidate shows it once.
+    demoTimed(base, 'demo-parkers-j', justin, 'Dinner with the Parkers', 4, [18, 30], [20, 30], { location: 'The Parkers’, 2811 W Newton St, Seattle, WA 98199' }),
+    demoTimed(base, 'demo-parkers-s', sheena, 'Dinner with the Parkers', 4, [18, 30], [20, 30]),
+    demoAllDay(base, 'demo-grandparents', sheena, 'Grandparents visiting', 5, 4),
+    demoAllDay(base, 'demo-grandma-bday', justin, 'Grandma’s birthday', 5, 1),
+    demoAllDay(base, 'demo-fallbreak', justin, 'Fall break', 11, 9),
+    demoAllDay(base, 'demo-cabin', sheena, 'Cabin weekend', 12, 2),
+    demoTimed(base, 'demo-flu', sheena, 'Flu shots', 8, [15, 30], [16, 0], { location: 'Magnolia Pharmacy, 3217 W McGraw St, Seattle, WA 98199' }),
+    demoTimed(base, 'demo-recital', justin, 'Chase piano recital', 9, [18, 0], [19, 0], { location: DEMO_PLACES.piano }),
+  ]
+}
+
+// The hub's order: by start (an all-day event at its day's midnight), all day
+// first on a tie, then by title.
+function demoSortKey(e) {
+  if (e.allDay) {
+    const [y, m, d] = e.startDate.split('-').map(Number)
+    return new Date(y, m - 1, d).getTime()
+  }
+  return Date.parse(e.start)
+}
+
+function sortLikeTheHub(list) {
+  return list.slice().sort((a, b) =>
+    demoSortKey(a) - demoSortKey(b) ||
+    (a.allDay === b.allDay ? 0 : a.allDay ? -1 : 1) ||
+    String(a.title).localeCompare(String(b.title)))
+}
+
+// demoCalendar(today) -> { events, countdowns, calendars, range }: six weeks
+// of events (DEMO_SPAN, above), the three days the agenda shows by default
+// being the original eight (one all-day event spans tomorrow and the day
+// after, so it shows in two columns), and two countdowns - one whose art is
+// a hub path that does not exist, so the tile's fallback runs, and one with
+// an emoji. Each countdown carries a marker colour (`tileColor`, the hub's
+// palette purple and green: what `color: purple` and `color: green` in an
+// event's description send), which only the art-above tiles draw; the other
+// tile styles draw as before. range: the dates the events cover, as the
+// calendar store reports the hub's (hooks/useCalendar.js).
 export function demoCalendar(today) {
   const base = new Date(today)
   base.setHours(0, 0, 0, 0)
   const [justin, sheena] = DEMO_CALENDARS
 
-  const events = [
+  const firstThree = [
     demoAllDay(base, 'demo-pj', sheena, 'PJ and Stuffy day', 0, 1),
     demoTimed(base, 'demo-dentist', sheena, 'Chase dentist', 0, [8, 15], [9, 0]),
     demoTimed(base, 'demo-lunch', justin, 'Lunch with Dana', 0, [12, 30], [13, 30]),
-    demoTimed(base, 'demo-soccer', justin, 'Vinny soccer', 0, [17, 0], [18, 15]),
+    demoTimed(base, 'demo-soccer', justin, 'Vinny soccer', 0, [17, 0], [18, 15], {
+      location: DEMO_PLACES.field,
+      description: 'Bring shin guards and water',
+    }),
     demoAllDay(base, 'demo-chicago', sheena, 'Sheena in Chicago', 1, 2),
-    demoTimed(base, 'demo-piano', sheena, 'Chase piano lesson', 1, [16, 0], [16, 45]),
-    demoTimed(base, 'demo-bts', justin, 'Back to school night', 1, [18, 30], [20, 0]),
-    demoTimed(base, 'demo-swim', justin, 'Vinny swim meet', 2, [9, 0], [11, 30]),
+    demoTimed(base, 'demo-piano', sheena, 'Chase piano lesson', 1, [16, 0], [16, 45], { location: DEMO_PLACES.piano }),
+    demoTimed(base, 'demo-bts', justin, 'Back to school night', 1, [18, 30], [20, 0], { location: DEMO_PLACES.school }),
+    demoTimed(base, 'demo-swim', justin, 'Vinny swim meet', 2, [9, 0], [11, 30], { location: DEMO_PLACES.pool }),
   ]
+  const weeks = []
+  for (let i = -DEMO_SPAN.back; i < DEMO_SPAN.ahead; i++) {
+    if (i >= 0 && i <= 2) continue
+    demoWeekDay(base, i, { justin, sheena }).forEach((e) => weeks.push(e))
+  }
+  const events = sortLikeTheHub(firstThree.concat(weeks, demoOneOffs(base, { justin, sheena })))
+  const range = { from: dateKey(dayOffset(base, -DEMO_SPAN.back)), to: dateKey(dayOffset(base, DEMO_SPAN.ahead)) }
 
   const countdowns = [
     {
@@ -432,5 +551,5 @@ export function demoCalendar(today) {
     },
   ]
 
-  return { events, countdowns, calendars: DEMO_CALENDARS }
+  return { events, countdowns, calendars: DEMO_CALENDARS, range }
 }

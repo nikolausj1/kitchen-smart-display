@@ -14,6 +14,16 @@ import WhatToWearPanel from '../panels/WhatToWearPanel.jsx'
 import AirQualityChip from '../panels/AirQualityChip.jsx'
 import HeadlinePanel from '../panels/HeadlinePanel.jsx'
 import AgendaPanel, { sliceAgendaDays } from '../panels/AgendaPanel.jsx'
+// --- Calendar views (chunk 3) ---
+import UpNextPanel from '../panels/UpNextPanel.jsx'
+import DayListPanel from '../panels/DayListPanel.jsx'
+import WeekGridPanel from '../panels/WeekGridPanel.jsx'
+import MonthGridPanel from '../panels/MonthGridPanel.jsx'
+import { useCalendarWindow } from '../../../hooks/useCalendar.js'
+import { AGENDA_SCAN_DAYS, boardCalendarNeed, daysWithEvents } from '../lib/calendarViews.js'
+import { buildAgendaDays, keyToDate } from '../lib/agenda.js'
+import { dateKey } from '../../../lib/schoolDay.js'
+// --- end calendar views ---
 import CountdownsPanel from '../panels/CountdownsPanel.jsx'
 import CountdownPanel from '../panels/CountdownPanel.jsx'
 import DeparturePanel from '../panels/DeparturePanel.jsx'
@@ -103,6 +113,13 @@ import './SpecPanel.css'
 // carries its mark (d.weather.attribution). The alert banner's box is dropped
 // while no alert is in force, as if a rule hid it; the editor keeps it, with
 // a placeholder, so it can be placed.
+//
+// The calendar views (chunk 3: Up next, Day list, Week grid, Month grid) read
+// the calendar store (d.calendar). What they draw can reach past the six days
+// the store asks the hub for by default (a week from Monday, a month grid),
+// so the board wants the union of its calendar panels' windows
+// (lib/calendarViews.js boardCalendarNeed, hooks/useCalendar.js); a board
+// without them wants nothing and asks what it always has.
 
 // The Board's tile ran twelve photos; so does any photo panel.
 const PHOTO_COUNT = 12
@@ -124,6 +141,15 @@ function tileIntervalMs(slideshow) {
 
 // The departure panel in a borrowed box has no knobs of its own.
 const DEPARTURE_KNOBS = knobDefaults('departure')
+
+// --- Calendar views (chunk 3): each type's panel. ---
+const CALENDAR_VIEWS = {
+  upnext: UpNextPanel,
+  daylist: DayListPanel,
+  weekgrid: WeekGridPanel,
+  monthgrid: MonthGridPanel,
+}
+// --- end calendar views ---
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 
@@ -292,10 +318,28 @@ export default function SpecBoard({ d, layoutId, className, children }) {
   }, [panels])
 
   const agendaKnobs = knobs.agenda || null
-  const agendaDays = useMemo(
-    () => (agendaKnobs ? sliceAgendaDays(d.agendaDays, agendaKnobs) : d.agendaDays),
-    [d.agendaDays, agendaKnobs]
+  // --- Calendar views (chunk 3): the window the board's calendar panels
+  // need, and the agenda's days when it skips the empty ones (from two weeks
+  // of them). ---
+  useCalendarWindow(boardCalendarNeed(panels, knobs, d.now))
+  const nowOk = d.now instanceof Date && !Number.isNaN(d.now.getTime())
+  const todayKey = nowOk ? dateKey(d.now) : null
+  // A day's events that are over leave it (futureOnly) by the minute.
+  const minute = nowOk ? Math.floor(d.now.getTime() / 60000) : null
+  const skipEmpty = !!agendaKnobs && agendaKnobs.showEmptyDays === false
+  const calEvents = d.calendar?.events
+  const scanDays = useMemo(
+    () => (skipEmpty && todayKey ? buildAgendaDays(calEvents, keyToDate(todayKey), AGENDA_SCAN_DAYS) : null),
+    [skipEmpty, calEvents, todayKey]
   )
+  // --- end calendar views ---
+  const agendaDays = useMemo(() => {
+    if (!agendaKnobs) return d.agendaDays
+    // --- Calendar views (chunk 3) ---
+    if (scanDays) return daysWithEvents(scanDays, agendaKnobs, minute == null ? null : new Date(minute * 60000))
+    // --- end calendar views ---
+    return sliceAgendaDays(d.agendaDays, agendaKnobs)
+  }, [d.agendaDays, agendaKnobs, scanDays, minute])
 
   const headline = d.headline || fallbackHeadline(d.greeting)
   const cal = d.calendar
@@ -421,8 +465,30 @@ export default function SpecBoard({ d, layoutId, className, children }) {
             error={cal?.error ?? null}
             stale={!!cal?.stale}
             knobs={k}
+            calendars={cal?.calendars ?? null}
           />
         )
+      // --- Calendar views (chunk 3) ---
+      case 'upnext':
+      case 'daylist':
+      case 'weekgrid':
+      case 'monthgrid': {
+        const View = CALENDAR_VIEWS[p.type]
+        return (
+          <View
+            events={cal?.events}
+            calendars={cal?.calendars ?? null}
+            now={d.now}
+            connected={cal?.connected ?? null}
+            fetchedAt={cal?.fetchedAt ?? null}
+            error={cal?.error ?? null}
+            stale={!!cal?.stale}
+            range={cal?.range ?? null}
+            knobs={k}
+          />
+        )
+      }
+      // --- end calendar views ---
       case 'countdowns':
         return host === 'countdowns' ? departure(DEPARTURE_KNOBS) : <CountdownsPanel countdowns={d.countdowns} knobs={k} />
       case 'countdown':

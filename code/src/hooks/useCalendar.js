@@ -1,6 +1,7 @@
-import { useSyncExternalStore } from 'react'
+import { useLayoutEffect, useSyncExternalStore } from 'react'
 import { hubUrl } from '../lib/hub.js'
 import { deepEqual } from '../lib/settings.js'
+import { DEFAULT_WINDOW, calendarPath, cleanRange, cleanWindow, rangeOf, sameRange, unionWindow, wider } from './calendarWindow.js'
 
 // useCalendar - the family calendar and its countdowns, from the hub.
 //
@@ -8,12 +9,23 @@ import { deepEqual } from '../lib/settings.js'
 // result normalized (docs/designs/entry-board.md, "GET /api/calendar"):
 //
 //   GET hubUrl('/api/calendar?days=6') ->
-//   { connected, error, fetchedAt, days,
+//   { connected, error, fetchedAt, days, past, from, to,
 //     calendars:  [{ id, label, color }],
 //     events:     [{ id, calendarId, calendarLabel, color, title, description,
-//                    location, allDay, start, end, startDate, endDate, status }],
+//                    location, allDay, start, end, startDate, endDate, status,
+//                    alsoOn }],
 //     countdowns: [{ id, title, date, daysLeft, leadDays, image, emoji,
 //                    calendarLabel, color, tileColor }] }
+//
+// The window (docs/designs/panels-and-controls.md, chunk 3): six days from
+// today and none back is the default and the agenda's own need, so a screen
+// that shows only the agenda asks exactly what it always has. A calendar view
+// that draws more (a week from Monday, a month grid) says so with
+// wantCalendarWindow({ days, past }) (or the useCalendarWindow hook), which
+// returns its release: the store asks for the union of everything wanted
+// (hooks/calendarWindow.js), up to the hub's 60 days ahead and 31 back, and
+// asks again at once when the union grows. A narrower union waits for the
+// next poll.
 //
 // A countdown's color is its calendar's; tileColor is the `color:` marker in
 // its description ('#rrggbb' or null), which the art-above tiles draw
@@ -25,7 +37,8 @@ import { deepEqual } from '../lib/settings.js'
 // identities. Unlike houseState it polls only while something is subscribed
 // (a Today layout on screen): the kitchen on its Framed Today never asks.
 //
-// Snapshot: { events, countdowns, calendars, connected, fetchedAt, error, stale }
+// Snapshot: { events, countdowns, calendars, connected, fetchedAt, error,
+// stale, range }
 //   events      as the hub sent them, minus anything unusable (no date, a
 //               cancelled instance). Sorted by the hub; useTodayData buckets
 //               them into days (views/TodayLayouts/lib/agenda.js).
@@ -37,6 +50,10 @@ import { deepEqual } from '../lib/settings.js'
 //   error       this screen's fetch error (hub unreachable, or a 404 from a hub
 //               that predates the route), else the hub's own error string.
 //   stale       no successful poll of the hub for five minutes (or none yet).
+//   range       { from, to } ('YYYY-MM-DD', to exclusive): the local dates
+//               the events cover, as the hub answered; null before an answer.
+//               A day outside it is unknown, not free (a hub from before the
+//               window serves 14 days at most and nothing back).
 
 const CACHE_KEY = 'kitchenCalendarCache'
 const POLL_MS = 60 * 1000
@@ -47,7 +64,6 @@ const CACHE_MAX_AGE_MS = 48 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 15 * 1000
 // Collapses StrictMode's double subscribe and a burst of visibility changes.
 const MIN_POLL_GAP_MS = 5 * 1000
-const DAYS = 6
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -60,6 +76,7 @@ function emptyState() {
     fetchedAt: null,
     error: null,
     stale: true,
+    range: null,
   }
 }
 
@@ -129,6 +146,7 @@ function readCache() {
         ...base,
         ...dataFrom(raw),
         stale: Date.now() - polledAt > STALE_AFTER_MS,
+        range: cleanRange(raw.range),
       },
       polledAt,
     }
@@ -148,6 +166,7 @@ function writeCache(s, polledAt) {
         calendars: s.calendars,
         connected: s.connected,
         fetchedAt: s.fetchedAt,
+        range: s.range,
         polledAt,
       })
     )
@@ -164,6 +183,15 @@ let inFlight = false
 let lastPollStartedAt = 0
 let intervalId = null
 const listeners = new Set()
+// The windows the calendar views want (wantCalendarWindow), by token; a poll
+// asks for their union. `rerun`: the union grew while a poll was out.
+const wants = new Map()
+let nextWant = 1
+let rerun = false
+
+function wantedWindow() {
+  return unionWindow(Array.from(wants.values()))
+}
 
 // Keep the array we already hold when the new one is structurally identical,
 // so the agenda memo in useTodayData does not rebuild every poll.
@@ -186,16 +214,23 @@ function publish(next) {
     merged.connected === current.connected &&
     merged.fetchedAt === current.fetchedAt &&
     merged.error === current.error &&
-    merged.stale === current.stale
+    merged.stale === current.stale &&
+    sameRange(merged.range, current.range)
   if (same) return
+  if (sameRange(merged.range, current.range)) merged.range = current.range
   current = merged
   writeCache(current, lastOkAt)
   listeners.forEach((fn) => fn())
 }
 
-function accept(payload) {
+function accept(payload, asked, requestedAt) {
   lastOkAt = Date.now()
-  publish({ ...dataFrom(payload), error: str(payload.error), stale: false })
+  publish({
+    ...dataFrom(payload),
+    error: str(payload.error),
+    stale: false,
+    range: rangeOf(payload, asked, requestedAt),
+  })
 }
 
 function fail(err) {
@@ -210,28 +245,40 @@ function fail(err) {
   })
 }
 
-async function poll() {
-  if (typeof fetch === 'undefined' || inFlight) return
+// force: a wider window was just wanted, so the minimum gap between polls
+// does not apply.
+async function poll(force = false) {
+  if (typeof fetch === 'undefined') return
+  if (inFlight) {
+    if (force) rerun = true
+    return
+  }
   const startedAt = Date.now()
-  if (startedAt - lastPollStartedAt < MIN_POLL_GAP_MS) return
+  if (!force && startedAt - lastPollStartedAt < MIN_POLL_GAP_MS) return
   lastPollStartedAt = startedAt
   inFlight = true
+  const asked = wantedWindow()
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null
   const timeout = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : null
   try {
-    const res = await fetch(hubUrl(`/api/calendar?days=${DAYS}`), {
+    const res = await fetch(hubUrl(calendarPath(asked)), {
       cache: 'no-store',
       signal: ctrl ? ctrl.signal : undefined,
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const payload = await res.json()
     if (!isObj(payload)) throw new Error('bad /api/calendar payload')
-    accept(payload)
+    accept(payload, asked, startedAt)
   } catch (err) {
     fail(err)
   } finally {
     if (timeout) clearTimeout(timeout)
     inFlight = false
+    // A view wanted more while this one was out: ask again now, for all of it.
+    if (rerun) {
+      rerun = false
+      if (listeners.size > 0 && wider(wantedWindow(), asked)) poll(true)
+    }
   }
 }
 
@@ -275,4 +322,37 @@ export default function useCalendar() {
 // Synchronous read for code outside render.
 export function getCalendar() {
   return current
+}
+
+// wantCalendarWindow({ days, past }) -> release(): a calendar view needs the
+// events from `past` days before today to `days` from today on (today
+// counted; days 1..60, past 0..31). Until released, every poll asks the hub
+// for at least that; a want that widens what is asked polls again at once
+// (when the store is running; else its first poll asks for it). Releasing
+// twice is harmless.
+export function wantCalendarWindow(window) {
+  const token = nextWant++
+  const before = wantedWindow()
+  wants.set(token, cleanWindow(window))
+  if (listeners.size > 0 && wider(wantedWindow(), before)) poll(true)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    wants.delete(token)
+  }
+}
+
+// The hook form, for a layout: need = { days, past } or null (the default
+// window, nothing to want). Re-wants only when the numbers change. A layout
+// effect, so on a page's first render the want is in before the store's own
+// subscription (a passive effect) starts polling, and the first request asks
+// for all of it.
+export function useCalendarWindow(need) {
+  const days = need && need.days > 0 ? need.days : 0
+  const past = need && need.past > 0 ? need.past : 0
+  useLayoutEffect(() => {
+    if (!days && !past) return undefined
+    return wantCalendarWindow({ days: days || DEFAULT_WINDOW.days, past })
+  }, [days, past])
 }

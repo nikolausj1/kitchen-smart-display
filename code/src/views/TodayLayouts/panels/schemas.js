@@ -102,6 +102,65 @@ const WEIGHTS = [
   [700, 'Bold'],
 ]
 
+// --- Calendar views (docs/designs/panels-and-controls.md, chunk 3) ------------
+//
+// The options the calendar panels share, DAKboard's calendar settings as
+// knobs (lib/calendarViews.js draws them): each panel takes the ones that
+// mean something to it, the agenda included, and every default is the
+// agenda's behaviour before they existed.
+//   showLocation     the place under an event (placeOf: not the full address)
+//   showEndTime      start and end ('9:00 - 10:30 am'), not just the start
+//   showDescription  the first line of its description
+//   legend           each calendar's colour and name, at the foot
+//   showEmptyDays    agenda: a day with nothing says so; off, only days with
+//                    events, up to two weeks ahead
+//   futureOnly       leave out what is over (off: it stays, dimmed with dimPast)
+//   dimPast          step back what is over
+//   consolidate      the same event on two calendars (same title, start and
+//                    end, or an invitation the hub listed once) once, with
+//                    both colours
+//   timeFormat       'auto' (the screen's own when it has one, else 12-hour),
+//                    '12h' or '24h'
+//   colorBy          'calendar' or 'none' (neutral bars and dots)
+const TIME_FORMATS = [
+  ['auto', 'Auto'],
+  ['12h', '1:30 pm'],
+  ['24h', '13:30'],
+]
+
+const CALENDAR_OPTIONS = {
+  showLocation: (el, def = false) => toggle('showLocation', 'Location', def, el, 'The place, not the full address'),
+  showEndTime: (el, def = false) => toggle('showEndTime', 'End time', def, el),
+  showDescription: (el, def = false) => toggle('showDescription', 'Description', def, el, 'Its first line'),
+  legend: (el, def = false) => toggle('legend', 'Calendar legend', def, el, "Each calendar's colour, at the foot"),
+  showEmptyDays: (el, def = true) =>
+    toggle('showEmptyDays', 'Empty days', def, el, 'Off: only days with events, up to two weeks ahead'),
+  futureOnly: (el, def = false) =>
+    toggle('futureOnly', 'Upcoming only', def, el, 'Off: finished events stay, dimmed with Dim finished'),
+  dimPast: (el, def = true) => toggle('dimPast', 'Dim finished', def, el),
+  consolidate: (el, def = false) =>
+    toggle('consolidate', 'Merge shared events', def, el, 'The same event on two calendars once, with both colours'),
+  timeFormat: (el, def = 'auto') =>
+    select('timeFormat', 'Time format', TIME_FORMATS, def, el, "Auto: the screen's own, else 1:30 pm"),
+  colorBy: (el, def = 'calendar') =>
+    select(
+      'colorBy',
+      'Colour by',
+      [
+        ['calendar', 'Calendar'],
+        ['none', 'None'],
+      ],
+      def,
+      el
+    ),
+}
+
+// The shared options a panel takes, in this order: [key, element, default?].
+function calendarOptions(list) {
+  return list.map(([key, el, def]) => CALENDAR_OPTIONS[key](el, def))
+}
+// --- end calendar views ---
+
 // --- The panels ----------------------------------------------------------------
 
 export const PANEL_SCHEMAS = deepFreeze({
@@ -309,22 +368,158 @@ export const PANEL_SCHEMAS = deepFreeze({
       count('rowsPerDay', 'Rows per day', 2, 10, 6, 'rows', 'Rows size to fit; finished events give up their place first'),
       size('rowSize', 'Row size', 'rows'),
       size('headerSize', 'Header size', 'header'),
-      select(
-        'timeFormat',
-        'Time format',
-        [
-          ['12h', '1:30 pm'],
-          ['24h', '13:30'],
-        ],
-        '12h',
-        'rows'
-      ),
+      // 'auto' joined with the calendar views (chunk 3); the agenda's
+      // default stays '12h', which is what auto means today.
+      select('timeFormat', 'Time format', TIME_FORMATS, '12h', 'rows', "Auto: the screen's own, else 1:30 pm"),
       toggle('showAllDayLabel', 'All-day label', true, 'rows'),
       toggle('dimPast', 'Dim finished', true, 'rows'),
       factor('columnGap', 'Column gap'),
       toggle('showColorBars', 'Colour bars', true, 'rows'),
+      // --- Calendar views (chunk 3): the shared options, off by default ---
+      ...calendarOptions([
+        ['showLocation', 'location'],
+        ['showEndTime', 'rows'],
+        ['showDescription', 'description'],
+        ['legend', 'legend'],
+        ['showEmptyDays', 'rows'],
+        ['futureOnly', 'rows'],
+        ['consolidate', 'rows'],
+        ['colorBy', 'rows'],
+      ]),
+      // --- end calendar views ---
     ],
   },
+
+  // --- Calendar views (docs/designs/panels-and-controls.md, chunk 3) ---------
+  // The family calendar from the hub (hooks/useCalendar.js), drawn by
+  // lib/calendarViews.js. On no default board; they arrive through Add panel.
+  upnext: {
+    fields: [
+      count('count', 'Rows after', 0, 6, 3, 'rows', 'The events after the next one'),
+      withExtras({ key: 'hoursAhead', label: 'Looks ahead', type: 'number', min: 12, max: 72, step: 6, unit: 'h', default: 48 }, null, 'Hours from now'),
+      size('nextSize', 'Next event size', 'next'),
+      size('rowSize', 'Row size', 'rows'),
+      ...calendarOptions([
+        ['showLocation', 'nextLocation'],
+        ['showEndTime', 'nextTime'],
+        ['showDescription', 'description'],
+        ['legend', 'legend'],
+        ['consolidate', 'next'],
+        ['timeFormat', 'time'],
+        ['colorBy', 'next'],
+      ]),
+    ],
+  },
+
+  daylist: {
+    fields: [
+      select(
+        'day',
+        'Day',
+        [
+          ['today', 'Today'],
+          ['tomorrow', 'Tomorrow'],
+        ],
+        'today',
+        'header'
+      ),
+      count('maxRows', 'Rows', 3, 14, 8, 'rows', 'Finished events give up their place first'),
+      size('rowSize', 'Row size', 'rows'),
+      size('headerSize', 'Header size', 'header'),
+      ...calendarOptions([
+        ['showLocation', 'location'],
+        ['showEndTime', 'time'],
+        ['showDescription', 'description'],
+        ['legend', 'legend'],
+        ['futureOnly', 'rows'],
+        ['dimPast', 'rows'],
+        ['consolidate', 'rows'],
+        ['timeFormat', 'time'],
+        ['colorBy', 'rows'],
+      ]),
+    ],
+  },
+
+  weekgrid: {
+    fields: [
+      select(
+        'startDay',
+        'Starts',
+        [
+          ['today', 'Today'],
+          ['monday', 'Monday'],
+          ['sunday', 'Sunday'],
+        ],
+        'today',
+        'dayHeader'
+      ),
+      count('days', 'Days', 5, 7, 7, 'dayHeader'),
+      count('startHour', 'From', 5, 12, 7, 'hourLabel', 'Hour of the first row (7 = 7 am)'),
+      count('endHour', 'To', 17, 24, 21, 'hourLabel', 'Hour the last row ends (21 = 9 pm)'),
+      toggle('showAllDay', 'All-day band', true, 'allday', 'All-day and multi-day events across the top'),
+      toggle('hourLabels', 'Hour labels', true, 'hourLabel'),
+      toggle('compact', 'Compact', false, 'block', 'Shorter rows: an event and a day header on one line each'),
+      size('size', 'Size', 'block'),
+      ...calendarOptions([
+        ['showLocation', 'block'],
+        ['showEndTime', 'block'],
+        ['legend', 'legend'],
+        ['futureOnly', 'block'],
+        ['dimPast', 'block'],
+        ['consolidate', 'block'],
+        ['timeFormat', 'block'],
+        ['colorBy', 'block'],
+      ]),
+    ],
+  },
+
+  monthgrid: {
+    fields: [
+      select(
+        'month',
+        'Month',
+        [
+          ['current', 'This month'],
+          ['next', 'Next month'],
+        ],
+        'current',
+        'monthLabel'
+      ),
+      select(
+        'weekStart',
+        'Week starts',
+        [
+          ['sunday', 'Sunday'],
+          ['monday', 'Monday'],
+        ],
+        'sunday',
+        'weekday'
+      ),
+      select(
+        'mode',
+        'Show',
+        [
+          ['dots', 'Dots'],
+          ['titles', 'Titles'],
+        ],
+        'dots',
+        'day',
+        'Dots suit a small screen; titles the Echo Show 15'
+      ),
+      count('titlesPerDay', 'Titles per day', 1, 4, 3, 'event', 'Titles: more show as +n'),
+      toggle('showOtherMonths', 'Other months', true, 'day', 'The days before and after, dimmed'),
+      size('size', 'Size', 'day'),
+      ...calendarOptions([
+        ['legend', 'legend'],
+        ['futureOnly', 'day'],
+        ['dimPast', 'day'],
+        ['consolidate', 'dot'],
+        ['timeFormat', 'event'],
+        ['colorBy', 'dot'],
+      ]),
+    ],
+  },
+  // --- end calendar views ---
 
   countdowns: {
     fields: [
@@ -612,7 +807,66 @@ export const PANEL_ELEMENTS = deepFreeze({
     { key: 'header', label: 'Day header' },
     { key: 'rows', label: 'Events' },
     { key: 'message', label: 'Not connected' },
+    // --- Calendar views (chunk 3): the shared options' parts ---
+    { key: 'location', label: 'Location' },
+    { key: 'description', label: 'Description' },
+    { key: 'legend', label: 'Legend' },
   ],
+  // --- Calendar views (chunk 3) ---
+  upnext: [
+    TITLE,
+    { key: 'updated', label: 'Updated' },
+    { key: 'next', label: 'Next event' },
+    { key: 'nextIn', label: 'Starts in' },
+    { key: 'nextTime', label: 'Time' },
+    { key: 'nextLocation', label: 'Location' },
+    { key: 'description', label: 'Description' },
+    { key: 'rows', label: 'Following events' },
+    { key: 'day', label: 'Day' },
+    { key: 'row', label: 'Event' },
+    { key: 'time', label: 'Event time' },
+    { key: 'legend', label: 'Legend' },
+    EMPTY,
+  ],
+  daylist: [
+    TITLE,
+    { key: 'updated', label: 'Updated' },
+    { key: 'header', label: 'Date' },
+    { key: 'allday', label: 'All-day events' },
+    { key: 'rows', label: 'Events' },
+    { key: 'row', label: 'Event' },
+    { key: 'time', label: 'Time' },
+    { key: 'location', label: 'Location' },
+    { key: 'description', label: 'Description' },
+    { key: 'legend', label: 'Legend' },
+    EMPTY,
+  ],
+  weekgrid: [
+    TITLE,
+    { key: 'updated', label: 'Updated' },
+    { key: 'dayHeader', label: 'Day header' },
+    { key: 'hourLabel', label: 'Hour labels' },
+    { key: 'allday', label: 'All-day band' },
+    { key: 'block', label: 'Event' },
+    { key: 'more', label: 'More' },
+    { key: 'nowLine', label: 'Now line' },
+    { key: 'legend', label: 'Legend' },
+    EMPTY,
+  ],
+  monthgrid: [
+    TITLE,
+    { key: 'monthLabel', label: 'Month' },
+    { key: 'updated', label: 'Updated' },
+    { key: 'weekday', label: 'Weekdays' },
+    { key: 'day', label: 'Day' },
+    { key: 'dayNumber', label: 'Date' },
+    { key: 'dot', label: 'Dots' },
+    { key: 'event', label: 'Event titles' },
+    { key: 'more', label: 'More' },
+    { key: 'legend', label: 'Legend' },
+    EMPTY,
+  ],
+  // --- end calendar views ---
   countdowns: [
     TITLE,
     { key: 'tile', label: 'Tile' },

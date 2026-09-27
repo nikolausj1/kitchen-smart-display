@@ -1,0 +1,193 @@
+/* DayListPanel - one day as a vertical list under its date (DayListPanel.jsx).
+ *
+ * Sizes as in UpNextPanel.css: unscaled bases resolved where they are used,
+ * the header's against the body (a size container) and the rows' against
+ * their own part of it divided by --tl-daylist-lines (from the JSX: what the
+ * rows shown take, counted as at least four and at most maxRows, so the
+ * busiest day fits and a quiet one is not a headline); every text element
+ * is its base times a factor times var(--tl-text-scale). Fallbacks first,
+ * the container units under @supports. Chrome 80 rules: no flex gap, no
+ * `inset`, no aspect-ratio. */
+
+.tl-daylist__body {
+  container-type: size;
+  container-name: daylist;
+  --tl-daylist-head-px: clamp(14px, 2.4vh, 34px);
+  --tl-daylist-row-px: clamp(11px, 1.9vh, 26px);
+}
+
+@supports (height: 1cqh) {
+  .tl-daylist__body {
+    --tl-daylist-head-px: clamp(14px, min(6.4cqw, 8cqh), 38px);
+    --tl-daylist-row-px: clamp(11px, min(6.4cqw, calc(100cqh / var(--tl-daylist-lines, 14))), 30px);
+  }
+}
+
+.tl-daylist__header {
+  flex: 0 0 auto;
+  padding-bottom: 0.3em;
+  margin-bottom: calc(var(--tl-pad) * 0.4);
+  border-bottom: 1px solid var(--tl-rule);
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-head-px));
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--tl-fg);
+  overflow-wrap: anywhere;
+}
+
+.tl-daylist__rows {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  container-type: size;
+  overflow: hidden;
+}
+
+.tl-daylist__list {
+  min-width: 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px));
+}
+
+.tl-daylist__allday {
+  margin-bottom: 0.35em;
+}
+
+/* Bar, time, the rest. The time column is fixed so titles line up down the
+ * day ("9:00" and "12:30" alike), narrower in 24-hour. */
+.tl-daylist__row {
+  display: grid;
+  grid-template-columns: 0.2em 4.15em minmax(0, 1fr);
+  column-gap: 0.55em;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.16em 0.45em 0.16em 0;
+  border-radius: var(--tl-radius-sm);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px));
+  line-height: 1.25;
+}
+
+.tl-daylist__row + .tl-daylist__row {
+  margin-top: 0.25em;
+}
+
+.tl-daylist--h24 .tl-daylist__row {
+  grid-template-columns: 0.2em 3em minmax(0, 1fr);
+}
+
+.tl-daylist__bar {
+  grid-column: 1;
+}
+
+.tl-daylist__row--allday {
+  background: var(--tl-daylist-tint, var(--tl-surface-2));
+}
+
+.tl-daylist--nocolor .tl-daylist__row--allday {
+  background: var(--tl-surface-2);
+}
+
+.tl-daylist__time {
+  display: flex;
+  flex-direction: column;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px));
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "12:30" is 2.76em in tabular figures; "pm" at 0.68em brings the widest
+ * time to about 3.9em, inside the 4.15em column (as the agenda's). */
+.tl-daylist__ampm {
+  margin-left: 0.1em;
+  font-size: 0.68em;
+}
+
+/* The end, under the start, quieter. */
+.tl-daylist__end {
+  font-size: 0.82em;
+  line-height: 1.2;
+  color: var(--tl-fg-3);
+}
+
+.tl-daylist__time--allday {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px) * 0.64);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tl-fg);
+}
+
+.tl-daylist__main {
+  min-width: 0;
+}
+
+.tl-daylist__title {
+  min-width: 0;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px));
+  color: var(--tl-fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tl-daylist__span,
+.tl-daylist__loc,
+.tl-daylist__desc {
+  margin-top: 0.1em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px) * 0.8);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.tl-daylist__span,
+.tl-daylist__loc {
+  color: var(--tl-fg-2);
+}
+
+.tl-daylist__desc {
+  color: var(--tl-fg-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Over, but still today: kept for context, stepped back. */
+.tl-daylist__row--past {
+  opacity: 0.45;
+}
+
+.tl-daylist__more {
+  margin-top: 0.3em;
+  padding-left: 0.7em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-daylist-row-px) * 0.8);
+  line-height: 1.5;
+  color: var(--tl-fg-3);
+}
+
+.tl-daylist__body > .tl-cal-legend {
+  margin-top: auto;
+  padding-top: calc(var(--tl-pad) * 0.5);
+}
+
+/* --- Knobs (tokens.css "Panel knobs") -------------------------------------- */
+
+.tl-knobs .tl-daylist__header {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-daylist-head, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+.tl-knobs .tl-daylist__rows {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-daylist-row, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx for 'daylist'; keep the two in step) ---- */
+
+@container tl-spec (width < 150px) or (height < 110px) {
+  .tl-spec--daylist > .tl-spec__content { display: none; }
+  .tl-spec.tl-spec--daylist > .tl-panel--small { display: flex; }
+}
