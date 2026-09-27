@@ -1,0 +1,83 @@
+/* FlipClockPanel - the flip clock (Clock/FlipClock.css) filling a box of a
+ * spec layout, centred in it by design.
+ *
+ * The box (.tl-flipclock__box) is a size container and FlipClock's one
+ * variable, --tl-flip-u (the card height), is the fit times the size knobs:
+ *
+ *   --tl-flip-u = --tl-flipclock-fit x --tl-knob-scale
+ *
+ * --tl-knob-scale is the box's text scale times the scale knob (tokens.css
+ * "Panel knobs"). The fit is the largest card height at which the clock fits
+ * the box: min(width / wu, height / hu, (height - floor) / footu), the
+ * clock's extent in card heights from lib/clocks.js flipFit, handed in on the
+ * panel as --tl-fc-wu, --tl-fc-hu, --tl-fc-footu and --tl-fc-floor (the date
+ * line's 12 px floor). With container units it is worked out here; without
+ * them FlipClockPanel.jsx measures the box and hands in the fit as px on it,
+ * and 20vh stands in until it has.
+ *
+ * The fit is declared on .tl-flip and only used below it, so its container
+ * units resolve against the box, the nearest container (an element never
+ * queries itself).
+ *
+ * The date line keeps FlipClock's size, 0.062 of a card and never under
+ * 12 px, and takes an element style's size (--tl-el-size) and the shrink to
+ * fit (--tl-el-fit). The cards are drawn in card heights and do not: the
+ * scale knob sizes them. Chrome 80 rules: no `inset`, no flex `gap`, no
+ * `aspect-ratio`. */
+
+.tl-flipclock__body {
+  min-height: 0;
+}
+
+.tl-flipclock__box {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+}
+
+.tl-flipclock .tl-flip {
+  --tl-flip-u: calc(var(--tl-flipclock-fit, 20vh) * var(--tl-knob-scale, 1));
+  flex: 0 0 auto;
+}
+
+@supports (height: 1cqh) {
+  .tl-flipclock .tl-flip {
+    --tl-flipclock-fit: min(
+      calc(100cqw / var(--tl-fc-wu, 3.456)),
+      calc(100cqh / var(--tl-fc-hu, 1.288)),
+      calc((100cqh - var(--tl-fc-floor, 12px)) / var(--tl-fc-footu, 1.226))
+    );
+  }
+}
+
+.tl-flipclock .tl-flip__date {
+  font-size: max(12px, calc(var(--tl-flip-u) * 0.062 * var(--tl-el-size, 1) * var(--tl-el-fit, 1)));
+}
+
+/* --- The universal align (horizontal) and valign (vertical: top is the
+ * clock centred, as designed) ---------------------------------------------- */
+
+.tl-spec--align-start .tl-flipclock__box {
+  align-items: flex-start;
+}
+
+.tl-spec--align-end .tl-flipclock__box {
+  align-items: flex-end;
+}
+
+.tl-spec.tl-spec--valign-bottom .tl-flipclock__box {
+  justify-content: flex-end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ----------------------------------------- */
+
+.tl-knobs .tl-flipclock__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-flipclock-scale, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
