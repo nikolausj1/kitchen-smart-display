@@ -412,6 +412,34 @@ body[data-kiosk='echo'] .tl-spec.tl-spec--blur {
   .tl-spec--countdown > .tl-panel--small { display: flex; }
 }
 
+/* --- Blocks and clocks (chunk 4). The shape has no minimum: a line box can be
+ * a sliver. --- */
+@container tl-spec (width < 110px) or (height < 40px) {
+  .tl-spec--flipclock > .tl-spec__content { display: none; }
+  .tl-spec--flipclock > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 48px) or (height < 48px) {
+  .tl-spec--analog > .tl-spec__content { display: none; }
+  .tl-spec--analog > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 90px) or (height < 44px) {
+  .tl-spec--clock2 > .tl-spec__content { display: none; }
+  .tl-spec--clock2 > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 60px) or (height < 24px) {
+  .tl-spec--date > .tl-spec__content { display: none; }
+  .tl-spec--date > .tl-panel--small { display: flex; }
+}
+
+@container tl-spec (width < 70px) or (height < 50px) {
+  .tl-spec--daycount > .tl-spec__content { display: none; }
+  .tl-spec--daycount > .tl-panel--small { display: flex; }
+}
+/* --- end blocks and clocks --- */
+
 /* The departure panel: its own box, or a box it borrowed. */
 @container tl-spec (width < 140px) or (height < 100px) {
   .tl-spec--departure > .tl-spec__content,
