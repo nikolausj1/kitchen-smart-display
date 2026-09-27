@@ -1,0 +1,160 @@
+/* HaChipsPanel - Home Assistant entities as chips in a row that wraps
+ * (HaChipsPanel.jsx): an icon, a label and a state word on a pill.
+ *
+ * One size. --tl-hachips-room, against the body (a size container): 32cqh
+ * keeps a row of chips inside a thin band, 2cqw the five house modes on one
+ * line in the starting box. Without container units, a share of the screen's
+ * height (see AirQualityChip.css for why the fallback stands outside the
+ * @supports block). The chips' type, --tl-hachips-u, is that times
+ * --tl-ha-fit (panels/useHaFit.js), which steps down only while the chips
+ * overflow the body. Every text size carries var(--tl-text-scale), so the
+ * size knob and the chip's, label's and state's own sizes reach them.
+ * Spacing is margins, never a flex gap; the block is centred with auto
+ * margins, so what overflows spills at the bottom, where the fitter sees it.
+ * The tones are HaParts.css's. Chrome 80 rules: no flex gap, no `inset`, no
+ * aspect-ratio. */
+
+.tl-hachips__body {
+  container-type: size;
+  min-height: 0;
+  --tl-hachips-room: 2vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-hachips__body {
+    --tl-hachips-room: clamp(11px, min(32cqh, 2cqw), 40px);
+  }
+}
+
+.tl-hachips__inner {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+  --tl-hachips-u: calc(var(--tl-hachips-room) * var(--tl-ha-fit, 1));
+}
+
+.tl-hachips__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.tl-hachips__chip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.22) calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.45)
+    calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.22) 0;
+  padding: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.36) calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.8)
+    calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.36) calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.55);
+  border: 1px solid var(--tl-ha-edge);
+  border-radius: 999px;
+  background: rgba(var(--tl-fg-rgb), 0.08);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u));
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.tl-hachips__chip.tl-ha-tone--alert {
+  background: var(--tl-ha-wash);
+}
+
+.tl-hachips__chip.tl-ha-tone--unknown {
+  background: transparent;
+  border-style: dashed;
+}
+
+.tl-hachips__icon {
+  flex: 0 0 auto;
+  width: 1.15em;
+  height: 1.15em;
+  margin-right: 0.42em;
+  color: var(--tl-ha-ink);
+}
+
+.tl-hachips__label {
+  margin-right: 0.5em;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u));
+  font-weight: 600;
+  color: var(--tl-fg);
+}
+
+.tl-hachips__label:last-child {
+  margin-right: 0;
+}
+
+.tl-hachips__state {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u));
+  font-weight: 400;
+  color: var(--tl-ha-word);
+}
+
+/* Calm reads quietly; an alert's label is amber with its state; an unknown
+ * chip is all the faintest ink. */
+.tl-hachips__chip.tl-ha-tone--calm .tl-hachips__state {
+  color: var(--tl-fg-2);
+}
+
+.tl-hachips__chip.tl-ha-tone--alert .tl-hachips__label,
+.tl-hachips__chip.tl-ha-tone--unknown .tl-hachips__label {
+  color: var(--tl-ha-word);
+}
+
+/* Not connected: a line under the chips saying which. */
+.tl-hachips__note {
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-hachips-u) * 0.75);
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hachips-u) * 0.8));
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--tl-fg-3);
+}
+
+.tl-hachips__empty {
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 1.1vw, 20px));
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tl-fg-3);
+}
+
+/* --- The universal align ----------------------------------------------------------- */
+
+.tl-spec--align-center .tl-hachips__row {
+  justify-content: center;
+}
+
+.tl-spec--align-end .tl-hachips__row {
+  justify-content: flex-end;
+}
+
+.tl-spec--align-center .tl-hachips__note,
+.tl-spec--align-center .tl-hachips__empty {
+  text-align: center;
+}
+
+.tl-spec--align-end .tl-hachips__note,
+.tl-spec--align-end .tl-hachips__empty {
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ----------------------------------------------- */
+
+.tl-knobs .tl-hachips__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-hachips-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx: 120 x 30) ------------------------------------- */
+
+@container tl-spec (width < 120px) or (height < 30px) {
+  .tl-spec--hachips > .tl-spec__content {
+    display: none;
+  }
+
+  .tl-spec.tl-spec--hachips > .tl-panel--small {
+    display: flex;
+  }
+}

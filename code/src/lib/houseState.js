@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { hubUrl } from './hub.js'
 import { dateKey, normalizeDecisions } from './countdown.js'
 import { DEVICE_ID, READ_ONLY, deepEqual } from './settings.js'
+import { cleanHouseHa } from './haState.js'
 
 // houseState - the house-wide STATE every screen shares through the hub.
 //
@@ -24,6 +25,16 @@ import { DEVICE_ID, READ_ONLY, deepEqual } from './settings.js'
 //                  after which the line may change (null for most kinds).
 //   airQuality     { pm25, aqi, label, fetchedAt }: Open-Meteo air quality for
 //                  the house location, refreshed hourly on the hub.
+//   ha             { connected, entities: { id: { state, attributes:
+//                  { friendly_name?, options?, current_position? },
+//                  lastChanged } } }: the Home Assistant whitelist's states
+//                  (docs/designs/panels-and-controls.md, chunk 5; the hub's
+//                  homeAssistant.mjs compact()), cleaned by lib/haState.js to
+//                  exactly those fields. null until the hub has sent it (a hub
+//                  without Home Assistant never does). Read through
+//                  hooks/useHomeAssistant.js, which adds the labels, kinds and
+//                  actions. Never cached: a garage "closed" carried over from
+//                  yesterday would be worse than "waiting".
 //
 // Screens share decisions, never a derived timer: each one derives the
 // countdown itself with frameserver/lib/countdown.mjs (hooks/useTimer.js).
@@ -36,10 +47,11 @@ import { DEVICE_ID, READ_ONLY, deepEqual } from './settings.js'
 // decisions, and a 10 s poll that picks up the other screens' writes.
 //
 // Snapshot: { countdown, travelDefault, noSchoolToday, timer, headline,
-// airQuality, fetchedAt, error, stale }. noSchoolToday, headline and airQuality
-// are null until the hub has said (a hub from before the Entry board never
-// sends the last two, and they stay null). `stale` is true once the last
-// successful fetch is over a minute old (or there has been none).
+// airQuality, weatherAlerts, ha, fetchedAt, error, stale }. noSchoolToday,
+// headline, airQuality and ha are null until the hub has said (a hub from
+// before the Entry board never sends the last two, and they stay null).
+// `stale` is true once the last successful fetch is over a minute old (or
+// there has been none).
 
 const CACHE_KEY = 'kitchenHouseState'
 const POLL_MS = 10 * 1000
@@ -49,7 +61,7 @@ const POLL_MS = 10 * 1000
 const LOCAL_WRITE_GRACE_MS = 5 * 1000
 const STALE_AFTER_MS = 60 * 1000
 
-const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer', 'headline', 'airQuality', 'weatherAlerts']
+const STATE_KEYS = ['countdown', 'travelDefault', 'noSchoolToday', 'timer', 'headline', 'airQuality', 'weatherAlerts', 'ha']
 
 function emptyState() {
   return {
@@ -60,6 +72,7 @@ function emptyState() {
     headline: null,
     airQuality: null,
     weatherAlerts: [],
+    ha: null,
     fetchedAt: null,
     error: null,
     stale: true,
@@ -160,6 +173,9 @@ function stateFrom(payload, base) {
   if ('weatherAlerts' in payload) {
     next.weatherAlerts = keep(base.weatherAlerts, cleanWeatherAlerts(payload.weatherAlerts))
   }
+  if ('ha' in payload) {
+    next.ha = keep(base.ha, cleanHouseHa(payload.ha))
+  }
   return next
 }
 
@@ -180,6 +196,8 @@ function readCache() {
   }
 }
 
+// ha is left out on purpose (see the header): only the house decisions and
+// the hub's slow-moving words are worth showing from a cache.
 function writeCache(s) {
   if (typeof localStorage === 'undefined') return
   try {
@@ -307,6 +325,13 @@ export function postCountdown(nextDecisions) {
 function subscribe(fn) {
   listeners.add(fn)
   return () => listeners.delete(fn)
+}
+
+// Raw subscription for a store outside render (hooks/useHomeAssistant.js
+// follows the `ha` slice with it). The listener is called after every
+// publish; getHouseState() reads the new snapshot. Returns the unsubscribe.
+export function subscribeHouseState(fn) {
+  return subscribe(fn)
 }
 
 function getSnapshot() {

@@ -1,0 +1,281 @@
+/* HaButtonPanel - one Home Assistant action as a button (HaButtonPanel.jsx):
+ * a face filling the box, the icon in a disc (with the hold's ring round it),
+ * the label, the entity's state and a hint line.
+ *
+ * Two sizes, against the body (a size container named tl-habutton):
+ * --tl-habutton-room, the label's type, and --tl-habutton-iconroom, the
+ * disc. Without container units, a share of the screen's height (see
+ * AirQualityChip.css for why the fallback stands outside the @supports
+ * block). What the face uses, --tl-habutton-u and --tl-habutton-icon, are
+ * those times --tl-ha-fit (panels/useHaFit.js), which steps down only while
+ * the words overflow the face. Every size carries var(--tl-text-scale), the
+ * disc's too, so the size knob and an element's own size reach them. The
+ * face is a row (the disc left of the words); in a box that is not wide
+ * enough for that, a column, centred (a container query, which the Echo's
+ * Silk skips: it keeps the row). Its parts are centred with auto margins, so
+ * what overflows spills at the bottom, where the fitter sees it. Labels
+ * wrap; nothing is cut off with an ellipsis. The tones are HaParts.css's.
+ * Chrome 80 rules: no flex gap, no `inset`, no aspect-ratio property. */
+
+.tl-habutton__body {
+  container-type: size;
+  container-name: tl-habutton;
+  min-height: 0;
+  --tl-habutton-room: 2.2vh;
+  --tl-habutton-iconroom: 6vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-habutton__body {
+    --tl-habutton-room: min(15cqh, 7.2cqw);
+    --tl-habutton-iconroom: min(44cqh, 24cqw);
+  }
+}
+
+/* --- The face -------------------------------------------------------------------- */
+
+.tl-habutton__face {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.7) calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.85);
+  border: 0;
+  border-radius: var(--tl-radius);
+  background: var(--tl-surface-solid);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--tl-fg-rgb), 0.1),
+    0 calc(var(--tl-pad) * 0.15) calc(var(--tl-pad) * 0.8) rgba(0, 0, 0, 0.3);
+  color: var(--tl-fg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  /* A press is a press: no scrolling, zooming, selecting or context menu
+   * takes it over halfway through a hold. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease;
+  --tl-habutton-u: calc(var(--tl-habutton-room) * var(--tl-ha-fit, 1));
+  --tl-habutton-icon: calc(var(--tl-habutton-iconroom) * var(--tl-ha-fit, 1));
+}
+
+.tl-habutton--outline .tl-habutton__face {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px rgba(var(--tl-fg-rgb), 0.4);
+}
+
+.tl-habutton.is-pressed .tl-habutton__face {
+  transform: scale(0.97);
+}
+
+.tl-habutton.is-disabled .tl-habutton__face {
+  cursor: default;
+}
+
+.tl-habutton__face:focus {
+  outline: none;
+}
+
+.tl-habutton__face:focus-visible {
+  outline: 2px solid var(--tl-accent);
+  outline-offset: -3px;
+}
+
+/* --- The disc, the icon and the ring ------------------------------------------------ */
+
+.tl-habutton__iconwrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--tl-text-scale, 1) * var(--tl-habutton-icon));
+  height: calc(var(--tl-text-scale, 1) * var(--tl-habutton-icon));
+  margin-top: auto;
+  margin-bottom: auto;
+  margin-right: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.75);
+}
+
+.tl-habutton__iconwrap::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 50%;
+  background: rgba(var(--tl-fg-rgb), 0.07);
+}
+
+.tl-habutton__face.tl-ha-tone--alert .tl-habutton__iconwrap::before {
+  background: var(--tl-ha-wash);
+}
+
+.tl-habutton__icon {
+  position: relative;
+  width: 56%;
+  height: 56%;
+  color: var(--tl-ha-ink);
+}
+
+.tl-habutton.is-pending .tl-habutton__icon {
+  color: var(--tl-fg-2);
+}
+
+.tl-habutton.is-ok .tl-habutton__icon {
+  color: #6fd08c;
+}
+
+.tl-habutton__ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.tl-habutton__track,
+.tl-habutton__fill {
+  fill: none;
+  stroke-width: 5;
+}
+
+/* A hold action's ring shows faintly at rest, so the button says "hold me". */
+.tl-habutton__track {
+  stroke: rgba(var(--tl-fg-rgb), 0.16);
+}
+
+/* 2 x pi x 46 = 289.03: the circle's length, all of it offset (empty) at
+ * rest. Hidden unless held, so the round cap of the empty dash draws no dot. */
+.tl-habutton__fill {
+  stroke: var(--tl-accent);
+  stroke-linecap: round;
+  stroke-dasharray: 289.03;
+  stroke-dashoffset: 289.03;
+  opacity: 0;
+}
+
+@keyframes tl-habutton-ring {
+  from {
+    stroke-dashoffset: 289.03;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.tl-habutton.is-holding .tl-habutton__fill {
+  opacity: 1;
+  animation: tl-habutton-ring var(--tl-habutton-hold, 1200ms) linear forwards;
+}
+
+/* --- The words ---------------------------------------------------------------------- */
+
+.tl-habutton__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.tl-habutton__label {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u));
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--tl-fg);
+  overflow-wrap: break-word;
+}
+
+.tl-habutton__state {
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.14);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.78);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tl-ha-word);
+  overflow-wrap: break-word;
+}
+
+.tl-habutton__face.tl-ha-tone--calm .tl-habutton__state {
+  color: var(--tl-fg-2);
+}
+
+.tl-habutton__hint {
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.22);
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-habutton-u) * 0.6));
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--tl-fg-3);
+  overflow-wrap: break-word;
+}
+
+.tl-habutton__hint.is-error {
+  color: #ff9d82;
+}
+
+/* Disabled (actions off, Home Assistant or the hub down, not on the
+ * whitelist, none chosen): the button steps back; its hint does not. */
+.tl-habutton.is-disabled .tl-habutton__iconwrap,
+.tl-habutton.is-disabled .tl-habutton__label,
+.tl-habutton.is-disabled .tl-habutton__state {
+  opacity: 0.45;
+}
+
+/* --- Not wide enough for a row: a column, centred ---------------------------------- */
+
+@container tl-habutton (aspect-ratio < 1.25) {
+  .tl-habutton__face {
+    flex-direction: column;
+    text-align: center;
+    --tl-habutton-room: min(12cqh, 11cqw);
+    --tl-habutton-iconroom: min(38cqh, 46cqw);
+  }
+
+  .tl-habutton__iconwrap {
+    margin-right: 0;
+    margin-top: auto;
+    margin-bottom: calc(var(--tl-text-scale, 1) * var(--tl-habutton-u) * 0.5);
+  }
+
+  .tl-habutton__text {
+    flex: 0 0 auto;
+    max-width: 100%;
+    margin-top: 0;
+    margin-bottom: auto;
+    align-items: center;
+  }
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ----------------------------------------------- */
+
+.tl-knobs .tl-habutton__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-habutton-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx: 80 x 48) --------------------------------------- */
+
+@container tl-spec (width < 80px) or (height < 48px) {
+  .tl-spec--habutton > .tl-spec__content {
+    display: none;
+  }
+
+  .tl-spec.tl-spec--habutton > .tl-panel--small {
+    display: flex;
+  }
+}

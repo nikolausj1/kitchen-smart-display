@@ -2,6 +2,8 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { EDIT_MODE, REQUESTED_LAYOUT } from '../../lib/kioskMode.js'
 import { getSettings, whenHubSettled } from '../../lib/settings.js'
 import { setDemoMode } from './data/demoMode.js'
+import { getHomeAssistant, subscribeHomeAssistant } from '../../hooks/useHomeAssistant.js'
+import { haOptionsKey, withHaOptions } from './panels/haParts.js'
 import {
   BOX_SCHEMA,
   DAYPARTS,
@@ -36,7 +38,9 @@ import {
 //                                  panels-and-controls.md, chunk 1)
 //                                  once the first hub answer is in (or 2 s
 //                                  passed), whenever the saved spec changes on
-//                                  the hub, and in reply to a ping
+//                                  the hub, whenever the Home Assistant
+//                                  whitelist changes (below), and in reply to
+//                                  a ping
 //                  sd-edit:rects   { layoutId, daypart, canvas,
 //                                    panels: [{ id, type, x, y, w, h }],
 //                                    elements: [{ panelId, key, label,
@@ -66,6 +70,19 @@ import {
 //
 // Only active in edit mode AND inside a frame. Every message in is checked
 // for this page's own origin and for coming from the frame's parent.
+//
+// Live options (docs/designs/panels-and-controls.md, chunk 5). The Home
+// Assistant panels' entity and action knobs hold a whitelist id; schemas.js
+// declares them as text (the normaliser cannot know the whitelist). In the
+// ready's schemas (and each panelTypes entry's schema) they go out as
+// selects of the live whitelist, id -> label, with a first option for none
+// ('' ; 'Automatic' for the picker's action), and an id the saved layout
+// holds that is no longer on the whitelist kept as a choice marked so
+// (panels/haParts.js withHaOptions); while the whitelist is empty or not yet
+// known they stay the text fields they are. The chips' ids stay text (the
+// editor has no multi-select), their hint listing the whitelist's ids. The
+// bridge keeps the whitelist polled (hooks/useHomeAssistant.js, an active
+// subscription from import) and sends a fresh ready when the options change.
 
 export const EDIT_BRIDGE_ACTIVE =
   EDIT_MODE && typeof window !== 'undefined' && window.parent && window.parent !== window
@@ -179,6 +196,18 @@ function savedSpecOf(layoutId) {
 let announced = false
 let announcedLayoutId = null
 let announcedSaved = null
+let announcedHaKey = null
+
+// The schemas as the editor gets them: the Home Assistant knobs made selects
+// of the live whitelist (see the header), in both places a ready carries a
+// schema. Every other type's is the table's own.
+function liveSchemas(savedSpec) {
+  const schemas = withHaOptions(PANEL_SCHEMA_TABLE, getHomeAssistant(), savedSpec)
+  const panelTypes = PANEL_TYPE_LIST.map((t) =>
+    t.schema && schemas[t.type] && schemas[t.type] !== PANEL_SCHEMA_TABLE[t.type] ? { ...t, schema: schemas[t.type] } : t
+  )
+  return { schemas, panelTypes }
+}
 
 function sendReady() {
   const layoutId = currentLayoutId()
@@ -188,14 +217,16 @@ function sendReady() {
   announced = true
   announcedLayoutId = layoutId
   announcedSaved = savedSpec
+  announcedHaKey = haOptionsKey(getHomeAssistant())
+  const live = liveSchemas(savedSpec)
   post({
     type: 'sd-edit:ready',
     layoutId,
     canvas: canvasSize(),
     savedSpec,
     defaultSpec: defaultSpecFor(layoutId),
-    panelTypes: PANEL_TYPE_LIST,
-    schemas: PANEL_SCHEMA_TABLE,
+    panelTypes: live.panelTypes,
+    schemas: live.schemas,
     globalSchema: GLOBAL_SCHEMA_COPY,
     dayparts: DAYPARTS,
     specVersion: SPEC_VERSION,
@@ -204,6 +235,14 @@ function sendReady() {
     fonts: FONTS,
     ruleKinds: RULE_KINDS,
   })
+}
+
+// The whitelist's entities or actions changed (or first arrived): the editor
+// hears the new options, once a ready has gone out at all. The minute poll
+// of an unchanged whitelist says nothing.
+function onHomeAssistant() {
+  if (!announced || haOptionsKey(getHomeAssistant()) === announcedHaKey) return
+  sendReady()
 }
 
 // Only when the layout or its saved spec really changed: a hub poll that
@@ -376,6 +415,7 @@ function onMessage(event) {
 // board is still mounting is kept (the draft waits in the store).
 if (EDIT_BRIDGE_ACTIVE) {
   window.addEventListener('message', onMessage)
+  subscribeHomeAssistant(onHomeAssistant, { active: true })
 }
 
 // --- The hook ------------------------------------------------------------------

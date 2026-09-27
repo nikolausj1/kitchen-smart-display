@@ -45,6 +45,19 @@ import DatePanel from '../panels/DatePanel.jsx'
 import DayCountPanel from '../panels/DayCountPanel.jsx'
 import { dayCount, dayFromKey } from '../lib/dates.js'
 // --- end blocks and clocks ---
+// --- Home Assistant (chunk 5): the status panel, the button, the chips and
+// the picker read d.ha (hooks/useHomeAssistant.js's snapshot, or the demo's).
+// The board keeps the snapshot polled while one of them is on it; a press
+// goes through the store's runHaAction, the demo's demoHaAction (it only
+// animates) under ?demo=1, and nowhere in the layout editor. ---
+import HaStatusPanel from '../panels/HaStatusPanel.jsx'
+import HaButtonPanel from '../panels/HaButtonPanel.jsx'
+import HaChipsPanel from '../panels/HaChipsPanel.jsx'
+import HaPickerPanel from '../panels/HaPickerPanel.jsx'
+import { HA_PANEL_TYPES } from '../panels/haParts.js'
+import { runHaAction, useHaPolling } from '../../../hooks/useHomeAssistant.js'
+import { demoHaAction } from '../data/demo.js'
+// --- end Home Assistant ---
 import { knobDefaults } from '../panels/schemas.js'
 import SpecPanel, { SpecScrims } from './SpecPanel.jsx'
 import { hexChannels } from './specStyles.js'
@@ -126,6 +139,10 @@ import './SpecPanel.css'
 // carries its mark (d.weather.attribution). The alert banner's box is dropped
 // while no alert is in force, as if a rule hid it; the editor keeps it, with
 // a placeholder, so it can be placed.
+//
+// The Home Assistant panels (chunk 5) read d.ha. While one is on the board
+// (and not in demo mode) the store polls the hub's snapshot of the whitelist
+// (useHaPolling); nothing else on a board asks for it.
 //
 // The calendar views (chunk 3: Up next, Day list, Week grid, Month grid) read
 // the calendar store (d.calendar). What they draw can reach past the six days
@@ -336,6 +353,10 @@ export default function SpecBoard({ d, layoutId, className, children }) {
     return shown.filter((p) => out.indexOf(p.id) < 0)
   }, [shown, ruledOut])
   const joins = useMemo(() => cardJoins(panels), [panels])
+  // --- Home Assistant (chunk 5) ---
+  useHaPolling(!d.demo && panels.some((p) => HA_PANEL_TYPES.indexOf(p.type) >= 0))
+  const haRun = EDIT_MODE ? null : d.demo ? demoHaAction : runHaAction
+  // --- end Home Assistant ---
   const style = useMemo(() => globalStyle(view.global), [view.global])
   // One knobs object per panel, rebuilt only with the panels, so a memoised
   // panel (PhotoPanel) is not handed a new one every second.
@@ -558,6 +579,16 @@ export default function SpecBoard({ d, layoutId, className, children }) {
         )
       case 'school':
         return <SchoolPanel school={d.school} knobs={k} />
+      // --- Home Assistant (chunk 5) ---
+      case 'hastatus':
+        return <HaStatusPanel ha={d.ha} now={d.now} knobs={k} />
+      case 'habutton':
+        return <HaButtonPanel ha={d.ha} knobs={k} run={haRun} />
+      case 'hachips':
+        return <HaChipsPanel ha={d.ha} knobs={k} />
+      case 'hapicker':
+        return <HaPickerPanel ha={d.ha} knobs={k} run={haRun} demo={!!d.demo} />
+      // --- end Home Assistant ---
       case 'text':
         return (
           <TextBlock

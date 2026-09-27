@@ -1,4 +1,5 @@
 import { dateKey } from '../../../lib/schoolDay.js'
+import { cleanHaSnapshot, mergeHa } from '../../../lib/haState.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
 
 // Demo fixtures for ?demo=1 - a full, plausible Today with music playing, a
@@ -552,4 +553,79 @@ export function demoCalendar(today) {
   ]
 
   return { events, countdowns, calendars: DEMO_CALENDARS, range }
+}
+
+// --- Home Assistant (docs/designs/panels-and-controls.md, chunk 5) ---------------
+//
+// demoHa(sinceMs) -> the Home Assistant store's snapshot
+// (hooks/useHomeAssistant.js), faked: the whitelist the hub was seeded with
+// (the same ids, labels and kinds, so a layout saved against the real one
+// draws here too, and the same ten actions), in a plausible afternoon: the
+// garage open 38 minutes, the front door locked, Justin home and Sheena
+// away, working late on and the other modes off, the day part on Auto, the
+// downstairs lights on. Actions are on, so the buttons look live; a press
+// only animates (demoHaAction). Like the calendar, the demo always wins over
+// the real house: a design shot should not publish who is home. Built
+// through lib/haState.js, so it is exactly the store's shape, and frozen at
+// the moment demo mode turned on.
+
+const DEMO_DAY_PARTS = ['Auto', 'Morning', 'Day', 'Afternoon', 'Evening', 'Late Evening', 'Night', 'Overnight']
+
+// [id, label, kind, state, minutes since it changed, attributes]
+const DEMO_HA_ENTITIES = [
+  ['cover.garage_door_controller', 'Garage', 'cover', 'open', 38, { friendly_name: 'Garage Door Controller', device_class: 'garage' }],
+  ['lock.front_door_smart_code_with_home_connect_technology', 'Front door', 'lock', 'locked', 131, { friendly_name: 'Front Door Lock' }],
+  ['binary_sensor.front_door_contact_open', 'Front door open', 'door', 'off', 132, { friendly_name: 'Front Door Contact', device_class: 'door' }],
+  ['input_boolean.mode_away', 'Away', 'mode', 'off', 1210, { friendly_name: 'Mode Away' }],
+  ['input_boolean.mode_guest', 'Guest', 'mode', 'off', 2890, { friendly_name: 'Mode Guest' }],
+  ['input_boolean.mode_outside', 'Outside', 'mode', 'off', 2890, { friendly_name: 'Mode Outside' }],
+  ['input_boolean.mode_vacation', 'Vacation', 'mode', 'off', 2890, { friendly_name: 'Mode Vacation' }],
+  ['input_boolean.mode_working_late', 'Working late', 'mode', 'on', 95, { friendly_name: 'Mode - Working Late' }],
+  ['input_select.day_part_override', 'Day part', 'select', 'Auto', 245, { friendly_name: 'Day Part Override', options: DEMO_DAY_PARTS }],
+  ['light.downstairs', 'Downstairs lights', 'light', 'on', 52, { friendly_name: 'Downstairs' }],
+  ['light.basement_basement', 'Basement', 'light', 'off', 410, { friendly_name: 'Basement' }],
+  ['person.justin', 'Justin', 'person', 'home', 312, { friendly_name: 'Justin' }],
+  ['person.sheena', 'Sheena', 'person', 'not_home', 174, { friendly_name: 'Sheena' }],
+]
+
+// The hub's seed actions (frameserver/lib/homeAssistant.mjs SEED_ACTIONS).
+const DEMO_HA_ACTIONS = [
+  ['downstairs-off', 'Turn off downstairs', 'light.downstairs', 'light.turn_off', 'tap'],
+  ['garage-toggle', 'Garage', 'cover.garage_door_controller', 'cover.toggle', 'hold'],
+  ['garage-close', 'Close garage', 'cover.garage_door_controller', 'cover.close_cover', 'hold'],
+  ['door-lock', 'Lock front door', 'lock.front_door_smart_code_with_home_connect_technology', 'lock.lock', 'tap'],
+  ['door-unlock', 'Unlock front door', 'lock.front_door_smart_code_with_home_connect_technology', 'lock.unlock', 'hold'],
+  ['away-on', 'Leaving', 'input_boolean.mode_away', 'input_boolean.turn_on', 'tap'],
+  ['away-off', 'Home', 'input_boolean.mode_away', 'input_boolean.turn_off', 'tap'],
+  ['guest-toggle', 'Guest mode', 'input_boolean.mode_guest', 'input_boolean.toggle', 'tap'],
+  ['basement-toggle', 'Basement light', 'light.basement_basement', 'light.toggle', 'tap'],
+  ['daypart-set', 'Day part', 'input_select.day_part_override', 'input_select.select_option', 'tap'],
+]
+
+export function demoHa(sinceMs) {
+  const at = Number.isFinite(sinceMs) ? sinceMs : 0
+  const entities = {}
+  DEMO_HA_ENTITIES.forEach(([id, label, kind, state, minutes, attributes]) => {
+    entities[id] = { state, attributes, lastChanged: new Date(at - minutes * 60000).toISOString(), label, kind }
+  })
+  const actions = DEMO_HA_ACTIONS.map(([id, label, entity, service, confirm]) => ({
+    id,
+    label,
+    entity,
+    service,
+    confirm,
+    needs: service === 'input_select.select_option' ? ['option'] : [],
+  }))
+  const snap = cleanHaSnapshot({ connected: true, configured: true, actionsEnabled: true, error: null, entities, actions })
+  return mergeHa({ snap, snapAt: at })
+}
+
+// A press under ?demo=1: it animates (a spinner, then the check) and sends
+// nothing anywhere.
+export const DEMO_HA_PRESS_MS = 700
+
+export function demoHaAction() {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve({ ok: true, status: 200, error: null }), DEMO_HA_PRESS_MS)
+  })
 }

@@ -1,0 +1,200 @@
+/* HaPickerPanel - a Home Assistant select as a segmented control
+ * (HaPickerPanel.jsx): an option per segment, the current one in the
+ * accent; the hint at the right of the header row (PanelFrame's aside), or
+ * under the options when there is no header.
+ *
+ * One size. --tl-hapicker-room, against the body (a size container): 30cqh
+ * keeps a row of options inside a band, 2.2cqw a row of eight on one line in
+ * the starting box. Without container units, a share of the screen's height
+ * (see AirQualityChip.css for why the fallback stands outside the @supports
+ * block). The options' type, --tl-hapicker-u, is that times --tl-ha-fit
+ * (panels/useHaFit.js), which steps down while they overflow the body (how
+ * many rows they need depends on their words). Every size carries
+ * var(--tl-text-scale). Wrap (the default): each option as wide as its words,
+ * running onto more rows; off: one row, the options sharing it and each
+ * wrapping its own words. Spacing is margins, never a flex gap; the options
+ * are centred in the body with auto margins, so content that overflows
+ * spills at the bottom, where the fitter sees it. Chrome 80 rules: no flex
+ * gap, no `inset`, no aspect-ratio. */
+
+.tl-hapicker__body {
+  container-type: size;
+  min-height: 0;
+  --tl-hapicker-room: 2vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-hapicker__body {
+    --tl-hapicker-room: clamp(11px, min(30cqh, 2.2cqw), 36px);
+  }
+}
+
+.tl-hapicker__inner {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+  --tl-hapicker-u: calc(var(--tl-hapicker-room) * var(--tl-ha-fit, 1));
+}
+
+.tl-hapicker__seg {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.tl-hapicker--wrap .tl-hapicker__seg {
+  flex-wrap: wrap;
+}
+
+.tl-hapicker__opt {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.2) calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.4)
+    calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.2) 0;
+  padding: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.45) calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.7);
+  border: 0;
+  border-radius: calc(var(--tl-radius-sm) * 1.5);
+  background: rgba(var(--tl-fg-rgb), 0.08);
+  color: var(--tl-fg-2);
+  font-family: inherit;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u));
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: break-word;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.tl-hapicker__opt:last-child {
+  margin-right: 0;
+}
+
+.tl-hapicker--wrap .tl-hapicker__opt {
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding-left: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.85);
+  padding-right: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.85);
+  border-radius: 999px;
+}
+
+.tl-hapicker__opt:focus {
+  outline: none;
+}
+
+.tl-hapicker__opt:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--tl-accent);
+}
+
+.tl-hapicker__opt:active {
+  background-color: rgba(var(--tl-fg-rgb), 0.16);
+}
+
+.tl-hapicker__opt.is-current {
+  background: var(--tl-accent);
+  color: #16130f;
+}
+
+/* Tapped, on its way: the accent's outline (and a spinner while the hub
+ * answers). */
+.tl-hapicker__opt.is-pending {
+  box-shadow: inset 0 0 0 2px var(--tl-accent);
+  color: var(--tl-fg);
+}
+
+.tl-hapicker__spin {
+  flex: 0 0 auto;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.4em;
+}
+
+.tl-hapicker.is-disabled .tl-hapicker__opt {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tl-hapicker.is-disabled .tl-hapicker__opt.is-current {
+  opacity: 0.6;
+}
+
+/* The hint: in the header row it takes the aside's own type (PanelFrame.css);
+ * under the options, the message's. A refusal is in the warm red. */
+.tl-hapicker__hint {
+  color: var(--tl-fg-3);
+  font-weight: 600;
+}
+
+.tl-hapicker__hint.is-error {
+  color: #ff9d82;
+}
+
+.tl-hapicker__message {
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-hapicker-u) * 0.6);
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hapicker-u) * 0.68));
+  line-height: 1.25;
+  overflow-wrap: break-word;
+}
+
+/* Which id is not on the whitelist, under the words. */
+.tl-hapicker__id {
+  margin-top: 0.25em;
+  font-size: 0.85em;
+  font-weight: 400;
+  color: var(--tl-fg-3);
+  overflow-wrap: anywhere;
+}
+
+.tl-hapicker__message:first-child {
+  margin-top: 0;
+}
+
+/* --- The universal align ----------------------------------------------------------- */
+
+.tl-spec--align-center .tl-hapicker__seg {
+  justify-content: center;
+}
+
+.tl-spec--align-end .tl-hapicker__seg {
+  justify-content: flex-end;
+}
+
+.tl-spec--align-center .tl-hapicker__message {
+  text-align: center;
+}
+
+.tl-spec--align-end .tl-hapicker__message {
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ----------------------------------------------- */
+
+.tl-knobs .tl-hapicker__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-hapicker-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx: 200 x 44) ------------------------------------- */
+
+@container tl-spec (width < 200px) or (height < 44px) {
+  .tl-spec--hapicker > .tl-spec__content {
+    display: none;
+  }
+
+  .tl-spec.tl-spec--hapicker > .tl-panel--small {
+    display: flex;
+  }
+}

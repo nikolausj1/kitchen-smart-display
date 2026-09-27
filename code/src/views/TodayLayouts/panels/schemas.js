@@ -15,6 +15,13 @@
 //                                   focuses its fields (absent: the whole panel)
 //     hint }                        one line of help, optional
 //
+// A text field may carry `format` (layoutSpec.js fieldValue): 'entityId' (a
+// Home Assistant entity id, trimmed and lower-cased, else empty), 'id' (an
+// action id, trimmed) or 'entityIds' (a list of entity ids, kept as
+// 'a.b, c.d'); and `ha`, which marks a knob holding a Home Assistant whitelist
+// id, made a select of the live whitelist for the editor (panels/haParts.js
+// withHaOptions, editBridge.js).
+//
 // Sizes are multipliers of the panel's own type size ('x'), on top of the
 // universal textScale, so 1 is always "as designed". Every default reproduces
 // the phase 1 Entry board exactly. The Board differs in a few knobs, which its
@@ -63,6 +70,14 @@ function toggle(key, label, def, element, hint) {
 
 function select(key, label, options, def, element, hint) {
   return withExtras({ key, label, type: 'select', options, default: def }, element, hint)
+}
+
+// A knob holding one Home Assistant whitelist id (chunk 5): text here, so the
+// normaliser keeps whatever id is stored; a select of the live whitelist in
+// the editor. `ha` says which list (panels/haParts.js), `format` how the
+// normaliser cleans it.
+function haRef(key, label, ha, format, element, hint, placeholder) {
+  return withExtras({ key, label, type: 'text', default: '', maxLength: 255, placeholder, format, ha }, element, hint)
 }
 
 // The art-above countdown card's own knobs (countdowns' 'artAbove' tiles and
@@ -790,6 +805,78 @@ export const PANEL_SCHEMAS = deepFreeze({
     fields: [size('numberSize', 'Number size', 'number'), toggle('showToggle', 'Walk or drive button', true, 'toggle')],
   },
 
+  // --- Home Assistant (docs/designs/panels-and-controls.md, chunk 5) --------
+  // The dashboard's whitelist (hooks/useHomeAssistant.js), through
+  // useTodayData. Empty ids draw an honest "Choose ..." rather than a guess.
+  hastatus: {
+    fields: [
+      haRef('entity', 'Entity', 'entity', 'entityId', 'state', "From the dashboard's Home Assistant whitelist", 'e.g. cover.garage_door_controller'),
+      toggle('showLabel', 'Label', true, 'label'),
+      toggle('showSince', 'Since', true, 'since', 'When it last changed: since 4:12 pm'),
+      size('size', 'Size'),
+      select(
+        'layout',
+        'Layout',
+        [
+          ['row', 'Side by side'],
+          ['stacked', 'Stacked'],
+        ],
+        'row',
+        null,
+        'Side by side suits a wide box, stacked a tall one'
+      ),
+    ],
+  },
+
+  habutton: {
+    fields: [
+      haRef('action', 'Action', 'action', 'id', 'label', "From the dashboard's whitelist. A hold action fires after a 1.2 s press", 'e.g. garage-toggle'),
+      size('size', 'Size'),
+      select(
+        'style',
+        'Style',
+        [
+          ['filled', 'Filled'],
+          ['outline', 'Outline'],
+        ],
+        'filled',
+        null
+      ),
+      toggle('showState', 'State', true, 'state', "Its entity's state, under the label"),
+    ],
+  },
+
+  hachips: {
+    fields: [
+      withExtras(
+        {
+          key: 'entities',
+          label: 'Entities',
+          type: 'text',
+          default: '',
+          maxLength: 2000,
+          placeholder: 'input_boolean.mode_away, input_boolean.mode_guest',
+          format: 'entityIds',
+          ha: 'entityList',
+        },
+        'chip',
+        'Entity ids, separated by commas; empty shows every mode.'
+      ),
+      size('size', 'Size', 'chip'),
+      toggle('showLabels', 'Labels', true, 'label'),
+    ],
+  },
+
+  hapicker: {
+    fields: [
+      haRef('entity', 'Select', 'selectEntity', 'entityId', 'option', 'An input_select on the whitelist', 'e.g. input_select.day_part_override'),
+      haRef('action', 'Action', 'optionAction', 'id', 'option', 'Automatic: the whitelisted action that sets this select', 'e.g. daypart-set'),
+      size('size', 'Size', 'option'),
+      toggle('wrap', 'Wrap', true, 'option', 'Options run onto another row when they do not fit one'),
+    ],
+  },
+  // --- end Home Assistant ---
+
   nowplaying: {
     fields: [
       size('size', 'Size', 'track'),
@@ -1064,6 +1151,27 @@ export const PANEL_ELEMENTS = deepFreeze({
     { key: 'status', label: 'Status' },
     { key: 'toggle', label: 'Walk or drive' },
   ],
+  // --- Home Assistant (chunk 5). A chip holds its label and state, so it
+  // comes first. 'empty' and 'hint' carry the honest states (not connected,
+  // not on the whitelist, buttons off). ---
+  hastatus: [
+    TITLE,
+    { key: 'icon', label: 'Icon' },
+    { key: 'label', label: 'Label' },
+    { key: 'state', label: 'State' },
+    { key: 'since', label: 'Since' },
+    EMPTY,
+  ],
+  habutton: [
+    TITLE,
+    { key: 'icon', label: 'Icon' },
+    { key: 'label', label: 'Label' },
+    { key: 'state', label: 'State' },
+    { key: 'hint', label: 'Hint' },
+  ],
+  hachips: [TITLE, { key: 'chip', label: 'Chip' }, { key: 'label', label: 'Label' }, { key: 'state', label: 'State' }, EMPTY],
+  hapicker: [TITLE, { key: 'option', label: 'Option' }, { key: 'hint', label: 'Hint' }],
+  // --- end Home Assistant ---
   nowplaying: [
     TITLE,
     { key: 'room', label: 'Room' },

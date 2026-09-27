@@ -46,6 +46,7 @@
 import { GLOBAL_SCHEMA, PANEL_SCHEMAS, elementKeysOf, knobDefaults } from './panels/schemas.js'
 import * as Schemas from './panels/schemas.js'
 import { FONTS, FONT_IDS } from './lib/fonts.js'
+import { parseEntityList } from './panels/haParts.js'
 
 // The font registry, for the editor (sd-edit:ready fonts) and the renderer.
 export { FONTS }
@@ -99,6 +100,12 @@ function isVariantKey(k) {
 // box      where the type lands (percent) in a layout whose default has no
 //          such panel (the editor's "Add panel"), and props what it starts
 //          with there. A layout's own default panel wins over both.
+// repeat   a functional panel a layout may hold more than once (the Home
+//          Assistant panels, chunk 5: an indicator or a button per thing):
+//          the first keeps the bare type as its id ('hastatus'), each further
+//          one is '<type>-<4 hex>' ('hastatus-3fa9'), the instance scheme the
+//          layout editor uses. Every other functional type: once, the first
+//          wins.
 
 const CARD = { background: 'card', padding: 1 }
 const BARE = { background: 'none', padding: 0 }
@@ -187,6 +194,15 @@ const TYPE_TABLE = [
   // A tile: the Entry board's full-bleed backdrop is a screen setting, not this.
   { type: 'photo', label: 'Photo', kind: 'panel', min: { w: 6, h: 6 }, minPx: null, box: { x: 30, y: 25, w: 40, h: 50 }, props: { background: 'card', padding: 0 } },
   { type: 'school', label: 'School', kind: 'panel', min: { w: 10, h: 6 }, minPx: { w: 140, h: 50 }, box: { x: 35, y: 35, w: 30, h: 30 }, props: CARD },
+  // --- Home Assistant (docs/designs/panels-and-controls.md, chunk 5): on no
+  // default board; they arrive through Add panel. The button is its own face,
+  // so its box draws nothing. Their "Too small" rules sit in their own
+  // stylesheets (panels/HaStatusPanel.css and the others). ---
+  { type: 'hastatus', label: 'HA status', kind: 'panel', repeat: true, min: { w: 6, h: 5 }, minPx: { w: 120, h: 44 }, box: { x: 40, y: 42, w: 20, h: 16 }, props: CARD },
+  { type: 'habutton', label: 'HA button', kind: 'panel', repeat: true, min: { w: 5, h: 5 }, minPx: { w: 80, h: 48 }, box: { x: 42, y: 41, w: 16, h: 18 }, props: BARE },
+  { type: 'hachips', label: 'HA chips', kind: 'panel', repeat: true, min: { w: 8, h: 4 }, minPx: { w: 120, h: 30 }, box: { x: 25, y: 44, w: 50, h: 12 }, props: CARD },
+  { type: 'hapicker', label: 'HA picker', kind: 'panel', repeat: true, min: { w: 12, h: 6 }, minPx: { w: 200, h: 44 }, box: { x: 15, y: 42, w: 70, h: 16 }, props: CARD },
+  // --- end Home Assistant ---
   { type: 'text', label: 'Text', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 30, y: 44, w: 40, h: 12 }, props: null },
   { type: 'image', label: 'Image', kind: 'block', min: { w: 2, h: 2 }, minPx: null, box: { x: 40, y: 32, w: 20, h: 36 }, props: null },
 ]
@@ -273,18 +289,23 @@ export const GLOBAL_SCHEMA_COPY = deepFreeze({ fields: cloneJson(globalFields())
 
 // The list, as sent to the editor in sd-edit:ready (panelTypes). schema is
 // { fields, elements } (the same shape as PANEL_SCHEMAS[type], with the
-// type's data-edit sub-elements), or null.
+// type's data-edit sub-elements), or null. A functional type that repeats
+// (the table's `repeat`) is not unique, and says so with repeat: true.
 export const PANEL_TYPE_LIST = deepFreeze(
-  TYPE_TABLE.map((t) => ({
-    type: t.type,
-    label: t.label,
-    kind: t.kind,
-    unique: t.kind === 'panel',
-    min: { ...t.min },
-    minPx: t.minPx ? { ...t.minPx } : null,
-    padShape: t.padShape ? t.padShape.slice() : [1, 1],
-    schema: schemaFor(t.type),
-  }))
+  TYPE_TABLE.map((t) => {
+    const out = {
+      type: t.type,
+      label: t.label,
+      kind: t.kind,
+      unique: t.kind === 'panel' && !t.repeat,
+      min: { ...t.min },
+      minPx: t.minPx ? { ...t.minPx } : null,
+      padShape: t.padShape ? t.padShape.slice() : [1, 1],
+      schema: schemaFor(t.type),
+    }
+    if (t.kind === 'panel' && t.repeat) out.repeat = true
+    return out
+  })
 )
 
 // The same, keyed by type. Look types up with panelType(), which ignores
@@ -866,6 +887,20 @@ function repairedBlockId(type, seed, taken) {
   return `${type}-0000` // 65536 blocks of one type: not a real spec
 }
 
+// --- Home Assistant (chunk 5): functional panels that repeat (TYPE_TABLE
+// `repeat`): the bare type ('hastatus') for one of them, '<type>-<4 hex>'
+// ('hastatus-3fa9') for each other. ---
+function repeats(t) {
+  return !!t && t.kind === 'panel' && TYPE_EXTRAS[t.type] && TYPE_EXTRAS[t.type].repeat === true
+}
+
+// 'hastatus' or 'hastatus-3fa9' for a type that repeats.
+export function isRepeatId(type, id) {
+  if (typeof type !== 'string' || typeof id !== 'string' || !repeats(panelType(type))) return false
+  return id === type || (id.length === type.length + 5 && id.indexOf(`${type}-`) === 0 && /^[0-9a-f]{4}$/.test(id.slice(type.length + 1)))
+}
+// --- end Home Assistant ---
+
 // --- Knob values ---------------------------------------------------------------
 
 // The option of a select field matching v (3 matches '3'), or undefined.
@@ -881,10 +916,41 @@ function optionValue(field, v) {
   return loose
 }
 
+// --- Home Assistant (chunk 5): a text knob's `format` (panels/schemas.js) ---
+//   'entityId'   one entity id, trimmed and lower-cased; anything that is not
+//                one is '' (none chosen)
+//   'id'         one action id, trimmed, at most 64 characters
+//   'entityIds'  entity ids as 'a.b, c.d' (panels/haParts.js parseEntityList:
+//                each once, at most 16); an array is read too
+// A string that is none of these reads as '' so the panel says what is
+// missing; a value that is not a string at all takes the fallback.
+const ENTITY_ID_RE = /^[a-z0-9_]+\.[a-z0-9_]+$/
+
+function formattedText(format, v, def) {
+  if (format === 'entityIds') {
+    if (typeof v !== 'string' && !Array.isArray(v)) return typeof def === 'string' ? def : ''
+    return parseEntityList(v).join(', ')
+  }
+  if (typeof v !== 'string') return typeof def === 'string' ? def : ''
+  const t = v.trim()
+  if (format === 'entityId') {
+    const id = t.toLowerCase()
+    return id.length <= 255 && ENTITY_ID_RE.test(id) ? id : ''
+  }
+  return t.length <= 64 ? t : ''
+}
+
+function isTextFormat(f) {
+  return f === 'entityId' || f === 'id' || f === 'entityIds'
+}
+// --- end Home Assistant ---
+
 // A valid value for one schema field (a panel knob, a global): v when it is
 // one (clamped and rounded to the step for a number), else the fallback (the
 // layout's own default), else the field's default. The rules match the
-// editor's cleanKnob (code/src/editor/schema.js), so the two sides agree.
+// editor's cleanKnob (code/src/editor/schema.js), so the two sides agree
+// (the Home Assistant formats above are this side's own: the editor keeps
+// what was typed, and this pass, the last before a save, cleans it).
 function fieldValue(field, v, fallback) {
   const def = fallback === undefined ? field.default : fallback
   switch (field.type) {
@@ -915,6 +981,7 @@ function fieldValue(field, v, fallback) {
     case 'color':
       return color(v, color(def, color(field.default, '#000000')))
     case 'text': {
+      if (isTextFormat(field.format)) return formattedText(field.format, v, def)
       const max = Number.isFinite(field.maxLength) ? field.maxLength : TEXT_MAX_LENGTH
       if (typeof v === 'string') return v.length > max ? v.slice(0, max) : v
       if (typeof v === 'number' && Number.isFinite(v)) return String(v)
@@ -1229,7 +1296,7 @@ function normPanels(list, layoutId) {
   // that a later block legitimately carries.
   const takenIds = new Set()
   source.forEach((p) => {
-    if (isDict(p) && isValidBlockId(p.type, p.id)) takenIds.add(p.id)
+    if (isDict(p) && (isValidBlockId(p.type, p.id) || isRepeatId(p.type, p.id))) takenIds.add(p.id)
   })
 
   const usedBlockIds = new Set()
@@ -1239,7 +1306,15 @@ function normPanels(list, layoutId) {
     const t = panelType(type)
     if (!t) return // unknown type: dropped
     let id
-    if (t.kind === 'panel') {
+    if (repeats(t)) {
+      // A repeating panel keeps its id when it is one and still free; else
+      // the bare type when no panel claims it, else a fresh suffixed id.
+      if (isRepeatId(type, p.id) && !usedBlockIds.has(p.id)) id = p.id
+      else if (!takenIds.has(type)) id = type
+      else id = repairedBlockId(type, `${type}:${index}:${typeof p.id === 'string' ? p.id : ''}`, takenIds)
+      takenIds.add(id)
+      usedBlockIds.add(id)
+    } else if (t.kind === 'panel') {
       if (seenFunctional.has(type)) return // a second clock: the first wins
       seenFunctional.add(type)
       id = type
@@ -1409,21 +1484,33 @@ export function newBlock(type, overrides, takenIds) {
   )
 }
 
-// newPanel(type, overrides, { layoutId }) -> a normalized functional panel
-// (id === type) for the editor's "Add panel": its box and props are that
-// layout's default for the type, or the type's own starting box (centred, above
-// the built-in panels) and a card. overrides may set any panel field and any
-// props. null for a type that is not a functional panel.
+// newPanel(type, overrides, { layoutId, takenIds }) -> a normalized
+// functional panel (id === type) for the editor's "Add panel": its box and
+// props are that layout's default for the type, or the type's own starting box
+// (centred, above the built-in panels) and a card. overrides may set any panel
+// field and any props. null for a type that is not a functional panel. A type
+// that repeats (the Home Assistant panels) whose bare id is among takenIds (a
+// Set or an array of the layout's ids) gets a fresh '<type>-<4 hex>' instead.
 export function newPanel(type, overrides, options) {
   const t = panelType(type)
   if (!t || t.kind !== 'panel') return null
   const o = isDict(overrides) ? overrides : {}
-  const layoutId = layoutIdOf(isDict(options) ? options.layoutId : null)
+  const opts = isDict(options) ? options : {}
+  const layoutId = layoutIdOf(opts.layoutId)
   const box = defaultBoxFor(type, layoutId)
+  let id = type
+  if (repeats(t)) {
+    const taken = opts.takenIds instanceof Set ? opts.takenIds : new Set(Array.isArray(opts.takenIds) ? opts.takenIds : [])
+    if (taken.has(type)) {
+      id = `${type}-${randomHex4()}`
+      for (let i = 0; i < 64 && taken.has(id); i++) id = `${type}-${randomHex4()}`
+      if (taken.has(id)) id = repairedBlockId(type, `${type}:new:${taken.size}`, taken)
+    }
+  }
   return normPanel(
     { ...box, hidden: false, locked: false, ...o, props: isDict(o.props) ? o.props : {} },
     type,
-    type,
+    id,
     layoutId
   )
 }

@@ -8,6 +8,7 @@ import useLunch from '../../../hooks/useLunch.js'
 import useSchoolCalendar from '../../../hooks/useSchoolCalendar.js'
 import useCalendar from '../../../hooks/useCalendar.js'
 import { useHouseState } from '../../../lib/houseState.js'
+import { useHomeAssistant } from '../../../hooks/useHomeAssistant.js'
 import { decideTravelMode } from '../../../lib/travelDefault.js'
 import {
   dateKey,
@@ -33,6 +34,7 @@ import {
   DEMO_TIMER_MINUTES,
   demoCalendar,
   demoFeed,
+  demoHa,
   demoWeather,
 } from './demo.js'
 
@@ -71,6 +73,11 @@ import {
 // And schoolCalendar (chunk 4, the day count's school days): the hub's
 // /api/schoolcal payload (hooks/useSchoolCalendar.js: noSchoolRanges,
 // firstDays, lastDays), or null until it has answered; live in demo mode.
+// And ha (chunk 5, the Home Assistant panels): hooks/useHomeAssistant.js's
+// snapshot ({ status, loaded, connected, entities, actions, actionsKnown,
+// actionsEnabled, fetchedAt, error }), listened to passively here (SpecBoard
+// keeps it polled while a Home Assistant panel is on the board); in demo
+// mode always data/demo.js's demoHa, frozen when demo mode turned on.
 //
 // weather: what the weather card, the forecast and the sun arc have always
 // read, { current, today, days, sunrise, sunset, forecastForHour, fetchedAt,
@@ -177,6 +184,7 @@ export default function useTodayData() {
   const calendar = useSchoolCalendar()
   const liveCalendar = useCalendar()
   const house = useHouseState()
+  const haLive = useHomeAssistant()
 
   const todayKey = useMemo(() => dateKey(today), [today])
 
@@ -471,6 +479,11 @@ export default function useTodayData() {
   const airQuality = liveAir || (demo ? DEMO_AIR_QUALITY : null)
   const weatherAlerts = !demo && houseToday && Array.isArray(house.weatherAlerts) ? house.weatherAlerts : null
 
+  // Home Assistant: the demo whitelist always wins in demo mode, as the
+  // calendar does (a design shot should not publish who is home).
+  const demoHaData = useMemo(() => (demo && demoSince != null ? demoHa(demoSince) : null), [demo, demoSince])
+  const ha = demo && demoHaData ? demoHaData : haLive
+
   return {
     now,
     demo,
@@ -491,5 +504,7 @@ export default function useTodayData() {
     weatherAlerts,
     // --- Blocks and clocks (chunk 4): the day count's school days. ---
     schoolCalendar: calendar,
+    // --- Home Assistant (chunk 5) ---
+    ha,
   }
 }

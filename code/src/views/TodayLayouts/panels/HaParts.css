@@ -1,0 +1,66 @@
+/* HaParts.css - what the Home Assistant panels share (panels/HaIcon.jsx,
+ * docs/designs/panels-and-controls.md chunk 5): the icon's line, the tones,
+ * the spinner. Every rule is scoped to a tl-ha class, so nothing here can
+ * reach another panel. Chrome 80 rules: no flex gap, no `inset`, no
+ * aspect-ratio. */
+
+.tl-ha-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+
+.tl-ha-icon .is-fill {
+  fill: currentColor;
+}
+
+.tl-ha-icon .is-dot {
+  stroke-width: 2.8;
+}
+
+/* The tones (panels/haParts.js haTone), as three inks: the icon
+ * (--tl-ha-ink), the state word (--tl-ha-word) and a wash behind an alert
+ * (--tl-ha-wash). Calm is the board's own ink, quiet; alert an amber that
+ * reads across a room; unknown the faintest ink (no state, or Home Assistant
+ * not connected). The amber is fixed, not the layout's accent: a blue accent
+ * must not make an open garage look calm. */
+.tl-ha-tone--calm {
+  --tl-ha-ink: var(--tl-fg-2);
+  --tl-ha-word: var(--tl-fg);
+  --tl-ha-wash: transparent;
+  --tl-ha-edge: transparent;
+}
+
+.tl-ha-tone--alert {
+  --tl-ha-ink: #f5a83a;
+  --tl-ha-word: #f5a83a;
+  --tl-ha-wash: rgba(245, 168, 58, 0.16);
+  --tl-ha-edge: rgba(245, 168, 58, 0.55);
+}
+
+.tl-ha-tone--unknown {
+  --tl-ha-ink: var(--tl-fg-3);
+  --tl-ha-word: var(--tl-fg-3);
+  --tl-ha-wash: transparent;
+  --tl-ha-edge: rgba(var(--tl-fg-rgb), 0.28);
+}
+
+@keyframes tl-ha-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tl-ha-spinner {
+  transform-origin: 50% 50%;
+  animation: tl-ha-spin 0.9s linear infinite;
+}

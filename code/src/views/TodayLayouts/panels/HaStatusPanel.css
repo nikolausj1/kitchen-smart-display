@@ -1,0 +1,204 @@
+/* HaStatusPanel - one Home Assistant entity: an icon, a label, a state word
+ * and a since line (HaStatusPanel.jsx), side by side or stacked.
+ *
+ * Two sizes, against the body (a size container): --tl-hastatus-room, the
+ * state word's type, and --tl-hastatus-iconroom. Without container units, a
+ * share of the screen's height (see AirQualityChip.css for why the fallback
+ * stands outside the @supports block). What the words and the icon use,
+ * --tl-hastatus-u and --tl-hastatus-icon, are those times --tl-ha-fit
+ * (panels/useHaFit.js), which steps down only while the block overflows the
+ * body. Every size carries var(--tl-text-scale), the icon's too, so the size
+ * knob and an element's own size reach it. A state that does not fit its
+ * line wraps; nothing is cut off with an ellipsis. The block is centred with
+ * auto margins, so what overflows spills at the bottom, where the fitter
+ * sees it. The tones are HaParts.css's. Chrome 80 rules: no flex gap, no
+ * `inset`, no aspect-ratio. */
+
+.tl-hastatus__body {
+  container-type: size;
+  min-height: 0;
+  --tl-hastatus-room: 4.2vh;
+  --tl-hastatus-iconroom: 6.6vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-hastatus__body {
+    --tl-hastatus-room: min(40cqh, 14cqw);
+    --tl-hastatus-iconroom: min(64cqh, 26cqw);
+  }
+
+  .tl-hastatus--stacked .tl-hastatus__body {
+    --tl-hastatus-room: min(22cqh, 15cqw);
+    --tl-hastatus-iconroom: min(30cqh, 36cqw);
+  }
+}
+
+.tl-hastatus__main {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+  margin-top: auto;
+  margin-bottom: auto;
+  --tl-hastatus-u: calc(var(--tl-hastatus-room) * var(--tl-ha-fit, 1));
+  --tl-hastatus-icon: calc(var(--tl-hastatus-iconroom) * var(--tl-ha-fit, 1));
+}
+
+.tl-hastatus--stacked .tl-hastatus__main {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.tl-hastatus__icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-icon));
+  height: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-icon));
+  margin-right: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-u) * 0.45);
+  color: var(--tl-ha-ink);
+}
+
+.tl-hastatus--stacked .tl-hastatus__icon {
+  margin-right: 0;
+  margin-bottom: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-u) * 0.3);
+}
+
+/* An alert's icon sits on a soft amber disc; the other tones' wash is clear. */
+.tl-hastatus__icon::before {
+  content: '';
+  position: absolute;
+  top: -16%;
+  right: -16%;
+  bottom: -16%;
+  left: -16%;
+  border-radius: 50%;
+  background: var(--tl-ha-wash);
+}
+
+.tl-hastatus__icon > .tl-ha-icon {
+  position: relative;
+}
+
+.tl-hastatus__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tl-hastatus--stacked .tl-hastatus__text {
+  flex: 0 1 auto;
+  max-width: 100%;
+  align-items: center;
+}
+
+.tl-hastatus__label {
+  max-width: 100%;
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hastatus-u) * 0.34));
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--tl-fg-3);
+  overflow-wrap: break-word;
+}
+
+.tl-hastatus__state {
+  max-width: 100%;
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-u) * 0.05);
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-u));
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--tl-ha-word);
+  overflow-wrap: break-word;
+}
+
+/* Stacked, the words are the smaller share of the box: its label and since
+ * line a little larger against the state. */
+.tl-hastatus--stacked .tl-hastatus__label {
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hastatus-u) * 0.4));
+}
+
+.tl-hastatus__since {
+  max-width: 100%;
+  margin-top: calc(var(--tl-text-scale, 1) * var(--tl-hastatus-u) * 0.16);
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hastatus-u) * 0.3));
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--tl-fg-3);
+  overflow-wrap: break-word;
+}
+
+.tl-hastatus--stacked .tl-hastatus__since {
+  font-size: calc(var(--tl-text-scale, 1) * max(11px, var(--tl-hastatus-u) * 0.36));
+}
+
+/* What it says instead: none chosen, still waiting, not on the whitelist. */
+.tl-hastatus__empty {
+  margin-top: auto;
+  margin-bottom: auto;
+  font-size: calc(var(--tl-text-scale, 1) * clamp(11px, 1.1vw, 20px));
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--tl-fg-3);
+}
+
+/* Which id is not on the whitelist, under the words. */
+.tl-hastatus__id {
+  margin-top: 0.25em;
+  font-size: 0.8em;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.tl-hastatus--stacked .tl-hastatus__empty {
+  text-align: center;
+}
+
+/* --- The universal align ----------------------------------------------------------- */
+
+.tl-spec--align-center .tl-hastatus__main {
+  justify-content: center;
+}
+
+.tl-spec--align-end .tl-hastatus__main {
+  justify-content: flex-end;
+}
+
+.tl-spec--align-center .tl-hastatus--row .tl-hastatus__text,
+.tl-spec--align-end .tl-hastatus--row .tl-hastatus__text {
+  flex-grow: 0;
+}
+
+.tl-spec--align-center .tl-hastatus--row .tl-hastatus__empty {
+  text-align: center;
+}
+
+.tl-spec--align-end .tl-hastatus__empty,
+.tl-spec--align-end .tl-hastatus--row .tl-hastatus__text {
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ----------------------------------------------- */
+
+.tl-knobs .tl-hastatus__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-hastatus-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
+
+/* --- Too small (layoutSpec.js minPx: 120 x 44) ------------------------------------- */
+
+@container tl-spec (width < 120px) or (height < 44px) {
+  .tl-spec--hastatus > .tl-spec__content {
+    display: none;
+  }
+
+  .tl-spec.tl-spec--hastatus > .tl-panel--small {
+    display: flex;
+  }
+}
