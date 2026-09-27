@@ -1,0 +1,111 @@
+/* SecondClockPanel - the label, the time, the date and offset under it, a
+ * stack centred in the box by design and aligned by the box's align.
+ *
+ * Everything is a share of one size, --tl-clock2-u, the time's type: against
+ * the body (a size container, the box's content) 27cqw keeps "12:45 PM"
+ * inside the width (3.42 em in Inter 400, the meridiem included, and 7% to
+ * spare) and 52cqh the three lines inside the height (1.76 em tall); without
+ * container units it is a share of the screen's height (see
+ * AirQualityChip.css for why the fallback stands outside the @supports
+ * block). It is declared on the body and used only below it, so the units
+ * resolve against the body. Every size carries var(--tl-text-scale). Chrome
+ * 80 rules: no `inset`, no flex `gap`, no `aspect-ratio`. */
+
+.tl-clock2__body {
+  container-type: size;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 0;
+  --tl-clock2-u: 5.4vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-clock2__body {
+    --tl-clock2-u: min(27cqw, 52cqh);
+  }
+}
+
+.tl-clock2__label {
+  max-width: 100%;
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-clock2-u) * 0.26);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-clock2__unknown {
+  margin-left: 0.35em;
+  letter-spacing: 0;
+  color: var(--tl-fg-3);
+}
+
+.tl-clock2__time {
+  display: flex;
+  align-items: baseline;
+  max-width: 100%;
+  margin-top: calc(var(--tl-clock2-u) * 0.04);
+  font-family: var(--tl-font-display);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-clock2-u));
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--tl-fg);
+  white-space: nowrap;
+}
+
+.tl-clock2__hm {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Small and on the numerals' baseline, as the main clock's. */
+.tl-clock2__ampm {
+  margin-left: 0.14em;
+  font-size: 0.3em;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--tl-fg-2);
+}
+
+.tl-clock2__meta {
+  max-width: 100%;
+  margin-top: calc(var(--tl-clock2-u) * 0.1);
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-clock2-u) * 0.26);
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--tl-fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-clock2__sep {
+  color: var(--tl-fg-3);
+}
+
+.tl-clock2__offset {
+  font-weight: 600;
+}
+
+/* --- The universal align --------------------------------------------------------- */
+
+.tl-spec--align-center .tl-clock2__body {
+  align-items: center;
+  text-align: center;
+}
+
+.tl-spec--align-end .tl-clock2__body {
+  align-items: flex-end;
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") --------------------------------------------- */
+
+.tl-knobs .tl-clock2__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-clock2-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}

@@ -1,0 +1,165 @@
+/* DatePanel - the date as large as the box allows, centred in it by design,
+ * aligned by the box's align.
+ *
+ * One size, --tl-date-u, the line's type (the big day's, for daynumber),
+ * against the body (a size container). The width shares keep each format's
+ * longest date inside the box with 7% to spare, from its width in Inter,
+ * the widest default face, measured in Chrome (em at weight 500):
+ *
+ *   Wednesday, September 30  12.61    September 30        6.63
+ *   ... , 2026               15.68    September 30, 2026  9.70
+ *   Wed, Sep 30               5.96    Sep 30              3.34
+ *   Wed, Sep 30, 2026         9.03    Sep 30, 2026        6.41
+ *   12/31  2.90   12/31/2026  5.81    Wednesday           5.46
+ *   30 (weight 600)           1.27
+ *
+ * so 100 / (width x 1.07) cqw. A long or medium date takes the larger of one
+ * line (a share of the height that leaves the line some air, 56cqh) and two,
+ * broken after the weekday's comma (DatePanel.jsx; each line the date's
+ * longer half, 30cqh for two lines): a narrow box gets two lines of bigger
+ * type. IBM Plex Mono runs about 7% wider than Inter and just fits; a wider
+ * size knob or an element size wraps at the same break. Without container
+ * units the size is a share of the screen's height (see AirQualityChip.css
+ * for why the fallback stands outside the @supports block). Declared on the
+ * body, used only below it. Every size carries var(--tl-text-scale). Chrome
+ * 80 rules: no `inset`, no flex `gap`, no `aspect-ratio`. */
+
+.tl-date__body {
+  container-type: size;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  min-height: 0;
+  --tl-date-u: 4.4vh;
+}
+
+.tl-date--daynumber .tl-date__body {
+  --tl-date-u: 10vh;
+}
+
+@supports (height: 1cqh) {
+  .tl-date__body {
+    --tl-date-u: max(min(7.4cqw, 56cqh), min(14.1cqw, 30cqh));
+  }
+
+  .tl-date--year .tl-date__body {
+    --tl-date-u: max(min(5.95cqw, 56cqh), min(9.6cqw, 30cqh));
+  }
+
+  .tl-date--medium .tl-date__body {
+    --tl-date-u: max(min(15.7cqw, 56cqh), min(28cqw, 30cqh));
+  }
+
+  .tl-date--medium.tl-date--year .tl-date__body {
+    --tl-date-u: max(min(10.3cqw, 56cqh), min(14.6cqw, 30cqh));
+  }
+
+  .tl-date--short .tl-date__body {
+    --tl-date-u: min(32cqw, 60cqh);
+  }
+
+  .tl-date--short.tl-date--year .tl-date__body {
+    --tl-date-u: min(16cqw, 60cqh);
+  }
+
+  .tl-date--dayname .tl-date__body {
+    --tl-date-u: min(17cqw, 58cqh);
+  }
+
+  .tl-date--daynumber .tl-date__body {
+    --tl-date-u: min(70cqw, 80cqh);
+  }
+
+  .tl-date--daynumber.tl-date--year .tl-date__body {
+    --tl-date-u: min(66cqw, 80cqh);
+  }
+}
+
+.tl-date__text {
+  max-width: 100%;
+  min-width: 0;
+  font-family: var(--tl-font-display);
+  color: var(--tl-fg);
+}
+
+/* The parts restate the size, so an element style's size on one of them
+ * (the day, the month) takes: each part's text scale is its own
+ * (Entry/specStyles.js), the punctuation between them the line's. */
+.tl-date__line,
+.tl-date__line [data-edit] {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-date-u));
+}
+
+/* The words that stay on one line: the date breaks after the weekday's
+ * comma, or not at all. */
+.tl-date__words {
+  white-space: nowrap;
+}
+
+.tl-date__line {
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  overflow-wrap: normal;
+}
+
+.tl-date__day,
+.tl-date__year {
+  font-variant-numeric: lining-nums;
+}
+
+/* --- daynumber: the month small over the day, big ------------------------------ */
+
+.tl-date__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tl-date__over,
+.tl-date__over [data-edit] {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-date-u) * 0.22);
+}
+
+.tl-date__over {
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--tl-accent);
+}
+
+.tl-date__big,
+.tl-date__big [data-edit] {
+  font-size: calc(var(--tl-text-scale, 1) * var(--tl-date-u));
+}
+
+.tl-date__big {
+  margin-top: calc(var(--tl-date-u) * 0.02);
+  font-weight: 600;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+/* --- The universal align (centre by default for the date) ------------------------ */
+
+.tl-spec--align-start .tl-date__body,
+.tl-spec--align-start .tl-date__stack {
+  align-items: flex-start;
+  text-align: start;
+}
+
+.tl-spec--align-end .tl-date__body,
+.tl-spec--align-end .tl-date__stack {
+  align-items: flex-end;
+  text-align: end;
+}
+
+/* --- Knobs (tokens.css "Panel knobs") ---------------------------------------------- */
+
+.tl-knobs .tl-date__body {
+  --tl-knob-scale: calc(var(--tl-panel-text-scale) * var(--tl-date-size, 1));
+  --tl-text-scale: calc(var(--tl-knob-scale) * var(--tl-el-size, 1) * var(--tl-el-fit, 1));
+}
