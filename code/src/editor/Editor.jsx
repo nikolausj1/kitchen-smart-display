@@ -23,6 +23,12 @@
 // element styles (the inspector's Element section, the layers' element
 // tree), the box v2 props, visibility rules ("Show when"), several panels
 // selected at once (move, align, distribute, match), and copy and paste style.
+//
+// Chunk 4: the block types are the app's (schema.js, the type registry), so
+// the shape is added (behind the selection or in front), edited, saved and
+// removed like text and image. A panel of a type the app does not know is
+// kept exactly as stored: not on the stage, not in any edit, dimmed in the
+// layers; the one thing to do with it is to remove it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Dayparts from './Dayparts.jsx'
@@ -33,14 +39,16 @@ import TopBar, { StatusLine } from './TopBar.jsx'
 import { Dialog } from './menus.jsx'
 import useAppBridge, { readRuleMarks } from './useAppBridge.js'
 import useEditorState from './useEditorState.js'
-import { finalSpec, newPanel, sameLayout, samePanel, withVariant, withoutVariant } from './appSpec.js'
+import { finalSpec, newBlock, newPanel, sameLayout, samePanel, withVariant, withoutVariant } from './appSpec.js'
 import {
   addPanel,
   alignPanels,
+  backmost,
   distributePanels,
   editGlobal,
   editPanels,
   followDayGlobal,
+  insertBehind,
   mapPanel,
   mapPanels,
   matchPanels,
@@ -49,6 +57,7 @@ import {
   removePanels,
   setEveningFrom,
   styleOf,
+  unionPct,
   unionPx,
   withBox,
   withElementStyle,
@@ -74,7 +83,17 @@ import {
   isWebScreen,
   patchDeviceConfig,
 } from './hub.js'
-import { elementLabel, knobDefaultsFor, knobFields, registerFromReady } from './schema.js'
+import {
+  blockTypes,
+  elementLabel,
+  hasOwnProps,
+  isBlockType,
+  isKnownType,
+  knobDefaultsFor,
+  knobFields,
+  registerFromReady,
+  typeRegistry,
+} from './schema.js'
 import {
   DAYPART_LABELS,
   MAX_PANELS,
@@ -99,7 +118,6 @@ import {
   pctToPx,
   pctToPxRound,
   pxToPctKeeping,
-  registerPanelTypes,
   restack,
   round2,
   typeLabel,
@@ -192,11 +210,20 @@ export default function Editor() {
   const panels = partPanels(spec, part)
   const hasVariant = !spec || !!panels
   const selected = panels?.find((p) => p.id === state.selectedId) ?? null
-  // Several selected, in the order they were picked.
+  // The app's types: which it knows changes when its ready arrives.
+  const types = typeRegistry()
+  // Several selected, in the order they were picked; never a type the app
+  // does not know (nothing may move or restyle it).
   const group = useMemo(
-    () => (panels && state.selectedIds.length > 1 ? state.selectedIds.map((id) => panels.find((p) => p.id === id)).filter(Boolean) : []),
-    [panels, state.selectedIds]
+    () =>
+      panels && state.selectedIds.length > 1
+        ? state.selectedIds.map((id) => panels.find((p) => p.id === id)).filter((p) => p && types.known.has(p.type))
+        : [],
+    [panels, state.selectedIds, types]
   )
+  // What the stage draws and edits: the types the app knows.
+  const stagePanels = useMemo(() => (panels ? panels.filter((p) => types.known.has(p.type)) : panels), [panels, types])
+  const editable = (p) => !!p && isKnownType(p.type)
   const device = devices?.find((d) => d.id === deviceId) ?? null
   const screens = useMemo(() => (devices || []).filter(isWebScreen), [devices])
   const copyTargets = useMemo(() => screens.filter((d) => d.id !== deviceId), [screens, deviceId])
@@ -267,9 +294,9 @@ export default function Editor() {
   // --- the app in the iframe ------------------------------------------------------
   const onReady = useCallback(
     (m) => {
-      // Schemas and types first: the reducer normalises with them.
+      // Schemas and types (which are blocks, which the app knows) first: the
+      // reducer normalises with them.
       registerFromReady(m)
-      registerPanelTypes(m.panelTypes)
       actions.appReady(m)
     },
     [actions]
@@ -422,12 +449,16 @@ export default function Editor() {
   const onPanel = (id, patch) => actions.update((s, p) => mapPanel(s, p, id, withFields(patch)))
   const onToggle = (id, key) => {
     const panel = panels?.find((x) => x.id === id)
-    if (panel) onPanel(id, { [key]: !panel[key] })
+    if (editable(panel)) onPanel(id, { [key]: !panel[key] })
   }
   function onRemove(id) {
     const panel = panels?.find((x) => x.id === id)
     actions.update((s, p) => removePanel(s, p, id))
-    if (panel && panel.type !== 'text' && panel.type !== 'image') {
+    if (!panel) return
+    if (!isKnownType(panel.type)) {
+      const name = typeLabel(panel.type, state.labels).toLowerCase()
+      setNotice({ kind: 'info', text: `Removed ${panel.id}, a ${name} this app does not support. Undo brings it back.` })
+    } else if (!isBlockType(panel.type)) {
       setNotice({ kind: 'info', text: `${typeLabel(panel.type, state.labels)} is off this layout; Add panel brings it back.` })
     }
   }
@@ -478,14 +509,14 @@ export default function Editor() {
 
   // --- copy and paste style --------------------------------------------------------------
   function onCopyStyle() {
-    if (!selected) return
+    if (!editable(selected)) return
     const label = `${panelLabel(selected, state.labels)}${part !== 'day' ? ` (${DAYPART_LABELS[part]})` : ''}`
     setStyleClip({ ...styleOf(selected), label, part })
     setNotice({ kind: 'info', text: `Copied ${label}'s style. Paste style (⌥⌘V) puts it on another panel.` })
   }
 
   function onPasteStyle() {
-    const targets = group.length > 1 ? group : selected ? [selected] : []
+    const targets = group.length > 1 ? group : editable(selected) ? [selected] : []
     // Never onto the panel it came from (the same id in the same day part).
     const ids = targets.map((p) => p.id).filter((id) => !(id === styleClip?.id && part === styleClip?.part))
     if (!styleClip || !ids.length) return
@@ -527,7 +558,15 @@ export default function Editor() {
     )
   }
 
-  const onLayerSelect = (id, toggle) => (toggle ? actions.toggleSelect(id) : actions.select(id))
+  // Shift-click: in or out of the selection, which never mixes in a type the
+  // app does not know (that one is selected alone).
+  const isUnknownId = (id) => {
+    const p = panels?.find((x) => x.id === id)
+    return !!p && !isKnownType(p.type)
+  }
+  const onToggleSelect = (id) =>
+    isUnknownId(id) || state.selectedIds.some(isUnknownId) ? actions.select(id) : actions.toggleSelect(id)
+  const onLayerSelect = (id, toggle) => (toggle ? onToggleSelect(id) : actions.select(id))
   const onLayerHover = useCallback((id, element) => setHover(id ? { id, element: element || null } : null), [])
 
   const onReorder = (frontFirstIds) => actions.update((s, p) => editPanels(s, p, (list) => restack(list, frontFirstIds)))
@@ -542,13 +581,42 @@ export default function Editor() {
   const onFollowDay = () => actions.update((s, p) => followDayGlobal(s, p))
   const onEveningFrom = (hour) => actions.update((s) => setEveningFrom(s, hour))
 
-  function onAdd(type) {
-    if (!panels || panels.length >= MAX_PANELS) return
-    const id = newBlockId(type, allIds(spec))
-    actions.update((s, p) => addPanel(s, p, makeBlock(type, partPanels(s, p) || [], id)))
-    actions.select(id)
-    if (type === 'text') setFocusText({ id })
-    setNotice({ kind: 'info', text: `Added ${typeLabel(type, state.labels).toLowerCase()} block ${id}.` })
+  // A new block of one of the app's block types. where: 'front', in front of
+  // everything, or 'behind': just behind the selection and over its area (the
+  // card behind a group), or behind everything when nothing is selected.
+  // Text and image are made as they always were (makeBlock: centred, their
+  // own size); any other type as the app's newBlock makes it (a shape: its
+  // starting box and props), else a bare box (makeBlock). Made here, not in
+  // the recipe: the app's ids are random, and a recipe may run twice.
+  function onAdd(type, where = 'front') {
+    if (!panels || panels.length >= MAX_PANELS || !isBlockType(type)) return
+    const taken = allIds(spec)
+    const sel = group.length > 1 ? group : editable(selected) ? [selected] : []
+    let behind = null
+    let place = {}
+    if (where === 'behind') {
+      behind = backmost(panels, (sel.length ? sel : stagePanels).map((p) => p.id))
+      place = { z: behind ? behind.z : 0 }
+      if (sel.length) place.box = unionPct(sel)
+    } else if (!hasOwnProps(type)) {
+      place = { z: Math.min(999, panels.reduce((m, x) => Math.max(m, Number.isFinite(x.z) ? x.z : 0), 0) + 1) }
+    }
+    const overrides = { ...(place.box || {}), ...(place.z != null ? { z: place.z } : {}) }
+    const fromApp = hasOwnProps(type) ? null : newBlock(type, overrides, taken)
+    const made = fromApp || makeBlock(type, panels, newBlockId(type, taken), place)
+    actions.update((s, p) => (behind ? insertBehind(s, p, made, behind.id) : addPanel(s, p, made)))
+    actions.select(made.id)
+    if (type === 'text') setFocusText({ id: made.id })
+    const name = typeLabel(type, state.labels).toLowerCase()
+    let text = `Added ${name} block ${made.id}.`
+    if (where === 'behind') {
+      text = sel.length
+        ? `Added ${name} ${made.id} behind ${sel.map((p) => panelLabel(p, state.labels)).join(', ')}, over their area.`
+        : `Added ${name} ${made.id} at the back.`
+    } else if (!hasOwnProps(type)) {
+      text = `Added ${name} ${made.id} in front.`
+    }
+    setNotice({ kind: 'info', text })
   }
 
   // Functional panels this part does not have, in the app's order.
@@ -565,7 +633,7 @@ export default function Editor() {
     actions.update((s, p) => {
       const list = partPanels(s, p)
       if (!list || list.some((x) => x.type === type)) return s
-      const z = Math.min(999, list.reduce((m, x) => Math.max(m, x.z), 0) + 1)
+      const z = Math.min(999, list.reduce((m, x) => Math.max(m, Number.isFinite(x.z) ? x.z : 0), 0) + 1)
       const made = newPanel(type, layoutId, z) || makePanel(type, list, state.mins)
       return addPanel(s, p, made)
     })
@@ -576,19 +644,21 @@ export default function Editor() {
   function deleteSelected() {
     if (group.length > 1) {
       // One step: blocks go, panels hide.
-      const blocks = group.filter((p) => p.type === 'text' || p.type === 'image').map((p) => p.id)
+      const blocks = group.filter((p) => isBlockType(p.type)).map((p) => p.id)
       const rest = group.filter((p) => !blocks.includes(p.id)).map((p) => p.id)
       actions.update((s, p) => removePanels(mapPanels(s, p, rest, withFields({ hidden: true })), p, blocks), { group: true, label: 'delete several' })
       return
     }
     if (!selected) return
-    if (selected.type === 'text' || selected.type === 'image') onRemove(selected.id)
+    // A block goes; so does a type the app does not know (hiding it would
+    // change it, and nothing else can be done with it). A panel hides.
+    if (isBlockType(selected.type) || !isKnownType(selected.type)) onRemove(selected.id)
     else onPanel(selected.id, { hidden: true })
   }
 
   function nudge(dx, dy) {
     if (group.length > 1) return nudgeGroup(dx, dy)
-    if (!selected || selected.locked || selected.hidden) return
+    if (!editable(selected) || selected.locked || selected.hidden) return
     const id = selected.id
     actions.update(
       (s, p) =>
@@ -950,6 +1020,8 @@ export default function Editor() {
             : null
         }
         canAdd={!!panels && panels.length < MAX_PANELS}
+        blocks={blockTypes()}
+        hasSelection={group.length > 1 || editable(selected)}
         addable={addable}
         onSelect={onLayerSelect}
         onSelectElement={actions.selectPath}
@@ -990,7 +1062,7 @@ export default function Editor() {
               grid={prefs.grid}
               gridSize={prefs.gridSize}
               spec={spec}
-              panels={panels}
+              panels={stagePanels}
               readOnly={!!spec && !panels}
               rects={liveRects}
               ruleIds={liveRects?.rules ?? null}
@@ -1003,7 +1075,7 @@ export default function Editor() {
               appState={appState}
               elementName={(key) => (selected ? (key === state.selectedElement && elName) || elementLabel(selected.type, key, reportedLabels) : key)}
               onSelect={actions.select}
-              onToggleSelect={actions.toggleSelect}
+              onToggleSelect={onToggleSelect}
               onSelectElement={actions.selectElement}
               onHover={onStageHover}
               onGeometry={onGeometry}

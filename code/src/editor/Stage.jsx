@@ -27,11 +27,15 @@
 //
 // readOnly: a day part with no layout of its own shows the Day layout, which
 // is not edited from there.
+//
+// `panels` holds only the types the app knows (Editor.jsx): one it does not
+// know is drawn by nobody, so it has no box to click, drag or snap to.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { unionPx } from './edits.js'
 import { HANDLES, HANDLE_AT, HANDLE_CURSOR, guideLines, guideLinesFor, guideTargets, moveRect, resizeRect } from './geometry.js'
 import { RuleIcon } from './icons.jsx'
+import { isBlockType } from './schema.js'
 import { frontToBack, minPctFor, pctToPx, pctToPxRound, pxToPctKeeping, typeLabel, whenSummary } from './spec.js'
 
 const FIT_PAD = 24 // stage px around the canvas
@@ -469,7 +473,7 @@ function GroupBox({ box, px, count, dragging, canvas, k }) {
 
 function selectionLabel(p, labels) {
   const type = typeLabel(p.type, labels)
-  const parts = [p.type === 'text' || p.type === 'image' ? `${type} · ${p.id}` : type]
+  const parts = [isBlockType(p.type) ? `${type} · ${p.id}` : type]
   if (p.locked) parts.push('locked')
   if (p.hidden) parts.push('hidden')
   return parts.join(' · ')

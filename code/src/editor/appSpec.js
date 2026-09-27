@@ -16,6 +16,13 @@
 //   newPanel(type, layoutId, z) a functional panel for "Add panel": that
 //                               layout's default box and props for the type,
 //                               or the type's own starting box
+//   newBlock(type, overrides, takenIds)
+//                               a block from the app's own newBlock (a shape:
+//                               its starting box and props), or null when the
+//                               bundled app does not make that type
+//   BLOCK_TYPES, PANEL_TYPE_LIST  registered with schema.js as the type list
+//                               (text and image when the app has none); the
+//                               ready message's list wins there too
 //   ELEMENT_STYLE_SCHEMA, BOX_SCHEMA, FONTS, RULE_KINDS
 //                               the panels-and-controls chunk 1 contract
 //                               (docs/designs/panels-and-controls.md), as
@@ -25,14 +32,19 @@
 //
 // The editor's spec.js keeps its own copy of the normaliser for editing-time
 // clamps; it must write a valid spec whatever app build the iframe shows.
+// A panel whose type the bundled module does not know (a shape, while the
+// editor is older than the app in the preview; or any type from a newer app)
+// never goes through the app's normaliser, which would drop it: it keeps the
+// editor's copy (spec.js normalised it from the ready's schema, or kept it as
+// stored when nobody here knows the type) in its place in the list.
 //
 // A namespace import on purpose: the chunk 1 exports are being added to the
 // app module alongside this editor work, and `app.X` is simply undefined
 // where a named import of a missing export would break the build.
 
 import * as app from '../views/TodayLayouts/layoutSpec.js'
-import { globalFields, registerBundledContract } from './schema.js'
-import { hasPart, normalizeSpec } from './spec.js'
+import { globalFields, registerBundledContract, registerBundledTypes } from './schema.js'
+import { hasPart, isValidBlockId, normalizeSpec } from './spec.js'
 import { deepEqual, isDict } from './util.js'
 
 // --- the chunk 1 contract: fallbacks ---------------------------------------------
@@ -175,6 +187,20 @@ export const RULE_KINDS = app.RULE_KINDS ?? FALLBACK_RULE_KINDS
 
 registerBundledContract({ elementStyleSchema: ELEMENT_STYLE_SCHEMA, boxSchema: BOX_SCHEMA, fonts: FONTS, ruleKinds: RULE_KINDS })
 
+// --- the panel types ------------------------------------------------------------------
+
+// The blocks of an app module that predates the list: Contract v1's two.
+const FALLBACK_BLOCK_TYPES = ['text', 'image']
+
+registerBundledTypes(
+  Array.isArray(app.PANEL_TYPE_LIST) ? app.PANEL_TYPE_LIST : null,
+  Array.isArray(app.BLOCK_TYPES) ? app.BLOCK_TYPES : FALLBACK_BLOCK_TYPES
+)
+
+// Does the bundled app module know the type? (An app module without
+// panelType: as before, it is handed everything.)
+const appKnows = (type) => (typeof app.panelType === 'function' ? !!app.panelType(type) : true)
+
 // --- the spec -----------------------------------------------------------------------
 
 const editorNormalize = (spec) => normalizeSpec(spec, { globalFields: globalFields() })
@@ -200,7 +226,7 @@ function carryOver(mine, theirs) {
   const onto = (mineList, theirList) =>
     (theirList || []).map((p) => {
       const m = (mineList || []).find((x) => x.id === p.id)
-      if (!m) return p
+      if (!m || m === p || !isDict(m.props)) return p
       const props = { ...p.props }
       if (keepElements && m.props.elements) props.elements = m.props.elements
       if (keepBox) for (const k of BOX_KEYS) if (m.props[k] !== undefined && props[k] === undefined) props[k] = m.props[k]
@@ -218,12 +244,52 @@ function carryOver(mine, theirs) {
   return out
 }
 
+// The spec with only the panels the bundled app knows, for its normaliser.
+function onlyKnown(spec) {
+  const keep = (list) => (Array.isArray(list) ? list.filter((p) => appKnows(p.type)) : list)
+  const out = { ...spec, panels: keep(spec.panels) }
+  if (isDict(spec.variants)) {
+    out.variants = {}
+    for (const part of Object.keys(spec.variants)) {
+      const v = spec.variants[part]
+      out.variants[part] = isDict(v) ? { ...v, panels: keep(v.panels) } : v
+    }
+  }
+  return out
+}
+
+// One panel list back in the editor's order: each panel the app knows as the
+// app normalised it (position by position: its normaliser keeps the order),
+// each other one as the editor holds it. Should the app have dropped one
+// after all, its list comes first and the others after it.
+function putBack(mineList, theirList) {
+  const mine = Array.isArray(mineList) ? mineList : []
+  const theirs = Array.isArray(theirList) ? theirList : []
+  const known = mine.filter((p) => appKnows(p.type))
+  if (known.length === mine.length) return theirs
+  if (known.length !== theirs.length) return [...theirs, ...mine.filter((p) => !appKnows(p.type))]
+  let i = 0
+  return mine.map((p) => (appKnows(p.type) ? theirs[i++] : p))
+}
+
+function withUnknown(mine, theirs) {
+  const out = { ...theirs, panels: putBack(mine.panels, theirs.panels) }
+  if (isDict(theirs.variants)) {
+    out.variants = {}
+    for (const part of Object.keys(theirs.variants)) {
+      const v = theirs.variants[part]
+      out.variants[part] = { ...v, panels: putBack(mine.variants?.[part]?.panels, v.panels) }
+    }
+  }
+  return out
+}
+
 // null for "no spec" (the built-in default in the registry).
 export function readSpec(raw, layoutId) {
   const mine = editorNormalize(raw)
   if (!mine) return null
-  const theirs = appNormalize(mine, layoutId)
-  return theirs ? carryOver(mine, theirs) : mine
+  const theirs = appNormalize(onlyKnown(mine), layoutId)
+  return theirs ? carryOver(mine, withUnknown(mine, theirs)) : mine
 }
 
 export const finalSpec = readSpec
@@ -271,4 +337,18 @@ export function withoutVariant(spec, part) {
 export function newPanel(type, layoutId, z) {
   const p = app.newPanel(type, { z }, { layoutId })
   return isDict(p) && p.id === type ? p : null
+}
+
+// A block from the app's own newBlock: its starting box and props for the
+// type, with `overrides` over them (a box, a z), its id clear of takenIds (a
+// Set). null when the bundled app does not make that type (a shape, while the
+// editor is older than the app in the preview): spec.js makeBlock then.
+export function newBlock(type, overrides, takenIds) {
+  if (typeof app.newBlock !== 'function' || !appKnows(type)) return null
+  try {
+    const b = app.newBlock(type, overrides, takenIds)
+    return isDict(b) && b.type === type && isValidBlockId(type, b.id) && !takenIds.has(b.id) ? b : null
+  } catch {
+    return null
+  }
 }

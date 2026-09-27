@@ -15,6 +15,16 @@
 // scrolled to and marked below. Hovering a field tells the app which element
 // it affects (onFieldHover).
 //
+// Blocks come from the app's type list (schema.js): text and image show their
+// content (the text, the picture), a shape its own knobs (Shape, Fill) under
+// "Shape settings"; every block has Delete where a panel has Hide. The Type
+// section (font, text colour, vertical align) is for boxes with words of
+// their own: a type whose only element is its title (the shape) goes without
+// it, and its title takes an element style like any other.
+//
+// A panel of a type the app does not know: what it is, that it is kept as
+// saved, and Remove. Nothing else: the editor cannot know what it may hold.
+//
 // Several panels selected: what they are, and pasting a style onto all.
 //
 // Nothing selected: the screen's Entry backdrop (Entry only), the layout's
@@ -39,6 +49,9 @@ import {
   fieldValue,
   globalFields,
   groupFields,
+  hasOwnProps,
+  isBlockType,
+  isKnownType,
   knobFields,
   ruleKind,
   ruleKinds,
@@ -99,6 +112,8 @@ export default function Inspector(props) {
         <PartPrompt {...props} />
       ) : group && group.length > 1 ? (
         <GroupInspector {...props} />
+      ) : panel && !isKnownType(panel.type) ? (
+        <UnsupportedInspector key={panel.id} {...props} />
       ) : panel ? (
         <PanelInspector key={panel.id} {...props} />
       ) : (
@@ -159,10 +174,15 @@ function PanelInspector({
   const min = minPctFor(panel.type, mins)
   const minW = Math.ceil((min.w * canvas.w) / 100)
   const minH = Math.ceil((min.h * canvas.h) / 100)
-  const isBlock = panel.type === 'text' || panel.type === 'image'
+  const isBlock = isBlockType(panel.type)
+  // Text and image: their fields are their content, the section is theirs.
+  // Everything else (a shape, a panel): settings, with Reset knobs.
+  const ownProps = hasOwnProps(panel.type)
   const title = typeLabel(panel.type, labels)
   const set = (patch, field) => onProps(id, patch, field)
   const fields = knobFields(panel.type)
+  // A picture to pick: the image block's src.
+  const hasSrc = fields.some((f) => f.key === 'src')
   const groups = groupFields(panel.type, fields, reportedLabels)
   const elLabel = selectedElement ? elementLabel(panel.type, selectedElement, reportedLabels) : ''
   const hasGroup = !!selectedElement && groups.some((g) => g.element === selectedElement)
@@ -369,11 +389,11 @@ function PanelInspector({
         </Row>
       </section>
 
-      {(fields.length > 0 || panel.type === 'image') && (
+      {fields.length > 0 && (
         <section className="ed-sec ed-knobs" aria-label={`${title} settings`}>
           <div className="ed-sec__head">
-            <h3>{isBlock ? title : `${title} settings`}</h3>
-            {!isBlock && fields.length > 0 && (
+            <h3>{ownProps ? title : `${title} settings`}</h3>
+            {!ownProps && (
               <button
                 type="button"
                 className="ed-link"
@@ -385,7 +405,7 @@ function PanelInspector({
               </button>
             )}
           </div>
-          {panel.type === 'image' && <ArtPicker src={pr.src} art={art} onRefresh={onRefreshArt} onPick={(url) => set({ src: url })} />}
+          {hasSrc && <ArtPicker src={pr.src} art={art} onRefresh={onRefreshArt} onPick={(url) => set({ src: url })} />}
           {groups.map((g) => (
             <div
               key={g.element ?? '-'}
@@ -504,11 +524,21 @@ function ElementSection({ panel, elKey, label, knobsTitle, onShowKnobs, onElemen
 
 // --- box v2 -----------------------------------------------------------------------------
 
+// Does the box hold words of its own? Not when its element list is its title
+// alone (a shape): the title takes an element style, and the Type section
+// (font, text colour, vertical align) has nothing else to act on. A type
+// with no element list at all keeps the section, as before.
+function hasOwnText(type) {
+  const els = elementList(type)
+  return !els.length || els.some((e) => e.key !== 'title')
+}
+
 // Where each top-level box key is shown, in this order; a key the schema adds
-// that is not listed here gets a section of its own at the end.
+// that is not listed here gets a section of its own at the end. showFor: the
+// types the section is for (every type when absent).
 const BOX_SECTIONS = [
   { title: 'Fill and border', tops: ['bg', 'border', 'shadow', 'blur'] },
-  { title: 'Type', tops: ['font', 'color', 'valign'] },
+  { title: 'Type', tops: ['font', 'color', 'valign'], showFor: hasOwnText },
   { title: 'Block title', tops: ['title'] },
 ]
 const BOX_GROUPS = { bg: 'Fill', border: 'Border' }
@@ -546,6 +576,7 @@ function BoxSections({ panel, onBoxProp, onFieldHover }) {
   const extra = [...new Set(list.map((b) => b.top).filter((t) => !placed.has(t)))]
   const sections = [...BOX_SECTIONS, ...(extra.length ? [{ title: 'More', tops: extra }] : [])]
   return sections.map((sec) => {
+    if (sec.showFor && !sec.showFor(panel.type)) return null
     const fields = list
       .filter((b) => sec.tops.includes(b.top) && boxShown(b, panel.props, list))
       .map((b, i) => ({ b, i }))
@@ -738,6 +769,48 @@ function ParamField({ param, value, onChange }) {
         </Row>
       )
   }
+}
+
+// --- a type the app does not know ------------------------------------------------------
+
+// Read-only: what it is and where it sits (as stored), and Remove. It stays in
+// the layout exactly as saved until removed; an app build that knows the type
+// draws it and edits it again.
+function UnsupportedInspector({ panel, canvas, labels, onRemove }) {
+  const name = typeLabel(panel.type, labels)
+  const box = [panel.x, panel.y, panel.w, panel.h].every(Number.isFinite) ? pctToPxRound(panel, canvas) : null
+  return (
+    <div className="ed-insp ed-insp__unsupported">
+      <header className="ed-insp__head">
+        <div className="ed-insp__title">
+          <strong>{name}</strong>
+          <code>{panel.id}</code>
+        </div>
+        <div className="ed-insp__actions">
+          <button
+            type="button"
+            className="ed-btn ed-btn--danger"
+            onClick={() => onRemove(panel.id)}
+            title="Take it off the layout (Delete); Undo brings it back"
+          >
+            Remove
+          </button>
+        </div>
+      </header>
+      <section className="ed-sec">
+        <p className="ed-prompt">
+          Not supported by this app: the app in the preview has no <code>{panel.type}</code>, so it draws nothing here and
+          the editor cannot change it. It stays in the layout exactly as saved, and a build that knows it shows it again.
+        </p>
+        {box && (
+          <p className="ed-note">
+            Saved at {box.x}, {box.y}, {box.w} x {box.h} px on {canvas.w} x {canvas.h}
+            {panel.hidden === true ? ', hidden' : ''}.
+          </p>
+        )}
+      </section>
+    </div>
+  )
 }
 
 // --- several panels -----------------------------------------------------------------------

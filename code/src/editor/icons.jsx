@@ -99,6 +99,34 @@ export function PanelIcon() {
   )
 }
 
+// A shape: a square with a circle over its corner.
+export function ShapeIcon() {
+  return (
+    <svg {...base}>
+      <rect x="2" y="6" width="8" height="8" rx="1.2" />
+      <circle cx="10.5" cy="5.5" r="3.5" />
+    </svg>
+  )
+}
+
+// Any other block: a plain box.
+export function BlockIcon() {
+  return (
+    <svg {...base}>
+      <rect x="2.5" y="3.5" width="11" height="9" rx="1.5" />
+    </svg>
+  )
+}
+
+// A type the app does not know: a dashed box.
+export function UnknownIcon() {
+  return (
+    <svg {...base}>
+      <rect x="2.5" y="3.5" width="11" height="9" rx="1.5" strokeDasharray="2 1.8" />
+    </svg>
+  )
+}
+
 export function ChevronIcon({ open }) {
   return (
     <svg {...base} width={12} height={12} viewBox="0 0 12 12" style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 0.12s' }}>

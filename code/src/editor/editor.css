@@ -2013,3 +2013,53 @@ select:disabled {
   color: var(--ed-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--ed-accent) 60%, transparent);
 }
+
+/* --- panels and controls, chunk 4: block types from the app ------------------
+ * One Add button per block type; any block but text and image (the shape) is
+ * a small menu, behind the selection or in front. A panel of a type the app
+ * does not know is listed dimmed and cannot be edited. */
+
+.ed-layers__addpanel.is-half {
+  grid-column: auto;
+}
+
+.ed-layers__addblock > .ed-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ed-layers__addblock .ed-menu__list {
+  min-width: 100%;
+  width: max-content;
+  max-width: 240px;
+}
+
+/* A menu in the right-hand column opens leftwards, inside the column. */
+.ed-layers__addblock:nth-child(even) .ed-menu__list {
+  left: auto;
+  right: 0;
+}
+
+.ed-layer.is-unsupported .ed-layer__name,
+.ed-layer.is-unsupported .ed-layer__icon {
+  opacity: 0.5;
+}
+
+.ed-layer.is-unsupported {
+  height: auto;
+  min-height: 28px;
+}
+
+.ed-layer.is-unsupported .ed-layer__label {
+  font-style: italic;
+  white-space: normal;
+}
+
+/* Its eye, lock and restacking do nothing: their room goes to the name. */
+.ed-layer.is-unsupported .ed-layer__tools {
+  display: none;
+}
+
+.ed-insp__unsupported code {
+  font-size: 11px;
+}

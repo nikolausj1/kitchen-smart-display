@@ -2,9 +2,19 @@
 // show, front to back (the top row is drawn in front). Click selects,
 // Shift-click adds a panel to the selection or takes it out, the eye hides,
 // the lock stops drag and resize, drag a row (or use the arrows) to restack.
-// Add text / Add image put a new block in the middle of the canvas, in front;
-// Add panel lists the functional panels this part does not have (each appears
-// at most once per layout) and puts the one chosen there too.
+//
+// One Add button per block type the app has (`blocks`, from the type
+// registry): Add text and Add image put a new block in the middle of the
+// canvas, in front; any other block (Add shape) is a small menu, "behind
+// selection" (just behind the selected panels and over their area: the card
+// behind a group; at the back when nothing is selected) or "in front". Add
+// panel lists the functional panels this part does not have (each appears at
+// most once per layout) and puts the one chosen there too.
+//
+// A panel of a type the app does not know is listed dimmed, "Shape (not
+// supported by this app)": the app draws nothing for it and the editor keeps
+// it exactly as stored, so it has no eye, lock or restacking, and a restack
+// of the others leaves its z alone (select it for the way to remove it).
 //
 // A chevron opens a panel's elements (the type's element list: Countdowns
 // has Tile, Image, Title, Number): click one to select it on the stage, its
@@ -14,6 +24,7 @@
 
 import { useState } from 'react'
 import {
+  BlockIcon,
   ChevronIcon,
   DownIcon,
   EyeIcon,
@@ -22,18 +33,75 @@ import {
   LockIcon,
   PanelIcon,
   RuleIcon,
+  ShapeIcon,
   TextIcon,
+  UnknownIcon,
   UnlockIcon,
   UpIcon,
 } from './icons.jsx'
 import { Menu, MenuItem, MenuNote } from './menus.jsx'
-import { elementList } from './schema.js'
-import { elementStyleOf, frontToBack, isStyled, panelLabel, styledCount, whenSummary } from './spec.js'
+import { elementList, hasOwnProps, isBlockType, isKnownType } from './schema.js'
+import { elementStyleOf, frontToBack, isStyled, panelLabel, styledCount, typeLabel, whenSummary } from './spec.js'
+
+const BLOCK_ICONS = { text: TextIcon, image: ImageIcon, shape: ShapeIcon }
 
 function TypeIcon({ type }) {
-  if (type === 'text') return <TextIcon />
-  if (type === 'image') return <ImageIcon />
-  return <PanelIcon />
+  if (!isKnownType(type)) return <UnknownIcon />
+  if (!isBlockType(type)) return <PanelIcon />
+  const Icon = BLOCK_ICONS[type] || BlockIcon
+  return <Icon />
+}
+
+// The v1 blocks first, as they always were, then the others in the app's order.
+function addOrder(blocks) {
+  const first = ['text', 'image'].filter((t) => blocks.includes(t))
+  return [...first, ...blocks.filter((t) => !first.includes(t))]
+}
+
+// Add text, Add image: in front. Any other block: behind the selection, or in
+// front.
+function AddBlock({ type, labels, canAdd, hasSelection, onAdd }) {
+  const Icon = BLOCK_ICONS[type] || BlockIcon
+  const name = typeLabel(type, labels).toLowerCase()
+  if (hasOwnProps(type)) {
+    return (
+      <button type="button" className="ed-btn" disabled={!canAdd} onClick={() => onAdd(type, 'front')}>
+        <Icon /> Add {name}
+      </button>
+    )
+  }
+  return (
+    <Menu
+      className="ed-layers__addblock"
+      disabled={!canAdd}
+      title={`Put a new ${name} on the layout, behind the selection or in front`}
+      label={
+        <>
+          <Icon /> Add {name}
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <MenuItem
+            close={close}
+            onSelect={() => onAdd(type, 'behind')}
+            title={hasSelection ? 'Just behind the selected panels, over their area' : 'Nothing is selected: at the back of the layout'}
+          >
+            Add {name} behind selection
+          </MenuItem>
+          <MenuItem close={close} onSelect={() => onAdd(type, 'front')} title="In front of everything, in the middle">
+            Add {name} in front
+          </MenuItem>
+          <MenuNote>
+            {hasSelection
+              ? "Behind the selection: over the selected panels' area, just behind them. A card behind a group."
+              : 'Nothing is selected, so behind selection puts it at the back of the layout.'}
+          </MenuNote>
+        </>
+      )}
+    </Menu>
+  )
 }
 
 // Depth of an element in its panel's list, from the parents the list names.
@@ -60,6 +128,8 @@ export default function Layers({
   disabled,
   readOnlyNote,
   canAdd,
+  blocks,
+  hasSelection,
   addable,
   onSelect,
   onSelectElement,
@@ -71,7 +141,9 @@ export default function Layers({
   onAddPanel,
 }) {
   const ordered = panels ? frontToBack(panels) : []
-  const ids = ordered.map((p) => p.id)
+  // Restacking moves the panels the app knows; one it does not know keeps
+  // its z, as stored.
+  const ids = ordered.filter((p) => isKnownType(p.type)).map((p) => p.id)
   // While a row is dragged: which one, and where it would land.
   const [drag, setDrag] = useState(null) // { id, overId, after }
   // Rows opened or closed by hand; otherwise the selected panel is open while
@@ -106,14 +178,11 @@ export default function Layers({
         <span className="ed-side__meta">{selectedIds.length > 1 ? `${selectedIds.length} of ${ordered.length} selected` : ordered.length}</span>
       </div>
       <div className="ed-layers__add">
-        <button type="button" className="ed-btn" disabled={!canAdd} onClick={() => onAdd('text')}>
-          <TextIcon /> Add text
-        </button>
-        <button type="button" className="ed-btn" disabled={!canAdd} onClick={() => onAdd('image')}>
-          <ImageIcon /> Add image
-        </button>
+        {addOrder(blocks).map((t) => (
+          <AddBlock key={t} type={t} labels={labels} canAdd={canAdd} hasSelection={hasSelection} onAdd={onAdd} />
+        ))}
         <Menu
-          className="ed-layers__addpanel"
+          className={`ed-layers__addpanel${blocks.length % 2 ? ' is-half' : ''}`}
           disabled={!canAdd}
           title="Put a panel this layout does not have on it"
           label={
@@ -137,16 +206,20 @@ export default function Layers({
       </div>
       {readOnlyNote && <p className="ed-side__empty">{readOnlyNote}</p>}
       <ul className="ed-layers__list" aria-label="Layers, front to back">
-        {ordered.map((p, i) => {
+        {ordered.map((p) => {
+          const supported = isKnownType(p.type)
+          // Where it stands among the panels that restack (not a type the app does not know).
+          const at = ids.indexOf(p.id)
           const selected = selectedIds.includes(p.id)
-          const els = elementList(p.type)
+          const els = supported ? elementList(p.type) : []
           const open = els.length > 0 && isOpen(p.id)
-          const styled = styledCount(p)
-          const summary = whenSummary(p.when)
+          const styled = supported ? styledCount(p) : 0
+          const summary = supported ? whenSummary(p.when) : null
           const cls = ['ed-layer']
           if (selected) cls.push('is-selected')
           if (p.id === hoverId) cls.push('is-hover')
           if (p.hidden) cls.push('is-hidden')
+          if (!supported) cls.push('is-unsupported')
           if (summary) cls.push('has-rule')
           if (drag?.id === p.id) cls.push('is-dragging')
           if (drag?.overId === p.id && drag.id !== p.id) cls.push(drag.after ? 'drop-after' : 'drop-before')
@@ -154,7 +227,8 @@ export default function Layers({
             <li key={p.id} className="ed-layer-item">
               <div
                 className={cls.join(' ')}
-                draggable={!disabled}
+                draggable={!disabled && supported}
+                title={supported ? undefined : `${p.id}: this app does not draw a ${p.type}; kept in the layout as saved`}
                 onClick={(e) => onSelect(p.id, e.shiftKey)}
                 onMouseEnter={() => onHover(p.id, null)}
                 onMouseLeave={() => onHover(null, null)}
@@ -164,7 +238,7 @@ export default function Layers({
                   setDrag({ id: p.id, overId: null, after: false })
                 }}
                 onDragOver={(e) => {
-                  if (!drag) return
+                  if (!drag || !supported) return
                   e.preventDefault()
                   e.dataTransfer.dropEffect = 'move'
                   const r = e.currentTarget.getBoundingClientRect()
@@ -218,6 +292,7 @@ export default function Layers({
                     title={p.hidden ? 'Show' : 'Hide'}
                     aria-label={`${p.hidden ? 'Show' : 'Hide'} ${p.id}`}
                     aria-pressed={p.hidden}
+                    disabled={!supported}
                     onClick={(e) => {
                       e.stopPropagation()
                       onToggle(p.id, 'hidden')
@@ -231,6 +306,7 @@ export default function Layers({
                     title={p.locked ? 'Unlock' : 'Lock'}
                     aria-label={`${p.locked ? 'Unlock' : 'Lock'} ${p.id}`}
                     aria-pressed={p.locked}
+                    disabled={!supported}
                     onClick={(e) => {
                       e.stopPropagation()
                       onToggle(p.id, 'locked')
@@ -243,7 +319,7 @@ export default function Layers({
                     className="ed-icon ed-restack"
                     title="Bring forward"
                     aria-label={`Bring ${p.id} forward`}
-                    disabled={i === 0}
+                    disabled={at <= 0}
                     onClick={(e) => {
                       e.stopPropagation()
                       step(p.id, -1)
@@ -256,7 +332,7 @@ export default function Layers({
                     className="ed-icon ed-restack"
                     title="Send backward"
                     aria-label={`Send ${p.id} backward`}
-                    disabled={i === ordered.length - 1}
+                    disabled={at < 0 || at === ids.length - 1}
                     onClick={(e) => {
                       e.stopPropagation()
                       step(p.id, 1)

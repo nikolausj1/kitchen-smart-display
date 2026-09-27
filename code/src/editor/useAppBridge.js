@@ -25,6 +25,12 @@
 //
 // Incoming messages must come from the iframe's window and its origin, and a
 // ready must be for the layout being edited.
+//
+// A ready goes to onReady whole: its panelTypes ([{ type, label, kind:
+// 'panel' | 'block', unique, min, schema }]) and, when an app sends one, a
+// `blockTypes` list are the app's type list, which schema.js registers
+// (registerFromReady): which types are blocks (text, image, the shape) and
+// which the app knows at all.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { isDict, normalizeCanvas } from './spec.js'

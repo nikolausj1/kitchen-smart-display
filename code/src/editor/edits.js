@@ -50,6 +50,32 @@ export const removePanels = (spec, part, ids) =>
 
 export const addPanel = (spec, part, panel) => editPanels(spec, part, (panels) => [...panels, panel])
 
+// Of the panels whose id is in `ids`, the one drawn furthest back: the lowest
+// z, and for a tie the first in the list (paint order is z, then the list's
+// order, in the app and in frontToBack alike). null for none.
+export function backmost(panels, ids) {
+  let best = null
+  panels.forEach((p, i) => {
+    if (!ids.includes(p.id)) return
+    if (!best || p.z < best.p.z || (p.z === best.p.z && i < best.i)) best = { p, i }
+  })
+  return best ? best.p : null
+}
+
+// A new panel drawn just behind `behindId` and in front of everything that
+// was behind it: the same z, and right before it in the list, so no other
+// panel changes (a shape as the card behind a group). Added in front of
+// everything when there is no such panel.
+export function insertBehind(spec, part, panel, behindId) {
+  return editPanels(spec, part, (panels) => {
+    const i = panels.findIndex((p) => p.id === behindId)
+    if (i < 0) return [...panels, panel]
+    const out = panels.slice()
+    out.splice(i, 0, { ...panel, z: panels[i].z })
+    return out
+  })
+}
+
 // Global knobs. On Day: spec.global. On a variant: its own global, created
 // on the first edit as a full copy of Day's plus the change (so it no longer
 // follows Day's).
@@ -220,6 +246,21 @@ export function movePanels(spec, part, start, dx, dy, canvas) {
     const rect = { x: s.px.x + dx, y: s.px.y + dy, w: s.px.w, h: s.px.h }
     return withBox(pxToPctKeeping(s.pct, s.px, rect, canvas))(p)
   })
+}
+
+// Their union in percent of the canvas, straight from their boxes (no
+// whole-pixel step), so a card put behind a group sits exactly on its edges.
+export function unionPct(list) {
+  if (!list.length) return null
+  const r3 = (v) => Math.round(v * 1000) / 1000 + 0
+  const l = Math.min(...list.map((p) => p.x))
+  const t = Math.min(...list.map((p) => p.y))
+  return {
+    x: l,
+    y: t,
+    w: r3(Math.max(...list.map((p) => p.x + p.w)) - l),
+    h: r3(Math.max(...list.map((p) => p.y + p.h)) - t),
+  }
 }
 
 // Their union, canvas px.

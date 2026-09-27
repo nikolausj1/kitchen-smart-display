@@ -28,6 +28,17 @@
 // the ready message's elementStyleSchema, boxSchema, fonts and ruleKinds, then
 // the copy bundled with the editor, which appSpec.js registers at load (the
 // app's own exports, or the editor's fallbacks until those land).
+//
+// And for the panel types themselves: which types the app knows, and which
+// of them are blocks (free content, any number per layout, ids
+// '<type>-<4 hex>': text, image and, since chunk 4, the shape). Every other
+// type is a functional panel (at most once per layout, id === type). First
+// hit wins: the ready message (its `blockTypes` when it carries that list,
+// else its panelTypes marked kind 'block'; every panelType is a type it
+// knows), then the app's layoutSpec.js as bundled (PANEL_TYPE_LIST,
+// BLOCK_TYPES; appSpec.js registers them at load), then the Contract v1 and v2
+// types. A type none of them knows is "not supported by this app": the editor
+// keeps such a panel exactly as stored and never edits it (spec.js).
 
 import {
   GLOBAL_SCHEMA as APP_GLOBAL_SCHEMA,
@@ -153,9 +164,113 @@ let fromReady = {}
 let readyGlobal = null
 let version = 0
 
-// sd-edit:ready: { schemas, globalSchema, panelTypes: [{ type, schema }],
-// elementStyleSchema, boxSchema, fonts, ruleKinds }. Returns true when
-// anything changed.
+// --- panel types: which the app knows, and which are blocks --------------------
+
+// Contract v1 and v2, for an app that names none.
+const BUILTIN_PANEL_TYPES = [
+  'clock',
+  'weather',
+  'forecast',
+  'sunmoon',
+  'wear',
+  'airquality',
+  'headline',
+  'agenda',
+  'countdowns',
+  'departure',
+  'nowplaying',
+  'photo',
+  'school',
+]
+const BUILTIN_BLOCK_TYPES = ['text', 'image']
+const isTypeName = (t) => typeof t === 'string' && t.length > 0 && t.length <= 64
+
+// { known: Set, blocks: [type] | null, labels: { type: label } } from a type
+// list ([{ type, label, kind: 'panel' | 'block', unique }] or ['clock', ...])
+// and a block list; blocks is null when neither says which are blocks. With
+// no type list, the types are `fallbackKnown` (and the blocks named). null
+// for no types at all.
+function cleanTypes(list, blockList, fallbackKnown) {
+  const known = new Set()
+  const labels = {}
+  let blocks = null
+  for (const t of Array.isArray(list) ? list : []) {
+    const type = typeof t === 'string' ? t : isDict(t) ? t.type : null
+    if (!isTypeName(type)) continue
+    known.add(type)
+    if (!isDict(t)) continue
+    if (typeof t.label === 'string' && t.label.trim()) labels[type] = t.label.trim()
+    const block = t.kind === 'block' || (t.kind == null && t.unique === false)
+    if (block || t.kind === 'panel' || t.unique === true) {
+      blocks = blocks || []
+      if (block && !blocks.includes(type)) blocks.push(type)
+    }
+  }
+  if (!known.size && fallbackKnown) for (const t of fallbackKnown) known.add(t)
+  if (Array.isArray(blockList)) {
+    blocks = [...new Set(blockList.filter(isTypeName))]
+    for (const b of blocks) known.add(b)
+  }
+  return known.size ? { known, blocks, labels } : null
+}
+
+let bundledTypes = null
+let readyTypes = null
+
+// What the editor goes by: the ready's types, else the bundled ones, else the
+// built-in ones. A source that does not say which types are blocks takes the
+// bundled (or built-in) blocks it names.
+function resolveTypes() {
+  const src = readyTypes || bundledTypes
+  if (!src) {
+    return { known: new Set([...BUILTIN_PANEL_TYPES, ...BUILTIN_BLOCK_TYPES]), blocks: BUILTIN_BLOCK_TYPES, labels: {} }
+  }
+  const blocks = src.blocks || (bundledTypes?.blocks || BUILTIN_BLOCK_TYPES).filter((t) => src.known.has(t))
+  return {
+    known: new Set([...src.known, ...blocks]),
+    blocks,
+    labels: { ...(bundledTypes?.labels || {}), ...(readyTypes?.labels || {}) },
+  }
+}
+
+let types = resolveTypes()
+
+// appSpec.js, once at load: the bundled app's PANEL_TYPE_LIST and BLOCK_TYPES
+// (text and image when it has none).
+export function registerBundledTypes(list, blocks) {
+  bundledTypes = cleanTypes(list, Array.isArray(blocks) ? blocks : BUILTIN_BLOCK_TYPES, BUILTIN_PANEL_TYPES)
+  types = resolveTypes()
+  version += 1
+}
+
+// The registry as it stands: { known: Set, blocks, labels }, a new object
+// whenever the types change, so a memoised value that reads it can depend on
+// it (the ready arrives after the first render).
+export const typeRegistry = () => types
+
+// The block types, in the app's order ('shape', 'text', 'image' today). The
+// same array until the types change, so it can be a render dependency.
+export const blockTypes = () => types.blocks
+
+export const isBlockType = (type) => types.blocks.includes(type)
+
+// Does the app know the type? A panel of a type it does not know is kept as
+// stored, drawn by nobody, and not editable ("not supported by this app").
+export const isKnownType = (type) => isTypeName(type) && types.known.has(type)
+
+// Unique per layout, id === type.
+export const isFunctionalType = (type) => isKnownType(type) && !isBlockType(type)
+
+// The app's name for a type ("Shape", "Flip clock"), or undefined.
+export const registeredTypeLabel = (type) => (isTypeName(type) && Object.prototype.hasOwnProperty.call(types.labels, type) ? types.labels[type] : undefined)
+
+// The v1 blocks (text, image), whose props are their content (Contract v1:
+// BLOCK_SCHEMAS above), not knobs: a shape's are knobs, like a panel's.
+export const hasOwnProps = (type) => Object.prototype.hasOwnProperty.call(BLOCK_SCHEMAS, type)
+
+// sd-edit:ready: { schemas, globalSchema, panelTypes: [{ type, label, kind,
+// unique, schema }], blockTypes?: [type], elementStyleSchema, boxSchema,
+// fonts, ruleKinds }. Returns true when anything changed.
 export function registerFromReady(msg) {
   const table = cleanTable(msg?.schemas)
   if (Array.isArray(msg?.panelTypes)) {
@@ -172,12 +287,21 @@ export function registerFromReady(msg) {
     fonts: msg?.fonts,
     ruleKinds: msg?.ruleKinds,
   })
-  const changed = JSON.stringify([table, g, c]) !== JSON.stringify([fromReady, readyGlobal, readyContract])
+  // A ready naming its blocks but not its types keeps the types known so far.
+  const knownSoFar = Array.isArray(msg?.blockTypes) ? (readyTypes || bundledTypes)?.known : null
+  const t = cleanTypes(msg?.panelTypes, msg?.blockTypes, knownSoFar)
+  const key = (x) => (x ? [[...x.known].sort(), x.blocks, x.labels] : null)
+  const changed =
+    JSON.stringify([table, g, c, key(t || readyTypes)]) !== JSON.stringify([fromReady, readyGlobal, readyContract, key(readyTypes)])
   if (Object.keys(table).length || g) {
     fromReady = table
     readyGlobal = g
   }
   readyContract = c
+  if (t) {
+    readyTypes = t
+    types = resolveTypes()
+  }
   if (changed) version += 1
   return changed
 }

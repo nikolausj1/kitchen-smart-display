@@ -29,6 +29,12 @@
 //                   cond = { kind, not?, days?, from?, to?, daypart? }
 // An explicit null reads as absent everywhere, as the hub stores the nulls
 // the editor sends for removals (withRemovals below).
+//
+// Chunk 4 makes the block types data: which types are blocks, and which the
+// app knows at all, come from the app (schema.js, the type registry), so a
+// shape is a block like text and image. A panel of a type the app does not
+// know is kept exactly as stored (never dropped, never edited), and the
+// layers call it "not supported by this app".
 
 import {
   boxFields,
@@ -37,14 +43,20 @@ import {
   cleanParamValue,
   elementList,
   elementStyleFields,
+  isBlockType,
+  isFunctionalType,
+  isKnownType,
   isPlainValue,
+  knobDefaultsFor,
   knobFields,
+  registeredTypeLabel,
   ruleKind,
   ruleKinds,
   UNIVERSAL_KEYS,
 } from './schema.js'
 import {
   clamp,
+  cloneJson,
   colorForWell,
   deepEqual,
   getPath,
@@ -88,27 +100,12 @@ export function partWhen(part, eveningFrom) {
 
 // --- panel types -----------------------------------------------------------------
 
-// Functional panels (unique per layout, id === type) and blocks (any number).
-// The app's sd-edit:ready may name more; registerPanelTypes adds them.
-const BUILTIN_FUNCTIONAL = [
-  'clock',
-  'weather',
-  'forecast',
-  'sunmoon',
-  'wear',
-  'airquality',
-  'headline',
-  'agenda',
-  'countdowns',
-  'departure',
-  'nowplaying',
-  'photo',
-  'school',
-]
-export const BLOCK_TYPES = ['text', 'image']
-const functional = new Set(BUILTIN_FUNCTIONAL)
-export const isFunctionalType = (t) => functional.has(t)
+// Functional panels (unique per layout, id === type) and blocks (any number):
+// which is which, and which types the app knows at all, is the type registry
+// in schema.js (the app's sd-edit:ready, else its bundled layoutSpec.js).
+export { isBlockType, isFunctionalType, isKnownType }
 
+// Names for a ready message that gives none (the app's own labels win).
 export const TYPE_LABELS = {
   clock: 'Clock',
   weather: 'Weather',
@@ -125,16 +122,6 @@ export const TYPE_LABELS = {
   school: 'School',
   text: 'Text',
   image: 'Image',
-}
-
-// sd-edit:ready's panelTypes: [{ type, unique | kind: 'panel' }]. Types the
-// editor did not know become functional panels too (never dropped on save).
-export function registerPanelTypes(list) {
-  if (!Array.isArray(list)) return
-  for (const t of list) {
-    if (!isDict(t) || typeof t.type !== 'string' || BLOCK_TYPES.includes(t.type)) continue
-    if (t.unique === true || t.kind === 'panel') functional.add(t.type)
-  }
 }
 
 export const RANGES = {
@@ -162,8 +149,15 @@ const BLOCK_PROP_KEYS = { text: ['text', 'size', 'weight', 'color', 'lineHeight'
 // What a new text block says, so it is visible before it is edited.
 export const NEW_TEXT = 'Text'
 
-// New blocks, centred on the canvas (percent).
-export const NEW_BLOCK_SIZE = { text: { w: 30, h: 8 }, image: { w: 15, h: 25 } }
+// New blocks the editor makes itself (makeBlock): the v1 blocks at their own
+// size and with their content, centred; any other block (a shape) as a bare
+// 20 x 12 box, which is where the app's own newBlock starts one, for when the
+// bundled app does not know the type (appSpec.js newBlock is tried first).
+const NEW_BLOCKS = {
+  text: { w: 30, h: 8, props: { ...TEXT_DEFAULTS, text: NEW_TEXT } },
+  image: { w: 15, h: 25, props: { ...IMAGE_DEFAULTS } },
+}
+const NEW_BLOCK_OTHER = { w: 20, h: 12, props: { background: 'none', padding: 0 } }
 
 // Smallest panel, percent of the canvas, when the app's ready message names none.
 export const DEFAULT_MIN_PCT = 4
@@ -199,7 +193,18 @@ export function normalizeSrc(v) {
   return ''
 }
 
-const BLOCK_ID_RE = { text: /^text-[0-9a-f]{4}$/, image: /^image-[0-9a-f]{4}$/ }
+const HEX4_RE = /^[0-9a-f]{4}$/
+
+// '<type>-<4 hex>' for a block type: 'text-3fa9', 'image-09c1', 'shape-5d20'.
+export function isValidBlockId(type, id) {
+  return (
+    isBlockType(type) &&
+    typeof id === 'string' &&
+    id.length === type.length + 5 &&
+    id.startsWith(`${type}-`) &&
+    HEX4_RE.test(id.slice(type.length + 1))
+  )
+}
 
 const hex4 = (n) => (n & 0xffff).toString(16).padStart(4, '0')
 
@@ -376,21 +381,27 @@ function normalizeBox(p) {
   return { x, y, w, h }
 }
 
+// A panel of a type the app does not know (a shape saved by a newer app): kept
+// exactly as stored, a copy, as long as it has an id to be told apart by; the
+// app it came from normalised it, and only that app can change it.
+function keepAsStored(raw, taken) {
+  const id = raw.id
+  if (typeof id !== 'string' || !id || id.length > 64 || taken.has(id)) return null
+  return cloneJson(raw)
+}
+
 function normalizePanel(raw, index, taken) {
   if (!isDict(raw)) return null
   const type =
     typeof raw.type === 'string' ? raw.type : typeof raw.id === 'string' && isFunctionalType(raw.id) ? raw.id : null
+  if (type == null) return null
+  if (!isKnownType(type)) return keepAsStored(raw, taken)
   let id
-  if (isFunctionalType(type)) {
+  if (isBlockType(type)) {
+    id = isValidBlockId(type, raw.id) && !taken.has(raw.id) ? raw.id : stableBlockId(type, taken, index)
+  } else {
     id = type // functional panels: id === type, each at most once
     if (taken.has(id)) return null
-  } else if (BLOCK_TYPES.includes(type)) {
-    id =
-      typeof raw.id === 'string' && BLOCK_ID_RE[type].test(raw.id) && !taken.has(raw.id)
-        ? raw.id
-        : stableBlockId(type, taken, index)
-  } else {
-    return null // unknown type: dropped
   }
   const z = Math.round(num(raw.z, ...RANGES.z, index + 1))
   const out = {
@@ -578,10 +589,17 @@ export function restack(panels, frontFirstIds) {
   return panels.map((p) => (zOf.has(p.id) ? { ...p, z: zOf.get(p.id) } : p))
 }
 
-export const typeLabel = (type, labels) => labels?.[type] || TYPE_LABELS[type] || type
+// The app's name for a type, else the editor's, else the type made readable
+// ('shape' -> 'Shape' for a type nobody here knows).
+export const typeLabel = (type, labels) =>
+  labels?.[type] || registeredTypeLabel(type) || TYPE_LABELS[type] || humanize(type) || String(type)
+
+// What the layers call a panel of a type the app does not know.
+const UNSUPPORTED_NOTE = 'not supported by this app'
 
 export function panelLabel(p, labels) {
   const base = typeLabel(p.type, labels)
+  if (!isKnownType(p.type)) return `${base} (${UNSUPPORTED_NOTE})`
   if (p.type === 'text') {
     const t = String(p.props?.text || '').replace(/\s+/g, ' ').trim()
     return t ? `${base}: ${t.length > 22 ? `${t.slice(0, 21)}…` : t}` : base
@@ -591,6 +609,9 @@ export function panelLabel(p, labels) {
     const file = src.split('/').pop()
     return file ? `${base}: ${decodeURIComponentSafe(file).slice(0, 22)}` : `${base} (empty)`
   }
+  // Any other block (a shape): its custom title, when it has one, tells it apart.
+  const title = isBlockType(p.type) && p.props?.title?.mode === 'custom' ? String(p.props.title.text || '').trim() : ''
+  if (title) return `${base}: ${title.length > 22 ? `${title.slice(0, 21)}…` : title}`
   return base
 }
 
@@ -602,22 +623,25 @@ function decodeURIComponentSafe(s) {
   }
 }
 
-const topZ = (panels) => panels.reduce((m, p) => Math.max(m, p.z), 0) + 1
+// One above the highest z (a panel of a type the app does not know is kept as
+// stored, so its z may not be a number).
+const topZ = (panels) => panels.reduce((m, p) => Math.max(m, Number.isFinite(p.z) ? p.z : 0), 0) + 1
 
-// A new block, centred, on top of everything.
-export function makeBlock(type, panels, id) {
-  const size = NEW_BLOCK_SIZE[type]
+// A new block: centred and on top of everything, unless `place` says where
+// ({ box: { x, y, w, h } percent, z }). Its knobs start at their defaults.
+export function makeBlock(type, panels, id, place = {}) {
+  const seed = NEW_BLOCKS[type] || NEW_BLOCK_OTHER
+  const box = isDict(place.box)
+    ? normalizeBox(place.box)
+    : { x: round2((100 - seed.w) / 2), y: round2((100 - seed.h) / 2), w: seed.w, h: seed.h }
   return {
     id,
     type,
-    x: round2((100 - size.w) / 2),
-    y: round2((100 - size.h) / 2),
-    w: size.w,
-    h: size.h,
-    z: Math.min(RANGES.z[1], topZ(panels)),
+    ...box,
+    z: Number.isFinite(place.z) ? clamp(Math.round(place.z), ...RANGES.z) : Math.min(RANGES.z[1], topZ(panels)),
     hidden: false,
     locked: false,
-    props: normalizeProps(type, type === 'text' ? { ...TEXT_DEFAULTS, text: NEW_TEXT } : { ...IMAGE_DEFAULTS }),
+    props: normalizeProps(type, { ...knobDefaultsFor(type), ...seed.props }),
   }
 }
 
