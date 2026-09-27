@@ -44,7 +44,6 @@ import SecondClockPanel from '../panels/SecondClockPanel.jsx'
 import DatePanel from '../panels/DatePanel.jsx'
 import DayCountPanel from '../panels/DayCountPanel.jsx'
 import { dayCount, dayFromKey } from '../lib/dates.js'
-import { dateKey } from '../../../lib/countdown.js'
 // --- end blocks and clocks ---
 import { knobDefaults } from '../panels/schemas.js'
 import SpecPanel, { SpecScrims } from './SpecPanel.jsx'
@@ -317,15 +316,15 @@ export default function SpecBoard({ d, layoutId, className, children }) {
   // count, no box (the editor keeps it, with a note). ---
   const dayCountPanel = shown.find((p) => p.type === 'daycount') || null
   const dayCountShow = dayCountPanel ? knobsOf(dayCountPanel).show : null
-  const todayKey = d.now instanceof Date && !Number.isNaN(d.now.getTime()) ? dateKey(d.now) : ''
+  const dayCountKey = d.now instanceof Date && !Number.isNaN(d.now.getTime()) ? dateKey(d.now) : ''
   const schoolSettings = d.settings?.school
   const schoolCalendar = d.schoolCalendar
   const dayCountValue = useMemo(
     () =>
       dayCountShow
-        ? dayCount(dayCountShow, { now: dayFromKey(todayKey), school: schoolSettings, calendar: schoolCalendar })
+        ? dayCount(dayCountShow, { now: dayFromKey(dayCountKey), school: schoolSettings, calendar: schoolCalendar })
         : null,
-    [dayCountShow, todayKey, schoolSettings, schoolCalendar]
+    [dayCountShow, dayCountKey, schoolSettings, schoolCalendar]
   )
   if (!EDIT_MODE && dayCountPanel && !dayCountValue) {
     ruledOut = ruledOut ? `${ruledOut} daycount` : 'daycount'
