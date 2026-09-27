@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-26
-version: 7.8
+modified: 2026-09-27
+version: 7.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -87,7 +87,7 @@ refresh, resolve the flags. Full flow:
 
 ## Active design topics (in discussion)
 
-### Panels and controls (chunks 1 and 2 BUILT 2026-09-26; chunk 5's hub half BUILT)
+### Panels and controls (chunks 1 to 4 BUILT 2026-09-26/27; chunk 5's hub half BUILT)
 
 The layout editor's next round, decided against Justin's DAKboard screens:
 generic element styles on every panel (hide, size, weight, colour, spacing,
@@ -100,9 +100,10 @@ above a gradient card; Up next, Day list, Week grid and Month grid calendar
 views; shape and clock blocks; Home Assistant panels.
 Chunks 1 to 5 with sizes in `docs/designs/panels-and-controls.md`.
 
-**Built and deployed to the hub 2026-09-26.** At 12:49 (build `2fcca07`):
-chunk 1, the editor foundations (element styles, box v2, fonts, visibility
-rules, multi-select, copy and paste style; as built in
+**Built and deployed to the hub 2026-09-26 and 2026-09-27.** At 12:49 on
+2026-09-26 (build `2fcca07`): chunk 1, the editor foundations (element
+styles, box v2, fonts, visibility rules, multi-select, copy and paste
+style; as built in
 `docs/designs/layout-editor.md`, "As built, chunk 1"); chunk 2's hub half,
 one weather feed at `GET /api/weather`, on WeatherKit with Open-Meteo as the
 automatic fallback; chunk 5's hub half, the Home Assistant layer (connected,
@@ -110,13 +111,20 @@ automatic fallback; chunk 5's hub half, the Home Assistant layer (connected,
 (build `0f13224`): the rest of chunk 2, the screens on the hub's feed, the
 Hourly forecast, Conditions, Rain chance and Weather alert panels, the
 forecast's Bars style, Apple's mark, the Art above countdown tiles with a
-`color:` marker, and the single Countdown panel. See Recently Shipped.
-**Chunk 2 is done** but for small follow-ups (Shared / infrastructure: the
-hub's travel default, the weather panels follow-ups, shrink by default,
-the WeatherKit alert spot-check). **Next:** chunk 3, the calendar views
-(Up next, Day list, Week grid, Month grid); then chunk 4, blocks and
-clocks. Chunk 5's panels follow the first real Home Assistant action with
-Justin and the dashboard PIN.
+`color:` marker, and the single Countdown panel. At 01:34 on 2026-09-27
+(build `88877f9`): chunk 3, the calendar views (Up next, Day list, Week
+grid, Month grid, DAKboard's calendar options as knobs on every calendar
+panel, the agenda included, and a hub window from 31 days back to 60
+ahead), and chunk 4, blocks and clocks (the shape block, the flip clock as
+a panel, an analog clock, a second clock, a date and a day count), with
+the editor taking its block types from the app. See Recently Shipped.
+**Chunks 1 to 4 are done** but for small follow-ups (Shared /
+infrastructure: the hub's travel default, the weather panels follow-ups,
+shrink by default, the WeatherKit alert spot-check, a screen's 12 or 24
+hour setting, the month grid past the hub's window, the second clock as a
+block). **What remains of the round:** chunk 5's panels, after the first
+real Home Assistant action with Justin and the dashboard PIN; then the
+ideas (the backlog's and the STATUS Ideas Shelf).
 
 Topics we are actively talking through. Each gets its detail captured per-topic
 (inline here, or spun out to `docs/designs/<topic>.md` if it grows). Summary +
@@ -133,8 +141,9 @@ registry. All four steps are built and deployed: steps 1 and 2 on
 day-part tabs, the Board as a spec layout, history, copy to another screen)
 overnight 2026-09-24/25. What is left is polish: "Layout editor nits" under
 Shared / infrastructure. Chunk 1 of the next round (Panels and controls,
-above) extended it on 2026-09-26. Design and as-built record:
-`docs/designs/layout-editor.md`.
+above) extended it on 2026-09-26, and chunk 4 on 2026-09-27 (block types
+from the app, the shape block, panels of unknown types kept as stored).
+Design and as-built record: `docs/designs/layout-editor.md`.
 
 ### Mixtape: cassette deck Now Playing (BUILT 2026-09-24, on the TV, in review)
 
@@ -673,13 +682,46 @@ progress bar). Remaining:
   countdowns use Art above (the default tile style is still Card). Design:
   `docs/designs/panels-and-controls.md`, "As built: the app half and the
   tiles".
+- **Screen 12 or 24 hour setting** (TODO, from chunk 3, 2026-09-27) - the
+  calendar views' Time format defaults to Auto, which means the screen's
+  own 12 or 24 hour setting, and no screen has one yet, so Auto reads
+  12-hour everywhere. Add a per-screen setting (on-screen Settings and the
+  dashboard's screen card) and hand it to the calendar panels as
+  `screenHour24`, the prop they already take (`Entry/SpecBoard.jsx` passes
+  none today). Design: `docs/designs/panels-and-controls.md`, chunk 3,
+  "The shared options".
+- **Month grid past the hub's window** (POLISH, from chunk 3, 2026-09-27) -
+  the month grid is always six weeks, and the hub serves 60 days ahead and
+  31 back, which a grid can outrun: the next month's grid needs up to 73
+  days ahead (its trailing days in the first 4 to 13 days of a month, and
+  the next month's own last day or two on the 1st of every month but
+  January and February, and on July 2 and December 2), the current
+  month's up to 36 back (a few leading days in the last days of some
+  months). Those days show as unknown, never empty; with Other months off
+  only the next month's own last day or two are affected. A window of 36
+  days back and 73 ahead would cover every grid (a bigger Google fetch,
+  every 5 minutes; the countdowns and the headline would not change). The
+  caps live in three places: `frameserver/lib/googleCalendar.mjs`
+  (`WINDOW_DAYS`, `PAST_DAYS`), `code/src/hooks/calendarWindow.js`
+  (`MAX_DAYS`, `MAX_PAST`) and `lib/calendarViews.js` (`HUB_MAX_DAYS`,
+  `HUB_MAX_PAST`). Design: `docs/designs/panels-and-controls.md`, chunk 3,
+  "The month grid at the hub's edges".
+- **Second clock as a block** (DECISION, from chunk 4, 2026-09-27) - the
+  second clock is a panel, so a layout holds one other time zone. If a
+  board wants several (the grandparents, a trip), make it a block like the
+  shape: a `TYPE_TABLE` row of `kind: 'block'` in `layoutSpec.js`, its
+  knobs unchanged; the editor takes any block type the app names since
+  chunk 4. Justin's call whether one is enough. Design:
+  `docs/designs/panels-and-controls.md`, chunk 4.
 - **Kitchen Pi and Apple TV not redeployed on 2026-09-26** (TODO, with the
   next Pi deploy) - that day's deploys were the hub only (builds `2fcca07`
-  at 12:49 and `0f13224` at 15:31). The kitchen Pi serves its own bundle
-  (`812242f`, 2026-09-25) and shows Framed Today: chunk 1's styles and
-  rules matter there only once it shows a spec layout, but its Framed Today
-  and the slideshow's time widget still fetch Open-Meteo themselves, with
-  no Apple mark, where the Echos now read the hub's WeatherKit feed. The
+  at 12:49 and `0f13224` at 15:31), and so was 2026-09-27's (`88877f9` at
+  01:34: the calendar views, blocks and clocks). The kitchen Pi serves its
+  own bundle (`812242f`, 2026-09-25) and shows Framed Today: chunk 1's
+  styles and rules, and the new panels of chunks 2 to 4, matter there only
+  once it shows a spec layout, but its Framed Today and the slideshow's
+  time widget still fetch Open-Meteo themselves, with no Apple mark, where
+  the Echos now read the hub's WeatherKit feed. The
   next `./deploy.sh pi` brings the kitchen level (its 8 am icon then shows
   the hour from 8, as on the Echos). The Apple TV reads nothing new
   (`/api/weather` is there for it later).
@@ -722,6 +764,51 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-27 - A day count that cannot be counted drops its box, like
+  the alert banner.** School days left needs a last day of school ahead
+  (the dashboard's `shared.school.lastDay` while it is not past, else the
+  school calendar's). Without one a screen draws no box at all, rather
+  than a blank or a guess, the rule the Weather alert already follows with
+  no alert in force; the layout editor keeps the box, with "No last day of
+  school yet", so it can be placed. Design:
+  `docs/designs/panels-and-controls.md`, chunk 4.
+- **2026-09-27 - The second clock is a panel, one per layout.** Like the
+  other clocks, the date and the day count, it is a functional panel (its
+  id is its type), so a layout holds one other time zone. A board that
+  wants several would need it as a block, as the shape is (BACKLOG,
+  "Second clock as a block"). Design:
+  `docs/designs/panels-and-controls.md`, chunk 4.
+- **2026-09-27 - The layout editor never drops a panel of a type it does
+  not know.** The editor now takes its block types from the app in its
+  preview, so it can meet a type that app does not know: a shape saved by
+  a newer build, opened against an older one. Such a panel is kept
+  byte-identical and in its place, listed dimmed as "not supported by this
+  app", never edited and never dropped on save; the one thing to do with
+  it is Remove. This protects every type, not only shapes. Design:
+  `docs/designs/layout-editor.md`, "As built, chunk 4 and the shape
+  block".
+- **2026-09-27 - Merging shared events is a screen option, drawn from the
+  hub's `alsoOn`.** The plan put consolidation on the hub. As built, the
+  hub keeps listing an invitation between two listed calendars once (the
+  same iCalUID and start, from the first calendar in the registry's
+  order), as it always has, and now says which other calendars it was on
+  (`alsoOn`). Each calendar panel has Merge shared events, off by default:
+  on, it folds in `alsoOn` and also merges copies with the same title,
+  start and end on different calendars, drawing every calendar's colour, a
+  stripe each. Off, the screens draw what they always did. Design:
+  `docs/designs/panels-and-controls.md`, chunk 3.
+- **2026-09-27 - The hub's calendar window is 31 days back and 60 ahead.**
+  One Google fetch per calendar, every 5 minutes, covers local midnight 31
+  days back to 60 days ahead, so a week grid from Monday and a month grid
+  have their past days. `GET /api/calendar` serves `days` up to 60 and
+  `past` up to 31 from it and says which dates it covers (`from`, `to`). A
+  screen asks for the union of what its calendar panels need, never less
+  than the six days it always asked for, so a screen without the new
+  views makes the same request as before. The countdowns and the headline
+  are unchanged, still 60 days ahead. A month grid can outrun the window at
+  its edges; those days show as unknown, never as empty (BACKLOG, "Month
+  grid past the hub's window"). Design:
+  `docs/designs/panels-and-controls.md`, chunk 3.
 - **2026-09-26 - Apple's weather mark cannot be styled or hidden.** The
   WeatherKit licence asks for the Apple Weather mark wherever Apple's data
   shows, so the mark carries `data-edit="attribution"` (the editor can
@@ -1094,6 +1181,47 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-27 - Chunk 4, blocks and clocks, with the editor's shape
+  support** (hub deployed 01:34, build `88877f9`; the Echos take it on
+  their next reload; the kitchen Pi and the Apple TV were not
+  redeployed). Six new types for the spec layouts, none on a default
+  board: the shape, a block (any number) for a card behind a group, a band
+  of colour or a divider (Card, Accent or a custom fill with the box's
+  gradient, border, shadow, blur and radius, or a 2 px line); the flip
+  clock as a panel, as big as its box allows; an analog clock (minimal,
+  classic or numerals, an optional seconds hand); a second clock for
+  another time zone (London by default: its city, its date and "+8h"); the
+  date alone, in five formats; and a day count (the week of the year, the
+  day of the year, the days left, or the school days left to the last day:
+  163 on Sep 26, the box dropped while there is no last day). The editor
+  takes its block types from the app: Add shape behind the selection
+  (sized to it and just behind it, a card behind a group) or in front; the
+  shape's inspector; align, distribute, paste style, delete and undo on
+  shapes; and a panel of a type the previewed app does not know kept
+  byte-identical, dimmed, never dropped on save. 37 new app tests, 9 in
+  the editor; 0 px at the defaults. Design:
+  `docs/designs/panels-and-controls.md`, chunk 4, and
+  `docs/designs/layout-editor.md`, "As built, chunk 4 and the shape
+  block". Shots: `_review/layout-editor/blocks-*`, `shape-editor-*`.
+- **2026-09-27 - Chunk 3, the calendar views** (hub deployed 01:34, build
+  `88877f9`). Four new panels for the spec layouts, none on a default
+  board: Up next (the next event large with "in 40 min", then the rest by
+  day), Day list (today or tomorrow, all day first), Week grid (a column a
+  day and a row an hour from today, Monday or Sunday, overlaps side by
+  side, an all-day band, a line at the time now) and Month grid (this
+  month or next, dots or titles). DAKboard's calendar options as knobs on
+  each panel they fit, the agenda included: location (the place name
+  only), end time, description, legend, empty days, upcoming only, dim
+  finished, merge shared events, 12 or 24 hour (Auto: 12 until a screen
+  setting exists), colour by calendar or none; at its defaults the agenda
+  draws the same DOM. Hub: one Google window from 31 days back to 60
+  ahead, `GET /api/calendar?days=1..60&past=0..31` with `from`, `to` and
+  each event's `alsoOn`; a screen asks for the union its panels need,
+  never less than the six days it always did. Six weeks of demo events. 42
+  new app tests and 14 on the hub (the app's suite is 190, the hub's 504);
+  every board 0 px at the defaults. Design:
+  `docs/designs/panels-and-controls.md`, chunk 3. Shots:
+  `_review/layout-editor/cal-*`.
 - **2026-09-26 - Chunk 2, the app half: the screens on the hub's weather
   feed, four weather panels, Apple's mark** (hub deployed 15:31, build
   `0f13224`; the Echos take it on their next reload; the kitchen Pi and
@@ -1484,9 +1612,9 @@ Newest first.
 - **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
-- **Branches not on GitHub (2026-09-26)** - `main` matches `origin/main`
-  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (95
-  commits over `main` at `0f13224`, with Mixtape and the Today layouts
+- **Branches not on GitHub (2026-09-27)** - `main` matches `origin/main`
+  (2026-08-18). `feature/mixtape` (45 commits) and `feature/echo-hub` (105
+  commits over `main` at `88877f9`, with Mixtape and the Today layouts
   inside it) exist only locally. Merging waits on the Mixtape label pick;
   pushing does not have to.
 - **Secrets on the Mac and the hub** - `~/.config/smart-display/` holds

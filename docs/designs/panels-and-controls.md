@@ -1,22 +1,27 @@
 ---
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
-modified: 2026-09-26
-version: 1.4
+modified: 2026-09-27
+version: 1.5
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, countdowns, countdown-tiles, home-assistant, echo-show, frameserver]
+tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, echo-show, frameserver]
 ---
 
 # Panels and controls
 
-**Status: chunks 1 and 2 built and deployed 2026-09-26. Chunk 1 went to the
-hub at 12:49 (build `2fcca07`; as built in `layout-editor.md`, "As built,
-chunk 1 (2026-09-26)") with the hub halves of chunk 2 (the one weather
-feed, on Apple WeatherKit) and chunk 5 (Home Assistant, actions off).
-Chunk 2's app half (the screens on the feed, four weather panels, the
+**Status: chunks 1 to 4 built and deployed. Chunk 1 went to the hub
+2026-09-26 at 12:49 (build `2fcca07`; as built in `layout-editor.md`, "As
+built, chunk 1 (2026-09-26)") with the hub halves of chunk 2 (the one
+weather feed, on Apple WeatherKit) and chunk 5 (Home Assistant, actions
+off). Chunk 2's app half (the screens on the feed, four weather panels, the
 forecast's Bars style, Apple's mark) and the countdown tiles followed at
-15:31 (build `0f13224`). Not built: chunk 3 (the calendar views, next),
-chunk 4 and chunk 5's panels.** The plan of record for the layout editor's
+15:31 (build `0f13224`). Chunk 3 (the calendar views) and chunk 4 (blocks
+and clocks, with the editor's shape support) went to the hub 2026-09-27 at
+01:34 (build `88877f9`); as built under each below, and the editor's half
+of chunk 4 in `layout-editor.md`, "As built, chunk 4 and the shape block
+(2026-09-27)". Not built: chunk 5's panels, which follow the first real
+Home Assistant action. What is left of chunks 3 and 4 is at the end of
+chunk 4.** The plan of record for the layout editor's
 next round, decided in conversation with Justin against his DAKboard
 screens (calendar, time, weather and countdown settings). Builds on
 `layout-editor.md` (Contract v2, panel schemas, day-part variants) and
@@ -534,7 +539,20 @@ arrive through the editor's Add panel:
   style on it is dropped; the Minnesota event wants a `color:` line and the
   backpack PNG a clean transparent area.
 
-## Chunk 3: calendar views
+## Chunk 3: calendar views (BUILT, deployed 2026-09-27)
+
+Built and deployed with the hub 2026-09-27 01:34 (build `88877f9`; chunk 3
+is commit `61d3880`). The as-built record is "As built: the calendar views
+(2026-09-27)", below the plan. Where the build differs from the plan:
+
+- The Google window reaches back as well as ahead (31 days back, 60
+  ahead), so a week from Monday and a month grid have their past days.
+- Consolidation is a screen option on each panel, not a hub step. The hub
+  already listed an invitation between two listed calendars once; it now
+  says which other calendars it was on (`alsoOn`), so a panel that
+  consolidates can draw every calendar's colour.
+
+The plan as written:
 
 Hub: the `days` cap on `GET /api/calendar` rises from 14 to 60 (the Google
 window is already 60 days); consolidation of the same event across two
@@ -548,11 +566,340 @@ end times), **Week grid** (seven columns, hour rows, all-day band on top),
 knobs: location, end time, description, calendar legend, show empty days,
 future events only, consolidate, 12 or 24 hour, dim past, colour by calendar.
 
-## Chunk 4: blocks and clocks
+### As built: the calendar views (2026-09-27)
+
+Deployed with the hub 2026-09-27 01:34 (build `88877f9`); the Echos take it
+on their next reload (every deploy reloads them, and each then waits for a
+tap). The kitchen Pi and the Apple TV were not redeployed. None of the four
+views is on a default board; they arrive through the editor's Add panel.
+
+#### The hub's window
+
+- `frameserver/lib/googleCalendar.mjs` fetches one window per calendar,
+  from local midnight 31 days back (`PAST_DAYS`) to local midnight 60 days
+  ahead (`WINDOW_DAYS`; `fetchWindow`), still every 5 minutes, at startup
+  and when the registry's calendar list changes. Before, the window was
+  today to 60 days ahead.
+- `GET /api/calendar?days=N&past=P` (`calendarQuery`): `days` 1 to 60 ahead
+  (it was 1 to 14), default 3; `past` 0 to 31 back, default 0; whole
+  numbers, anything else reads as the default. The response gains `past`,
+  and `from` and `to`, the local dates its events cover (`to` exclusive).
+  Every event gains `alsoOn`, `[{ calendarId, calendarLabel, color }]`: the
+  other listed calendars the same invitation was on, `[]` for most. The hub
+  lists such an invitation once (same iCalUID and start), from the first
+  calendar in the registry's order, as it always has. The shape:
+  `entry-board.md`, "`GET /api/calendar?days=N&past=P`".
+- Unchanged: the headline, and the countdowns, which still look 60 days
+  ahead from today whatever the query. The disk cache
+  (`calendar-cache.json`) gains an informational `window` key, and a file
+  without it reads as before. `/healthz.calendar.events` now counts the
+  whole window: 66 live after the deploy, when `?days=60&past=31` answered
+  `from` 2026-08-27 and `to` 2026-11-26.
+
+#### The screens' window
+
+- `hooks/useCalendar.js` asks the hub for the union of what the panels on
+  screen want, never less than `days=6` (the agenda's own need), so a
+  screen without the new views makes exactly the request it always made. A
+  view says what it needs with `wantCalendarWindow({ days, past })`, or the
+  `useCalendarWindow` hook, which returns its release; `SpecBoard` wants
+  its board's union (`lib/calendarViews.js`, `boardCalendarNeed`): Up next
+  the hours it looks ahead, Day list one or two days, Week grid its days
+  before and after today, Month grid its 42 days (clamped to the hub's
+  caps), and the agenda 14 days when it skips empty days. A wider union
+  asks again at once; a narrower one waits for the next poll (every 60 s).
+  The pure parts are `hooks/calendarWindow.js`.
+- The snapshot gains `range`, `{ from, to }` as the hub answered. A view
+  never calls a day outside it empty: such a day is drawn with no events
+  and no marks, and "Nothing this week" or "No events this month" shows
+  only when the whole week or month is inside the range.
+
+#### The panels
+
+| type | label | starting box (x, y, w x h, %) | minimum (%) | "Too small" under | box |
+|---|---|---|---|---|---|
+| `upnext` | Up next | 34, 25, 32 x 50 | 12 x 12 | 160 x 100 px | card |
+| `daylist` | Day list | 36, 15, 28 x 70 | 10 x 14 | 150 x 110 px | card |
+| `weekgrid` | Week grid | 3, 20, 94 x 70 | 30 x 24 | 360 x 180 px | card |
+| `monthgrid` | Month grid | 20, 6, 60 x 88 | 20 x 24 | 240 x 200 px | card |
+
+Each draws in `PanelFrame`, sizes its type through `--tl-knob-scale`, marks
+its parts with `data-edit` keys, and keeps its "Too small" rule in its own
+stylesheet (`panels/UpNextPanel.css` and the others) rather than
+`Entry/SpecPanel.css`. The pure parts are `lib/calendarViews.js`; the
+colour bar, the dot and the legend are `panels/CalendarParts.jsx`. Each
+says "Calendar not connected" when the hub has no calendar, and nothing
+while the first answer is out.
+
+- **Up next** (`upnext`, `panels/UpNextPanel.jsx`): the next event large,
+  then the events after it grouped under their day ("Tomorrow",
+  "Saturday"). The next is the first timed event not yet over (one running
+  now included), a long one (24 hours or more: a trip) only when nothing
+  else is coming, else the first all-day event. Under its title, how long
+  until it starts ("in 40 min", "in 2 hr 5 min", "Tomorrow", "Saturday")
+  and its time; while it runs, "Now" and "until 6:15 pm". Knobs: `count` 0
+  to 6 (3), the rows after the next; `hoursAhead` 12 to 72 (48, in steps
+  of 6); `nextSize`, `rowSize`. Elements: title, updated, next, nextIn,
+  nextTime, nextLocation, description, rows, day, row, time, legend, empty
+  ("Nothing coming up"); past the rows, "+n more".
+- **Day list** (`daylist`, `panels/DayListPanel.jsx`): one day, today or
+  tomorrow, under its long date ("Sunday, September 27"): all-day and long
+  events first, then the timed ones with their start, and the end under it
+  with End time on; an event across days adds "through Mon" or "until Tue
+  6:00 pm". Knobs: `day` today or tomorrow; `maxRows` 3 to 14 (8),
+  finished events giving up their places first, then "+n more"; `rowSize`,
+  `headerSize`. Elements: title, updated, header, allday, rows, row, time,
+  location, description, legend, empty ("Nothing today", "Nothing
+  tomorrow").
+- **Week grid** (`weekgrid`, `panels/WeekGridPanel.jsx`): a column per day
+  and a row per hour, each timed event a block placed by its start and
+  length, in its calendar's colour. Events that overlap stand side by side,
+  three lanes at most, the rest as "+n"; all-day events, and timed ones of
+  24 hours or more, are bars in a band across the top (three rows, then
+  "+n" under a day); a line marks the time now on today's column. A timed
+  event is cut at midnight into a block per day, and a part outside the
+  hours is pinned to the grid's edge with its own time on it and a dashed
+  edge. The header says "Next 7 days" from today, else "This week". Knobs:
+  `startDay` today, monday or sunday; `days` 5 to 7 (7); `startHour` 5 to
+  12 (7) and `endHour` 17 to 24 (21); `showAllDay` and `hourLabels` (on);
+  `compact` (off; on, shorter rows and an event on one line); `size`.
+  Elements: title, updated, dayHeader, hourLabel, allday, block, more,
+  nowLine, legend, empty ("Nothing this week").
+- **Month grid** (`monthgrid`, `panels/MonthGridPanel.jsx`): the current
+  month or the next as six weeks, today marked, each day's events as dots
+  in their calendars' colours (four, then "+n") or, where there is room
+  (the Echo Show 15), as titles with a short time ("5pm"). Knobs: `month`
+  current or next; `weekStart` sunday or monday; `mode` dots or titles;
+  `titlesPerDay` 1 to 4 (3), the rest as "+n"; `showOtherMonths` (on: the
+  days before and after, dimmed); `size`. Elements: title, monthLabel,
+  updated, weekday, day, dayNumber, dot, event, more, legend, empty ("No
+  events this month").
+
+#### The shared options
+
+DAKboard's calendar settings, as knobs on each panel they mean something to
+(`panels/schemas.js`, `CALENDAR_OPTIONS`). Every default is the agenda's
+behaviour before they existed.
+
+| option | label | default | what it does | Agenda | Up next | Day list | Week grid | Month grid |
+|---|---|---|---|---|---|---|---|---|
+| `showLocation` | Location | off | the place under an event | yes | yes | yes | yes | no |
+| `showEndTime` | End time | off | start and end, not only the start | yes | yes | yes | yes | no |
+| `showDescription` | Description | off | the first line of the description, countdown marker lines skipped | yes | yes | yes | no | no |
+| `legend` | Calendar legend | off | each calendar's colour and name, at the foot | yes | yes | yes | yes | yes |
+| `showEmptyDays` | Empty days | on | off: only days with events, looking up to 14 days ahead | yes | no | no | no | no |
+| `futureOnly` | Upcoming only | off | leaves out what is over (off, it stays, dimmed with Dim finished) | yes | no | yes | yes | yes |
+| `dimPast` | Dim finished | on | steps back what is over | yes (its own since Contract v2) | no | yes | yes | yes |
+| `consolidate` | Merge shared events | off | the same event on two calendars once, with both colours | yes | yes | yes | yes | yes |
+| `timeFormat` | Time format | auto | auto, 12h or 24h | yes (default 12h) | yes | yes | yes | yes |
+| `colorBy` | Colour by | calendar | calendar, or none (neutral bars and dots) | yes | yes | yes | yes | yes |
+
+- `consolidate` merges events from different calendars with the same title
+  (any case) that are all day on the same dates or timed with the same
+  start and end, and folds in the hub's `alsoOn`; the first copy is kept,
+  with every calendar's colour. Its colour bar is then a hard-edged stripe
+  per calendar and its dot is split left to right (`splitPaint`). Off, an
+  invitation the hub listed once shows its first calendar's colour, as
+  before.
+- `timeFormat` auto is the screen's own 12 or 24 hour setting when it has
+  one, else 12-hour. No screen has one yet, so auto reads 12-hour today;
+  the panels already take the setting as `screenHour24`, the hook point.
+  The agenda's own `timeFormat` gained Auto and keeps 12h as its default.
+- Places are shortened to the place name (`placeOf`): "McGilvra
+  Elementary, 1617 38th Ave E, Seattle, WA 98112" reads "McGilvra
+  Elementary"; a bare street address keeps its street.
+- The agenda gained all of them, with the elements location, description
+  and legend. At its defaults it draws the very same DOM (`agendaItems`
+  hands back the same objects when no option is on).
+- An exception to "never truncates": month titles and short week blocks
+  end in an ellipsis, because their cells cannot grow.
+
+#### The month grid at the hub's edges
+
+The month grid is always six weeks, 42 days, and asks for all of them,
+clamped to the hub's 60 days ahead and 31 back, which a grid can outrun:
+
+- The next month's grid can need up to 73 days ahead. In the first 4 to 13
+  days of a month its last days (the month after, drawn only with Other
+  months on) fall past the cap; on the 1st of every month but January and
+  February, and on July 2 and December 2, so do the next month's own last
+  day or two (61 or 62 days ahead).
+- The current month's grid can start up to 36 days back. In the last one
+  to five days of some months its first days (the month before, again only
+  with Other months on) fall past the 31-day cap; a Monday-start grid on
+  January 31, 2026 starts 33 days back.
+
+A day past the caps is drawn as unknown (no marks, and never counted
+toward "No events this month"), never as empty. Worked out from
+`calendarNeed` over 2026 and 2027. BACKLOG, "Month grid past the hub's
+window".
+
+#### The demo
+
+`?demo=1` carries six weeks of events (21 days back to 20 ahead) on two
+calendars: a week of regular things by weekday, one-offs, overlaps (four at
+5 pm three days out: two side by side and "+2" in the week grid), multi-day
+events (grandparents visiting, a nine-day fall break), a trip timed across
+three days, and one dinner on both calendars, for Merge shared events.
+Today and the next two days keep the original eight events, so the demo
+Entry board is unchanged (0 px).
+
+#### Verified
+
+- Pixel diffs against the build before (`4ebcfb5`), nothing set and every
+  board at its built-in default, frozen at Sun 2026-09-27 4:05 pm, software
+  raster, three loads per build: 0 px in every pair for the Entry board at
+  1920x1080 and 1280x800, its demo at 1920x1080, the Board at 1280x800 and
+  Briefing at 1920x1080. The demo Board at 1280x800 differs by up to 53 px
+  between two loads of either build (the edges of its SVG weather icons),
+  with pairs across the builds at 0. Both builds asked `?days=6`
+  (`_review/layout-editor/cal-diff-results.json`).
+- Tests: 42 new in the app (`lib/calendarViews.test.mjs` 36,
+  `hooks/calendarWindow.test.mjs` 6) and 14 on the hub
+  (`googleCalendar.test.mjs`); with chunk 4 the app's suite is 190 and the
+  hub's 504.
+- The editor's Add panel lists the four views and places one at its
+  starting box (`cal-editor-weekgrid-added-1600.png`).
+- Shots: `_review/layout-editor/cal-*`, indexed in that folder's README.
+
+## Chunk 4: blocks and clocks (BUILT, deployed 2026-09-27)
+
+Built in a worktree (`49ff04f` to `cfbf839`), merged as `ff1beb5` and
+deployed with the hub 2026-09-27 01:34 (build `88877f9`). The as-built
+record is "As built: blocks and clocks (2026-09-27)", below the plan; the
+editor's half (block types from the app, the shape in the editor, types it
+does not know kept as stored) is `layout-editor.md`, "As built, chunk 4 and
+the shape block (2026-09-27)". Where the build differs from the plan: the
+shape is one block with a Rectangle or Line kind rather than two blocks;
+the second clock is a panel, so one per layout; the date and the day count
+(week number, day of the year, days left, school days left) are panels.
+
+The plan as written:
 
 Shape and line blocks (fill, gradient, radius, blur), the flip clock as a
 panel, an analog clock, a second clock with its own time zone, a date-only
 block, week number and day X of Y.
+
+### As built: blocks and clocks (2026-09-27)
+
+Deployed with the hub 2026-09-27 01:34 (build `88877f9`); the kitchen Pi
+and the Apple TV were not redeployed. None of the six is on a default
+board: the shape arrives through the editor's Add shape, the rest through
+Add panel.
+
+| type | label | kind | starting box (x, y, w x h, %) | minimum (%) | "Too small" under | box |
+|---|---|---|---|---|---|---|
+| `shape` | Shape | block | 40, 44, 20 x 12 | 1 x 1 | never | none (its fill is the shape) |
+| `flipclock` | Flip clock | panel | 30, 35, 40 x 30 | 8 x 6 | 110 x 40 px | none (its own case) |
+| `analog` | Analog clock | panel | 40, 35, 20 x 30 | 4 x 6 | 48 x 48 px | none (its own face) |
+| `clock2` | Second clock | panel | 40, 43, 20 x 14 | 6 x 5 | 90 x 44 px | card |
+| `date` | Date | panel | 38, 44, 24 x 12 | 5 x 3 | 60 x 24 px | card |
+| `daycount` | Day count | panel | 42, 43, 16 x 14 | 5 x 5 | 70 x 50 px | card, centred |
+
+- **Shape** (`shape`, `panels/ShapeBlock.jsx`): a block like text and
+  image (`BLOCK_TYPES` in `layoutSpec.js`: any number per layout, ids
+  `shape-<4 hex>`), for a card behind a group of panels, a band of colour
+  or a divider. Knobs: `kind` Rectangle (`rect`, the default) or Line;
+  `fillPreset` Card (`surface`, the default: the layout's card at its
+  opacity, with the card's hairline), Accent, or Custom (the fill colour
+  under Fill and border, `bg.color`). A rectangle's look is the box's own
+  v2 props: fill, gradient, opacity, border, shadow, blur and radius
+  (`Entry/specStyles.js`, `shapeFill` and `boxLook`). A line is a 2 px line
+  across the middle of the box in the fill colour, at the fill opacity,
+  with the box's shadow; with Card it is drawn in the card's divider ink
+  (`--tl-rule`), since a card-coloured line would vanish on the dark
+  boards. A shape is never joined into a flush neighbour's card. Its only
+  element is its title.
+- **Flip clock** (`flipclock`, `panels/FlipClockPanel.jsx`): the Flip clock
+  layout's split-flap clock (`Clock/FlipClock.jsx`) in a box, as big as the
+  box allows and centred in it. The card height, `--tl-flip-u`, comes from
+  the box through container units where the engine has them, else from the
+  measured box (a ResizeObserver), both from `lib/clocks.js` `flipFit` and
+  within 0.1 px of each other. It keeps its black cards and cream numerals
+  whatever the layout's colours. Knobs: `hour24` (off; on, 00 to 23 and no
+  tab), `showMeridiem` (the AM / PM tab, on), `showDate` (on), `scale` 0.5
+  to 1.5 (1 fills the box; above it the box crops the clock). Elements:
+  title, hour, minutes, tab, date (FlipClock gained the markers; the Flip
+  clock layout draws the same as before, 0 px).
+- **Analog clock** (`analog`, `panels/AnalogClockPanel.jsx`): one SVG face,
+  scaled to the box's shorter side and placed by the box's align and
+  valign. Knobs: `style` Minimal (hour marks), Classic (the default: minute
+  marks too, tapered hands) or Numerals (1 to 12); `showSeconds` (off);
+  `handColor` Auto (the text colour, the seconds hand in the accent),
+  Accent or Text; `faceOpacity` 0 to 1 (1: the layout's card with its
+  hairline; 0, the marks and hands alone). The seconds hand runs its own
+  once-a-second timer, a hair past each second so it lands on the second;
+  with it off, nothing of its own runs. Elements: title, face, numerals,
+  hands.
+- **Second clock** (`clock2`, `panels/SecondClockPanel.jsx`): the time
+  somewhere else: a label over the time there, then its date and how far
+  ahead of or behind the house it is ("Sun, Sep 27" and "+8h"). Knobs:
+  `timezone` (an IANA zone, default `Europe/London`, checked with
+  `Intl.DateTimeFormat`; one this engine does not know shows the house's
+  own time, with a muted "?" after the label and no offset); `label` (up to
+  40 characters; empty, the zone's city); `hour24` (off); `showDate` (on);
+  `showOffset` (on: "+8h", "+5:30h", a minus sign for behind); `size`.
+  Elements: title, label, time, date, offset. A panel, so one per layout.
+- **Date** (`date`, `panels/DatePanel.jsx`): today's date alone, as large
+  as its box allows. Knobs: `format` long ("Saturday, September 26", the
+  default), medium ("Sat, Sep 26"), short ("9/26"), dayname ("Saturday")
+  or daynumber (a big 26 under a small Sep); `showYear` (off; never with
+  the day name alone); `size`; and the universal `align`, declared in its
+  schema so the inspector shows it here, centred by default. A long or
+  medium date breaks after the weekday's comma, and nowhere else, when two
+  lines give bigger type. Elements: title, text, weekday, month, day,
+  year, so a part can be styled apart (the day in the accent).
+- **Day count** (`daycount`, `panels/DayCountPanel.jsx`): a number and a
+  small label under it. Knobs: `show` Week of the year (the default: the
+  ISO week, weeks starting Monday), Day of the year ("269" over "Day of
+  365"), Days left this year ("96", "Days left in 2026") or School days
+  left; `label` (up to 60 characters; empty, the count's own); `size`.
+  School days count today while it is one, and the last day itself, by the
+  morning countdown's own test for a school day (`isNoSchoolToday`: the
+  school's weekdays, the dashboard's no-school dates, the school calendar's
+  breaks and session bounds). The last day is `shared.school.lastDay` while
+  it is not past, else the school calendar's first last day from today on
+  (June 21, 2027 gives 163 on Sat Sep 26). A count that cannot be worked
+  out (no last day of school ahead) drops its box on a screen, as the
+  alert banner does with no alert; the editor keeps it, with "No last day
+  of school yet", so it can be placed. Worked out once a day. Elements:
+  title, number, label.
+- The clocks read the layout's one `now` (`useTodayData`, once a second);
+  the analog seconds hand is the only other timer. `useTodayData` gains
+  `schoolCalendar`, the hub's `/api/schoolcal` (`noSchoolRanges`,
+  `firstDays`, `lastDays`; null until it answers, live in demo mode). The
+  pure parts are `lib/clocks.js` (zones and offsets, the hands' angles, the
+  flip clock's fit) and `lib/dates.js` (the date formats, the ISO week, the
+  day of the year, the school days left).
+- Tests: 37 new in the app (`lib/clocks.test.mjs` 14, `lib/dates.test.mjs`
+  9, `blocksAndClocks.test.mjs` 14), green in five machine time zones.
+  Pixel diffs with none of the new types on a board: 0 px on the Entry
+  board, the Board, the Entry board in edit mode and the Flip clock
+  layout.
+- The merge with chunk 3: both touched `Entry/SpecBoard.jsx`; a duplicate
+  `dateKey` import and a `todayKey` clash (the day count's key is now
+  `dayCountKey`) were resolved in `c700150`.
+- Shots: `_review/layout-editor/blocks-*` (the app) and `shape-editor-*`
+  (the editor), indexed in that folder's README.
+
+### What remains of chunks 3 and 4
+
+- **A screen's own 12 or 24 hour setting.** `timeFormat: 'auto'` on the
+  calendar views means the screen's setting, and no screen has one, so
+  auto reads 12-hour. A per-screen setting handed to the panels as
+  `screenHour24` (they take it already) would give auto a meaning.
+  BACKLOG, "Screen 12 or 24 hour setting".
+- **The month grid at the hub's edges.** Days past 60 ahead or 31 back
+  show as unknown: the next month's trailing days early in a month, the
+  next month's own last day or two on the 1st, and a few leading days of
+  the current month's grid late in some months ("The month grid at the
+  hub's edges", above). BACKLOG, "Month grid past the hub's window".
+- **The second clock as a block**, if a board wants more than one other
+  time zone: as a panel it is one per layout, and the editor takes any
+  block type the app names since this chunk. BACKLOG, "Second clock as a
+  block".
+- **A real WeatherKit alert**, still open from chunk 2: BACKLOG,
+  "WeatherKit alert spot-check".
 
 ## Chunk 5: Home Assistant (hub half BUILT 2026-09-26; panels not built)
 
@@ -696,5 +1043,6 @@ returned, attribution URL present.
 ## Sizes
 
 Chunk 1 L; chunk 2 M plus S per panel; chunk 3 L; chunk 4 S each; chunk 5 M.
-Order: 1, 2, 3, then 4 and 5 as their inputs allow. Chunks 1 and 2 are done
-(2026-09-26); chunk 3 is next.
+Order: 1, 2, 3, then 4 and 5 as their inputs allow. Chunks 1 and 2 were
+done 2026-09-26 and chunks 3 and 4 on 2026-09-27; chunk 5's panels remain,
+after the first real Home Assistant action.

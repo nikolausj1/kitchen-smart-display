@@ -1,10 +1,10 @@
 ---
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
-modified: 2026-09-26
-version: 1.7
+modified: 2026-09-27
+version: 1.8
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules]
+tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules, block-types, shape]
 ---
 
 # Layout editor
@@ -14,13 +14,15 @@ and 4 (panel knobs, spec v2, sub-elements, smart guides, day parts, the
 Board, history, copy) deployed to the hub 2026-09-24 23:45 (build
 `309eb66`). The next round's editor foundations (`panels-and-controls.md`,
 chunk 1: element styles, box v2, fonts, visibility rules, multi-select, copy
-and paste style) deployed to the hub 2026-09-26 12:49 (build `2fcca07`).**
-Open a screen's card on the dashboard and press Edit layout (it opens the
-Today layout that screen is on), or go to
+and paste style) deployed to the hub 2026-09-26 12:49 (build `2fcca07`).
+Its chunk 4 half (block types from the app, the shape block, panels of
+types the app does not know kept as stored) deployed to the hub 2026-09-27
+01:34 (build `88877f9`).** Open a screen's card on the dashboard and press
+Edit layout (it opens the Today layout that screen is on), or go to
 `http://nuc.local:8095/editor/?device=echo-show15`. What was built, and where
-it differs from the contracts: "As built" under each contract below, and "As
-built, chunk 1 (2026-09-26)" at the end. Review shots:
-`_review/layout-editor/`.
+it differs from the contracts: "As built" under each contract below, then
+"As built, chunk 1 (2026-09-26)" and "As built, chunk 4 and the shape block
+(2026-09-27)" at the end. Review shots: `_review/layout-editor/`.
 
 A what-you-see-is-what-you-get editor for the screen layouts, used from a
 MacBook Pro, so "move it 10 pixels, make the font smaller, shrink the image"
@@ -825,3 +827,86 @@ changed.
 - The missing faces: Inter 500, the 300 faces of Roboto, Barlow Condensed
   and IBM Plex Mono, and 600 for Roboto and IBM Plex Mono.
 - Removing the editor's contract fallbacks.
+
+## As built, chunk 4 and the shape block (2026-09-27)
+
+The editor's half of `panels-and-controls.md`, chunk 4 ("Blocks and
+clocks"), built on `feature/echo-hub` (commit `88877f9`, over the chunk 3
+and 4 app work) and deployed to the hub 2026-09-27 01:34 (build
+`88877f9`). With chunks 1 to 4 built, this is the editor's as-built record
+for chunk 4; the six new types themselves are in `panels-and-controls.md`,
+"As built: blocks and clocks (2026-09-27)". Chunk 3 needed nothing of the
+editor: Add panel lists whatever functional types the app sends, and it
+offered the four calendar views as it was
+(`_review/layout-editor/cal-editor-weekgrid-added-1600.png`). Contract v2
+and chunk 1 stay the reference; nothing stored changed shape.
+
+### Block types come from the app
+
+- The type registry (`editor/schema.js`) no longer takes text and image as
+  the only blocks. Which types the app knows, and which of them are blocks
+  (any number per layout, ids `<type>-<4 hex>`), come first from the app's
+  `sd-edit:ready`: its `panelTypes`, each carrying its `kind` (`panel` or
+  `block`), or a `blockTypes` list when a ready sends one (none does yet; a
+  ready naming only its blocks keeps the types known so far). Then the
+  app's `layoutSpec.js` as bundled with the editor (`PANEL_TYPE_LIST` and
+  the new `BLOCK_TYPES`, registered by `appSpec.js` at load), then the
+  built-in Contract v1 and v2 types, with text and image the blocks. The
+  app's labels name the types ("Shape", "Flip clock"). Every other type the
+  app knows is a functional panel, at most once per layout. The bridge did
+  not change: `panelTypes` already carried `kind`.
+- Adding blocks: Add text and Add image put their block in the middle of
+  the canvas, in front, at their own sizes, as before. Every other block
+  type the app has gets its own button, a small menu (Add shape):
+  - "Add shape behind selection": sized to the selection's area (the union
+    of the selected boxes, in percent) and placed in the list just before
+    the rearmost selected panel, with that panel's z, so nothing else
+    moves: the card behind a group. With nothing selected it goes to the
+    back of the layout. The status line says what it went behind.
+  - "Add shape in front": the app's own starting box (`newBlock`: 40, 44,
+    20 x 12 %), above everything (z one over the highest).
+- The shape's inspector: Position and size, Appearance, Fill and border,
+  Block title, Show when, State and "Shape settings" (Shape, Fill), with
+  Delete where a panel has Hide. The Type section (font, text colour,
+  vertical align) is left out for any type whose only element is its title
+  (the shape); that title still takes an element style, and it is all the
+  shape's elements tree holds.
+- Align, distribute, match, copy and paste style, Delete (the key and the
+  button) and undo cover shapes as any block. Paste style onto a shape
+  carries the box look (the universal and box v2 props, the rule, the
+  title's element style), never another type's knobs: its Shape and Fill
+  come only from another shape.
+
+### Types the app does not know are kept as stored
+
+- A panel of a type the app in the preview does not know (a shape saved by
+  a newer app and opened against an older build; any type, not only
+  shapes) is kept byte-identical and in its place in the list:
+  `normalizePanel` copies it as stored (`keepAsStored`, `editor/spec.js`)
+  rather than dropping it, and no edit touches it, so no save drops it.
+- The layers list it dimmed, "Shape (not supported by this app)", with no
+  eye, lock or restacking, and a restack of the others leaves its z alone;
+  the stage draws no box or handles for it. Selected, the inspector says
+  what it is, that it stays exactly as saved and that a build that knows
+  the type shows it again, and where it was saved, with Remove (Delete
+  removes it too: hiding it would change it).
+
+### Verified
+
+- Tests: 9 new in the editor (`editor/blockTypes.test.mjs`): the bundled
+  blocks, a new shape from the app clear of taken ids, a stored shape and
+  an unknown type saved byte-identical, an app without shapes, a block
+  only the ready knows, a ready naming its blocks outright or only its
+  blocks, behind the selection, and paste style onto a shape.
+- Against a mock hub, the PATCH bodies of five saves: add (the shape just
+  before the weather group with its z, over the group's area), style (a
+  custom fill, a diagonal gradient, a border, a blur; every other panel
+  byte-identical), an untouched round trip after a reload (the shape
+  byte-identical, only the nudged clock changed), remove (the list
+  otherwise as stored), and a save from an app build without shapes (the
+  shape byte-identical, in its place). With them: align, distribute and
+  paste style on a shape, each undone; Add shape in front at the starting
+  box; behind with nothing selected, at the back; the Line kind; Delete and
+  undo. All 36 checks passed.
+- Shots: `_review/layout-editor/shape-editor-*.png`, indexed in that
+  folder's README.

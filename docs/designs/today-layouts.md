@@ -1,10 +1,10 @@
 ---
 title: "Today layouts - Board, Briefing, Ambient, Entry board, Flip clock"
 created: 2026-09-04
-modified: 2026-09-26
-version: 1.3
+modified: 2026-09-27
+version: 1.4
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns]
+tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns, calendar-views, blocks, clocks, shape]
 ---
 
 # Today layouts
@@ -18,7 +18,9 @@ a per-screen layout spec that the layout editor edits (2026-09-24,
 `layout-editor.md`); the Flip clock (2026-09-24, below); and five more
 panel types for the spec layouts, four weather panels and a single
 countdown, with the screens' weather now from the hub's feed (2026-09-26,
-`panels-and-controls.md`, chunk 2).
+`panels-and-controls.md`, chunk 2); and ten more on 2026-09-27, four
+calendar views and six blocks and clocks, the shape a block like text and
+image (`panels-and-controls.md`, chunks 3 and 4).
 
 ## The one decision that shaped everything
 
@@ -37,6 +39,9 @@ hook feeds them. `views/TodayLayouts/`:
     lib/backdropLuma.js       adaptive darkness from that grid (pure; backdropLuma.test.mjs)
     lib/weatherPanels.js      the weather panels' parts: hours, curve, rain, alerts (pure; weatherPanels.test.mjs)
     lib/tileColor.js          an art-above countdown card's colour: marker, art, calendar (tileColor.test.mjs)
+    lib/calendarViews.js      the calendar views' parts: up next, the grids, the shared options, the window (calendarViews.test.mjs)
+    lib/clocks.js             the clocks' parts: time zones and offsets, hand angles, the flip clock's fit (clocks.test.mjs)
+    lib/dates.js              the date formats and the day counts: ISO week, day of the year, school days (dates.test.mjs)
     data/useTodayData.js      THE hook: composes every existing hook + useDailyForecast + demo fixtures
     data/useDailyForecast.js  current, 7 days, sunrise/sunset from the hub's weather feed (Open-Meteo as fallback)
     data/demo.js              ?demo=1 fixtures (only fill what live data leaves empty; ?demoWeather=1 forces the weather)
@@ -47,8 +52,11 @@ hook feeds them. `views/TodayLayouts/`:
     panels/schemas.js         every panel's knobs, as plain data (the layout editor's inspector)
     panels/<Name>Panel.jsx    Clock, WeatherNow, Forecast, Hourly, Conditions, Precip, Alert, SunMoon,
                               WhatToWear, Departure, NowPlaying, Photo, School, Agenda, Countdowns,
-                              Countdown, Headline; also AirQualityChip, TextBlock, ImageBlock,
-                              CountdownCard (the art-above card), WeatherAttribution (Apple's mark)
+                              Countdown, Headline, UpNext, DayList, WeekGrid, MonthGrid, FlipClock,
+                              AnalogClock, SecondClock, Date, DayCount; also AirQualityChip,
+                              TextBlock, ImageBlock, ShapeBlock (the shape), CountdownCard (the
+                              art-above card), CalendarParts (the calendar views' colour bar, dot
+                              and legend), WeatherAttribution (Apple's mark)
     Board/  Briefing/  Ambient/   one <Name>Layout.jsx + .css each
     Entry/                    EntryLayout, EntryBackdrop, SpecBoard (draws any spec layout),
                               SpecPanel (one box)
@@ -73,15 +81,18 @@ without saving it (`lib/kioskMode.js` `REQUESTED_LAYOUT`).
 
 `useTodayData()` returns `{ now, demo, greeting, settings, weather, moon, school,
 timer, wear, music, photos, calendar, agendaDays, countdowns, headline,
-airQuality, weatherAlerts }`; the exact field list is documented at the top
+airQuality, weatherAlerts, schoolCalendar }`; the exact field list is documented at the top
 of `useTodayData.js` (calendar through airQuality are the Entry board's,
 `entry-board.md`; weatherAlerts feeds the `alertActive` visibility rule).
 Since 2026-09-26 `weather` also carries the hub's whole weather feed for the
 weather panels (`source`, `hourly` from local midnight, `daily`,
 `nextHour`, `alerts`, `sun`, `moon`, `attribution`), and its `current`
 gains humidity, dew point, gusts, wind direction, pressure, visibility, UV
-and cloud cover (`panels-and-controls.md`, chunk 2). Three things worth
-knowing:
+and cloud cover (`panels-and-controls.md`, chunk 2). Since 2026-09-27
+`calendar` also carries `range`, the dates the hub's answer covers (a
+calendar view never calls a day outside it empty), and `schoolCalendar` is
+the hub's `/api/schoolcal`, for the day count's school days
+(`panels-and-controls.md`, chunks 3 and 4). Three things worth knowing:
 
 - `now` ticks at 1 Hz; every other object is memoised on its real inputs so a
   tick does not churn identities. PhotoPanel is `React.memo` and keeps its
@@ -162,6 +173,17 @@ layout has a departure panel of its own. The layout component still calls
 adds its backdrop (`EntryBackdrop`) as SpecBoard's child. The spec, the knobs
 and the editor: `layout-editor.md`.
 
+Beyond the two boards' own panels, a spec layout can take, through the
+editor: the weather panels (Hourly forecast, Conditions, Rain chance,
+Weather alert) and the single Countdown since 2026-09-26; the calendar
+views (`upnext` Up next, `daylist` Day list, `weekgrid` Week grid,
+`monthgrid` Month grid) and the clocks and dates (`flipclock` Flip clock,
+`analog` Analog clock, `clock2` Second clock, `date` Date, `daycount` Day
+count) since 2026-09-27, each at most once per layout; and, besides text
+and image blocks, any number of `shape` blocks (Add shape), since
+2026-09-27. None is on a default board. Knobs, elements and starting boxes:
+`panels-and-controls.md`, chunks 2 to 4.
+
 ## Flip clock (built 2026-09-24, full width 2026-09-25)
 
 A split-flap clock as wide as the screen allows, with the date along the
@@ -224,6 +246,14 @@ edge with its hairlines dropped.
   mid-flip frames, and the reference's 10:08 for comparison);
   `clock-960-fullwidth.png` and `clock-960-before-after.png` for the
   2026-09-25 change.
+- A panel too since 2026-09-27: `flipclock` ("Flip clock",
+  `panels/FlipClockPanel.jsx`) puts this component in a box of a spec
+  layout, as big as the box allows, `--tl-flip-u` worked out from the box
+  (container units, else a measured box), with its own `hour24`,
+  `showMeridiem`, `showDate` and `scale` knobs. FlipClock gained
+  `data-edit` markers (hour, minutes, tab, date); the Flip clock layout
+  draws exactly as before. `panels-and-controls.md`, chunk 4; shots
+  `_review/layout-editor/blocks-flipclock-*.png`.
 
 ## Adding a layout or a panel
 
@@ -241,8 +271,12 @@ A spec-drawn layout renders `<SpecBoard d={d} layoutId="<id>" />` (as
 row in `layoutSpec.js` `TYPE_TABLE` (label, minimum box, `minPx`, starting
 box), its knobs and sub-elements in `panels/schemas.js` (`PANEL_SCHEMAS`,
 `PANEL_ELEMENTS`, with `data-edit` on the elements), a case in `SpecBoard`'s
-`content()`, and its `minPx` as a container query in `Entry/SpecPanel.css`.
-The editor learns new types from the app's `sd-edit:ready`.
+`content()`, and its `minPx` as a container query in `Entry/SpecPanel.css`
+(or in its own stylesheet, as the calendar views keep theirs). A new block
+type is a `TYPE_TABLE` row of `kind: 'block'`, which puts it in
+`BLOCK_TYPES`. The editor learns new types, and which of them are blocks,
+from the app's `sd-edit:ready` (since 2026-09-27; `layout-editor.md`, "As
+built, chunk 4 and the shape block").
 
 ## Verifying without touching the kitchen
 
@@ -267,5 +301,6 @@ different ways between launches, which otherwise reads as a change.
 - House name as a setting; a Briefing-safe weather icon set; Forecast tile
   spacing; the Board's lunch tile (a School panel can now be added to it in
   the layout editor). Tracked in BACKLOG.
-- The Flip clock as a panel for the spec layouts, perhaps with a next-meeting
-  line (FlipClock already sizes from one variable).
+- A next-meeting line with the flip clock. The flip clock itself became a
+  panel for the spec layouts on 2026-09-27 (`flipclock`; "Flip clock",
+  above).

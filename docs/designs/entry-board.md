@@ -1,10 +1,10 @@
 ---
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
-modified: 2026-09-26
-version: 1.5
+modified: 2026-09-27
+version: 1.6
 author: Claude Fable 5.1 (claude-fable-5-1)
-tags: [design, entry, echo-show, today, layouts, calendar, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
+tags: [design, entry, echo-show, today, layouts, calendar, calendar-views, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
 ---
 
 # Entry board
@@ -86,39 +86,65 @@ calendar: {
 }
 ```
 
-### `GET /api/calendar?days=N`
+### `GET /api/calendar?days=N&past=P`
 
-The app asks for `days=6` (hooks/useCalendar.js): the agenda's widest
-setting, five columns starting tomorrow, needs six days.
+`days` is 1 to 60 days from today, today counted (default 3), and `past` 0
+to 31 days before it (default 0); whole numbers, anything else reads as the
+default (`calendarQuery` in `lib/googleCalendar.mjs`). Until 2026-09-27
+`days` stopped at 14 and there was no `past`. The app asks for `days=6`
+(hooks/useCalendar.js): the agenda's widest setting, five columns starting
+tomorrow, needs six days. Since the calendar views (2026-09-27,
+`panels-and-controls.md`, chunk 3) a screen asks for more when a view on it
+needs more (a week from Monday, a month grid), up to the caps, and never
+for less than `days=6`.
 
 ```
 {
   connected: bool,           // key file present and the last fetch succeeded
   error: string | null,
   fetchedAt: ISO | null,
-  days: 3,
+  days: 3,                   // the query as read (calendarQuery)
+  past: 0,
+  from: 'YYYY-MM-DD',        // the local dates the events cover: today - past
+  to: 'YYYY-MM-DD',          // up to today + days, `to` exclusive
   serviceAccount: 'frameserver@...iam.gserviceaccount.com' | null,   // the address to share with
   calendars: [{ id, label, color, ok, error, events }],               // per-calendar health
   events: [ { id, calendarId, calendarLabel, color, title, description, location,
-              allDay, start, end, startDate, endDate, status } ],
+              allDay, start, end, startDate, endDate, status,
+              alsoOn: [{ calendarId, calendarLabel, color }] } ],
   countdowns: [ { id, title, date: 'YYYY-MM-DD', daysLeft, leadDays,
                   image: '/countdown-art/<file>' | null, emoji: string | null,
                   calendarLabel, color, tileColor: '#rrggbb' | null } ]
 }
 ```
 
-- `events` covers today through today + days - 1 (local), sorted by start;
-  all-day events with `startDate` / `endDate` (exclusive, Google's convention)
-  and `start` / `end` null; timed events with ISO `start` / `end` and
-  `startDate` = the local date of `start`. Recurring events arrive already
-  expanded (`singleEvents=true`). Cancelled instances are dropped.
-- `countdowns` scans a wider window (60 days) for events whose description
-  carries the marker, keeps those with `0 <= daysLeft <= leadDays`, sorts by
-  date, caps at `countdownMax`. Multi-day events count to the start.
-  `color` is the event's calendar colour (the tiles' edge, the dashboard's
-  dot); `tileColor` is the `color:` marker's (below), null without one.
+- `events` covers `from` up to `to` (local: today - past through today +
+  days - 1), sorted by start; an event is in when any of its days is.
+  All-day events with `startDate` / `endDate` (exclusive, Google's
+  convention) and `start` / `end` null; timed events with ISO `start` /
+  `end`, `startDate` = the local date of `start` and `endDate` the day
+  after the last local date they touch (exclusive too). Recurring events
+  arrive already expanded (`singleEvents=true`). Cancelled instances are
+  dropped.
+- `alsoOn` (2026-09-27): the other listed calendars the same event was on,
+  `[]` for most. An invitation between two listed calendars (the same
+  iCalUID and start) is listed once, from the first calendar in the
+  registry's order, and the others ride along here, so a panel that merges
+  shared events can draw every calendar's colour
+  (`panels-and-controls.md`, chunk 3).
+- `countdowns` looks at everything cached from today on (60 days ahead),
+  whatever the query, for events whose description carries the marker,
+  keeps those with `0 <= daysLeft <= leadDays`, sorts by date, caps at
+  `countdownMax`. Multi-day events count to the start. `color` is the
+  event's calendar colour (the tiles' edge, the dashboard's dot);
+  `tileColor` is the `color:` marker's (below), null without one.
 - Google is fetched at most every 5 minutes (per process cache, plus a disk
-  cache `calendar-cache.json` so a restart serves the last copy at once).
+  cache `calendar-cache.json` so a restart serves the last copy at once),
+  one window per calendar: since 2026-09-27 from local midnight 31 days
+  back (`PAST_DAYS`) to local midnight 60 days ahead (`WINDOW_DAYS`),
+  before that from today. The cache records the window as an informational
+  `window` (`{ timeMin, timeMax }`); a cache without it reads the same.
+  `/healthz.calendar.events` counts the whole window (66 on 2026-09-27).
   Authentication: a JWT signed RS256 with Node's `crypto` (no dependency),
   scope `https://www.googleapis.com/auth/calendar.readonly`, exchanged at
   `https://oauth2.googleapis.com/token`, the access token cached until it
@@ -289,7 +315,11 @@ label "Entry board", in `registry.js`, `kioskMode.js` VALID_LAYOUTS and
 - `hooks/useCalendar.js`: a module store polling `hubUrl('/api/calendar?days=6')`
   every 60 s (six days since the layout editor's agenda knobs, 2026-09-24;
   it was three), localStorage cache, exposes `{ events, countdowns,
-  calendars, connected, fetchedAt, error, stale }`.
+  calendars, connected, fetchedAt, error, stale }`. Since 2026-09-27 it asks
+  for the union of what the calendar views on screen want
+  (`wantCalendarWindow`, never less than six days), and exposes `range`,
+  `{ from, to }`, the dates the answer covers (`panels-and-controls.md`,
+  chunk 3).
 - `lib/houseState.js` accepts `headline` and `airQuality` from `/api/state`.
 - `useTodayData()` adds `calendar` (the store above), `headline`, `airQuality`,
   with `?demo=1` fixtures (a few events across three days, two countdowns,
