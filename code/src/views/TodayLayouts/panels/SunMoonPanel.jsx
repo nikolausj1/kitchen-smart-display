@@ -2,6 +2,7 @@ import PanelFrame from './PanelFrame.jsx'
 import WeatherAttribution from './WeatherAttribution.jsx'
 import { panelKnobs } from './schemas.js'
 import { fmtClock } from '../lib/format.js'
+import { moonLitPath } from '../../../components/MoonGlyph/moonGeometry.js'
 import './SunMoonPanel.css'
 
 // Where the sun is in the day, and what the moon is doing tonight. The arc is
@@ -52,24 +53,12 @@ function arcPoint(f) {
   }
 }
 
-// The lit limb of the moon: the outer semicircle on the lit side, then half of
-// the terminator ellipse back to the top. phase 0 = new, 0.25 = first quarter
-// (lit on the right), 0.5 = full, 0.75 = last quarter (lit on the left).
-function moonLitPath(phase, cx, cy, r) {
-  if (!Number.isFinite(phase)) return null
-  const p = ((phase % 1) + 1) % 1
-  const t = Math.cos(2 * Math.PI * p) // +1 at new, -1 at full
-  const waxing = p < 0.5
-  const rx = Math.abs(t) * r
-  // Where the terminator crosses the horizontal diameter: on the lit side for
-  // a crescent, on the dark side for a gibbous.
-  const xm = cx + (waxing ? 1 : -1) * t * r
-  const limbSweep = waxing ? 1 : 0
-  const termSweep = xm > cx ? 0 : 1
-  const top = `${cx} ${cy - r}`
-  const bottom = `${cx} ${cy + r}`
-  return `M${top} A${r} ${r} 0 0 ${limbSweep} ${bottom} A${rx.toFixed(3)} ${r} 0 0 ${termSweep} ${top} Z`
-}
+// The lit limb of the moon (moonLitPath): the outer semicircle on the lit
+// side, then half of the terminator ellipse back to the top. phase 0 = new,
+// 0.25 = first quarter (lit on the right), 0.5 = full, 0.75 = last quarter
+// (lit on the left). Shared with the weather icons' night moon
+// (components/MoonGlyph/moonGeometry.js), the same bytes this panel always
+// drew for every phase lib/sun.js hands it (moonGeometry.test.mjs).
 
 export default function SunMoonPanel({ now, sunrise, sunset, moon, knobs, attribution = null }) {
   const k = panelKnobs('sunmoon', knobs)

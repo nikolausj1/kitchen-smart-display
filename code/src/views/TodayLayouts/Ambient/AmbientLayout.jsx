@@ -4,6 +4,7 @@ import NowPlayingPanel from '../panels/NowPlayingPanel.jsx'
 import WeatherAttribution from '../panels/WeatherAttribution.jsx'
 import WeatherIcon from '../../../components/WeatherIcon/WeatherIcon.jsx'
 import { fmtDateLong, fmtTime } from '../lib/format.js'
+import { skyFor } from '../data/wmo.js'
 // Inter 300, latin subset only. main.jsx loads 400/600/700, so a rule asking for
 // a lighter weight silently renders at 400 - and a hairline clock is the whole
 // point of this layout. Inter is already a dependency: this is one more face of
@@ -102,6 +103,9 @@ export default function AmbientLayout() {
 
   const current = d.weather?.current || null
   const tempF = Number.isFinite(current?.tempF) ? Math.round(current.tempF) : null
+  // After dark a clear or partly cloudy sky draws the moon at tonight's phase:
+  // the reading's own isDay and moonPhase, else worked out for now.
+  const sky = current ? skyFor(current, d.now, d.weather) : null
   const next = decideNext(d.school, d.timer, d.now)
 
   // The chip is always mounted so it can fade both ways with opacity and never
@@ -147,7 +151,7 @@ export default function AmbientLayout() {
           {current && (
             <div className="tl-ambient__wx">
               <span className="tl-ambient__wx-icon">
-                <WeatherIcon name={current.iconName} />
+                <WeatherIcon name={current.iconName} isDay={sky?.isDay} moonPhase={sky?.moonPhase} />
               </span>
               <span className="tl-num tl-ambient__wx-temp">
                 {tempF == null ? '--' : tempF}&deg;

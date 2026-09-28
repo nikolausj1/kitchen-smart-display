@@ -1,7 +1,7 @@
 {
  "what": "The layout editor Add block menu thumbnails: each block type alone on a 1920x1080 Entry board at the box Add block starts it in, the demo data, cut out 320 px wide",
  "made": "code/scripts/render-previews.mjs",
- "commit": "bf35ecb",
+ "commit": "420b70e",
  "dirty": true,
  "clock": "2026-10-15T10:10:00-07:00",
  "canvas": {
@@ -132,7 +132,7 @@
    "file": "hourly.png",
    "w": 320,
    "h": 90,
-   "bytes": 6522,
+   "bytes": 7265,
    "box": {
     "x": 20,
     "y": 34,

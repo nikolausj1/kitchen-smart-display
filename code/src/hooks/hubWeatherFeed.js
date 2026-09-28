@@ -23,8 +23,15 @@
 // 2 pm code. WeatherKit's hours are hour-start natively. A slot or a
 // departure hour H reads the entry whose time is H:00, the hour starting then.
 //
+// Day, night and the moon ("Day, night and the moon", below): cleanFeed hands
+// every hour and the current reading on with `isDay` and `moonPhase` filled
+// in, which is what a weather icon needs to draw a night sky with the moon at
+// its phase (components/WeatherIcon).
+//
 // Runtime rule: the Echo's Silk may be as old as Chrome 80, so no
 // Object.hasOwn, Array.prototype.at, structuredClone or String replaceAll.
+
+import { synodicPhase } from '../components/MoonGlyph/moonGeometry.js'
 
 // The feed is trusted as current up to this age (its own fetchedAt, when the
 // hub fetched it upstream). Older, or never answered at all (a hub still on a
@@ -120,6 +127,127 @@ export function parseLocalStamp(s) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+// --- Day, night and the moon -----------------------------------------------------
+//
+// A weather icon draws a night sky, the moon at its phase in place of the sun,
+// for an hour or a reading that is not in daylight (components/WeatherIcon;
+// only clear, partly and mostly cloudy skies change). The feed says both:
+// each hour's and the current reading's `isDay` (WeatherKit's daylight,
+// Open-Meteo's is_day) and each day's `moonPhase` (daily[], today's also as
+// `moon.phase`; 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter, 1 new
+// again). cleanFeed fills both in on every hour and on the current reading,
+// so a panel reads them off the entry it draws:
+//   isDay      as the source said; else from that date's sunrise and sunset
+//              (the sunrise minute is day, the sunset minute night; an hour
+//              is judged at its start, as WeatherKit and Open-Meteo judge
+//              it); else 6 am to 8 pm
+//   moonPhase  the exact mean phase at the hour (moonPhaseFor), the same
+//              model as the Sun and moon panel; the source's coarse daily
+//              phase is not used for drawing
+// Local stamps are compared as text ('2026-09-28T19:00' >= '...T18:54'), both
+// in the house's zone, so no clock or zone is read.
+
+// Daylight when nothing better is known: 6 am up to 8 pm.
+export const DAY_FROM_HOUR = 6
+export const DAY_UNTIL_HOUR = 20
+
+const STAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
+const DATE_RE = /^\d{4}-\d{2}-\d{2}/
+
+function validDate(when) {
+  if (when instanceof Date) return Number.isNaN(when.getTime()) ? null : when
+  if (typeof when === 'number' && Number.isFinite(when)) return new Date(when)
+  return null
+}
+
+// 'YYYY-MM-DDTHH:MM' from a local stamp (seconds dropped), a Date or a ms
+// epoch; null for anything else, a bare date included (it has no time).
+function localStampOf(when) {
+  if (typeof when === 'string') return STAMP_RE.test(when) ? when.slice(0, 16) : null
+  const d = validDate(when)
+  return d ? `${localDateKey(d)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}` : null
+}
+
+// The instant of a local stamp, of a bare date (its local noon, as the hub
+// takes a day's moon), of a Date or a ms epoch; or null.
+function instantOf(when) {
+  if (typeof when === 'string') {
+    if (STAMP_RE.test(when)) return parseLocalStamp(when.slice(0, 16))
+    return DATE_RE.test(when) ? parseLocalStamp(`${when.slice(0, 10)}T12:00`) : null
+  }
+  return validDate(when)
+}
+
+// That date's sunrise and sunset as local stamps, { rise, set }, from the
+// feed's daily[] (stamps), the layouts' days[] (useTodayData d.weather.days:
+// dateKey and Dates) or the feed's sun (today's); null when none has both.
+function sunTimesFor(day, weather) {
+  if (!day || !isObj(weather)) return null
+  const pair = (rise, set) => {
+    const r = localStampOf(rise)
+    const s = localStampOf(set)
+    return r && s && r.slice(0, 10) === day && s.slice(0, 10) === day && r < s ? { rise: r, set: s } : null
+  }
+  const daily = Array.isArray(weather.daily) ? weather.daily : []
+  for (let i = 0; i < daily.length; i++) {
+    const d = daily[i]
+    if (isObj(d) && typeof d.date === 'string' && d.date.slice(0, 10) === day) {
+      const p = pair(d.sunrise, d.sunset)
+      if (p) return p
+    }
+  }
+  const days = Array.isArray(weather.days) ? weather.days : []
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i]
+    if (isObj(d) && d.dateKey === day) {
+      const p = pair(d.sunrise, d.sunset)
+      if (p) return p
+    }
+  }
+  return isObj(weather.sun) ? pair(weather.sun.sunrise, weather.sun.sunset) : null
+}
+
+// isDayAt(when, weather) -> is `when` (a local stamp, a Date or a ms epoch) in
+// daylight: between that date's sunrise and sunset in `weather` (the feed, or
+// anything with its daily[], days[] or sun), else 6 am to 8 pm. null for a
+// time it cannot read.
+export function isDayAt(when, weather) {
+  const stamp = localStampOf(when)
+  if (!stamp) return null
+  const sun = sunTimesFor(stamp.slice(0, 10), weather)
+  if (sun) return stamp >= sun.rise && stamp < sun.set
+  const hour = Number(stamp.slice(11, 13))
+  return hour >= DAY_FROM_HOUR && hour < DAY_UNTIL_HOUR
+}
+
+// moonPhaseFor(when) -> the moon's phase (0..1) at `when` (a local stamp or
+// date, a Date or a ms epoch; a bare date at its noon): the mean synodic
+// month (moonGeometry.js synodicPhase), the very model the Sun and moon
+// panel draws (lib/sun.js moonPhase), so every moon on a board agrees. The
+// feed's own daily[].moonPhase and moon.phase are not used for drawing:
+// WeatherKit reports eight named steps, too coarse beside the panel's exact
+// moon (Justin, 2026-09-28: "real phase"). Callers may still pass the feed as
+// a second argument; it is ignored. null for a date it cannot read.
+export function moonPhaseFor(when) {
+  const at = instantOf(when)
+  return at ? synodicPhase(at) : null
+}
+
+// skyFor(reading, now, weather) -> { isDay, moonPhase }, what to draw a
+// reading's sky with (<WeatherIcon isDay moonPhase />): the reading's own
+// (every feed hour and the feed's current reading carry both, from cleanFeed),
+// else worked out for its own `time`, or for `now` (the moment it is drawn at)
+// when it has none, from `weather` when given. Either is undefined when there
+// is nothing to go by: the day icon, the default crescent.
+export function skyFor(reading, now, weather) {
+  const r = isObj(reading) ? reading : {}
+  const when = hourKeyOf(r.time) != null ? r.time : now
+  const isDay = typeof r.isDay === 'boolean' ? r.isDay : isDayAt(when, weather)
+  const own = num(r.moonPhase)
+  const moonPhase = own != null ? own : moonPhaseFor(when, weather)
+  return { isDay: isDay == null ? undefined : isDay, moonPhase: moonPhase == null ? undefined : moonPhase }
+}
+
 // --- The feed -------------------------------------------------------------------------
 
 function listOf(v, keep) {
@@ -129,32 +257,48 @@ function listOf(v, keep) {
 // cleanFeed(raw) -> the contract with every key present and typed, or null
 // when raw is not a feed at all. Entries without a usable stamp are dropped;
 // the rest are passed through as the hub sent them (the panels read each field
-// defensively). A WeatherKit feed always carries its attribution.
+// defensively), except that every hour and the current reading (when it has
+// a stamp) carry `isDay` and `moonPhase`, filled in where the hub left them
+// out ("Day, night and the moon", above). A WeatherKit feed always carries
+// its attribution. Idempotent: a cleaned feed (the cache's) cleans to itself.
 export function cleanFeed(raw) {
   if (!isObj(raw)) return null
   const source = SOURCES.indexOf(raw.source) >= 0 ? raw.source : null
   const loc = isObj(raw.location) ? raw.location : {}
   const nh = isObj(raw.nextHour) ? raw.nextHour : null
-  const sun = isObj(raw.sun) ? raw.sun : {}
-  const moon = isObj(raw.moon) ? raw.moon : {}
+  const sunRaw = isObj(raw.sun) ? raw.sun : {}
+  const moonRaw = isObj(raw.moon) ? raw.moon : {}
   const a = isObj(raw.attribution) ? raw.attribution : null
   let attribution = null
   if (source === 'weatherkit') {
     attribution = a && str(a.name) && str(a.url) ? { name: a.name, url: a.url } : { ...APPLE_ATTRIBUTION }
   }
   const stamped = (e) => isObj(e) && hourKeyOf(e.time) != null
+  const daily = listOf(raw.daily, (d) => isObj(d) && typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d.date))
+  const sun = { sunrise: str(sunRaw.sunrise), sunset: str(sunRaw.sunset) }
+  const moon = { phase: num(moonRaw.phase), name: str(moonRaw.name) }
+  const sky = { daily, sun, moon }
+  // An entry with its sky: the same object when it already had both.
+  const withSky = (e) => {
+    const isDay = typeof e.isDay === 'boolean' ? e.isDay : isDayAt(e.time, sky)
+    const own = num(e.moonPhase)
+    const moonPhase = own != null ? own : moonPhaseFor(e.time, sky)
+    return e.isDay === isDay && e.moonPhase === moonPhase ? e : { ...e, isDay, moonPhase }
+  }
+  let current = isObj(raw.current) ? raw.current : null
+  if (current && hourKeyOf(current.time) != null) current = withSky(current)
   return {
     source,
     fetchedAt: str(raw.fetchedAt),
     error: str(raw.error),
     location: { lat: num(loc.lat), lon: num(loc.lon), timezone: str(loc.timezone) },
-    current: isObj(raw.current) ? raw.current : null,
-    hourly: listOf(raw.hourly, stamped),
-    daily: listOf(raw.daily, (d) => isObj(d) && typeof d.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d.date)),
+    current,
+    hourly: listOf(raw.hourly, stamped).map(withSky),
+    daily,
     nextHour: nh ? { summary: listOf(nh.summary, stamped), minutes: listOf(nh.minutes, stamped) } : null,
     alerts: listOf(raw.alerts, (x) => isObj(x) && typeof x.event === 'string' && x.event.trim() !== ''),
-    sun: { sunrise: str(sun.sunrise), sunset: str(sun.sunset) },
-    moon: { phase: num(moon.phase), name: str(moon.name) },
+    sun,
+    moon,
     attribution,
   }
 }
@@ -208,16 +352,25 @@ export function forecastFromHours(hours, dateKey, hour) {
   }
 }
 
-// useWeather's slots from feed hours: [{ label, iconName, tempF }] for the
-// given hours of `dateKey`, a placeholder where there is no such hour.
-export function slotsFromHours(hours, slotHours, dateKey) {
+// useWeather's slots from feed hours: [{ label, iconName, tempF, code, isDay,
+// moonPhase }] for the given hours of `dateKey`, a placeholder ({ label,
+// iconName: 'overcast', tempF: null }, drawn by day) where there is no such
+// hour. `iconName` is the day icon, as it always was; `isDay` and
+// `moonPhase` are the hour's own (cleanFeed fills them in), else worked out
+// from `weather` (the feed) when given, so the slot's icon can be its night
+// version (<WeatherIcon name isDay moonPhase />).
+export function slotsFromHours(hours, slotHours, dateKey, weather) {
   return (Array.isArray(slotHours) ? slotHours : []).map((hour) => {
     const e = entryAt(hours, dateKey, hour)
     if (!e) return { label: hourLabel(hour), iconName: 'overcast', tempF: null }
+    const sky = skyFor(e, null, weather)
     return {
       label: hourLabel(hour),
       iconName: wmoToIcon(e.code),
       tempF: typeof e.tempF === 'number' ? Math.round(e.tempF) : null,
+      code: typeof e.code === 'number' ? e.code : null,
+      isDay: sky.isDay,
+      moonPhase: sky.moonPhase,
     }
   })
 }
@@ -240,20 +393,31 @@ export function openMeteoColumnsOf(hours) {
 // alignment test can hold one against the other).
 
 // useWeather's slots from an Open-Meteo hourly payload (`hourly.time`,
-// `temperature_2m`, `weather_code`).
+// `temperature_2m`, `weather_code`, and `is_day` when asked for), with the
+// night fields slotsFromHours gives: `isDay` from `is_day` at the hour's
+// start, else 6 am to 8 pm (the payload has no sunrise); `moonPhase` worked
+// out here (Open-Meteo has no moon).
 export function pickSlots(payload, slotHours, dateKey) {
   const times = (payload && payload.hourly && payload.hourly.time) || []
   const temps = (payload && payload.hourly && payload.hourly.temperature_2m) || []
   const codes = (payload && payload.hourly && payload.hourly.weather_code) || []
+  const isDays = (payload && payload.hourly && payload.hourly.is_day) || []
   return slotHours.map((hour) => {
-    const idx = times.indexOf(hourStamp(dateKey, hour))
+    const stamp = hourStamp(dateKey, hour)
+    const idx = times.indexOf(stamp)
     if (idx === -1) {
       return { label: hourLabel(hour), iconName: 'overcast', tempF: null }
     }
+    const flag = isDays[idx]
+    const isDay = flag == null ? isDayAt(stamp, null) : !!flag
+    const moonPhase = moonPhaseFor(stamp, null)
     return {
       label: hourLabel(hour),
       iconName: wmoToIcon(codes[idx]),
       tempF: Math.round(temps[idx]),
+      code: typeof codes[idx] === 'number' ? codes[idx] : null,
+      isDay: isDay == null ? undefined : isDay,
+      moonPhase: moonPhase == null ? undefined : moonPhase,
     }
   })
 }

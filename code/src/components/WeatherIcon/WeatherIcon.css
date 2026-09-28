@@ -1,0 +1,12 @@
+/* WeatherIcon - the night skies (WeatherIcon.jsx NightSky), an inline <svg>
+ * where the day icon is an <img>. It also carries the img's class, so each
+ * caller's `.weather-icon-img` rule (size, max-height, drop shadow) applies to
+ * it as to the img; this rule is only the floor, so it fills its box in any
+ * caller. The img's object-fit: contain is the svg's own default
+ * preserveAspectRatio, letterboxing the same viewBox the same way. */
+
+.weather-icon-night {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

@@ -6,6 +6,12 @@
 // The two tables have to stay in step - if you change one, change the other.
 // The names it returns are the keys of FILES in
 // components/WeatherIcon/WeatherIcon.jsx.
+//
+// Night: iconKeyFor(code, isDay) and the helpers below it. The day, night and
+// moon helpers themselves live with the feed (hooks/hubWeatherFeed.js) and
+// are re-exported here for the layouts.
+
+import { isDayAt, moonPhaseFor, skyFor } from '../../../hooks/hubWeatherFeed.js'
 
 export function wmoToIcon(code) {
   if (code === 0 || code === 1) return 'clear'
@@ -73,3 +79,46 @@ export const RAIN_CODES = new Set([
 ])
 
 export const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86])
+
+// --- Night ---------------------------------------------------------------------
+//
+// After dark the three skies that draw the sun have night versions with the
+// moon at its phase (components/WeatherIcon/nightSkies.js, drawn inline);
+// every other sky (overcast, fog, drizzle, rain, freezing rain, snow, storms)
+// draws the same icon by night as by day. By WMO code: 0 and 1 are clear and
+// 2 partly cloudy; no code draws mostly cloudy (3 is overcast, and the hub
+// maps WeatherKit's MostlyCloudy to 3), so 'mostly-cloudy-night' is reached
+// only by name, <WeatherIcon name="mostly-cloudy" isDay={false} />.
+export const NIGHT_ICON_KEYS = Object.freeze({
+  clear: 'clear-night',
+  'partly-cloudy': 'partly-cloudy-night',
+  'mostly-cloudy': 'mostly-cloudy-night',
+})
+
+// A day icon's night version, or the key itself when it has none.
+export function nightIconKey(key) {
+  return typeof key === 'string' && Object.prototype.hasOwnProperty.call(NIGHT_ICON_KEYS, key)
+    ? NIGHT_ICON_KEYS[key]
+    : key
+}
+
+// iconKeyFor(code, isDay) -> the icon for a WMO code: wmoToIcon's by day,
+// and while it is not known (isDay true, null or undefined); its night
+// version when isDay is exactly false.
+export function iconKeyFor(code, isDay) {
+  const key = wmoToIcon(code)
+  return isDay === false ? nightIconKey(key) : key
+}
+
+// For drawing an hour or a reading at night (hooks/hubWeatherFeed.js, "Day,
+// night and the moon"):
+//   moonPhaseFor(date, weather)  the phase on that date: weather.daily[]'s,
+//                                else weather.moon.phase, else worked out
+//   isDayAt(when, weather)       daylight: that date's sunrise to sunset,
+//                                else 6 am to 8 pm
+//   skyFor(reading, now, weather)  { isDay, moonPhase } for WeatherIcon: the
+//                                reading's own, else worked out
+// `weather` is the feed, or useTodayData's d.weather (its daily and moon are
+// the feed's). Every feed hour already carries isDay and moonPhase (the
+// hub's d.weather.hourly), so an hourly strip can pass them straight on.
+export { isDayAt, moonPhaseFor, skyFor }

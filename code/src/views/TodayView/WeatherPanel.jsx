@@ -9,6 +9,10 @@ import './WeatherPanel.css'
 // `attribution`: the Apple Weather mark while the slots are WeatherKit's
 // (hooks/useWeather.js), in the panel's bottom padding at its right edge, out
 // of the layout; null (Open-Meteo) draws nothing, as before.
+//
+// Each slot draws its own hour's sky: after dark (the slot's isDay, from the
+// feed) a clear or partly cloudy hour is its night version, the moon at that
+// night's phase (the slot's moonPhase). A placeholder draws by day.
 export default function WeatherPanel({ slots, band, attribution = null }) {
   const hasBand = Array.isArray(band) && band.length > 0
   return (
@@ -18,7 +22,7 @@ export default function WeatherPanel({ slots, band, attribution = null }) {
           <div className="weather__cell" key={slot.label}>
             <div className="weather__label">{slot.label}</div>
             <div className="weather__icon">
-              <WeatherIcon name={slot.iconName} />
+              <WeatherIcon name={slot.iconName} isDay={slot.isDay} moonPhase={slot.moonPhase} />
             </div>
             <div className="weather__temp">
               {slot.tempF == null ? '--' : slot.tempF}&deg;

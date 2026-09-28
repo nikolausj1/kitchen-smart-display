@@ -115,6 +115,9 @@ export function demoWeather(today) {
     }
   })
 
+  // No isDay here: this view knows the day, not the hour. The demo feed's
+  // current reading (demoFeed, which useTodayData lays under this one) says
+  // whether the demo started in daylight, and carries the moon.
   return {
     current: {
       tempF: 62,
@@ -123,7 +126,6 @@ export function demoWeather(today) {
       iconName: wmoToIcon(2),
       description: wmoDescription(2),
       windMph: 6,
-      isDay: true,
     },
     days,
     sunrise: days[0].sunrise,
@@ -135,7 +137,8 @@ export function demoWeather(today) {
 //
 // demoFeed(sinceMs) -> a full feed in the hub's shape (GET /api/weather,
 // hooks/hubWeatherFeed.js), so the weather panels have everything to draw
-// under ?demo=1: 48 hours from the hour the demo started, ten days (the first
+// under ?demo=1: its hours, like the hub's, from today's local midnight
+// through 48 hours past the hour the demo started, ten days (the first
 // five are DEMO_DAYS), the next hour's minutes with rain arriving, a wind
 // advisory, the sun, the moon. Like demoWeather it is the last resort: live
 // weather always wins (useTodayData), unless the URL also carries
@@ -143,7 +146,10 @@ export function demoWeather(today) {
 // dry day has no alert banner and no next-hour strip to design with). It
 // claims the house's source, Apple WeatherKit, so a design shot carries the
 // attribution a real screen does. Built from the moment demo mode turned on
-// and frozen there.
+// and frozen there. Each hour and the current reading are day or night by the
+// demo's sunrise and sunset and carry the moon's phase, as the hub's cleaned
+// feed does (hooks/hubWeatherFeed.js), so a demo opened after dark draws its
+// clear and partly cloudy skies with the moon.
 
 function readForceWeather() {
   if (typeof window === 'undefined') return false
@@ -162,6 +168,25 @@ const DEMO_MORE_DAYS = [
 
 // The first evening turns wet: rain chances from 5 pm to midnight.
 const DEMO_EVENING_RAIN = { 17: 20, 18: 35, 19: 55, 20: 70, 21: 65, 22: 50, 23: 30 }
+
+// Daylight in the demo: from its sunrise (6:31) up to its sunset (7:52 pm),
+// an hour judged at its start, as the hub's sources judge theirs (so 7 am
+// through 7 pm are day hours, and a demo opened at 11 pm is a night).
+function demoIsDay(hour, minute) {
+  const m = hour * 60 + minute
+  return m >= DEMO_SUNRISE.hour * 60 + DEMO_SUNRISE.minute && m < DEMO_SUNSET.hour * 60 + DEMO_SUNSET.minute
+}
+
+// The demo's moon: a waxing gibbous (0.42) on the day the demo starts, a
+// day's share of a synodic month further on each day after, as the hub's
+// days advance. Three places, as tidy as the hub's fractions.
+const DEMO_MOON_PHASE = 0.42
+const SYNODIC_DAYS = 29.530588853
+
+function demoMoonPhase(dayIndex) {
+  const p = (((DEMO_MOON_PHASE + dayIndex / SYNODIC_DAYS) % 1) + 1) % 1
+  return Math.round(p * 1000) / 1000
+}
 
 function pad2(n) {
   return String(n).padStart(2, '0')
@@ -201,7 +226,8 @@ function demoHour(t, dayIndex, ease) {
     gustMph: Math.round(wind * 1.7 * 10) / 10,
     humidity: 60 + Math.round(rain / 3),
     uv: h >= 9 && h <= 17 ? Math.max(0, 5 - Math.abs(13 - h)) : 0,
-    isDay: h >= DEMO_SUNRISE.hour + 1 && h <= DEMO_SUNSET.hour,
+    isDay: demoIsDay(h, 0),
+    moonPhase: demoMoonPhase(dayIndex),
   }
 }
 
@@ -210,14 +236,19 @@ export function demoFeed(sinceMs) {
   const base = new Date(since)
   base.setHours(0, 0, 0, 0)
 
-  // The day's curve, eased over six hours from the current reading, so the
-  // strip's "Now" and the next hours agree with the weather card.
+  // The hours, as the hub serves them: from today's local midnight through
+  // the hour now is in and the 47 after it (i counts from the hour now), so
+  // a strip that shows this morning (the hourly forecast's Whole day, from
+  // 8 am) has its hours. The day's curve is eased into the current reading
+  // over the six hours either side of now, so the strip's "Now" and its
+  // neighbours agree with the weather card; the hours from now on are what
+  // they always were.
   const offset = DEMO_NOW_F - demoTempAt(DEMO_DAYS[0], since.getHours())
   const hourly = []
-  for (let i = 0; i < 48; i++) {
+  for (let i = -since.getHours(); i < 48; i++) {
     const t = new Date(since.getFullYear(), since.getMonth(), since.getDate(), since.getHours() + i, 0, 0, 0)
     const dayIndex = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime() - base.getTime()) / 86400000)
-    hourly.push(demoHour(t, dayIndex, offset * Math.max(0, 1 - i / 6)))
+    hourly.push(demoHour(t, dayIndex, offset * Math.max(0, 1 - Math.abs(i) / 6)))
   }
 
   const daily = DEMO_DAYS.concat(DEMO_MORE_DAYS).map((d, i) => {
@@ -234,7 +265,7 @@ export function demoFeed(sinceMs) {
       sunset: stampOf(atTime(base, i, DEMO_SUNSET)),
       uvMax: 5,
       windMaxMph: 18,
-      moonPhase: 0.42,
+      moonPhase: demoMoonPhase(i),
     }
   })
 
@@ -273,7 +304,8 @@ export function demoFeed(sinceMs) {
       cloudCover: 45,
       code: 2,
       condition: 'PartlyCloudy',
-      isDay: true,
+      isDay: demoIsDay(since.getHours(), since.getMinutes()),
+      moonPhase: demoMoonPhase(0),
       precipIn: 0,
     },
     hourly,
@@ -301,7 +333,7 @@ export function demoFeed(sinceMs) {
       },
     ],
     sun: { sunrise: daily[0].sunrise, sunset: daily[0].sunset },
-    moon: { phase: 0.42, name: 'Waxing Gibbous' },
+    moon: { phase: demoMoonPhase(0), name: 'Waxing Gibbous' },
     attribution: { name: 'Apple Weather', url: 'https://weatherkit.apple.com/legal-attribution.html' },
   }
 }

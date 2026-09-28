@@ -44,13 +44,15 @@
 //
 // Night: a moment's isDay is its hour's own in the feed ("Now": current's),
 // else the sunrise and sunset of its date in daily[]; a day part is night
-// when most of its hours are. moonPhase is that of the moment's date in
-// daily[] (a part's: the date it starts on), else the feed's moon.
+// when most of its hours are. moonPhase is the exact mean phase at the
+// moment's hour (a part's: 9 pm of the date it starts on), as the Sun and
+// moon panel draws it.
 //
 // Runtime rule: the Echo's Silk may be as old as Chrome 80, so no
 // Object.hasOwn, Array.prototype.at, structuredClone or String replaceAll.
 
 import { fmtHour, hourlyColumns, hourlyTitle, localHourKey, pctOf } from './weatherPanels.js'
+import { synodicPhase } from '../../../components/MoonGlyph/moonGeometry.js'
 
 export const HOURLY_MODES = ['next', 'untilEnd', 'wholeDay', 'dayParts', 'setTimes']
 
@@ -184,13 +186,14 @@ function isDayAt(ctx, own, stamp) {
   return sunUpAt(ctx, stamp)
 }
 
-// The moon's phase (0 new, 0.5 full, to 1) on a day: that date's in daily[],
-// else the feed's moon (today's), else null.
-function phaseOn(ctx, day) {
-  const d = ctx.days.get(day)
-  const p = d ? num(d.moonPhase) : null
-  if (p != null) return p
-  return ctx.moon && num(ctx.moon.phase) != null ? ctx.moon.phase : null
+// The moon's phase (0 new, 0.5 full, to 1) at a moment: the exact mean
+// phase for that local hour (a bare date: its 9 pm), the same model the Sun
+// and moon panel draws, so every moon on a board agrees. The feed's daily or
+// moon phase (WeatherKit's eight named steps) is not used for the drawing.
+function phaseOn(ctx, when) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?/.exec(String(when || ''))
+  if (!m) return null
+  return synodicPhase(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), m[4] != null ? Number(m[4]) : 21, 0, 0))
 }
 
 // The hour of a day's sunrise (the hour it falls in), or null.
@@ -216,7 +219,7 @@ function hourMoment(ctx, day, hour, state) {
     current: !!(state && state.current),
     tomorrow: key.slice(0, 10) > ctx.today,
     isDay: isDayAt(ctx, e && e.isDay, `${key}:30`),
-    moonPhase: phaseOn(ctx, key.slice(0, 10)),
+    moonPhase: phaseOn(ctx, key),
     tempF: e ? e.tempF : null,
     tempWord: null,
     feelsF: e ? e.feelsF : null,
@@ -251,7 +254,7 @@ function liveMoment(ctx, e, live, isNow) {
     current: isNow,
     tomorrow: day > ctx.today,
     isDay: isDayAt(ctx, liveDay !== undefined ? liveDay : e.isDay, isNow ? ctx.nowStamp : `${String(e.time).slice(0, 13)}:30`),
-    moonPhase: phaseOn(ctx, day),
+    moonPhase: phaseOn(ctx, isNow ? ctx.nowStamp : String(e.time)),
     tempF: pick(live && live.tempF, e.tempF),
     tempWord: null,
     code: live && typeof live.code === 'number' ? live.code : e.code,
@@ -498,7 +501,7 @@ function setTimesMoments(ctx, k) {
       current: !rolled && ctx.hour === hh,
       tomorrow: rolled,
       isDay: isDayAt(ctx, e && e.isDay, stamp),
-      moonPhase: phaseOn(ctx, day),
+      moonPhase: phaseOn(ctx, stamp),
       tempF: e ? e.tempF : null,
       tempWord: null,
       feelsF: e ? e.feelsF : null,

@@ -3,6 +3,7 @@ import PanelFrame from './PanelFrame.jsx'
 import FreshnessStamp from './FreshnessStamp.jsx'
 import WeatherAttribution from './WeatherAttribution.jsx'
 import { panelKnobs } from './schemas.js'
+import { skyFor } from '../data/wmo.js'
 import './WeatherNowPanel.css'
 
 // Right now, outside: one big temperature, the icon, what it is doing, and a
@@ -17,6 +18,12 @@ import './WeatherNowPanel.css'
 // attribution: the Apple Weather mark while the hub's feed is WeatherKit's
 // (useTodayData d.weather.attribution), pinned to the panel's bottom-right
 // corner (WeatherAttribution.jsx); null draws nothing, as before.
+//
+// Night: the current reading's own isDay and moonPhase (the feed's; on the
+// Open-Meteo fallback is_day and the moon worked out for `now`: data/wmo.js
+// skyFor), so a clear or partly cloudy night draws the moon at tonight's
+// phase. An icon from today's forecast, with no current reading, stays a day
+// icon.
 
 // Precipitation under 20% is noise on a Seattle display, so it is left off the
 // meta line entirely rather than shown as a reassuring "10%".
@@ -44,6 +51,7 @@ export default function WeatherNowPanel({ current, today, fetchedAt, now, error,
   // WeatherIcon falls back to the overcast art for an unknown name, so only
   // ask it for an icon when we actually have one.
   const iconName = current?.iconName || today?.iconName || null
+  const sky = current?.iconName ? skyFor(current, now) : null
   const hasAnything = current != null || today != null
   const showDescription = k ? k.showDescription : true
   const base = k ? `tl-wnow tl-knobs tl-wnow--${k.layout === 'stacked' ? 'stacked' : 'horizontal'}` : 'tl-wnow'
@@ -72,7 +80,7 @@ export default function WeatherNowPanel({ current, today, fetchedAt, now, error,
             </div>
             {iconName && (
               <div className="tl-wnow__icon" data-edit="icon">
-                <WeatherIcon name={iconName} />
+                <WeatherIcon name={iconName} isDay={sky?.isDay} moonPhase={sky?.moonPhase} />
               </div>
             )}
           </div>

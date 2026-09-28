@@ -5,6 +5,7 @@ import WeatherAttribution from './WeatherAttribution.jsx'
 import useBoxSize from './useBoxSize.js'
 import { knobDefaults, panelKnobs } from './schemas.js'
 import { conditionRows, conditionsColumns } from '../lib/weatherPanels.js'
+import { moonPhaseFor, skyFor } from '../data/wmo.js'
 import './ConditionsPanel.css'
 
 // ConditionsPanel - the numbers behind "now", picked row by row: feels like,
@@ -23,6 +24,11 @@ import './ConditionsPanel.css'
 // rows bigger type, which is when the box is wide), size.
 //
 // attribution: the Apple Weather mark while the feed is WeatherKit's.
+//
+// Night: the sky's icon is its night version after dark, the moon at
+// tonight's phase: the reading's own isDay and moonPhase (the feed's; on the
+// Open-Meteo fallback is_day, and the moon worked out for today, from its
+// sunset). A reading that cannot say whether it is day draws the day icon.
 
 export default function ConditionsPanel({ current, sunrise, sunset, knobs, attribution = null }) {
   const k = panelKnobs('conditions', knobs) || knobDefaults('conditions')
@@ -33,6 +39,10 @@ export default function ConditionsPanel({ current, sunrise, sunset, knobs, attri
   const perCol = Math.max(1, Math.ceil(rows.length / cols))
   const code = current && typeof current.code === 'number' ? current.code : null
   const showHead = !!k.showCondition && current != null && code != null
+  // The reading's own sky, by its own time (no clock here, so without one no
+  // guess at day or night); its moon, else today's, worked out from sunset.
+  const sky = showHead ? skyFor(current, null) : null
+  const moonPhase = sky && sky.moonPhase == null ? moonPhaseFor(sunset || sunrise, null) : sky?.moonPhase
 
   return (
     <PanelFrame
@@ -44,7 +54,7 @@ export default function ConditionsPanel({ current, sunrise, sunset, knobs, attri
       {showHead && (
         <div className="tl-cond__head">
           <div className="tl-cond__icon" data-edit="icon">
-            <WeatherIcon name={current.iconName || 'overcast'} />
+            <WeatherIcon name={current.iconName || 'overcast'} isDay={sky?.isDay} moonPhase={moonPhase} />
           </div>
           <div className="tl-cond__condition" data-edit="condition">
             {current.description || ''}

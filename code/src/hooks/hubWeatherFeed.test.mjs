@@ -11,6 +11,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { parseOpenMeteoWeather } from '../../../frameserver/lib/openMeteoWeather.mjs'
+import { normalizeWeatherKit } from '../../../frameserver/lib/weatherKit.mjs'
+import { synodicPhase } from '../components/MoonGlyph/moonGeometry.js'
+import { moonPhase as sunMoonPhase } from '../views/TodayLayouts/lib/sun.js'
 import {
   APPLE_ATTRIBUTION,
   FEED_MAX_AGE_MS,
@@ -24,9 +27,12 @@ import {
   hasFeedData,
   hourKeyOf,
   hourStamp,
+  isDayAt,
+  moonPhaseFor,
   openMeteoColumnsOf,
   parseLocalStamp,
   pickSlots,
+  skyFor,
   slotsFromHours,
 } from './hubWeatherFeed.js'
 
@@ -46,7 +52,11 @@ test('cleanFeed: every key present, typed; junk is null', () => {
   assert.equal(cleanFeed([]), null)
   const f = cleanFeed({ source: 'nope', hourly: [{ time: 'x' }, { time: '2026-09-26T10:00', tempF: 50 }], alerts: [{ event: '' }, { event: 'Wind Advisory' }] })
   assert.equal(f.source, null)
-  assert.deepEqual(f.hourly, [{ time: '2026-09-26T10:00', tempF: 50 }])
+  // The hour as sent, with its sky filled in: no sunrise known, so 10 am is
+  // day by the 6-to-8 rule; no moon known, so it is worked out.
+  assert.deepEqual(f.hourly, [
+    { time: '2026-09-26T10:00', tempF: 50, isDay: true, moonPhase: synodicPhase(new Date(2026, 8, 26, 10)) },
+  ])
   assert.deepEqual(f.alerts, [{ event: 'Wind Advisory' }])
   assert.deepEqual(f.daily, [])
   assert.equal(f.current, null)
@@ -146,4 +156,145 @@ test('stamps: hour keys, local parsing, a bare date is local midnight', () => {
   const s = parseLocalStamp('2026-09-26T07:02')
   assert.deepEqual([s.getHours(), s.getMinutes()], [7, 2])
   assert.equal(parseLocalStamp(''), null)
+})
+
+// --- Day, night and the moon ---------------------------------------------------------
+//
+// The WeatherKit fixture is a real response for the house (2026-09-26, the
+// night of a full moon), normalised as the hub does, stamps in the house's
+// zone whatever this machine's.
+const wkRaw = JSON.parse(readFileSync(`${FIXTURES}weatherkit-house.json`, 'utf8'))
+
+function wkFeed() {
+  const snap = normalizeWeatherKit(wkRaw, { timezone: 'America/Los_Angeles', now: new Date('2026-09-26T18:42:00Z') })
+  return cleanFeed({ source: 'weatherkit', fetchedAt: '2026-09-26T18:42:00.000Z', error: null, location: {}, ...snap })
+}
+
+test('night: isDayAt is that date\'s sunrise to sunset, judged at the hour\'s start', () => {
+  const w = { daily: [{ date: '2026-09-28', sunrise: '2026-09-28T07:04', sunset: '2026-09-28T18:54' }] }
+  assert.equal(isDayAt('2026-09-28T07:00', w), false) // the hour starting before sunrise
+  assert.equal(isDayAt('2026-09-28T07:04', w), true) // the sunrise minute is day
+  assert.equal(isDayAt('2026-09-28T08:00', w), true)
+  assert.equal(isDayAt('2026-09-28T18:00', w), true)
+  assert.equal(isDayAt('2026-09-28T18:54', w), false) // the sunset minute is night
+  assert.equal(isDayAt('2026-09-28T20:00', w), false)
+  assert.equal(isDayAt('2026-09-28T20:00:59', w), false) // seconds dropped
+  // A Date or a ms epoch reads as its local wall clock.
+  assert.equal(isDayAt(new Date(2026, 8, 28, 12, 30), w), true)
+  assert.equal(isDayAt(new Date(2026, 8, 28, 23).getTime(), w), false)
+  // The layouts' days (Dates) and the feed's sun (today's) serve as well.
+  const days = { days: [{ dateKey: '2026-09-28', sunrise: new Date(2026, 8, 28, 7, 4), sunset: new Date(2026, 8, 28, 18, 54) }] }
+  assert.equal(isDayAt('2026-09-28T19:00', days), false)
+  assert.equal(isDayAt('2026-09-28T07:30', days), true)
+  const sun = { sun: { sunrise: '2026-09-28T07:04', sunset: '2026-09-28T18:54' } }
+  assert.equal(isDayAt('2026-09-28T19:30', sun), false)
+  // Another date's times are not this date's: 6 am to 8 pm instead.
+  assert.equal(isDayAt('2026-09-29T19:30', w), true)
+  assert.equal(isDayAt('2026-09-29T20:00', w), false)
+  assert.equal(isDayAt('2026-09-29T05:59', null), false)
+  assert.equal(isDayAt('2026-09-29T06:00', undefined), true)
+  // Nothing to read.
+  assert.equal(isDayAt('2026-09-29', w), null)
+  assert.equal(isDayAt('7 pm', w), null)
+  assert.equal(isDayAt(null, w), null)
+  assert.equal(isDayAt(new Date('nope'), w), null)
+})
+
+test('night: isDayAt agrees with Apple\'s daylight on every hour of the house\'s day', () => {
+  const snap = normalizeWeatherKit(wkRaw, { timezone: 'America/Los_Angeles', now: new Date('2026-09-26T18:42:00Z') })
+  assert.ok(snap.hourly.length > 48)
+  for (const h of snap.hourly) assert.equal(isDayAt(h.time, snap), h.isDay, h.time)
+})
+
+test('night: moonPhaseFor is the exact mean phase at the instant, whatever the feed says', () => {
+  const w = { daily: [{ date: '2026-09-28', moonPhase: 0.625 }], moon: { phase: 0.6, name: 'Waning Gibbous' } }
+  assert.equal(moonPhaseFor('2026-09-28T23:00', w), synodicPhase(new Date(2026, 8, 28, 23)))
+  assert.equal(moonPhaseFor('2026-09-28T23:00', null), synodicPhase(new Date(2026, 8, 28, 23)))
+  assert.equal(moonPhaseFor('2026-09-28', w), synodicPhase(new Date(2026, 8, 28, 12)))
+  assert.equal(moonPhaseFor(new Date(2026, 9, 3, 21), w), synodicPhase(new Date(2026, 9, 3, 21)))
+  assert.equal(moonPhaseFor(Date.UTC(2024, 3, 8, 18, 21), {}), synodicPhase(Date.UTC(2024, 3, 8, 18, 21)))
+  assert.equal(moonPhaseFor('tonight', null), null)
+  assert.equal(moonPhaseFor(undefined, null), null)
+  // The Sun and moon panel's model (lib/sun.js), so the two moons agree.
+  const at = new Date(2026, 8, 28, 23)
+  assert.ok(Math.abs(moonPhaseFor('2026-09-28T23:00') - sunMoonPhase(at).phase) < 1e-12)
+})
+
+test('night: cleanFeed gives every hour and the current reading its day and its moon', () => {
+  const feed = wkFeed()
+  for (const h of feed.hourly) {
+    assert.equal(typeof h.isDay, 'boolean', h.time)
+    assert.equal(h.moonPhase, moonPhaseFor(h.time), h.time)
+  }
+  // Tonight: night from 7 pm, the moon exact at the hour.
+  assert.equal(entryAt(feed.hourly, '2026-09-26', 21).isDay, false)
+  assert.equal(entryAt(feed.hourly, '2026-09-26', 21).moonPhase, synodicPhase(new Date(2026, 8, 26, 21)))
+  assert.equal(entryAt(feed.hourly, '2026-09-27', 22).moonPhase, synodicPhase(new Date(2026, 8, 27, 22)))
+  assert.equal(feed.current.isDay, true)
+  assert.equal(feed.current.moonPhase, moonPhaseFor(feed.current.time))
+  // The Open-Meteo feed: the same exact phase.
+  const om = omFeed()
+  assert.ok(om.hourly.every((h) => typeof h.isDay === 'boolean' && typeof h.moonPhase === 'number'))
+  assert.equal(entryAt(om.hourly, DAY, 20).isDay, false)
+  assert.equal(entryAt(om.hourly, DAY, 20).moonPhase, moonPhaseFor(entryAt(om.hourly, DAY, 20).time))
+  // Idempotent, and an entry that had both is passed on as it came.
+  assert.deepEqual(cleanFeed(JSON.parse(JSON.stringify(feed))), feed)
+  const again = cleanFeed(feed)
+  assert.equal(again.hourly[5], feed.hourly[5])
+  assert.equal(again.current, feed.current)
+})
+
+test('night: an hour without the source\'s isDay is judged by its date\'s sunrise and sunset', () => {
+  const f = cleanFeed({
+    source: 'open-meteo',
+    hourly: [
+      { time: '2026-09-28T18:00', code: 0, isDay: null },
+      { time: '2026-09-28T19:00', code: 0 },
+      { time: '2026-09-28T21:00', code: 0, isDay: true }, // the source's word stands
+    ],
+    daily: [{ date: '2026-09-28', sunrise: '2026-09-28T07:04', sunset: '2026-09-28T18:54', moonPhase: 0.625 }],
+    current: { time: '2026-09-28T23:00', code: 0 },
+    moon: { phase: 0.625 },
+  })
+  assert.deepEqual(f.hourly.map((h) => h.isDay), [true, false, true])
+  assert.deepEqual(f.hourly.map((h) => h.moonPhase), f.hourly.map((h) => moonPhaseFor(h.time)))
+  assert.equal(f.current.isDay, false)
+  assert.equal(f.current.moonPhase, synodicPhase(new Date(2026, 8, 28, 23)))
+  // A current reading with no stamp is passed on as it came.
+  const bare = { tempF: 50 }
+  assert.equal(cleanFeed({ current: bare }).current, bare)
+})
+
+test('night: the Framed Today\'s slots carry their own hour\'s sky', () => {
+  const feed = wkFeed()
+  const slots = slotsFromHours(feed.hourly, [8, 11, 14, 17, 20], '2026-09-26', feed)
+  assert.deepEqual(slots.map((s) => s.isDay), [true, true, true, true, false])
+  assert.deepEqual(slots.map((s) => s.moonPhase), [8, 11, 14, 17, 20].map((h) => synodicPhase(new Date(2026, 8, 26, h))))
+  assert.deepEqual(slots.map((s) => s.code), [3, 0, 3, 3, 3])
+  // iconName is still the day icon; the night version is WeatherIcon's call.
+  assert.equal(slots[1].iconName, 'clear')
+  // The fallback: Open-Meteo's is_day at the hour's start, the moon worked out.
+  const direct = pickSlots(raw, [8, 20], DAY)
+  assert.deepEqual(direct.map((s) => s.isDay), [true, false])
+  assert.equal(direct[1].moonPhase, synodicPhase(new Date(2026, 8, 26, 20)))
+  assert.equal(typeof direct[1].code, 'number')
+  // A payload asked for without is_day: 6 am to 8 pm.
+  const noFlag = { hourly: { time: [`${DAY}T19:00`, `${DAY}T20:00`], temperature_2m: [60, 58], weather_code: [0, 0] } }
+  assert.deepEqual(pickSlots(noFlag, [19, 20], DAY).map((s) => s.isDay), [true, false])
+})
+
+test('night: skyFor is the reading\'s own sky, else worked out for its time or for now', () => {
+  assert.deepEqual(skyFor({ time: '2026-09-28T23:00', isDay: false, moonPhase: 0.625 }, null), { isDay: false, moonPhase: 0.625 })
+  // Its own time: 11 pm is night by the 6-to-8 rule, and the moon is worked out.
+  assert.deepEqual(skyFor({ time: '2026-09-28T23:00' }, new Date(2026, 8, 28, 12)), {
+    isDay: false,
+    moonPhase: synodicPhase(new Date(2026, 8, 28, 23)),
+  })
+  // No time of its own: now.
+  const w = { daily: [{ date: '2026-09-28', sunrise: '2026-09-28T07:04', sunset: '2026-09-28T18:54', moonPhase: 0.625 }] }
+  assert.deepEqual(skyFor({ code: 0 }, new Date(2026, 8, 28, 19, 30), w), { isDay: false, moonPhase: synodicPhase(new Date(2026, 8, 28, 19, 30)) })
+  assert.deepEqual(skyFor({ code: 0, isDay: true }, new Date(2026, 8, 28, 19, 30), w), { isDay: true, moonPhase: synodicPhase(new Date(2026, 8, 28, 19, 30)) })
+  // Nothing to go by: the day icon and the default moon.
+  assert.deepEqual(skyFor({ code: 0 }, null), { isDay: undefined, moonPhase: undefined })
+  assert.deepEqual(skyFor(null, undefined), { isDay: undefined, moonPhase: undefined })
 })

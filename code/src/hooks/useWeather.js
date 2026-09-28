@@ -28,6 +28,13 @@ import {
 // entry for the hour STARTING at H:00 (hooks/hubWeatherFeed.js, "Hour
 // alignment"); the feed's hours run from today's local midnight, so this
 // morning's slots are there on a fresh load in the afternoon too.
+//
+// Each slot is { label, iconName, tempF } as always, plus the hour's `code`,
+// `isDay` and `moonPhase` (hubWeatherFeed.js, "Day, night and the moon"), so
+// a slot after dark draws its night sky: <WeatherIcon name={slot.iconName}
+// isDay={slot.isDay} moonPhase={slot.moonPhase} />. The fallback asks
+// Open-Meteo for is_day too and works the moon out itself. A placeholder, or
+// a slot cached before these fields, has none and draws by day.
 
 const REFRESH_MS = 15 * 60 * 1000
 const ERROR_RETRY_MS = 2 * 60 * 1000  // shorter retry when the API is down
@@ -101,7 +108,7 @@ export default function useWeather() {
       const url = new URL('https://api.open-meteo.com/v1/forecast')
       url.searchParams.set('latitude', location.lat)
       url.searchParams.set('longitude', location.lon)
-      url.searchParams.set('hourly', 'temperature_2m,weather_code')
+      url.searchParams.set('hourly', 'temperature_2m,weather_code,is_day')
       url.searchParams.set('temperature_unit', 'fahrenheit')
       url.searchParams.set('timezone', location.timezone)
       url.searchParams.set('forecast_days', '2')
@@ -162,11 +169,11 @@ export default function useWeather() {
     () =>
       fromFeed
         ? {
-            slots: slotsFromHours(hours, weatherSlots, day),
+            slots: slotsFromHours(hours, weatherSlots, day, feed),
             hourly: openMeteoColumnsOf(hours),
           }
         : null,
-    [fromFeed, hours, weatherSlots, day]
+    [fromFeed, hours, weatherSlots, day, feed]
   )
 
   if (feedView) {

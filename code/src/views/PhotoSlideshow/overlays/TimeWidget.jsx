@@ -6,6 +6,9 @@ import './TimeWidget.css'
 
 // Time widget overlay - bottom-left of the Photo Slideshow.
 // Tap to cycle: time -> time+date -> time+date+weather -> time.
+// The weather slots are the Framed Today's (hooks/useWeather.js), each
+// drawing its own hour's sky: after dark a clear or partly cloudy hour shows
+// the moon at that night's phase.
 // The widget itself is interactive so it does not bubble to the dead-area
 // tap that summons the menu pill (the parent slideshow stops menu-pill
 // triggering when the event target has [data-interactive="true"]).
@@ -75,7 +78,7 @@ export default function TimeWidget() {
             <div className="time-widget__slot" key={s.label}>
               <div className="time-widget__slot-label">{s.label}</div>
               <div className="time-widget__slot-icon">
-                <WeatherIcon name={s.iconName} />
+                <WeatherIcon name={s.iconName} isDay={s.isDay} moonPhase={s.moonPhase} />
               </div>
               <div className="time-widget__slot-temp">
                 {s.tempF == null ? '--' : s.tempF}&deg;

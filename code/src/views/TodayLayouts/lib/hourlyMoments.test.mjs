@@ -27,12 +27,19 @@ import {
 import { fmtHour, hourlyColumns, hourlyTitle, localHourKey, pctOf } from './weatherPanels.js'
 import { PANEL_ELEMENTS, PANEL_SCHEMAS, knobDefaults } from '../panels/schemas.js'
 import { newPanel, normalizeSpec } from '../layoutSpec.js'
+import { synodicPhase } from '../../../components/MoonGlyph/moonGeometry.js'
 
 const pad = (n) => String(n).padStart(2, '0')
 const stampOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 const dateOf = (d) => stampOf(d).slice(0, 10)
 // Monday 2026-09-28 unless told otherwise, local time.
 const at = (h, m = 0, day = 28, month = 8) => new Date(2026, month, day, h, m, 0)
+// The exact mean phase at a moment's hour (a bare date: its 9 pm), as phaseOn works it out.
+const exact = (stamp) => {
+  const [d, tm = '21:00'] = String(stamp).split('T')
+  const [y, mo, da] = d.split('-').map(Number)
+  return synodicPhase(new Date(y, mo - 1, da, Number(tm.slice(0, 2)), 0, 0))
+}
 
 // A feed like the hub's: hours from local midnight of the first day, one per
 // real hour (so a clock change repeats or skips a stamp, as the hub's does),
@@ -286,20 +293,20 @@ test('the now line in wrapped rows: the row it falls in, and how far across', ()
 test('the 10 pm moment is night, with the moon of its own date', () => {
   const r = run('wholeDay', at(14, 5))
   assert.deepEqual(flags(r, 'isDay'), [true, true, true, true, false, false])
-  assert.deepEqual(flags(r, 'moonPhase'), [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+  assert.deepEqual(flags(r, 'moonPhase'), r.moments.map((m) => exact(m.time)))
   // Rolled to tomorrow: tomorrow's phase.
   const t = run('wholeDay', at(22, 30))
   assert.equal(t.moments[5].isDay, false)
-  assert.equal(t.moments[5].moonPhase, 0.53)
+  assert.equal(t.moments[5].moonPhase, exact(t.moments[5].time))
   // An hour without its own isDay: that date's sunrise and sunset.
   const bare = feedFor({ isDay: null })
   assert.deepEqual(flags(run('wholeDay', at(14, 5), {}, bare), 'isDay'), [true, true, true, true, false, false])
-  // Neither: not known (drawn as day); no phase for the date: the feed's moon.
+  // Neither: not known (drawn as day); the phase is still the exact one.
   const blind = feedFor({ isDay: null, sunrise: null, sunset: null })
   blind.daily = []
   const b = run('wholeDay', at(14, 5), {}, blind)
   assert.deepEqual(flags(b, 'isDay'), [null, null, null, null, null, null])
-  assert.equal(b.moments[5].moonPhase, 0.9)
+  assert.equal(b.moments[5].moonPhase, exact(b.moments[5].time))
   // Now: the current reading's isDay, over its hour's.
   const dusk = { ...FEED, current: { ...FEED.current, isDay: false } }
   assert.equal(run('untilEnd', at(14, 5), {}, dusk).moments[0].isDay, false)
@@ -345,8 +352,8 @@ test('dayParts: from 9 pm, Tonight and tomorrow; after midnight, the same night'
 test('dayParts: Tonight is night with the phase of the date it starts on; an Evening in winter is night', () => {
   const r = run('dayParts', at(21, 30))
   assert.equal(r.moments[0].isDay, false)
-  assert.equal(r.moments[0].moonPhase, 0.5)
-  assert.equal(r.moments[1].moonPhase, 0.53)
+  assert.equal(r.moments[0].moonPhase, exact('2026-09-28'))
+  assert.equal(r.moments[1].moonPhase, exact('2026-09-29'))
   // September: the Evening's 5 and 6 pm are day, 7 and 8 night: not most.
   assert.deepEqual(flags(run('dayParts', at(14, 5)), 'isDay'), [true, true, true, false])
   // December: dark from 4:30, by the feed's own hours and by the sun alone.
@@ -422,7 +429,7 @@ test('setTimes: each time from the hour holding it, labelled with the time; past
   assert.equal(t.header, 'Tomorrow')
   assert.ok(t.moments.every((m) => m.tomorrow && !m.past && !m.current))
   assert.equal(t.moments[0].time, '2026-09-29T07:30')
-  assert.equal(t.moments[3].moonPhase, 0.53)
+  assert.equal(t.moments[3].moonPhase, exact(t.moments[3].time))
   // Its own isDay is its hour's.
   assert.deepEqual(flags(run('setTimes', at(5), { times: '6:30,12:00,21:15' }), 'isDay'), [false, true, false])
   // No time that reads as one: nothing, and why.
