@@ -2,7 +2,7 @@
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
 modified: 2026-09-28
-version: 1.9
+version: 1.10
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, entry, echo-show, today, layouts, calendar, calendar-views, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
 ---
@@ -352,7 +352,9 @@ label "Entry board", in `registry.js`, `kioskMode.js` VALID_LAYOUTS and
   wear and the air quality chip top-right; the headline across the middle
   left; the agenda's three columns bottom-left; the countdown tiles
   bottom-right. During the school-morning window on a school day the
-  countdown slot shows `DeparturePanel` instead. Since the layout editor
+  countdown slot used to show `DeparturePanel` instead; since 2026-09-28 it
+  keeps the calendar countdowns unless its School departure switch is on
+  (Justin's call; a Departure block can be added instead). Since the layout editor
   (2026-09-24) that arrangement is `DEFAULT_ENTRY_SPEC`, drawn by
   `Entry/SpecBoard.jsx` from the screen's own spec when it has one
   (`layout-editor.md`). `entryBackdrop === 'photos'` puts a full-bleed

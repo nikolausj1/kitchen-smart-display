@@ -1,8 +1,8 @@
 ---
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
-modified: 2026-09-27
-version: 1.9
+modified: 2026-09-28
+version: 1.10
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules, block-types, shape, blocks, add-block-menu, repeated-blocks, previews]
 ---
@@ -510,10 +510,12 @@ off (the old grid's gaps were in `vw`, so no one percentage fits both
 sizes).
 
 **The departure countdown borrows a box.** A layout with its own `departure`
-panel shows it there, always. Without one it takes the `countdowns` box
+panel shows it there, always. Without one it takes a `countdowns` box
 during a school morning on a school day, or while a manual timer runs at any
-hour (the Entry board's rule), else the `nowplaying` box while a countdown
-actually runs (the Board's rule). One box at most.
+hour, but only when that box's School departure switch (`schoolDeparture`)
+is on, which it is not by default since 2026-09-28 (the Entry board's rule;
+the logic is in `Entry/departureHost.js`, tested), else the `nowplaying` box
+while a countdown actually runs (the Board's rule). One box at most.
 
 **Data limits handled.** The calendar hook asks the hub for 6 days and the
 daily forecast for 7, so the agenda's knobs (1 to 5 days, from today or

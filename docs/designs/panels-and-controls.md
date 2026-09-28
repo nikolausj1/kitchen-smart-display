@@ -1,8 +1,8 @@
 ---
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
-modified: 2026-09-27
-version: 1.7
+modified: 2026-09-28
+version: 1.8
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, ha-blocks, repeated-blocks, hourly, agenda, previews, echo-show, frameserver]
 ---
@@ -1186,7 +1186,8 @@ menu, repeated blocks". At the defaults every board draws as it did.
   a reader that predates `kind`.
 - `Entry/SpecBoard.jsx` works per box wherever it worked per type:
   - The departure countdown still borrows one box (`departureHost`): the
-    first countdowns box drawn, in the spec's list order, during a school
+    first countdowns box drawn whose School departure switch is on (off by
+    default since 2026-09-28), in the spec's list order, during a school
     morning or a manual timer, else the first now-playing box drawn while a
     countdown runs, whatever their ids or stacking; a layout with a
     departure block of its own, any instance, lends none.

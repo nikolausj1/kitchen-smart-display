@@ -830,6 +830,13 @@ export const PANEL_SCHEMAS = deepFreeze({
         'image',
         'Which one a countdown with both shows'
       ),
+      toggle(
+        'schoolDeparture',
+        'School departure',
+        false,
+        null,
+        'On: during the school morning (or a manual timer) this block shows the leave-by countdown instead of the tiles'
+      ),
     ],
   },
 

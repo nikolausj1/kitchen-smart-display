@@ -64,7 +64,6 @@ import { hexChannels } from './specStyles.js'
 import {
   cardJoins,
   clockDaypart,
-  inSchoolMorning,
   isSchoolMorning,
   knobsOf,
   layoutTextScale,
@@ -76,6 +75,7 @@ import {
   variantPanels,
   visiblePanels,
 } from '../layoutSpec.js'
+import { departureHost } from './departureHost.js'
 import { fontStack } from '../lib/fonts.js'
 import { useEditBridge, useEditDaypart, useEditDraft, useEditHover } from '../editBridge.js'
 import { EDIT_MODE } from '../../../lib/kioskMode.js'
@@ -133,12 +133,12 @@ import './SpecPanel.css'
 // slideshow interval) and its own shuffle.
 //
 // The departure countdown. A layout with its own departure panel shows it
-// there, always. Without one it borrows a box, as the two built-in boards
-// always have: the countdowns box during a school morning (the Entry board's
-// rule: the whole morning window, or a manual timer at any hour), else the
-// now-playing box while a countdown actually runs (the Board's rule). One box
-// at most: with several, the first countdowns (or now-playing) box in the
-// spec's list, whatever the stacking.
+// there, always. Without one it may borrow a box (Entry/departureHost.js): a
+// countdowns box whose School departure switch is on, during a school morning
+// or a manual timer (off by default since 2026-09-28: the countdown block shows
+// the calendar countdowns only), else the now-playing box while a countdown
+// actually runs (the Board's rule). One box at most: with several, the first
+// eligible box in the spec's list, whatever the stacking.
 //
 // In the layout editor (?edit=1 inside its frame) editBridge.js reports where
 // each box and each marked sub-element landed.
@@ -211,41 +211,6 @@ function globalStyle(global) {
   return style
 }
 
-// The Entry board's rule: the departure panel during the school-morning window
-// on a school day, or whenever a manual timer runs ("leave at 4:40" set on any
-// screen). The default timer only ever runs inside the window; keying on the
-// window rather than on "timer active" is also what lets ?demo=1 (whose timer
-// is always active) show the tiles outside the morning.
-function departureInCountdowns(d) {
-  const school = d.school
-  if (!school || school.noSchool) return false
-  if (inSchoolMorning(d.now, school)) return true
-  return d.timer?.mode === 'active' && d.timer?.kind === 'manual'
-}
-
-// The Board's rule: while a departure countdown actually runs.
-function departureInNowPlaying(d) {
-  return d.timer?.mode === 'active' && !d.school?.noSchool
-}
-
-// Which box borrows the departure countdown: the id of a countdowns box or a
-// now-playing box, or null (none, or the layout has a departure panel of its
-// own). panels: the boxes drawn; order: the spec's panel list (view.panels),
-// which decides the first of several, whatever their stacking.
-function departureHost(panels, order, d) {
-  if (panels.some((p) => p.type === 'departure')) return null
-  const drawn = new Set(panels.map((p) => p.id))
-  const first = (type) => {
-    for (let i = 0; i < order.length; i++) {
-      const p = order[i]
-      if (p && p.type === type && drawn.has(p.id)) return p.id
-    }
-    return null
-  }
-  const countdowns = departureInCountdowns(d) ? first('countdowns') : null
-  if (countdowns) return countdowns
-  return departureInNowPlaying(d) ? first('nowplaying') : null
-}
 
 // Until the hub publishes a headline (or when it has not confirmed one today)
 // the line is the local greeting, which is what the hub itself says with no

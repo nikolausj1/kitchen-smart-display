@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-27
-version: 8.2
+modified: 2026-09-28
+version: 8.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -831,6 +831,12 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-28 - The countdown block shows calendar countdowns only.** The
+  school departure no longer takes over the countdown block on school
+  mornings or during a manual timer. A School departure switch on the block
+  (off by default) brings the old behaviour back for that block; a Departure
+  block added through Add block shows the leave-by countdown on its own.
+  The rule now lives in `Entry/departureHost.js` with tests.
 - **2026-09-27 - Any number of every type, with ids that never move.** A
   layout may hold any type any number of times, each instance with its own
   box and knobs. A functional type's first instance keeps the bare type as
@@ -1288,6 +1294,10 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-28 - Countdown block: no school departure takeover** (Justin's
+  request). The Echo Show 15's countdown tiles stay on school mornings. Also
+  the same night: countdown art goes to the picture matching the most title
+  words, so "Nana & Pop Visit" shows Mark and Kim's picture.
 - **2026-09-27 - Sheena's calendar connected.** She shared it with the
   service account ("See all event details"; the service account reads it as
   `reader`), and it joined `shared.calendar.calendars` as "Sheena". Colours

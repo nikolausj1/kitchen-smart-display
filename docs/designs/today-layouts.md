@@ -1,8 +1,8 @@
 ---
 title: "Today layouts - Board, Briefing, Ambient, Entry board, Flip clock"
 created: 2026-09-04
-modified: 2026-09-27
-version: 1.5
+modified: 2026-09-28
+version: 1.6
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, kitchen, today, layouts, panels, board, briefing, ambient, entry, flip-clock, layout-spec, weather-panels, countdowns, calendar-views, blocks, clocks, shape, home-assistant, repeated-blocks, swipe]
 ---
@@ -226,8 +226,9 @@ colour, card opacity and corner radius as variables on the root; cards
 stacked flush draw as one card divided by hairlines. The default specs
 reproduce the old grids: the Board exactly at 1280x800 (the Echo Show 10),
 the Entry board at 1920x1080 (the Echo Show 15), each within a few pixels at
-the other size. The departure countdown borrows the countdowns box on a
-school morning and the now-playing box while a countdown runs (with
+the other size. The departure countdown borrows a countdowns box on a
+school morning when that box's School departure switch is on (off by
+default since 2026-09-28) and the now-playing box while a countdown runs (with
 several, the first in the spec's list), unless the layout has a departure
 panel of its own. The layout component still calls
 `useTodayData()` once and hands the result to `SpecBoard`; the Entry board
