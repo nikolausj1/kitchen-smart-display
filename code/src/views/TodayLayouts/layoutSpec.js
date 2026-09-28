@@ -156,7 +156,20 @@ const TYPE_TABLE = [
   // default board; they arrive through Add panel. The alert banner is its own
   // card (like the countdown tiles), and its box is dropped while no alert is
   // in force (SpecBoard). ---
-  { type: 'hourly', label: 'Hourly forecast', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 220, h: 90 }, box: { x: 20, y: 34, w: 60, h: 30 }, props: CARD },
+  // startKnobs: what a new hourly block starts with (newPanel): Whole day, 8
+  // am to 10 pm in six (Justin, 2026-09-28). Not a fallback for a stored
+  // block, which keeps the schema's default (Next hours) when it has no
+  // `mode`, as every block saved before the modes does.
+  {
+    type: 'hourly',
+    label: 'Hourly forecast',
+    kind: 'panel',
+    min: { w: 14, h: 10 },
+    minPx: { w: 220, h: 90 },
+    box: { x: 20, y: 34, w: 60, h: 30 },
+    props: CARD,
+    startKnobs: { mode: 'wholeDay' },
+  },
   { type: 'conditions', label: 'Conditions', kind: 'panel', min: { w: 10, h: 8 }, minPx: { w: 150, h: 70 }, box: { x: 34, y: 30, w: 32, h: 36 }, props: CARD },
   { type: 'precip', label: 'Rain chance', kind: 'panel', min: { w: 14, h: 10 }, minPx: { w: 220, h: 90 }, box: { x: 25, y: 34, w: 50, h: 30 }, props: CARD },
   { type: 'alert', label: 'Weather alert', kind: 'panel', min: { w: 10, h: 4 }, minPx: { w: 160, h: 28 }, box: { x: 20, y: 3, w: 60, h: 9 }, props: BARE },
@@ -1540,7 +1553,8 @@ export function newBlock(type, overrides, takenIds) {
 // newPanel(type, overrides, { layoutId, takenIds }) -> a normalized
 // functional panel for the editor's "Add block": its box and props are that
 // layout's default for the type, or the type's own starting box (centred,
-// above the built-in panels) and a card. overrides may set any panel field
+// above the built-in panels) and a card, with the type's startKnobs (the
+// hourly block's Whole day). overrides may set any panel field
 // and any props (overrides.id is ignored). The id follows the instance
 // scheme: the bare type when takenIds (a Set or an array of the layout's ids)
 // does not hold it, else a fresh '<type>-<4 hex>' clear of them. null for a
@@ -1554,8 +1568,11 @@ export function newPanel(type, overrides, options) {
   const box = defaultBoxFor(type, layoutId)
   const taken = idSet(opts.takenIds)
   const id = taken.has(type) ? freshId(type, taken) : type
+  // A type's startKnobs (the hourly block's Whole day), unless the layout's
+  // own default has the type.
+  const start = !layoutDefaultPanel(type, layoutId) && isDict(TYPE_EXTRAS[type].startKnobs) ? TYPE_EXTRAS[type].startKnobs : null
   return normPanel(
-    { ...box, hidden: false, locked: false, ...o, props: isDict(o.props) ? o.props : {} },
+    { ...box, hidden: false, locked: false, ...o, props: { ...start, ...(isDict(o.props) ? o.props : {}) } },
     type,
     id,
     layoutId

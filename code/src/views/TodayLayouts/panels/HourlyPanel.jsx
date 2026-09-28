@@ -5,46 +5,51 @@ import WeatherAttribution from './WeatherAttribution.jsx'
 import useBoxSize from './useBoxSize.js'
 import { knobDefaults, panelKnobs } from './schemas.js'
 import { wmoToIcon } from '../data/wmo.js'
-import {
-  RAIN_FLOOR,
-  curveLevels,
-  fmtHour,
-  hourlyColumns,
-  hourlyGrid,
-  hourlyTitle,
-  localHourKey,
-  pctOf,
-  tempRange,
-} from '../lib/weatherPanels.js'
+import { RAIN_FLOOR, curveLevels, hourlyGrid, tempRange } from '../lib/weatherPanels.js'
+import { hourlyMoments, nowLineRow } from '../lib/hourlyMoments.js'
 import './HourlyPanel.css'
 
-// HourlyPanel - the next hours, one column each: the hour ("Now" first), the
-// sky, the temperature, and on request the rain chance, the feels-like and
-// the wind (docs/designs/panels-and-controls.md, chunk 2, "Hourly strip").
+// HourlyPanel - the hourly forecast: a column per moment, its label ("Now",
+// "3 PM", "Morning", "7:30 AM"), the sky, the temperature, and on request the
+// rain chance, the feels-like and the wind (docs/designs/panels-and-controls.md,
+// chunk 2, "Hourly strip", and "The hourly forecast's Show modes").
 //
-// hourly: the hub's feed hours (useTodayData d.weather.hourly), each the hour
-// STARTING at its time; the strip starts at the hour `now` is in. The first
-// column, when it is this hour, shows the current reading (d.weather.current)
-// so it agrees with the weather card beside it.
+// Which moments, and the header, are lib/hourlyMoments.js's, by the Show knob
+// (`mode`): Next hours (the strip as it always was: "Now", the current
+// reading, so it agrees with the weather card beside it, then every `step`
+// hours for `hours` or through `untilHour`, "Rest of day"), Now until, Whole
+// day, Day parts or Set times. Each rolls to tomorrow after its end, the
+// header then saying so ("Tomorrow", "Tonight and tomorrow"). A moment that
+// is over is dimmed to the muted ink; the current one is drawn as "Now"
+// always was (its label in full ink, its dot on the curve in the accent);
+// Whole day draws a 2 px accent line where now falls.
 //
-// knobs (panels/schemas.js 'hourly'): which hours (lib/weatherPanels.js
-// hourlyColumns): range 'hours' (the next `hours`, 6..24) or 'untilHour'
-// (through today's `untilHour`, 18..24, the header then saying "Rest of
-// day"), and step 1..4 ("Now", then every step hour on the clock: 3, 6, 9
-// pm); columns 'auto' | 6 | 8 | 12 (hours past the columns wrap to another
-// row; auto fits the box, in balanced rows), style 'columns' | 'curve' (a
-// line through the temperatures behind the columns, in a band above the
-// numbers), showRain (every hour's chance; from 20 % in the accent, muted
-// below), showFeelsLike, showWind, size (the words and numbers; icons and
-// the curve are art). At the defaults (every hour, the next 12) the strip is
-// what it always was.
+// hourly, current, daily, moon: the hub's feed (useTodayData d.weather): its
+// hours (each the hour STARTING at its time, from today's midnight), the
+// current reading, the days (sunrise, sunset, the moon's phase) and today's
+// moon. Each icon gets its moment's isDay and moonPhase, so a moment at night
+// can draw the night sky.
+//
+// knobs (panels/schemas.js 'hourly'): mode and each mode's own (range, hours,
+// untilHour, step; count, startHour, endHour; times), then for every mode
+// columns 'auto' | 6 | 8 | 12 (moments past the columns wrap to another row;
+// auto fits the box, in balanced rows), style 'columns' | 'curve' (a line
+// through the temperatures behind the columns, in a band above the numbers),
+// showRain (every moment's chance; from 20 % in the accent, muted below),
+// showFeelsLike, showWind, size (the words and numbers; icons and the curve
+// are art) and iconSize. At the defaults (Next hours, every hour, the next
+// 12) the strip is what it always was, element for element.
 //
 // attribution: the Apple Weather mark while the feed is WeatherKit's.
 
-// The narrowest a column may get before 'auto' wraps the hours: 3.4 % of the
-// screen's width, never under 44 px, times the size knob.
+// The narrowest a column may get before 'auto' wraps the moments: 3.4 % of
+// the screen's width, never under 44 px, times the size knob.
 const MIN_COL_VW = 0.034
 const MIN_COL_PX = 44
+
+const EMPTY_TEXT = {
+  noTimes: 'No times set',
+}
 
 function num(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null
@@ -55,9 +60,15 @@ function deg(v) {
   return t == null ? '--' : Math.round(t)
 }
 
+// A cell's class: its own, and the muted ink when its moment is over.
+function cellClass(base, m) {
+  return m.past ? `${base} tl-hr__cell--past` : base
+}
+
 // The curve band: a line through the column centres, and a dot on each (the
-// current hour's in the accent: `nowIndex`, -1 for a row without it).
-function Curve({ levels, cols, nowIndex }) {
+// current moment's in the accent: `nowIndex`, -1 for a row without it; a past
+// one's muted).
+function Curve({ levels, cols, nowIndex, past }) {
   const pts = []
   levels.forEach((lv, i) => {
     if (lv != null) pts.push({ i, x: (i + 0.5) * 100, y: 14 + lv * 72 })
@@ -71,7 +82,7 @@ function Curve({ levels, cols, nowIndex }) {
       {pts.map((p) => (
         <span
           key={p.i}
-          className={`tl-hr__dot${p.i === nowIndex ? ' tl-hr__dot--now' : ''}`}
+          className={`tl-hr__dot${p.i === nowIndex ? ' tl-hr__dot--now' : ''}${past[p.i] ? ' tl-hr__dot--past' : ''}`}
           style={{ left: `${((p.i + 0.5) / cols) * 100}%`, top: `${p.y}%` }}
         />
       ))}
@@ -79,36 +90,21 @@ function Curve({ levels, cols, nowIndex }) {
   )
 }
 
-export default function HourlyPanel({ hourly, current, now, knobs, attribution = null }) {
+export default function HourlyPanel({ hourly, current, daily, moon, now, knobs, attribution = null }) {
   const k = panelKnobs('hourly', knobs) || knobDefaults('hourly')
   const curve = k.style === 'curve'
   const areaRef = useRef(null)
   const box = useBoxSize(areaRef)
 
-  const list = hourlyColumns(hourly, now, k)
-  const nowKey = now instanceof Date && !Number.isNaN(now.getTime()) ? localHourKey(now) : null
-  const cur = current || null
-  const hours = list.map((e, i) => {
-    const isNow = i === 0 && nowKey != null && String(e.time).slice(0, 13) === nowKey
-    const live = isNow && cur ? cur : null
-    const pick = (a, b) => (live && num(a) != null ? a : b)
-    return {
-      key: e.time,
-      label: isNow ? 'Now' : fmtHour(e.time),
-      isNow,
-      tempF: pick(live && live.tempF, e.tempF),
-      code: live && typeof live.code === 'number' ? live.code : e.code,
-      feelsF: pick(live && (num(live.feelsLikeF) != null ? live.feelsLikeF : live.feelsF), e.feelsF),
-      rain: pctOf(e.precipProb),
-      windMph: pick(live && live.windMph, e.windMph),
-    }
-  })
+  const view = hourlyMoments({ mode: k.mode, knobs: k, now, feed: { hourly, current, daily, moon } })
+  const moments = view.moments
 
   const minCol = Math.max(MIN_COL_PX, (box.vw || 0) * MIN_COL_VW) * (num(k.size) || 1)
-  const grid = hourlyGrid(hours.length, k.columns, box.w, minCol)
+  const grid = hourlyGrid(moments.length, k.columns, box.w, minCol)
   const rows = []
-  for (let r = 0; r < grid.rows; r++) rows.push(hours.slice(r * grid.cols, (r + 1) * grid.cols))
-  const levels = curve ? curveLevels(hours.map((h) => h.tempF), tempRange(hours.map((h) => h.tempF))) : null
+  for (let r = 0; r < grid.rows; r++) rows.push(moments.slice(r * grid.cols, (r + 1) * grid.cols))
+  const levels = curve ? curveLevels(moments.map((h) => h.tempF), tempRange(moments.map((h) => h.tempF))) : null
+  const line = nowLineRow(view.nowLine, moments.length, grid.cols, grid.rows)
 
   const style = {
     '--tl-hr-size': String(k.size),
@@ -119,24 +115,33 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
 
   return (
     <PanelFrame
-      title={hourlyTitle(k)}
+      title={view.header}
       className={`tl-hr tl-knobs${curve ? ' tl-hr--curve' : ''}`}
       bodyClassName="tl-hr__body"
       style={style}
     >
       <div className="tl-hr__area" ref={areaRef}>
-        {hours.length === 0 ? (
+        {moments.length === 0 ? (
           <div className="tl-hr__empty" data-edit="empty">
-            No hourly forecast yet
+            {EMPTY_TEXT[view.empty] || 'No hourly forecast yet'}
           </div>
         ) : (
           rows.map((row, r) => (
-            <div className="tl-hr__row" key={row[0].key}>
+            <div className={`tl-hr__row${line && line.row === r ? ' tl-hr__row--now' : ''}`} key={row[0].key}>
+              {line && line.row === r && (
+                <div
+                  className="tl-hr__now"
+                  data-edit="nowLine"
+                  data-edit-label="Now line"
+                  style={{ left: `${(line.x * 100).toFixed(2)}%` }}
+                />
+              )}
               {curve && (
                 <Curve
                   levels={levels.slice(r * grid.cols, r * grid.cols + row.length)}
                   cols={grid.cols}
-                  nowIndex={r === 0 && row[0].isNow ? 0 : -1}
+                  nowIndex={row.findIndex((h) => h.current)}
+                  past={row.map((h) => h.past)}
                 />
               )}
               {row.map((h, i) => {
@@ -145,21 +150,36 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
                 return [
                   <div
                     key={`${h.key}-h`}
-                    className={`tl-hr__hour${h.isNow ? ' tl-hr__hour--now' : ''}`}
+                    className={cellClass(`tl-hr__hour${h.current ? ' tl-hr__hour--now' : ''}`, h)}
                     data-edit="hour"
                     style={col}
                   >
                     {h.label}
                   </div>,
-                  <div key={`${h.key}-i`} className="tl-hr__icon" data-edit="icon" style={col}>
-                    {h.code != null && <WeatherIcon name={wmoToIcon(h.code)} />}
+                  <div key={`${h.key}-i`} className={cellClass('tl-hr__icon', h)} data-edit="icon" style={col}>
+                    {h.code != null && (
+                      <WeatherIcon name={wmoToIcon(h.code)} code={h.code} isDay={h.isDay} moonPhase={h.moonPhase} />
+                    )}
                   </div>,
-                  <div key={`${h.key}-t`} className="tl-hr__temp tl-num" data-edit="temp" data-edit-label="Temperature" style={col}>
+                  <div
+                    key={`${h.key}-t`}
+                    className={cellClass('tl-hr__temp tl-num', h)}
+                    data-edit="temp"
+                    data-edit-label="Temperature"
+                    style={col}
+                  >
+                    {h.tempWord ? <span className="tl-hr__temp-word">{h.tempWord} </span> : null}
                     {deg(h.tempF)}
                     <span className="tl-hr__deg">&deg;</span>
                   </div>,
                   k.showFeelsLike ? (
-                    <div key={`${h.key}-f`} className="tl-hr__feels tl-num" data-edit="feels" data-edit-label="Feels like" style={col}>
+                    <div
+                      key={`${h.key}-f`}
+                      className={cellClass('tl-hr__feels tl-num', h)}
+                      data-edit="feels"
+                      data-edit-label="Feels like"
+                      style={col}
+                    >
                       <span className="tl-hr__feels-word">feels </span>
                       {deg(h.feelsF)}&deg;
                     </div>
@@ -167,7 +187,7 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
                   k.showRain ? (
                     <div
                       key={`${h.key}-r`}
-                      className={`tl-hr__rain tl-num${wet ? ' tl-hr__rain--wet' : ''}`}
+                      className={cellClass(`tl-hr__rain tl-num${wet ? ' tl-hr__rain--wet' : ''}`, h)}
                       data-edit="rain"
                       data-edit-label="Rain chance"
                       style={col}
@@ -176,7 +196,13 @@ export default function HourlyPanel({ hourly, current, now, knobs, attribution =
                     </div>
                   ) : null,
                   k.showWind ? (
-                    <div key={`${h.key}-w`} className="tl-hr__wind tl-num" data-edit="wind" data-edit-label="Wind" style={col}>
+                    <div
+                      key={`${h.key}-w`}
+                      className={cellClass('tl-hr__wind tl-num', h)}
+                      data-edit="wind"
+                      data-edit-label="Wind"
+                      style={col}
+                    >
                       {num(h.windMph) == null ? '--' : Math.round(h.windMph)}
                       <span className="tl-hr__unit"> mph</span>
                     </div>

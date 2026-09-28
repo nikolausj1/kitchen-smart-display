@@ -1,4 +1,4 @@
-/* HourlyPanel - the next hours in columns. The whole strip is sized against
+/* HourlyPanel - the moments in columns. The whole strip is sized against
  * one column's width (--tl-hr-col) and one row's height (--tl-hr-rowh), both
  * from the area (a size container), so 6 hours in a wide box and 24 in two
  * rows both fit without a layout tuning anything. The type carries
@@ -198,6 +198,68 @@
   margin: auto 0;
   font-size: calc(var(--tl-text-scale, 1) * clamp(1.4vh, min(6cqw, 12cqh), 2.8vh));
   color: var(--tl-fg-3);
+}
+
+/* --- The Show modes (lib/hourlyMoments.js) ------------------------------------------ */
+
+/* A night's part shows its low: the word, small, before the number. */
+.tl-hr__temp-word {
+  font-family: inherit;
+  font-size: 0.4em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 0.5em;
+  color: var(--tl-fg-3);
+}
+
+/* A moment that is over (Whole day, Day parts, Set times): the muted ink,
+ * and its icon and dot as faint. */
+.tl-hr__cell--past,
+.tl-hr__cell--past .tl-hr__deg,
+.tl-hr__cell--past .tl-hr__feels-word,
+.tl-hr__cell--past .tl-hr__unit,
+.tl-hr__rain--wet.tl-hr__cell--past {
+  color: var(--tl-fg-3);
+}
+
+.tl-hr__icon.tl-hr__cell--past {
+  opacity: 0.42;
+}
+
+.tl-hr__dot--past {
+  background: var(--tl-fg-3);
+}
+
+/* Where now falls (Whole day): a 2 px accent line down the row, behind the
+ * moments' words and icons, a dot at its head. The row is its own stacking
+ * context, so the line stays above the card under the row. Drawn in
+ * currentColor, so the element's colour style recolours it. */
+.tl-hr__row--now {
+  isolation: isolate;
+}
+
+.tl-hr__now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  color: var(--tl-accent);
+  background: currentColor;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.tl-hr__now::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 /* --- Knobs (a spec layout; tokens.css "Panel knobs") -------------------------- */

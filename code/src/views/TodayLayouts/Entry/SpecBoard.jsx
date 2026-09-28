@@ -473,6 +473,8 @@ export default function SpecBoard({ d, layoutId, className, children }) {
           <HourlyPanel
             hourly={d.weather?.hourly}
             current={d.weather?.current}
+            daily={d.weather?.daily}
+            moon={d.weather?.moon}
             now={d.now}
             knobs={k}
             attribution={d.weather?.attribution}

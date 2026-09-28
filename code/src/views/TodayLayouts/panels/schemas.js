@@ -389,25 +389,53 @@ export const PANEL_SCHEMAS = deepFreeze({
 
   // --- Weather panels (docs/designs/panels-and-controls.md, chunk 2) ---------
   // The hub's one weather feed (hooks/useHubWeather.js), through useTodayData.
-  // Which hours (lib/weatherPanels.js hourlyColumns): "Now", then every
-  // `step` hours on the clock, for the next `hours` hours or through today's
-  // `untilHour` ("Rest of day", which the header then says). At the defaults
-  // (every hour, the next 12) the strip is what it always was. `showIf`
-  // names the range each end belongs to, for an inspector that reads it.
+  // `mode` ("Show") picks the moments (lib/hourlyMoments.js): Next hours
+  // (`next`, the default, so every block saved before the modes reads as it
+  // did: "Now", then every `step` hours on the clock, for the next `hours`
+  // hours or through today's `untilHour`, lib/weatherPanels.js
+  // hourlyColumns), Now until (`untilEnd`: Now, then `count` - 1 moments to
+  // `endHour`), Whole day (`wholeDay`: `count` moments from `startHour` to
+  // `endHour`, the past dimmed, a line at now; what a new block starts with,
+  // layoutSpec.js TYPE_TABLE startKnobs), Day parts (`dayParts`) or Set
+  // times (`setTimes`: `times`, 24-hour 'H:MM', comma-separated). Every mode
+  // after its end shows tomorrow. `showIf` says which mode (and range) each
+  // field belongs to; startHour and endHour are one two-handle hour slider
+  // in an editor that knows `ui: 'hourRange'`, and `times` chips with
+  // `ui: 'timeList'` (`max` of them); elsewhere they are plain fields. The
+  // mode and its own fields name the hour labels as their element, so the
+  // inspector draws them first (it groups a type's fields by element, in the
+  // order the fields first name each); the shared look follows.
   hourly: {
     fields: [
       select(
-        'range',
+        'mode',
         'Show',
         [
-          ['hours', 'Next hours'],
-          ['untilHour', 'Rest of day'],
+          ['next', 'Next hours'],
+          ['untilEnd', 'Now until'],
+          ['wholeDay', 'Whole day'],
+          ['dayParts', 'Day parts'],
+          ['setTimes', 'Set times'],
         ],
-        'hours',
-        null,
-        'Rest of day: from now through the hour set below'
+        'next',
+        'hour',
+        'Whole day: the hours past dimmed, a line at now. Every mode shows tomorrow after its end'
       ),
-      { ...count('hours', 'Hours', 6, 24, 12, null, 'From this hour (Show: Next hours)'), showIf: { range: 'hours' } },
+      {
+        ...select(
+          'range',
+          'Range',
+          [
+            ['hours', 'Next hours'],
+            ['untilHour', 'Rest of day'],
+          ],
+          'hours',
+          'hour',
+          'Rest of day: from now through the hour set below'
+        ),
+        showIf: { mode: 'next' },
+      },
+      { ...count('hours', 'Hours', 6, 24, 12, 'hour', 'From this hour (Range: Next hours)'), showIf: { mode: 'next', range: 'hours' } },
       {
         ...select(
           'untilHour',
@@ -422,24 +450,56 @@ export const PANEL_SCHEMAS = deepFreeze({
             [24, 'Midnight'],
           ],
           22,
-          null,
-          'Through that hour (Show: Rest of day)'
+          'hour',
+          'Through that hour (Range: Rest of day)'
         ),
-        showIf: { range: 'untilHour' },
+        showIf: { mode: 'next', range: 'untilHour' },
       },
-      select(
-        'step',
-        'Every',
-        [
-          [1, '1 h'],
-          [2, '2 h'],
-          [3, '3 h'],
-          [4, '4 h'],
-        ],
-        1,
-        'hour',
-        'Now, then the hours on the clock the step divides: every 3 h is 3, 6, 9 pm'
-      ),
+      {
+        ...select(
+          'step',
+          'Every',
+          [
+            [1, '1 h'],
+            [2, '2 h'],
+            [3, '3 h'],
+            [4, '4 h'],
+          ],
+          1,
+          'hour',
+          'Now, then the hours on the clock the step divides: every 3 h is 3, 6, 9 pm'
+        ),
+        showIf: { mode: 'next' },
+      },
+      {
+        ...count('count', 'Moments', 3, 12, 6, 'hour', 'Both ends exact, those between on the nearest hour (Now until: Now is one)'),
+        showIf: { mode: ['untilEnd', 'wholeDay'] },
+      },
+      {
+        ...count('startHour', 'Hours', 0, 23, 8, 'hour', 'From the first hour to the last; from the last on, tomorrow'),
+        ui: 'hourRange',
+        pair: 'endHour',
+        showIf: { mode: 'wholeDay' },
+      },
+      {
+        ...count('endHour', 'Until', 1, 24, 22, 'hour', 'The last moment (24 is midnight); from its hour on, tomorrow'),
+        ui: 'hourRange',
+        pairOf: 'startHour',
+        showIf: { mode: ['wholeDay', 'untilEnd'] },
+      },
+      {
+        key: 'times',
+        label: 'Times',
+        type: 'text',
+        ui: 'timeList',
+        default: '7:30,12:00,15:15,18:00',
+        max: 8,
+        maxLength: 120,
+        placeholder: '7:30,12:00,18:00',
+        element: 'hour',
+        hint: "Up to eight, 24-hour; after the last, tomorrow's",
+        showIf: { mode: 'setTimes' },
+      },
       select(
         'columns',
         'Columns',
@@ -1099,6 +1159,8 @@ export const PANEL_ELEMENTS = deepFreeze({
   // --- Weather panels (chunk 2). Their Apple Weather mark is marked
   // data-edit="attribution" but deliberately left out of these lists, so no
   // element style can hide or restyle it (panels/WeatherAttribution.jsx). ---
+  // The header ("Today", "Tomorrow") is the title; the now line is Whole
+  // day's (lib/hourlyMoments.js).
   hourly: [
     TITLE,
     { key: 'hour', label: 'Hour' },
@@ -1108,6 +1170,7 @@ export const PANEL_ELEMENTS = deepFreeze({
     { key: 'feels', label: 'Feels like' },
     { key: 'rain', label: 'Rain chance' },
     { key: 'wind', label: 'Wind' },
+    { key: 'nowLine', label: 'Now line' },
     EMPTY,
   ],
   conditions: [
