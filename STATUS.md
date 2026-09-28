@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-09-27
-version: 5.8
+version: 5.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
@@ -19,7 +19,7 @@ Active Development. Five screens are registered with the hub (plus `dev-mac` for
 
 ## Health
 
-**2026-09-27, 21:27: Sheena's calendar is connected.** Shared with the hub's service account with full event details and added to the house calendar list (blue); the hub fetched it at once, so the Entry board, the headline, the countdowns and every calendar block now draw both calendars (the next six days: 10 of Sheena's events, 6 of Justin's).
+**2026-09-27, 21:27: Sheena's calendar is connected.** Shared with the hub's service account with full event details and added to the house calendar list (Sheena pink, Justin now blue); the hub fetched it at once, so the Entry board, the headline, the countdowns and every calendar block now draw both calendars (the next six days: 10 of Sheena's events, 6 of Justin's).
 
 **2026-09-27, 10:42: the layout editor round is built end to end: Home Assistant blocks, any block any number of times, an editor that speaks of blocks, and swiping between Today layouts; all of it went to the hub (build `736683e`).** In the layout editor everything on a layout is now a block (Justin's word, DAKboard's): one Add block button opens a grouped, searchable list of every type with a picture of each, and Delete takes a block off the layout (Cmd-Z brings it back) where it used to hide it; with a part of a block selected, Delete hides just that part. Any type can be on a board more than once, two weathers or three agendas, each with its own settings. Four Home Assistant blocks can now be placed: a status (the garage "Closed", the front door "Locked", who is home, each with since when), a button (a tap, or a 1.2 s hold for the garage and the unlock), chips for the house modes, and a picker for the day part. Nothing has been sent to the house: while the dashboard's "Allow actions from screens" is off, as it is, every button draws disabled and says so, and the hub's action log was still empty at 13:05. The hourly forecast can now step every 2 to 4 hours and run to the end of the day ("Rest of day"), and the agenda gains three row layouts, one-line titles, three day headers and a row gap. On the Echos a swipe left or right on Today moves to the next or previous layout, and the screen keeps it: handy, but a stray swipe on the front-door Echo changes its board until someone swipes back (Settings can turn swiping off per screen; the dashboard has no row for it yet). None of the new blocks is on a board yet, and at the defaults every board draws as before (the pixel comparisons found no change). The kitchen Pi and the Apple TV were not redeployed; the kitchen gets the swipe with its next deploy. Tests: the app's suite is 265 (75 new), the hub's 504. Next: the first real Home Assistant action with Justin, then the switch and the PIN; then the camera snapshot and shopping list blocks.
 

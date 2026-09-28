@@ -2,7 +2,7 @@
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
 modified: 2026-09-27
-version: 1.7
+version: 1.8
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, entry, echo-show, today, layouts, calendar, calendar-views, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
 ---
@@ -11,7 +11,7 @@ tags: [design, entry, echo-show, today, layouts, calendar, calendar-views, googl
 
 **Status: phase 1 built and deployed 2026-09-24**, live on the Echo Show 15 as
 its home view. Justin's and Sheena's calendars are both connected (Sheena's
-since 2026-09-27, in blue `#4a90e2`). **Phase 1.5 deployed to the hub 2026-09-25 08:24**: the headline's
+since 2026-09-27; Justin blue `#4a90e2`, Sheena pink `#e0457b`). **Phase 1.5 deployed to the hub 2026-09-25 08:24**: the headline's
 weather rules and National Weather Service alerts (see "Headline rules"; the
 first real weather line, "Rain from 10 am", went up at 08:25) and backdrop
 legibility (adaptive darkness, per-panel scrims, optional blur; see "Phase
@@ -79,8 +79,8 @@ Registry, house-wide (`shared.calendar`, editable on the dashboard):
 
 ```
 calendar: {
-  calendars: [ { id: 'justin@...', label: 'Justin', color: '#e0457b' },
-               { id: 'sheena@...', label: 'Sheena', color: '#4a90e2' } ],
+  calendars: [ { id: 'justin@...', label: 'Justin', color: '#4a90e2' },
+               { id: 'sheena@...', label: 'Sheena', color: '#e0457b' } ],
   countdownLeadDays: 30,
   countdownMax: 3,
 }
