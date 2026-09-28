@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-27
-version: 8.0
+version: 8.1
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -1288,6 +1288,10 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-27 - Sheena's calendar connected.** She shared it with the
+  service account ("See all event details"; the service account reads it as
+  `reader`), and it joined `shared.calendar.calendars` as "Sheena", colour
+  `#4a90e2`. The hub refetched at once; both calendars draw on every screen.
 - **2026-09-27 - Layout core: any block repeats, the hourly forecast's
   step and rest of day, the agenda's row layouts, the Add block previews**
   (hub deployed 10:42, build `736683e`; the Echos take it on their reload;
