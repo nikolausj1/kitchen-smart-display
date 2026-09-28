@@ -1,8 +1,8 @@
 ---
 title: "Entry board - the front-door Today layout, calendar, countdowns, headline"
 created: 2026-09-24
-modified: 2026-09-27
-version: 1.8
+modified: 2026-09-28
+version: 1.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, entry, echo-show, today, layouts, calendar, calendar-views, google-calendar, countdowns, countdown-tiles, headline, weather, nws, legibility, scrims, frameserver]
 ---
@@ -169,10 +169,17 @@ Assets removed from the album are removed from the folder. `GET
 file (long cache, the id is immutable).
 
 Matching, in `lib/countdowns.mjs` (pure): `image: <name>` in the description
-matches a `name` (case-insensitive, extension optional); otherwise the first
-art entry, longest matching keyword first, whose keyword appears as a whole
-word in the lowercased event title; otherwise null (the tile shows the
-emoji, or a calendar glyph).
+matches a `name` (case-insensitive, extension optional); otherwise the art
+entry whose keywords match the most DISTINCT words of the lowercased event
+title (or its `label:`), whole-word (a multi-word keyword, such as a full
+file-name stem with a space in it, counts for every word it covers, not just
+once); the highest score wins, ties go to the longest matching keyword, then
+to library order; otherwise null (the tile shows the emoji, or a calendar
+glyph). Changed 2026-09-28: the old rule (a single longest matching keyword)
+let one long, loosely-related word (Minnesota art keyworded "visit") beat a
+shorter, more specific pair (an art keyworded "nana, pop") for a title like
+"Nana & Pop Visit"; scoring by how many distinct title words an entry
+matches fixes that.
 
 The tile colour (since 2026-09-26; `panels-and-controls.md`, chunk 2): the
 marker also takes `color: <value>` (or `colour:`), on its own line like

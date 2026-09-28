@@ -25,10 +25,12 @@
 // HTML (<br>, <p>, &amp;), which is read as the text it displays.
 //
 // Art (lib/countdownArt.mjs mirrors the "Countdown Art" Immich album): an
-// explicit `image:` wins; otherwise the entry with the LONGEST keyword that
-// appears as a whole word in the event title (or the label), ties to the
-// first entry in the index; otherwise none, and the tile shows the title's
-// emoji, or a calendar glyph.
+// explicit `image:` wins; otherwise the entry whose keywords match the most
+// DISTINCT words of the event title (or the label), whole-word (a multi-word
+// keyword, such as a full file-name stem with a space in it, counts for
+// every word it covers); ties go to the longest matching keyword, then to
+// the first entry in the index; otherwise none, and the tile shows the
+// title's emoji, or a calendar glyph.
 //
 // Pure ESM, no IO. Local dates throughout (the hub runs in the house
 // timezone), via countdown.mjs's dateKey.
@@ -246,7 +248,12 @@ function hasWholeWord(text, word) {
 }
 
 // The art entry for a countdown, or null. artIndex entries are
-// countdown-art/index.json's { id, file, name, keywords }.
+// countdown-art/index.json's { id, file, name, keywords }. Each entry scores
+// the number of DISTINCT title (+ label) words matched by any of its
+// keywords, whole-word; a multi-word keyword (e.g. a full file-name stem
+// with a space in it) counts for every word it covers, not just once. The
+// highest score wins; ties go to the longest matching keyword, then to
+// library order.
 export function matchArt(event, marker, artIndex) {
   const list = Array.isArray(artIndex) ? artIndex.filter(isDict) : []
   const want = marker?.image ? nameKey(marker.image) : null
@@ -259,14 +266,24 @@ export function matchArt(event, marker, artIndex) {
   }
   const text = `${event?.title ?? ''} ${marker?.label ?? ''}`.toLowerCase().replace(/\s+/g, ' ')
   let best = null
+  let bestScore = 0
   let bestLen = 0
   for (const a of list) {
+    const words = new Set()
+    let longest = 0
     for (const kw of Array.isArray(a.keywords) ? a.keywords : []) {
       const k = String(kw).toLowerCase().trim()
-      if (k.length > bestLen && hasWholeWord(text, k)) {
-        best = a
-        bestLen = k.length
+      if (!k || !hasWholeWord(text, k)) continue
+      for (const w of k.split(/\s+/)) {
+        if (w) words.add(w)
       }
+      if (k.length > longest) longest = k.length
+    }
+    if (words.size === 0) continue
+    if (words.size > bestScore || (words.size === bestScore && longest > bestLen)) {
+      best = a
+      bestScore = words.size
+      bestLen = longest
     }
   }
   return best

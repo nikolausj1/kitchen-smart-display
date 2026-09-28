@@ -320,9 +320,9 @@ describe('matchArt', () => {
     assert.equal(hit.id, 'a1')
   })
 
-  it('the longest whole-word keyword match wins', () => {
+  it('equal one-word scores tie-break to the longest matching keyword (was "longest keyword wins" before scoring by word count)', () => {
     const hit = matchArt({ title: 'Disneyland trip' }, {}, artIndex)
-    assert.equal(hit.id, 'a4') // "disneyland" (10) beats "disney" (6) and "trip" (4)
+    assert.equal(hit.id, 'a4') // a4 ("disneyland") and a2 ("trip") each match exactly 1 word; a4's keyword is longer
   })
 
   it('matches keywords from the label too, not just the title', () => {
@@ -340,7 +340,7 @@ describe('matchArt', () => {
     assert.equal(matchArt({ title: 'Trip' }, {}, []), null)
   })
 
-  it('ties on keyword length go to the first entry in the index', () => {
+  it('ties on score AND keyword length go to the first entry in the index', () => {
     const tieIndex = [
       { id: 't1', file: 't1.png', name: 'one', keywords: ['zzzzz'] },
       { id: 't2', file: 't2.png', name: 'two', keywords: ['zzzzz'] },
@@ -348,10 +348,88 @@ describe('matchArt', () => {
     assert.equal(matchArt({ title: 'zzzzz event' }, {}, tieIndex).id, 't1')
   })
 
+  it('a tie on score breaks to the longer matching keyword, even when it is listed later', () => {
+    const lenIndex = [
+      { id: 's1', file: 's1.png', name: 'short', keywords: ['hi'] },
+      { id: 's2', file: 's2.png', name: 'long', keywords: ['hello'] },
+    ]
+    // both match exactly one word ("hi" / "hello"); s2's keyword is longer, so it wins despite being listed second
+    assert.equal(matchArt({ title: 'say hello and hi to all' }, {}, lenIndex).id, 's2')
+  })
+
+  it('scores the number of distinct title words matched, not the length of a single keyword', () => {
+    const wordIndex = [
+      { id: 'w1', file: 'w1.png', name: 'one-word', keywords: ['minnesota'] },
+      { id: 'w2', file: 'w2.png', name: 'two-word', keywords: ['mark', 'kim'] },
+    ]
+    // both "minnesota" and "mark"/"kim" appear in the title; w2 matches 2 distinct words and beats w1's 1, even though
+    // w1's single keyword ("minnesota", 9 letters) is longer than either of w2's ("mark" 4, "kim" 3) - this is the old
+    // bug (single-longest-keyword) inverted: a title naming a place AND people used to always go to the place's art
+    assert.equal(matchArt({ title: 'Minnesota reunion: Mark and Kim' }, {}, wordIndex).id, 'w2')
+  })
+
+  it('a multi-word keyword (e.g. a full file-name stem with a space) counts for every word it covers', () => {
+    const stemIndex = [
+      { id: 'm1', file: 'm1.png', name: 'mark kim', keywords: ['mark kim', 'mark', 'kim'] },
+      { id: 'm2', file: 'm2.png', name: 'solo', keywords: ['visit'] },
+    ]
+    // "mark kim" alone (one keyword hit) covers 2 distinct words, same as matching "mark" and "kim" separately would
+    const hit = matchArt({ title: 'Visit Mark Kim' }, {}, [stemIndex[0]])
+    assert.equal(hit.id, 'm1')
+    // and that 2-word score still beats a single-word match elsewhere in the library
+    assert.equal(matchArt({ title: 'Visit Mark Kim' }, {}, stemIndex).id, 'm1')
+  })
+
   it('malformed input: non-dict index entries are ignored, not thrown on', () => {
     const dirtyIndex = [null, 'junk', 42, { id: 'a1', file: 'a1.png', name: 'pumpkin', keywords: ['pumpkin'] }]
     const hit = matchArt({ title: 'pumpkin patch' }, {}, dirtyIndex)
     assert.equal(hit.id, 'a1')
+  })
+})
+
+describe('matchArt (the real "Countdown Art" library, from the live hub)', () => {
+  // Copied 2026-09-28 from GET http://192.168.4.61:8095/api/countdown-art
+  // (names and keywords only). mark_kim's keywords here include "nana" and
+  // "pop" per Justin's pending Immich description edit: Nana and Pop are
+  // Mark and Kim, Sheena's parents, and their photo is this existing art.
+  const realIndex = [
+    { id: '03b3a848-1e26-4f48-b918-f6022bd07d2b', file: '03b3a848-1e26-4f48-b918-f6022bd07d2b.png', name: 'backpack', keywords: ['backpack', 'first', 'day', 'of', 'school', 'last'] },
+    { id: '29565056-e336-4f01-ac52-23b774af82ff', file: '29565056-e336-4f01-ac52-23b774af82ff.png', name: 'balloons', keywords: ['balloons', 'birthday', 'party'] },
+    { id: 'af045e0f-8b2c-46a3-9f64-15871db0e827', file: 'af045e0f-8b2c-46a3-9f64-15871db0e827.png', name: 'cabin', keywords: ['cabin', 'rosyln', 'go', 'to'] },
+    { id: '776bd83f-4f01-43cc-9857-7ceb9419af5c', file: '776bd83f-4f01-43cc-9857-7ceb9419af5c.png', name: 'camper', keywords: ['camper', 'birch', 'bay'] },
+    { id: 'cb9a8f4e-3f14-4bf2-a420-cec726b64720', file: 'cb9a8f4e-3f14-4bf2-a420-cec726b64720.png', name: 'mark_kim', keywords: ['mark_kim', 'mark', 'kim', 'nana', 'pop'] },
+    { id: '2cb9f211-7d64-480c-9bc7-a72a87712f31', file: '2cb9f211-7d64-480c-9bc7-a72a87712f31.webp', name: 'minnesota', keywords: ['minnesota', 'visit', 'go', 'to', 'flight'] },
+    { id: '34b7c3be-5e8e-466f-9b60-86229527ee6f', file: '34b7c3be-5e8e-466f-9b60-86229527ee6f.png', name: 'pumpkin', keywords: ['pumpkin', 'halloween'] },
+  ]
+  // The library as it is live right now, before that Immich edit lands.
+  const realIndexBeforeEdit = realIndex.map((a) => (a.name === 'mark_kim' ? { ...a, keywords: ['mark_kim', 'mark', 'kim'] } : a))
+
+  it('"Nana & Pop Visit" picks mark_kim (nana + pop = 2 words) over minnesota ("visit" = 1 word)', () => {
+    assert.equal(matchArt({ title: 'Nana & Pop Visit' }, {}, realIndex).name, 'mark_kim')
+  })
+
+  it('before that Immich edit lands, the same title still picks minnesota (mark_kim matches nothing yet)', () => {
+    assert.equal(matchArt({ title: 'Nana & Pop Visit' }, {}, realIndexBeforeEdit).name, 'minnesota')
+  })
+
+  it('"Visit Mark and Kim" picks mark_kim (mark + kim = 2 words) over minnesota ("visit" = 1 word)', () => {
+    assert.equal(matchArt({ title: 'Visit Mark and Kim' }, {}, realIndex).name, 'mark_kim')
+  })
+
+  it('"Fly to Minnesota" picks minnesota', () => {
+    assert.equal(matchArt({ title: 'Fly to Minnesota' }, {}, realIndex).name, 'minnesota')
+  })
+
+  it('"Halloween" picks pumpkin', () => {
+    assert.equal(matchArt({ title: 'Halloween' }, {}, realIndex).name, 'pumpkin')
+  })
+
+  it('"First day of school" picks backpack (first + day + of + school = 4 words)', () => {
+    assert.equal(matchArt({ title: 'First day of school' }, {}, realIndex).name, 'backpack')
+  })
+
+  it('"Go to the cabin" picks cabin (cabin + go + to = 3 words, beating minnesota\'s go + to = 2)', () => {
+    assert.equal(matchArt({ title: 'Go to the cabin' }, {}, realIndex).name, 'cabin')
   })
 })
 
