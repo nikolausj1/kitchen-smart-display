@@ -2,10 +2,29 @@
 // friendly: number fields commit on Enter or blur (Esc cancels) and step with
 // the arrow keys (Shift x10); sliders and colour pickers report every value
 // and the caller coalesces them into one undo step.
+//
+// Two controls follow a field's `ui` (schema.js, "the field vocabulary"):
+// HourRangeField, an hourRange pair as one slider with two handles (one
+// while the other side is hidden), and TimeListField, a timeList as chips
+// with an Add time. SchemaField draws the time list itself; a pair needs both
+// fields, so the inspector draws it.
 
-import { useId, useRef, useState } from 'react'
-import { optionValue } from './schema.js'
-import { clamp, colorForWell, decimalsOf } from './util.js'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { hourRangeTrack, optionValue, placeHandle, timeListMax } from './schema.js'
+import {
+  addToTimeList,
+  clamp,
+  colorForWell,
+  decimalsOf,
+  hourLabel,
+  hourRangeText,
+  hourTicks,
+  parseTimeList,
+  timeLabel,
+  timeListText,
+  timeMinutes,
+  timeText,
+} from './util.js'
 
 const fmt = (v, digits) => (Number.isFinite(v) ? String(Number(v.toFixed(digits))) : '')
 
@@ -382,6 +401,7 @@ export function SchemaField({ field, value, onChange, textRef }) {
         />
       )
     case 'text':
+      if (field.ui === 'timeList') return <TimeListField field={field} value={value} onChange={onChange} />
       if (field.multiline || field.rows > 1) {
         return (
           <div className="ed-row ed-row--stack">
@@ -415,4 +435,378 @@ export function SchemaField({ field, value, onChange, textRef }) {
     default:
       return null
   }
+}
+
+// A stacked field's first line: its label (a short hint under it) and, on
+// the right, what it is set to.
+function FieldHead({ label, hint, value, htmlFor }) {
+  const short = typeof hint === 'string' && hint.length <= LONG_HINT
+  const text = (
+    <>
+      {label}
+      {short && <small>{hint}</small>}
+    </>
+  )
+  return (
+    <div className="ed-fieldhead">
+      {htmlFor ? (
+        <label className="ed-row__label" htmlFor={htmlFor}>
+          {text}
+        </label>
+      ) : (
+        <span className="ed-row__label">{text}</span>
+      )}
+      {value != null && <span className="ed-fieldhead__value">{value}</span>}
+    </div>
+  )
+}
+
+// --- ui: 'hourRange' ------------------------------------------------------------------
+//
+// Two number fields (hours) as one slider with two handles: the first field's
+// label, and "8 am to 10 pm" beside it; the track spans both fields' ranges
+// with its hours marked under it. Each handle writes its own field and stays
+// at least one step short of the other, so they never cross.
+//
+// Pointer: press a handle and drag it, or press the track and the nearer
+// handle jumps there and follows. Each drag is ONE undo step: its changes
+// carry a coalesce key of their own with no time limit (run: { key,
+// windowMs: Infinity }), as a drag on the stage does. Keys, on a focused
+// handle: the arrows move a step, Shift-arrows three, Page Up and Down three,
+// Home and End to its ends; a burst of presses is one step (run: the field's
+// key), as a number field's arrows are. The keys stop there, so the editor's
+// arrow nudge never moves the block meanwhile, and Delete and Backspace do
+// nothing there (the editor's would remove the block).
+//
+// onChange(field, value, run): the field whose handle moved, its new value,
+// and how to coalesce it.
+//
+// show: 'both', or 'first' or 'second' for one side alone (its partner hidden
+// by its showIf): one handle on the same track, under that field's own label
+// and hint, "10 pm" beside it, kept to its own range only (the hidden side
+// does not apply meanwhile), the rail filled from the track's start to it.
+
+// Numbered across the page, so a drag's key is never an earlier drag's (a
+// component's own count would restart with the inspector, and a new drag
+// could join the last one's undo step).
+const nextDrag = (() => {
+  let n = 0
+  return () => (n += 1)
+})()
+
+const HANDLE_STEPS = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -3, PageUp: 3 }
+const textOf = (v) => (typeof v === 'string' ? v : undefined)
+
+export function HourRangeField({ first, second, firstValue, secondValue, show = 'both', onChange }) {
+  const railRef = useRef(null)
+  const firstRef = useRef(null)
+  const secondRef = useRef(null)
+  const drag = useRef(null)
+  const [active, setActive] = useState(null)
+  const track = hourRangeTrack(first, second)
+  const { lo, hi, step } = track
+  const a = Number.isFinite(firstValue) ? firstValue : track.first[0]
+  const b = Number.isFinite(secondValue) ? secondValue : track.second[1]
+  const values = { first: a, second: b }
+  const fields = { first, second }
+  const refs = { first: firstRef, second: secondRef }
+  const both = show !== 'first' && show !== 'second'
+  const handles = both ? ['first', 'second'] : [show]
+  const label = both ? first.label || second.label || 'Hours' : fields[show].label || 'Hour'
+  const hint = both ? (textOf(first.hint) ?? textOf(second.hint)) : textOf(fields[show].hint)
+  const pct = (v) => ((clamp(v, lo, hi) - lo) / (hi - lo)) * 100
+  // The other handle's value, which this one may not cross; none when alone.
+  const other = (which) => (!both ? undefined : which === 'first' ? b : a)
+  // What a handle may be set to now (its own range, one step off the other).
+  const bounds = {
+    first: [track.first[0], placeHandle(track, 'first', track.first[1], other('first'))],
+    second: [placeHandle(track, 'second', track.second[0], other('second')), track.second[1]],
+  }
+  // Each handle named on its own: its field's label, unless the two share one.
+  const same = (first.label || '') === (second.label || '')
+  const names = both
+    ? { first: same ? `${label} from` : first.label || `${label} from`, second: same ? `${label} to` : second.label || `${label} to` }
+    : { [show]: label }
+
+  function set(which, v, run) {
+    const next = placeHandle(track, which, v, other(which))
+    if (next !== values[which]) onChange(fields[which], next, run)
+    return next
+  }
+
+  const valueAt = (clientX) => {
+    const r = railRef.current.getBoundingClientRect()
+    return lo + ((clientX - r.left) / Math.max(1, r.width)) * (hi - lo)
+  }
+
+  function nearest(v) {
+    if (!both) return show
+    if (v <= Math.min(a, b)) return a <= b ? 'first' : 'second'
+    if (v >= Math.max(a, b)) return a <= b ? 'second' : 'first'
+    return Math.abs(v - a) <= Math.abs(b - v) ? 'first' : 'second'
+  }
+
+  function follow(clientX) {
+    const d = drag.current
+    if (!d) return
+    const next = placeHandle(track, d.which, valueAt(clientX) - d.offset, other(d.which))
+    if (next === d.last) return
+    d.last = next
+    onChange(fields[d.which], next, d.run)
+  }
+
+  function onPointerDown(e) {
+    if (e.button !== 0 || !railRef.current) return
+    const hit = e.target instanceof Element ? e.target.closest('[data-handle]')?.getAttribute('data-handle') : null
+    const at = valueAt(e.clientX)
+    const which = handles.includes(hit) ? hit : nearest(at)
+    e.preventDefault()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // no capture: the drag still follows while the pointer is over the track
+    }
+    drag.current = {
+      which,
+      pointerId: e.pointerId,
+      run: { key: `${fields[which].key}:drag${nextDrag()}`, windowMs: Infinity },
+      // A handle grabbed off its centre does not jump to the pointer.
+      offset: hit ? at - values[which] : 0,
+      last: values[which],
+    }
+    setActive(which)
+    refs[which].current?.focus({ preventScroll: true })
+    if (!hit) follow(e.clientX)
+  }
+
+  function onPointerMove(e) {
+    if (drag.current && e.pointerId === drag.current.pointerId) follow(e.clientX)
+  }
+
+  function endDrag(e) {
+    const d = drag.current
+    if (!d || (e && e.pointerId !== d.pointerId)) return
+    drag.current = null
+    setActive(null)
+    try {
+      e?.currentTarget?.releasePointerCapture?.(d.pointerId)
+    } catch {
+      // already released
+    }
+  }
+
+  function onKeyDown(which, e) {
+    const n = HANDLE_STEPS[e.key]
+    let target
+    if (n) target = values[which] + n * step * (e.shiftKey && Math.abs(n) === 1 ? 3 : 1)
+    else if (e.key === 'Home') target = track[which][0]
+    else if (e.key === 'End') target = track[which][1]
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Nothing to delete on a handle; on a native slider these never
+      // reach the editor either, whose Delete would remove the block.
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    } else return
+    e.preventDefault()
+    e.stopPropagation()
+    set(which, target, fields[which].key)
+  }
+
+  const ticks = hourTicks(lo, hi)
+  // The fill: between the handles, or from the track's start to a lone one.
+  const left = both ? pct(Math.min(a, b)) : 0
+  const right = both ? pct(Math.max(a, b)) : pct(values[show])
+  return (
+    <div className="ed-row ed-row--stack ed-hours">
+      <FieldHead label={label} hint={hint} value={both ? hourRangeText(a, b) : hourLabel(values[show])} />
+      <div
+        className={`ed-hours__track${active ? ' is-dragging' : ''}`}
+        role="group"
+        aria-label={label}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+      >
+        <div className="ed-hours__rail" ref={railRef}>
+          <span className="ed-hours__line" aria-hidden="true" />
+          <span className="ed-hours__fill" aria-hidden="true" style={{ left: `${left}%`, width: `${right - left}%` }} />
+          {ticks.map((t) => (
+            <span key={t.h} className="ed-hours__mark" aria-hidden="true" style={{ left: `${pct(t.h)}%` }} />
+          ))}
+          {handles.map((which) => (
+            <span
+              key={which}
+              ref={refs[which]}
+              role="slider"
+              tabIndex={0}
+              data-handle={which}
+              className={`ed-hours__thumb${active === which ? ' is-active' : ''}`}
+              style={{ left: `${pct(values[which])}%` }}
+              aria-label={names[which]}
+              aria-orientation="horizontal"
+              aria-valuemin={bounds[which][0]}
+              aria-valuemax={bounds[which][1]}
+              aria-valuenow={values[which]}
+              aria-valuetext={hourLabel(values[which])}
+              title={`${names[which]}: ${hourLabel(values[which])}`}
+              onKeyDown={(e) => onKeyDown(which, e)}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="ed-hours__ticks" aria-hidden="true">
+        {ticks.map((t, i) => (
+          <span
+            key={t.h}
+            className={`ed-hours__tick${i === 0 ? ' is-start' : i === ticks.length - 1 ? ' is-end' : ''}`}
+            style={{ left: `${pct(t.h)}%` }}
+          >
+            {t.label}
+          </span>
+        ))}
+      </div>
+      {hint && hint.length > LONG_HINT && <small className="ed-row__hint">{hint}</small>}
+    </div>
+  )
+}
+
+// --- ui: 'timeList' -------------------------------------------------------------------
+//
+// A text field of 24-hour 'H:MM' times, comma-separated: a chip per time, in
+// time order and in the house style ("7:30 am"), each with its remove button,
+// then a time picker in quarter hours and Add time. A time already there is
+// not added twice, and the list holds at most the field's `max` (8 when it
+// does not say). Every add and remove writes the whole list normalised
+// ('7:30,12:00'), one undo step each. A stored value that is not a time
+// list shows as it is, with a warning and Reset (the field's default).
+//
+// A remove button takes Delete and Backspace too, and the focus stays in the
+// list (the next chip, else the picker): left on the page, the next Delete
+// would reach the editor and remove the whole block.
+
+const QUARTER = 15
+
+export function TimeListField({ field, value, onChange }) {
+  const [pick, setPick] = useState('')
+  const pickId = useId()
+  const chipsRef = useRef(null)
+  const pickRef = useRef(null)
+  const refocus = useRef(null) // the chip index to focus once a removal has drawn
+  const list = parseTimeList(typeof value === 'number' ? String(value) : value)
+  const max = timeListMax(field)
+  const hint = typeof field.hint === 'string' ? field.hint : undefined
+  const label = field.label || 'Times'
+
+  useLayoutEffect(() => {
+    if (refocus.current == null) return
+    const i = refocus.current
+    refocus.current = null
+    const buttons = chipsRef.current ? [...chipsRef.current.querySelectorAll('.ed-tchip__x')] : []
+    ;(buttons[Math.min(i, buttons.length - 1)] || pickRef.current)?.focus()
+  })
+
+  if (list == null) {
+    return (
+      <div className="ed-row ed-row--stack ed-times is-invalid">
+        <FieldHead label={label} hint={hint} />
+        <code className="ed-times__raw" title="As stored">
+          {String(value)}
+        </code>
+        <p className="ed-times__warn">
+          <span>Not a list of times like 7:30,17:45.</span>
+          <button type="button" className="ed-link" onClick={() => onChange(typeof field.default === 'string' ? field.default : '')}>
+            Reset
+          </button>
+        </p>
+      </div>
+    )
+  }
+
+  const full = list.length >= max
+  const picked = timeMinutes(pick)
+  const offQuarter = picked != null && picked % QUARTER !== 0
+  const duplicate = picked != null && list.includes(picked)
+  const canAdd = picked != null && !offQuarter && !duplicate && !full
+  // One line under the picker: why nothing can be added, the cap a quiet one.
+  let note = null
+  let quiet = false
+  if (list.length > max) note = `More than ${max} (saved by hand): the screen shows ${max} of them. Remove ${list.length - max}.`
+  else if (full) [note, quiet] = [`At most ${max} times; remove one to add another.`, true]
+  else if (duplicate) note = `${timeLabel(timeText(picked))} is on the list already.`
+  else if (offQuarter) note = 'Quarter hours only: :00, :15, :30 or :45.'
+
+  function add() {
+    if (!canAdd) return
+    const r = addToTimeList(list, picked, max)
+    if (!r.added) return
+    onChange(timeListText(r.list))
+    setPick('')
+  }
+
+  function remove(m, i) {
+    refocus.current = i
+    onChange(timeListText(list.filter((x) => x !== m)))
+  }
+
+  return (
+    <div className="ed-row ed-row--stack ed-times">
+      <FieldHead label={label} hint={hint} htmlFor={pickId} value={`${list.length} of ${max}`} />
+      {list.length ? (
+        <ul className="ed-times__chips" aria-label={label} ref={chipsRef}>
+          {list.map((m, i) => {
+            const text = timeLabel(timeText(m))
+            return (
+              <li key={m} className="ed-tchip">
+                <span>{text}</span>
+                <button
+                  type="button"
+                  className="ed-tchip__x"
+                  aria-label={`Remove ${text}`}
+                  title={`Remove ${text}`}
+                  onClick={() => remove(m, i)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Delete' && e.key !== 'Backspace') return
+                    e.preventDefault()
+                    e.stopPropagation()
+                    remove(m, i)
+                  }}
+                >
+                  ×
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="ed-times__none">No times yet.</p>
+      )}
+      <div className="ed-times__add">
+        <input
+          ref={pickRef}
+          id={pickId}
+          type="time"
+          className="ed-time"
+          step={QUARTER * 60}
+          value={pick}
+          disabled={full}
+          aria-label={`${label}: a time to add`}
+          onChange={(e) => setPick(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+        />
+        <button type="button" className="ed-btn" disabled={!canAdd} onClick={add}>
+          Add time
+        </button>
+      </div>
+      {note && <p className={`ed-times__note${quiet ? '' : ' is-warn'}`}>{note}</p>}
+      {hint && hint.length > LONG_HINT && <small className="ed-row__hint">{hint}</small>}
+    </div>
+  )
 }

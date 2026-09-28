@@ -27,6 +27,14 @@
 // A panel of a type the app does not know: what it is, that it is kept as
 // saved, and Delete. Nothing else: the editor cannot know what it may hold.
 //
+// Every list of schema fields (a type's knobs, the element style, the global
+// knobs) is drawn by FieldList: a field shows only while its `showIf` holds
+// (read from the current values with the defaults filled in; a hidden field
+// keeps its value), an hourRange pair is one slider with two handles, a
+// timeList is chips (schema.js, the field vocabulary). A knob group whose
+// fields are all hidden is not drawn; with its element selected, a note says
+// which setting hides them. The box fields take `showIf` too.
+//
 // Several panels selected: what they are, and pasting a style onto all.
 //
 // Nothing selected: the screen's Entry backdrop (Entry only), the layout's
@@ -37,8 +45,8 @@
 //
 // Every change goes up as a draft edit; nothing here talks to the hub.
 
-import { useEffect, useRef } from 'react'
-import { NumberField, Row, SchemaField, Segmented, SelectField, SliderField, TextField, TimeField, Toggle } from './fields.jsx'
+import { Fragment, useEffect, useRef } from 'react'
+import { HourRangeField, NumberField, Row, SchemaField, Segmented, SelectField, SliderField, TextField, TimeField, Toggle } from './fields.jsx'
 import { hubUrl } from './hub.js'
 import { MoreIcon } from './icons.jsx'
 import { Menu, MenuItem, MenuNote } from './menus.jsx'
@@ -52,10 +60,16 @@ import {
   globalFields,
   groupFields,
   hasOwnProps,
+  hiddenBecause,
+  hourRangeDraw,
+  hourRangePairs,
   isKnownType,
   knobFields,
   ruleKind,
   ruleKinds,
+  showIfHolds,
+  shownFields,
+  valueReader,
 } from './schema.js'
 import {
   BACKDROP_DIM_MAX,
@@ -125,8 +139,40 @@ export default function Inspector(props) {
   )
 }
 
-// Fields whose changes arrive as a stream get one undo step per run.
-const coalesceFor = (f) => (CONTINUOUS.includes(f.type) ? f.key : undefined)
+// Fields whose changes arrive as a stream get one undo step per run; a time
+// list's adds and removes are one step each.
+const coalesceFor = (f) => (f.type === 'text' && f.ui === 'timeList' ? undefined : CONTINUOUS.includes(f.type) ? f.key : undefined)
+
+// How a change coalesces: undefined (its own undo step), a key (a run of
+// changes a moment apart), or { key, windowMs } (an hourRange drag: all of it,
+// however long it takes).
+const runKey = (run) => (run && typeof run === 'object' ? run.key : run)
+const runWindow = (run) => (run && typeof run === 'object' ? run.windowMs : undefined)
+
+// A list of schema fields, those to draw (shownFields: showIf held, a pair
+// at its first field), each as its control: an hourRange pair as one slider
+// (two handles, or one when the other side is hidden), any other as
+// SchemaField. read(key): a value, defaults filled in. onChange(field, value,
+// run). wrap(field, node): what goes round each (the hover that marks what it
+// tunes).
+function FieldList({ fields, pairs, read, onChange, wrap, textRefFor }) {
+  return fields.map((f) => {
+    const hr = hourRangeDraw(f, pairs, read)
+    const node = hr ? (
+      <HourRangeField
+        first={hr.first}
+        second={hr.second}
+        show={hr.show}
+        firstValue={read(hr.first.key)}
+        secondValue={read(hr.second.key)}
+        onChange={onChange}
+      />
+    ) : (
+      <SchemaField field={f} value={read(f.key)} textRef={textRefFor ? textRefFor(f) : undefined} onChange={(v) => onChange(f, v, coalesceFor(f))} />
+    )
+    return <Fragment key={f.key}>{wrap ? wrap(f, node) : node}</Fragment>
+  })
+}
 
 // A field row that tells the app what it tunes while the pointer is on it.
 function Hover({ id, element, onFieldHover, children }) {
@@ -184,13 +230,20 @@ function PanelInspector({
   // name ("Weather 2") heads the inspector.
   const title = typeLabel(panel.type, labels)
   const name = blockName(panel, labels, names)
-  const set = (patch, field) => onProps(id, patch, field)
+  const set = (patch, run) => onProps(id, patch, runKey(run), runWindow(run))
   const fields = knobFields(panel.type)
   // A picture to pick: the image block's src.
   const hasSrc = fields.some((f) => f.key === 'src')
-  const groups = groupFields(panel.type, fields, reportedLabels)
+  // The knobs on show: their showIf read from the knobs as they are now, the
+  // defaults filled in; an hourRange partner goes with its first.
+  const read = valueReader(fields, pr)
+  const pairs = hourRangePairs(fields)
+  const groups = groupFields(panel.type, shownFields(fields, read, pairs), reportedLabels)
   const elLabel = selectedElement ? elementLabel(panel.type, selectedElement, reportedLabels) : ''
   const hasGroup = !!selectedElement && groups.some((g) => g.element === selectedElement)
+  // The selected element's own knobs, when every one is hidden by another
+  // knob's value: which, and what it is set to ("Show is Whole day").
+  const hiddenWhy = selectedElement && !hasGroup ? hiddenBecause(fields.filter((f) => f.element === selectedElement), fields, read) : []
   const knobsAtDefault = fields.every((f) => f.default === undefined || fieldValue(f, pr) === f.default)
   const uni = (key) => !declares(panel.type, key)
   const styled = styledCount(panel)
@@ -291,7 +344,9 @@ function PanelInspector({
       )}
       {selectedElement && !hasGroup && (
         <p className="ed-note ed-insp__note">
-          {title} has no settings of its own for {elLabel}; the block's are below.
+          {hiddenWhy.length
+            ? `${title} settings for ${elLabel} are hidden while ${hiddenWhy.join(' and ')}.`
+            : `${title} has no settings of its own for ${elLabel}; the block's are below.`}
         </p>
       )}
 
@@ -418,16 +473,18 @@ function PanelInspector({
                   )}
                 </h4>
               )}
-              {g.fields.map((f) => (
-                <Hover key={f.key} id={id} element={g.element} onFieldHover={onFieldHover}>
-                  <SchemaField
-                    field={f}
-                    value={fieldValue(f, pr)}
-                    textRef={panel.type === 'text' && f.key === 'text' ? textRef : undefined}
-                    onChange={(v) => set({ [f.key]: v }, CONTINUOUS.includes(f.type) ? f.key : undefined)}
-                  />
-                </Hover>
-              ))}
+              <FieldList
+                fields={g.fields}
+                pairs={pairs}
+                read={read}
+                textRefFor={(f) => (panel.type === 'text' && f.key === 'text' ? textRef : undefined)}
+                wrap={(f, node) => (
+                  <Hover id={id} element={g.element} onFieldHover={onFieldHover}>
+                    {node}
+                  </Hover>
+                )}
+                onChange={(f, v, run) => set({ [f.key]: v }, run)}
+              />
             </div>
           ))}
         </section>
@@ -479,6 +536,9 @@ function ElementSection({ panel, elKey, label, knobsTitle, onShowKnobs, onElemen
   const known = elementList(panel.type).some((e) => e.key === elKey)
   const style = elementStyleOf(panel, elKey)
   const fields = elementStyleFields()
+  const byKey = new Map(fields.map((f) => [f.key, f]))
+  const read = (key) => (byKey.has(key) ? styleValue(byKey.get(key), style) : style[key])
+  const pairs = hourRangePairs(fields)
   return (
     <section className="ed-sec ed-elsec" aria-label={`${label} style`}>
       <div className="ed-sec__head">
@@ -498,15 +558,17 @@ function ElementSection({ panel, elKey, label, knobsTitle, onShowKnobs, onElemen
       {!known ? (
         <p className="ed-note ed-note--top">{label} cannot be styled on its own.</p>
       ) : (
-        fields.map((f) => (
-          <Hover key={f.key} id={panel.id} element={elKey} onFieldHover={onFieldHover}>
-            <SchemaField
-              field={f}
-              value={styleValue(f, style)}
-              onChange={(v) => onElementStyle(panel.id, elKey, { [f.key]: v }, coalesceFor(f))}
-            />
-          </Hover>
-        ))
+        <FieldList
+          fields={shownFields(fields, read, pairs)}
+          pairs={pairs}
+          read={read}
+          wrap={(f, node) => (
+            <Hover id={panel.id} element={elKey} onFieldHover={onFieldHover}>
+              {node}
+            </Hover>
+          )}
+          onChange={(f, v, run) => onElementStyle(panel.id, elKey, { [f.key]: v }, runKey(run), runWindow(run))}
+        />
       )}
       {knobsTitle && (
         <button type="button" className="ed-link ed-elsec__more" onClick={onShowKnobs}>
@@ -557,19 +619,17 @@ function withOptionLabels(key, field) {
 // What an unset colour means, where the schema does not say.
 const BOX_NULL_LABELS = { color: 'Global', 'bg.color': 'Preset', 'bg.color2': 'Fade' }
 // Shown only when they mean something: the editor's rules, and the schema's
-// own `showIf: { 'title.mode': 'custom' }` (a value, or a list of them).
+// own `showIf: { 'title.mode': 'custom' }` (a value, or a list of them; the
+// same reading as a knob's, schema.js showIfHolds).
 const BOX_SHOWN = {
   'bg.color2': (props) => (getPath(props, ['bg', 'gradient']) ?? 'none') !== 'none',
 }
 function boxShown(b, props, all) {
   if (BOX_SHOWN[b.key] && !BOX_SHOWN[b.key](props)) return false
-  const cond = b.field.showIf
-  if (!cond || typeof cond !== 'object') return true
-  return Object.entries(cond).every(([key, want]) => {
+  return showIfHolds(b.field.showIf, (key) => {
     const other = all.find((x) => x.key === key)
-    const raw = getPath(props, key.split('.'))
-    const v = raw === undefined || raw === null ? other?.field.default : raw
-    return Array.isArray(want) ? want.includes(v) : v === want
+    const raw = getPath(props, String(key).split('.'))
+    return raw === undefined || raw === null ? other?.field.default : raw
   })
 }
 
@@ -917,6 +977,9 @@ function GlobalSection({ spec, part, defaultGlobal, onGlobal, onResetGlobal, onF
   const g = partGlobal(spec, part) || {}
   const own = partHasOwnGlobal(spec, part)
   const fields = globalFields()
+  const byKey = new Map(fields.map((f) => [f.key, f]))
+  const read = (key) => (byKey.has(key) ? g[key] ?? defaultGlobal?.[key] ?? byKey.get(key).default : g[key])
+  const pairs = hourRangePairs(fields)
   const isDefault = part === 'day' && !!defaultGlobal && deepEqual(spec.global, defaultGlobal)
   return (
     <section className="ed-sec">
@@ -941,14 +1004,12 @@ function GlobalSection({ spec, part, defaultGlobal, onGlobal, onResetGlobal, onF
             : `${DAYPART_LABELS[part]} follows Day's; a change here gives it its own.`}
         </p>
       )}
-      {fields.map((f) => (
-        <SchemaField
-          key={f.key}
-          field={f}
-          value={g[f.key] ?? defaultGlobal?.[f.key] ?? f.default}
-          onChange={(v) => onGlobal({ [f.key]: v }, CONTINUOUS.includes(f.type) ? f.key : undefined)}
-        />
-      ))}
+      <FieldList
+        fields={shownFields(fields, read, pairs)}
+        pairs={pairs}
+        read={read}
+        onChange={(f, v, run) => onGlobal({ [f.key]: v }, runKey(run), runWindow(run))}
+      />
     </section>
   )
 }

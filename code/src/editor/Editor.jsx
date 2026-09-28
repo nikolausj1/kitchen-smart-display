@@ -439,8 +439,9 @@ export default function Editor() {
   }
 
   // Props, universal or knobs. `field`: coalesce a stream of changes to it
-  // (a slider run, typing) into one undo step.
-  function onProps(id, patch, field) {
+  // (a slider run, typing) into one undo step; windowMs: how far apart two of
+  // them may be (Infinity: an hourRange drag, however slow, is one step).
+  function onProps(id, patch, field, windowMs) {
     const panel = panels?.find((x) => x.id === id)
     if (!panel) return
     const fields = knobFields(panel.type)
@@ -460,7 +461,7 @@ export default function Editor() {
       }
       clean.src = src
     }
-    const opts = field ? { coalesce: `props:${part}:${id}:${field}`, windowMs: field === 'text' ? 2000 : 1000 } : {}
+    const opts = field ? { coalesce: `props:${part}:${id}:${field}`, windowMs: windowMs ?? (field === 'text' ? 2000 : 1000) } : {}
     actions.update((s, p) => mapPanel(s, p, id, withProps(clean)), opts)
   }
 
@@ -517,13 +518,13 @@ export default function Editor() {
   const colorOk = (v) => v === null || v === undefined || !!normalizeColor(v, null)
   const badColor = () => setNotice({ kind: 'warn', text: 'Colours are hex: #rgb or #rrggbb.' })
 
-  function onElementStyle(id, key, patch, field) {
+  function onElementStyle(id, key, patch, field, windowMs) {
     const clean = { ...patch }
     if ('color' in clean) {
       if (!colorOk(clean.color)) return badColor()
       if (clean.color != null) clean.color = normalizeColor(clean.color, null)
     }
-    const opts = field ? { coalesce: `el:${part}:${id}:${key}:${field}`, windowMs: 1000 } : {}
+    const opts = field ? { coalesce: `el:${part}:${id}:${key}:${field}`, windowMs: windowMs ?? 1000 } : {}
     actions.update((s, p) => mapPanel(s, p, id, withElementStyle(key, clean)), { ...opts, label: 'element style' })
   }
 
@@ -623,8 +624,8 @@ export default function Editor() {
 
   const onReorder = (frontFirstIds) => actions.update((s, p) => editPanels(s, p, (list) => restack(list, frontFirstIds)))
   const onBackdrop = (patch, field) => actions.backdrop(patch, field ? { coalesce: `backdrop:${field}`, windowMs: 1000 } : {})
-  const onGlobal = (patch, field) =>
-    actions.update((s, p) => editGlobal(s, p, patch), field ? { coalesce: `global:${part}:${field}`, windowMs: 1000 } : {})
+  const onGlobal = (patch, field, windowMs) =>
+    actions.update((s, p) => editGlobal(s, p, patch), field ? { coalesce: `global:${part}:${field}`, windowMs: windowMs ?? 1000 } : {})
   // Day: the layout's own global (font, colours, sizes); a variant: Day's.
   const onResetGlobal = () =>
     actions.update((s, p) =>

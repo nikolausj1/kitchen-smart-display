@@ -12,9 +12,32 @@
 //   { key, label, type: 'number' | 'select' | 'toggle' | 'color' | 'text',
 //     min, max, step, unit,            number
 //     options: [[value, label], ...],  select
-//     default, element }               element: the data-edit key it tunes
+//     default, element,                element: the data-edit key it tunes
+//     hint,
+//     showIf, ui, pair, pairOf }       below
 // Knob values live in the panel's props next to the universal ones; a missing
 // value means the schema's default.
+//
+// showIf: { key: value } or { key: [value, ...] } (any of them); with several
+// keys every one must hold. The values are read with the defaults filled in
+// (a saved block without `mode` has the schema's mode), from any field of the
+// same list, else from the props (a universal prop, a box path 'title.mode').
+// A field that does not show keeps its stored value: hiding never clears it.
+//
+// ui: how a field is drawn, where the plain control would not do.
+//   'hourRange'  a number field with pair: '<key>', whose partner (a number
+//                field with ui: 'hourRange', pairOf: '<this key>') it is
+//                drawn with as ONE slider with two handles, hours on the
+//                track, the first field's label and hint; the partner is
+//                not drawn on its own. Each handle writes its own key. Each
+//                side keeps its own showIf: with one side hidden the other
+//                is drawn alone, one handle on the same track, under its
+//                own label (Now until: the end hour without the start).
+//   'timeList'   a text field holding 24-hour 'H:MM' times, comma-separated
+//                ('7:30,12:00'), drawn as chips with an Add time; `max` is
+//                how many it holds (8 when it does not say)
+// A ui the editor does not know, on the wrong field type, or a pair that does
+// not point back, draws the plain control.
 //
 // The registry is module state on purpose: it describes the app build in the
 // iframe, of which there is one at a time, and the spec normaliser (spec.js)
@@ -46,7 +69,7 @@ import {
   PANEL_ELEMENTS as APP_PANEL_ELEMENTS,
   PANEL_SCHEMAS as APP_PANEL_SCHEMAS,
 } from '../views/TodayLayouts/panels/schemas.js'
-import { clamp, decimalsOf, humanize, isDict, normalizeColor, normalizeTime, roundTo, toNum } from './util.js'
+import { clamp, decimalsOf, getPath, humanize, isDict, normalizeColor, normalizeTime, roundTo, toNum } from './util.js'
 
 export const FIELD_TYPES = ['number', 'select', 'toggle', 'color', 'text']
 export const UNIVERSAL_KEYS = ['textScale', 'opacity', 'padding', 'background', 'radius', 'align', 'scrim']
@@ -487,6 +510,153 @@ export function groupFields(type, fields, reported) {
   const out = [...groups.values()]
   if (rest.length) out.push({ element: null, label: out.length ? 'Other' : '', fields: rest })
   return out
+}
+
+// --- showIf and ui (the field vocabulary above) --------------------------------
+
+// Does a value match what a showIf asks for? Primitives as the selects do
+// (3 matches '3'); null and a missing value are the same.
+function sameValue(v, want) {
+  if (v === want || (v == null && want == null)) return true
+  return v != null && want != null && typeof v !== 'object' && typeof want !== 'object' && String(v) === String(want)
+}
+
+// Does the field's showIf hold? read(key): the current value, defaults
+// filled in. Nothing to hold (no showIf, not an object) shows the field; so
+// does an entry that asks for nothing usable (an empty list, an object): a
+// slip in a schema never hides a field for good.
+export function showIfHolds(cond, read) {
+  if (!isDict(cond)) return true
+  return Object.entries(cond).every(([key, want]) => {
+    if (Array.isArray(want)) return !want.length || want.some((w) => sameValue(read(key), w))
+    if (want !== null && typeof want === 'object') return true
+    if (want === undefined) return true
+    return sameValue(read(key), want)
+  })
+}
+
+// The keys of a field's showIf that do not hold now, in its order.
+export function showIfMisses(cond, read) {
+  if (!isDict(cond)) return []
+  return Object.keys(cond).filter((key) => !showIfHolds({ [key]: cond[key] }, read))
+}
+
+// read(key) for a list of fields over a props object: a field's value with
+// its default filled in (fieldValue), else the prop at that path as stored.
+export function valueReader(fields, props) {
+  const byKey = new Map(fields.map((f) => [f.key, f]))
+  return (key) => {
+    const f = byKey.get(key)
+    if (f) return fieldValue(f, props)
+    return typeof key === 'string' ? getPath(props, key.split('.')) : undefined
+  }
+}
+
+// The hourRange pairs in a list: partnerOf (first key -> the partner field),
+// firstOf (partner key -> the first field) and the partners' keys. A pair
+// counts when both are number fields marked ui: 'hourRange', the first names
+// the partner as its `pair` and the partner names the first as its `pairOf`;
+// a field is in one pair at most. Anything else is drawn as plain fields.
+export function hourRangePairs(fields) {
+  const byKey = new Map(fields.map((f) => [f.key, f]))
+  const partnerOf = new Map()
+  const firstOf = new Map()
+  const partners = new Set()
+  const isRange = (f) => !!f && f.type === 'number' && f.ui === 'hourRange'
+  for (const f of fields) {
+    if (!isRange(f) || typeof f.pair !== 'string' || f.pair === f.key || partners.has(f.key)) continue
+    const g = byKey.get(f.pair)
+    if (!isRange(g) || g.pairOf !== f.key || partnerOf.has(g.key) || partners.has(g.key)) continue
+    partnerOf.set(f.key, g)
+    firstOf.set(g.key, f)
+    partners.add(g.key)
+  }
+  return { partnerOf, firstOf, partners }
+}
+
+// The fields to draw, in order: those whose showIf holds. A pair is drawn at
+// its first field: as one slider when both sides show, as that side alone
+// (one handle) when only one does; so a partner is listed only while its
+// first is hidden (Now until: the end hour without the start). -> [field];
+// pairs: hourRangePairs(); how to draw each: hourRangeDraw().
+export function shownFields(fields, read, pairs = hourRangePairs(fields)) {
+  return fields.filter((f) => {
+    if (!showIfHolds(f.showIf, read)) return false
+    return !pairs.partners.has(f.key) || !showIfHolds(pairs.firstOf.get(f.key).showIf, read)
+  })
+}
+
+// How a shown field of an hourRange pair is drawn: { first, second, show:
+// 'both' | 'first' | 'second' } (the pair's two fields, whose ranges make
+// the track, and the handles on it); null for any other field. One side
+// alone keeps to its own range: the other does not apply while it is hidden.
+export function hourRangeDraw(field, pairs, read) {
+  const partner = pairs.partnerOf.get(field.key)
+  if (partner) return { first: field, second: partner, show: showIfHolds(partner.showIf, read) ? 'both' : 'first' }
+  const first = pairs.firstOf.get(field.key)
+  return first ? { first, second: field, show: 'second' } : null
+}
+
+// A field's value as its control names it: an option's label, On or Off, a
+// number with its unit; anything else as it is.
+export function valueText(field, v) {
+  if (!field) return String(v ?? '')
+  if (field.type === 'select') {
+    const hit = (field.options || []).find((o) => sameValue(o[0], v))
+    return hit ? String(hit[1]) : String(v ?? '')
+  }
+  if (field.type === 'toggle') return v ? 'On' : 'Off'
+  if (field.type === 'number' && Number.isFinite(v)) return `${v}${field.unit ? ` ${field.unit}` : ''}`
+  return String(v ?? '')
+}
+
+// Why fields are hidden: each setting whose value hides them, once, as
+// 'Show is Whole day'. fields: the hidden ones; all: the list they are in.
+export function hiddenBecause(fields, all, read) {
+  const keys = []
+  for (const f of fields) for (const k of showIfMisses(f.showIf, read)) if (!keys.includes(k)) keys.push(k)
+  return keys.map((k) => {
+    const f = all.find((x) => x.key === k)
+    return `${f?.label || humanize(k)} is ${valueText(f, read(k))}`
+  })
+}
+
+// How many times a timeList holds: its `max`, else 8.
+export const TIME_LIST_MAX = 8
+export const timeListMax = (field) => (Number.isFinite(field?.max) && field.max >= 1 ? Math.floor(field.max) : TIME_LIST_MAX)
+
+// An hourRange pair's track: { lo, hi, step, first: [min, max], second: [min,
+// max] } in hours. The track spans both fields' min..max (0..24 when they do
+// not say), a handle stays inside its own field's range, and the step is the
+// first field's (1 hour when it does not say).
+export function hourRangeTrack(first, second) {
+  const minOf = (f) => (Number.isFinite(f?.min) ? f.min : 0)
+  const maxOf = (f) => (Number.isFinite(f?.max) ? f.max : 24)
+  const lo = Math.min(minOf(first), minOf(second))
+  const hi = Math.max(maxOf(first), maxOf(second), lo + 1)
+  const own = Number.isFinite(first?.step) && first.step > 0 ? first.step : Number.isFinite(second?.step) && second.step > 0 ? second.step : 1
+  const step = Math.min(own, hi - lo)
+  return { lo, hi, step, first: [minOf(first), maxOf(first)], second: [minOf(second), maxOf(second)] }
+}
+
+// Where one handle may go: on a step of the track, inside its own field's
+// range, and at least one step short of the other handle (the handles never
+// cross). which: 'first' | 'second'; other: the other handle's value, or
+// undefined for a handle drawn alone (its own range only).
+export function placeHandle(track, which, value, other) {
+  const { lo, step } = track
+  const places = decimalsOf(step)
+  const snapped = roundTo(lo + Math.round((toNum(value) - lo) / step) * step, places)
+  const [min, max] = track[which]
+  const o = toNum(other)
+  const hasOther = Number.isFinite(o)
+  const lower = which === 'second' && hasOther ? Math.max(min, roundTo(o + step, places)) : min
+  const upper = which === 'first' && hasOther ? Math.min(max, roundTo(o - step, places)) : max
+  // No room beside the other handle (it sits at this one's end of the
+  // track): as near to it as this handle's own range allows.
+  if (upper < lower) return which === 'first' ? min : max
+  if (!Number.isFinite(snapped)) return which === 'first' ? lower : upper
+  return clamp(snapped, lower, upper)
 }
 
 // --- the chunk 1 contract ----------------------------------------------------

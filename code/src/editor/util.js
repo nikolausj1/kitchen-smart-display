@@ -129,3 +129,95 @@ export function shortTime(hm) {
   const h12 = h % 12 || 12
   return `${h12}:${String(m).padStart(2, '0')}${h < 12 ? ' am' : ' pm'}`
 }
+
+// --- hours and times in the house style (the hourRange and timeList fields) ----
+//
+// The screens' own way of writing a time: '5 am' and '10 pm' on the hour,
+// '7:30 am' off it, 'Noon', and 'Midnight' for 0 and 24 (the end of the day).
+
+// Minutes of the day (0..1439) -> '7 am', '7:30 am', 'Noon', 'Midnight'.
+function clockLabel(minutes) {
+  const h = Math.floor(minutes / 60) % 24
+  const m = minutes % 60
+  if (m === 0 && h === 0) return 'Midnight'
+  if (m === 0 && h === 12) return 'Noon'
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`
+}
+
+// An hour of the day (0..24, a fraction for the minutes) in the house style:
+// 5 -> '5 am', 12 -> 'Noon', 22 -> '10 pm', 24 -> 'Midnight', 8.5 -> '8:30 am'.
+export function hourLabel(h) {
+  const n = toNum(h)
+  if (!Number.isFinite(n)) return ''
+  return clockLabel(((Math.round(n * 60) % 1440) + 1440) % 1440)
+}
+
+// Two hours as a window: '8 am to 10 pm'.
+export const hourRangeText = (a, b) => `${hourLabel(a)} to ${hourLabel(b)}`
+
+// Where a track from lo to hi hours gets a label: both ends, and every 6, 3,
+// 2 or 1 hours between (the widest spacing that still gives a mark or three),
+// none closer than half a spacing to an end. -> [{ h, label }]
+export function hourTicks(lo, hi) {
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return []
+  const span = hi - lo
+  const every = [6, 3, 2, 1].find((s) => span / s >= 3) ?? 1
+  const out = [{ h: lo, label: hourLabel(lo) }]
+  for (let h = Math.ceil(lo / every) * every; h < hi; h += every) {
+    if (h - lo >= every / 2 && hi - h >= every / 2) out.push({ h, label: hourLabel(h) })
+  }
+  out.push({ h: hi, label: hourLabel(hi) })
+  return out
+}
+
+// A time list: 24-hour 'H:MM' times, comma-separated ('7:30,12:00,17:45').
+// Written normalised: 'H:MM' (no leading zero on the hour), in time order,
+// each once, joined by ','. Read leniently: spaces, a leading zero and empty
+// parts (a stray comma) are fine. Anything else is not a time list.
+const LIST_TIME_RE = /^(\d{1,2}):(\d{2})$/
+
+// Minutes of the day from 'H:MM' or 'HH:MM', else null.
+export function timeMinutes(v) {
+  const m = typeof v === 'string' ? LIST_TIME_RE.exec(v.trim()) : null
+  if (!m) return null
+  const h = Number(m[1])
+  const min = Number(m[2])
+  return h <= 23 && min <= 59 ? h * 60 + min : null
+}
+
+// Minutes of the day -> 'H:MM' ('7:05', '17:45', '0:00').
+export const timeText = (minutes) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
+
+// 'H:MM' -> the house style: '7:30 am', '7 am', 'Noon', 'Midnight'; the input
+// as it is when it is not a time.
+export function timeLabel(v) {
+  const m = timeMinutes(v)
+  return m == null ? String(v ?? '') : clockLabel(m)
+}
+
+// The times in a stored list, as minutes of the day in order, each once; []
+// for an empty one; null when it is not a time list.
+export function parseTimeList(v) {
+  if (v == null) return []
+  if (typeof v !== 'string') return null
+  const out = []
+  for (const part of v.split(',')) {
+    if (!part.trim()) continue
+    const m = timeMinutes(part)
+    if (m == null) return null
+    if (!out.includes(m)) out.push(m)
+  }
+  return out.sort((a, b) => a - b)
+}
+
+// Minutes of the day -> the normalised string: in order, each once.
+export const timeListText = (list) => [...new Set(list)].sort((a, b) => a - b).map(timeText).join(',')
+
+// A time added to a list (minutes): in order; unchanged when it is already
+// there or the list holds `max` already. -> { list, added, reason: null |
+// 'duplicate' | 'full' }
+export function addToTimeList(list, minutes, max = Infinity) {
+  if (list.includes(minutes)) return { list, added: false, reason: 'duplicate' }
+  if (list.length >= max) return { list, added: false, reason: 'full' }
+  return { list: [...list, minutes].sort((a, b) => a - b), added: true, reason: null }
+}
