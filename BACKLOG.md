@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-09-28
-version: 8.3
+version: 8.4
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -617,14 +617,8 @@ progress bar). Remaining:
   the WeatherKit keys), and the header of `lib/homeAssistant.mjs` and the
   `/api/ha/action` route's comment list the statuses from before the actions
   switch (it answers 403, and a service off the allowlist 400).
-- **The editor honours `showIf` only on box fields** (POLISH, from the
-  layout core, 2026-09-27) - `panels/schemas.js` marks the hourly
-  forecast's Hours with `showIf: { range: 'hours' }` and its Until with
-  `showIf: { range: 'untilHour' }`, but the inspector reads `showIf` only
-  on the box schema's own fields (`editor/Inspector.jsx`, where the block
-  title's text shows only for Custom), so both always show, whatever Show
-  says. Honour it on a type's own knobs too. Design:
-  `docs/designs/panels-and-controls.md`, "Layout core".
+- **The editor honours `showIf` only on box fields** (DONE 2026-09-28: honoured
+  on a type's fields too, with the hour-range slider and time list.)
 - **Drop the inspector's redundant overrides** (POLISH, from the layout
   core, 2026-09-27) - `editor/Inspector.jsx` overrides the box schema's
   vertical-align hint (`BOX_HINTS.valign`, "Top is the block as designed")
@@ -831,6 +825,13 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-09-28 - Hourly forecast: five Show modes; the moon at night.**
+  Next hours, Now until, Whole day, Day parts and Set times; new blocks
+  start in Whole day (8 am to 10 pm, six moments), saved blocks keep their
+  mode; Whole day dims the past with a now line; after the end hour, tomorrow.
+  After dark the sky icons draw the moon at its exact mean phase, the Sun and
+  moon panel's model, everywhere current weather or hours are drawn; the
+  multi-day Forecast keeps day icons (each column is a day).
 - **2026-09-28 - The countdown block shows calendar countdowns only.** The
   school departure no longer takes over the countdown block on school
   mornings or during a manual timer. A School departure switch on the block
@@ -1294,6 +1295,12 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-09-28 - Hourly Show modes, night skies, editor controls.** The
+  hourly block's Show dropdown (five modes, `lib/hourlyMoments.js`); the
+  editor's `showIf` on a type's fields, two-handle hour slider and time
+  chips; the moon after dark at its exact phase on every weather view.
+  Design: `docs/designs/panels-and-controls.md` ("The hourly forecast's Show
+  modes", "Night skies") and `layout-editor.md` ("As built, 2026-09-28").
 - **2026-09-28 - Countdown block: no school departure takeover** (Justin's
   request). The Echo Show 15's countdown tiles stay on school mornings. Also
   the same night: countdown art goes to the picture matching the most title

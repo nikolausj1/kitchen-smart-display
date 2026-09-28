@@ -2,7 +2,7 @@
 title: "Panels and controls - more panel types, generic element styles, WeatherKit, calendar views"
 created: 2026-09-26
 modified: 2026-09-28
-version: 1.8
+version: 1.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, layout-editor, panels, weather, weatherkit, attribution, calendar, calendar-views, countdowns, countdown-tiles, blocks, clocks, shape, flip-clock, home-assistant, ha-blocks, repeated-blocks, hourly, agenda, previews, echo-show, frameserver]
 ---
@@ -1213,8 +1213,54 @@ menu, repeated blocks". At the defaults every board draws as it did.
   "Hourly".
 - At the defaults the strip is the one it always was (`lib/weatherPanels.js`
   `hourlyColumns`, `hourlyTitle`). The schema marks each range's own field
-  with `showIf`, which the inspector does not yet honour on a type's fields,
-  so Hours and Until both show (BACKLOG).
+  with `showIf`, which the inspector honours on a type's fields since 2026-09-28.
+
+### The hourly forecast's Show modes (2026-09-28)
+
+Justin's decisions: all five modes; new blocks start in Whole day; in Whole
+day the past dims and a line marks now; after the end hour the block rolls
+to tomorrow; moments snap to whole hours with the endpoints exact. The
+logic is pure (`lib/hourlyMoments.js`, 23 tests); the panel draws whatever
+moments it returns.
+
+| `mode` "Show" | Moments | Its controls |
+|---|---|---|
+| `next` Next hours (schema default, so saved blocks keep their look) | Now, then every `step` hours for `hours`, or until `untilHour` (the old strip, byte for byte) | Range, Hours or Until, Every |
+| `untilEnd` Now until | Now, then `count` - 1 moments from the next hour to `endHour`; from `endHour` o'clock, tomorrow from its sunrise hour, header "Tomorrow" | Moments, Until |
+| `wholeDay` Whole day (new blocks: 8 am to 10 pm, six) | `count` moments `startHour` to `endHour`; past dimmed, the current one as "Now" was, a 2 px now line between the columns; from `endHour` o'clock, tomorrow, nothing dimmed | Moments, Hours (a two-handle slider) |
+| `dayParts` Day parts | Morning 6-12, Afternoon 12-17, Evening 17-21, Overnight 21-6: the most significant sky covering 2 or more hours, the high (Overnight: "LOW"), the highest rain; past parts dimmed; from 21:00 "Tonight and tomorrow" | none |
+| `setTimes` Set times | each chosen time's hour, labelled with the exact time; past dimmed; after the last, tomorrow's | Times (chips, 15-minute steps, up to 8) |
+
+- Spacing: endpoints exact, the moments between rounded to the nearest
+  hour, no hour twice (8 to 22 in six: 8, 11, 14, 16, 19, 22).
+- The editor shows each mode's own controls only (`showIf` on a type's
+  fields), the Whole day window as one two-handle slider (`ui:
+  'hourRange'`) and Set times as chips (`ui: 'timeList'`); see
+  `layout-editor.md`.
+- New blocks get `mode: 'wholeDay'` through the type table's `startKnobs`
+  (applied by `newPanel`), not through the schema default, so the Echo
+  Show 15's saved block (Next hours, Rest of day every 2 hours to 10 pm)
+  renders pixel-identical.
+
+### Night skies (2026-09-28)
+
+- After dark, clear, partly cloudy and mostly cloudy skies draw the moon
+  (`components/MoonGlyph`) instead of the sun, alone or behind the day
+  icon's own cloud; rain, snow, storms, fog and overcast keep their icons.
+  `<WeatherIcon code isDay moonPhase />`; by day the markup is unchanged.
+- `isDay` per hour and for the current reading: the source's own flag, else
+  that date's sunrise and sunset, else 6 am to 8 pm. A day part is night
+  when most of its hours are (Tonight always; Evening in winter).
+- `moonPhase`: the exact mean synodic phase at the moment, the model the Sun
+  and moon panel draws (`lib/sun.js`), so every moon on a board agrees.
+  WeatherKit's `moonPhase` comes in eight named steps and is not used for
+  drawing (first build used it; the Board showed two different moons).
+- Where: the weather card, conditions, Ambient, Framed Today, the slideshow
+  widget and every hourly moment (the 10 pm moment of a Whole day block
+  shows the moon). The multi-day Forecast keeps day icons: each column is a
+  whole day.
+- Mostly cloudy at night is reachable only by icon name: code 3 is
+  overcast, and the hub maps WeatherKit's MostlyCloudy to 3.
 
 ### The agenda's rows
 

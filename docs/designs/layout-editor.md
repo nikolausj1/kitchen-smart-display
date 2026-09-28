@@ -2,7 +2,7 @@
 title: "Layout editor - move, resize and tune the boards from a MacBook"
 created: 2026-09-24
 modified: 2026-09-28
-version: 1.10
+version: 1.11
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, editor, entry, today, layouts, frameserver, dashboard, echo-show, element-styles, fonts, visibility-rules, block-types, shape, blocks, add-block-menu, repeated-blocks, previews]
 ---
@@ -1089,12 +1089,32 @@ saves, exactly as it did.
 
 ### Left for later (in BACKLOG)
 
-- The inspector honours a field's `showIf` only on the box's own fields,
-  so the hourly forecast's Hours and Until both always show whatever its
-  Show; honour it on a type's fields too.
+- (Done 2026-09-28: `showIf` is honoured on a type's fields too; see
+  "As built, 2026-09-28" below.)
 - `BOX_HINTS.valign` and `BOX_OPTION_LABELS['title.mode']` in
   `editor/Inspector.jsx` now repeat what the app's box schema says; drop
   them (and `withOptionLabels`).
 - The HA chips take their entities as a comma-separated list of ids,
   because the editor has no multi-select field; one would make it a pick
   list of the whitelist.
+
+## As built, 2026-09-28: showIf on block settings, an hour range, a time list
+
+- `showIf` now applies to type-specific fields (and element and Global
+  fields): `{ key: value }` equal, `{ key: [a, b] }` any of, several keys
+  all; values read with schema defaults filled in, so a saved block without
+  `mode` counts as the default. Hidden fields keep their values. A group
+  whose fields are all hidden is not drawn.
+- `ui: 'hourRange'`: a number field with `pair: '<k>'` and its partner with
+  `pairOf` draw as one two-handle slider ("8 am to 10 pm"), handles at least
+  a step apart, arrows 1 step, Shift-arrows 3, Page and Home and End; one
+  undo step per drag. When only one side is shown by its own `showIf`, it
+  draws alone with one handle ("Until 10 pm").
+- `ui: 'timeList'`: a text field of `H:MM` times joined by commas, drawn as
+  chips in time order ("7:30 am", "Noon") with Add time in 15-minute steps,
+  duplicates refused, capped at the field's `max` (8); an unparseable value
+  shows as text with a Reset. The app's parser is lenient (am/pm, bare
+  hours); the editor only ever writes `H:MM`.
+- Unknown `ui` values fall back to the plain field. 11 tests
+  (`editor/fieldUi.test.mjs`).
+
