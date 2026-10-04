@@ -1,9 +1,9 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-09-28
-version: 8.4
-author: Claude Fable 5.1 (claude-fable-5-1)
+modified: 2026-10-03
+version: 8.5
+author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
 
@@ -825,6 +825,18 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-03 - Now Playing gets a Sound popover (option A).** A speaker
+  button after Next opens a card spanning the left column: group volume
+  (`/Main/groupVolume`, steps of 2, hold to repeat, shown at once and sent
+  throttled) and "Also play in" chips for Playroom and Family Room
+  (`/<room>/join/Main`, `/<room>/leave`). Main is always on; outdoor zones
+  and the Basement are left out; any other room already grouped still shows
+  so it can be removed. A +N badge on the button counts joined rooms; a chip
+  for a room busy elsewhere says what it is playing ("Playing the TV").
+  Closes after 6 s idle (no countdown shown) or a tap outside. The room list
+  is a constant in `views/NowPlaying/SoundControl.jsx`, since every web
+  screen plays on Main. The Apple TV app is not covered. Mockup:
+  `_review/mockups/sound-flyout-mockup.html`.
 - **2026-09-28 - Hourly forecast: five Show modes; the moon at night.**
   Next hours, Now until, Whole day, Day parts and Set times; new blocks
   start in Whole day (8 am to 10 pm, six moments), saved blocks keep their

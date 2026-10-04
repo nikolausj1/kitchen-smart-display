@@ -1,9 +1,9 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-09-28
-version: 5.10
-author: Claude Fable 5.1 (claude-fable-5-1)
+modified: 2026-10-03
+version: 5.11
+author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
 
@@ -18,6 +18,8 @@ Kitchen Smart Display covers the family's screens, all fed by one hub (FrameServ
 Active Development. Five screens are registered with the hub (plus `dev-mac` for testing): the kitchen Pi, the Living Room Apple TV, and three Echo Shows running the kitchen web app in Silk: the family-room Echo Show 10 (which now follows the Apple TV's Plex playback), the Echo Show 15 by the front door (the Entry board, its home view) and the office Echo Show 5 (its Today is the flip clock). All five were polling the hub at 13:05 on 2026-09-27. Every screen depends on FrameServer on the NUC and nothing else on the LAN. The work since 2026-08-18 is committed on `feature/echo-hub` (110 commits at `736683e`) and deployed, not merged or pushed.
 
 ## Health
+
+**2026-10-03: Now Playing has a Sound popover, built and verified in the dev app, not yet committed or deployed.** A speaker button beside the transport opens volume (steps of 2, hold to repeat, the whole group moves together) and chips to add or remove the Playroom and Family Room. It closes itself after 6 s idle. Checked at the kitchen's 1920x1080 and the Echo Show 10's 1280x800 with every Sonos command stubbed, so no speaker was touched; the real join, leave and group-volume calls still need one live try.
 
 **2026-09-28: the hourly forecast grew five Show modes and the weather views got the moon.** Next hours, Now until, Whole day (a two-handle start and end slider, past dimmed, a now line, tomorrow after the end), Day parts and Set times; new hourly blocks start in Whole day, and the Echo Show 15's saved block keeps its look. After dark every weather view draws the moon at its exact phase, the same one the Sun and Moon block shows. Earlier the same day: the countdown block no longer gives way to the school departure, and "Nana & Pop Visit" shows Mark and Kim's picture.
 
