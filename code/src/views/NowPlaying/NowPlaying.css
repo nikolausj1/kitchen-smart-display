@@ -90,6 +90,8 @@
 /* --- Transport buttons --------------------------------------------------- */
 
 .np__transport {
+  /* Containing block for the Sound popover, which spans the column. */
+  position: relative;
   margin-top: 3vh;
   display: flex;
   align-items: center;
@@ -126,6 +128,262 @@
   height: 46%;
   display: block;
   fill: #ffffff;
+}
+
+/* --- Sound button + popover (SoundControl.jsx) --------------------------- */
+
+/* Extra space sets the speaker apart from prev / play / next. */
+.snd__spk {
+  position: relative;
+  margin-left: 1.2vw;
+}
+.snd__spk.is-open {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+.snd__spk.is-open .np__btn-icon {
+  fill: #000000;
+}
+.snd__wave {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+.snd__spk.is-open .snd__wave {
+  stroke: #000000;
+}
+
+/* Rooms grouped with this one, beyond the screen's own. */
+.snd__badge {
+  position: absolute;
+  top: -0.25vw;
+  right: -0.4vw;
+  min-width: max(1.55vw, 20px);
+  height: max(1.55vw, 20px);
+  padding: 0 0.4vw;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #000000;
+  font-size: max(0.9vw, 11px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 0.22vw #000000;
+}
+
+/* The card covers the pill, title, artist and progress bar; fade them so
+ * nothing peeks round its rounded corners. */
+.np__station,
+.np__title,
+.np__artist,
+.np__progress {
+  transition: opacity 0.2s ease;
+}
+.np__left:has(.snd.is-open) :is(.np__station, .np__title, .np__artist, .np__progress) {
+  opacity: 0;
+}
+
+/* Tap anywhere outside the card to close it. */
+.snd-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+}
+
+/* The card spans the left column's content width, so its edges line up with
+ * the station pill, title and progress bar; the caret points at the button. */
+.snd {
+  --snd-bg: #232326;
+  --snd-pad: 2.4vw;
+  position: absolute;
+  z-index: 31;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 1.9vw);
+  padding: var(--snd-pad);
+  border-radius: 2vw;
+  background: var(--snd-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1.6vw 4.5vw rgba(0, 0, 0, 0.7);
+  transform-origin: var(--caret-x, 85%) 100%;
+  opacity: 0;
+  transform: translateY(0.8vw) scale(0.97);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15),
+    visibility 0s linear 0.22s;
+}
+.snd.is-open {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+/* Caret: the lower half of a rotated square, so it never doubles up over the
+ * card. Sits 1px low to cover the card's bottom border at its base. */
+.snd::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--caret-x, 85%) - 1vw);
+  bottom: calc(-1vw - 1px);
+  width: 2vw;
+  height: 2vw;
+  background: var(--snd-bg);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  transform: rotate(45deg);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+.snd__label {
+  font-size: max(0.95vw, 11px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Label left, big number right; their edges match the - and + buttons. */
+.snd__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 1.3vw;
+}
+.snd__value {
+  font-size: 3.4vw;
+  font-weight: 300;
+  line-height: 0.85;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.snd__vol {
+  display: flex;
+  align-items: center;
+  gap: 1.8vw;
+}
+.snd__step {
+  flex: none;
+  touch-action: none;
+}
+.snd__track {
+  flex: 1 1 auto;
+  height: max(0.6vw, 6px);
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.snd__fill {
+  height: 100%;
+  background: #ffffff;
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+
+.snd__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2.2vw 0 1.9vw;
+}
+
+.snd__rooms {
+  display: grid;
+  /* Two across on the kitchen; stacked where the column is narrower (the
+   * 16:10 Echo Show, whose album art takes more of the width). */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14.5vw), 1fr));
+  gap: 1.1vw;
+  margin-top: 1.3vw;
+}
+.snd__room {
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+  min-width: 0;
+  min-height: max(5vw, 70px);
+  padding: 0.8vw 1.6vw 0.8vw 1.3vw;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.snd__room.is-on {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
+}
+.snd__room-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.snd__room-name {
+  font-size: 1.4vw;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snd__room-sub {
+  font-size: max(0.85vw, 10px);
+  line-height: 1.2;
+  margin-top: 0.2vw;
+  opacity: 0.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empty ring = off, black tick = on, spinner while Sonos regroups. */
+.snd__ring {
+  flex: none;
+  width: max(2vw, 22px);
+  height: max(2vw, 22px);
+  border-radius: 999px;
+  border: max(0.15vw, 2px) solid rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.snd__ring svg {
+  width: 70%;
+  height: 70%;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.snd__room.is-on .snd__ring {
+  background: #000000;
+  border-color: #000000;
+}
+.snd__room.is-on .snd__ring svg {
+  opacity: 1;
+}
+.snd__room.is-pending .snd__ring {
+  background: none;
+  border-color: currentColor;
+  border-top-color: transparent;
+  animation: snd-spin 0.7s linear infinite;
+}
+.snd__room.is-pending .snd__ring svg {
+  opacity: 0;
+}
+@keyframes snd-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* --- Clock bottom-left --------------------------------------------------- */

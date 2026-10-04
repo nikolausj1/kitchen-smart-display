@@ -3,6 +3,7 @@ import useSonosState, { useSonosActions, getLastPlayingAt } from '../../hooks/us
 import { useView } from '../../shell/ViewContext.jsx'
 import { getHomeView } from '../../shell/homeView.js'
 import Jukebox from './Jukebox.jsx'
+import SoundControl from './SoundControl.jsx'
 import './NowPlaying.css'
 
 // If Sonos has been idle (not playing) for at least this long when the user
@@ -18,8 +19,9 @@ const IDLE_TO_HOME_MS = 60_000
 
 // NowPlaying view per Figma node 83:461.
 // Left: station name pill, track title (bold), artist, progress bar, three
-// round transport buttons.  Right: large square album art.  Bottom-left:
-// a big clock (the view's own time widget).
+// round transport buttons and the Sound button (SoundControl.jsx).  Right:
+// large square album art.  Bottom-left: a big clock (the view's own time
+// widget).
 
 function fmtTime(now) {
   const hour12 = now.getHours() % 12 || 12
@@ -168,6 +170,7 @@ export default function NowPlaying() {
             label="Next track"
             onClick={actions.next}
           />
+          <SoundControl state={state} actions={actions} />
         </div>
 
         <div className="np__clock">{fmtTime(now)}</div>

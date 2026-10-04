@@ -70,6 +70,34 @@ function findPlayerInZones(zones, roomName) {
   return null
 }
 
+// Grouping facts for the Sound popover, from the same /zones poll:
+//   groupMembers  room names in our group, ours included
+//   groupVolume   the group's volume (Sonos app's main slider); equals the
+//                 room volume when the room plays alone
+//   elsewhere     { roomName: label } for rooms playing in some OTHER group,
+//                 so a join can warn that it takes the room over
+function parseGrouping(zones, roomName) {
+  const out = { groupMembers: [roomName], groupVolume: null, elsewhere: {} }
+  if (!Array.isArray(zones)) return out
+  for (const group of zones) {
+    const members = (group.members || []).map((m) => m.roomName)
+    const c = group.coordinator || {}
+    if (members.includes(roomName)) {
+      out.groupMembers = members
+      out.groupVolume = c.groupState?.volume ?? null
+    } else if (c.state?.playbackState === 'PLAYING') {
+      const t = c.state.currentTrack || {}
+      const label = String(t.uri).includes('htastream')
+        ? 'the TV'
+        : t.type === 'line_in'
+          ? 'line-in'
+          : cleanStationName(t.stationName || '') || t.title || 'music'
+      for (const m of members) out.elsewhere[m] = label
+    }
+  }
+  return out
+}
+
 async function loadFavorites({ apiBase, room }) {
   if (Date.now() - favoritesLoadedAt < FAVORITES_REFRESH_MS && favoritesCache.length) {
     return favoritesCache
@@ -113,6 +141,9 @@ export default function useSonosState() {
     avTransportUri: '',
     avTransportUriMetadata: '',
     volume: 0,
+    groupMembers: [room],
+    groupVolume: null,
+    elsewhere: {},
     loading: true,
     error: null,
     // ms epoch of the last successful poll; lets a view advance the elapsed
@@ -158,6 +189,7 @@ export default function useSonosState() {
         setState((prev) => ({
           ...prev,
           ...(parsed || {}),
+          ...parseGrouping(zones, room),
           sourceLabel: label,
           sourceKind: source,
           avTransportUri,
@@ -187,9 +219,10 @@ export default function useSonosState() {
 export function useSonosActions() {
   const { sonos } = useSettings()
   return useMemo(() => {
-    const send = async (path) => {
+    // `path` is relative to the API base; `send` prefixes this screen's room.
+    const sendRaw = async (path) => {
       try {
-        await fetch(`${sonos.apiBase}/${sonos.room}${path}`, {
+        await fetch(`${sonos.apiBase}${path}`, {
           method: 'GET',
           cache: 'no-store',
         })
@@ -197,6 +230,7 @@ export function useSonosActions() {
         console.warn('sonos action failed', path, e)
       }
     }
+    const send = (path) => sendRaw(`/${encodeURIComponent(sonos.room)}${path}`)
     return {
       play: () => send('/play'),
       pause: () => send('/pause'),
@@ -205,6 +239,12 @@ export function useSonosActions() {
       playFavorite: (name) => send(`/favorite/${encodeURIComponent(name)}`),
       volumeUp: () => send('/volume/+5'),
       volumeDown: () => send('/volume/-5'),
+      // Absolute, so a burst of optimistic taps lands on what the screen shows.
+      setGroupVolume: (v) => send(`/groupVolume/${Math.round(v)}`),
+      // Pull another room into this screen's group, or send it back out.
+      joinRoom: (other) =>
+        sendRaw(`/${encodeURIComponent(other)}/join/${encodeURIComponent(sonos.room)}`),
+      leaveRoom: (other) => sendRaw(`/${encodeURIComponent(other)}/leave`),
     }
   }, [sonos.apiBase, sonos.room])
 }
