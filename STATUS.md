@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-10-03
-version: 5.11
+version: 5.12
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -19,7 +19,7 @@ Active Development. Five screens are registered with the hub (plus `dev-mac` for
 
 ## Health
 
-**2026-10-03: Now Playing has a Sound popover, built and verified in the dev app, not yet committed or deployed.** A speaker button beside the transport opens volume (steps of 2, hold to repeat, the whole group moves together) and chips to add or remove the Playroom and Family Room. It closes itself after 6 s idle. Checked at the kitchen's 1920x1080 and the Echo Show 10's 1280x800 with every Sonos command stubbed, so no speaker was touched; the real join, leave and group-volume calls still need one live try.
+**2026-10-03, 17:47: Now Playing has a Sound popover, deployed to the hub and the kitchen Pi (build `ed21a22`; the Echos pick it up on their deploy reload).** A speaker button beside the transport opens volume (steps of 2, hold to repeat, the whole group moves together) and chips to add or remove the Playroom and Family Room. It closes itself after 6 s idle. Checked at the kitchen's 1920x1080 and the Echo Show 10's 1280x800 with every Sonos command stubbed, so no speaker was touched; the real join, leave and group-volume calls still need one live try.
 
 **2026-09-28: the hourly forecast grew five Show modes and the weather views got the moon.** Next hours, Now until, Whole day (a two-handle start and end slider, past dimmed, a now line, tomorrow after the end), Day parts and Set times; new hourly blocks start in Whole day, and the Echo Show 15's saved block keeps its look. After dark every weather view draws the moon at its exact phase, the same one the Sun and Moon block shows. Earlier the same day: the countdown block no longer gives way to the school departure, and "Nana & Pop Visit" shows Mark and Kim's picture.
 
