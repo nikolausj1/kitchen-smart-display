@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-03
-version: 8.5
+modified: 2026-10-09
+version: 8.6
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -825,6 +825,16 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-09 - Mixtape label v2 decided: printed labels, three rotating
+  layouts, four typesets, handwritten fallback.** After three concept rounds on
+  real deck pixels Justin picked the round 3 recommendation: Fit left as the
+  default label (full cover printed at the left, title and artist on paper,
+  album under the wheels), Split and Fill width rotated in by hash, four
+  typesets rotating, medium wear by default, the handwritten homemade tape when
+  there is no art. The defining rule is that everything looks printed into the
+  paper: no shadows, grain through ink and art, wear across both. Dropped:
+  L-shape, Inverse, Two-tone, sticker, brand header strips on art labels.
+  Design: `docs/designs/mixtape.md`, "The label, v2". Building now.
 - **2026-10-03 - Now Playing gets a Sound popover (option A).** A speaker
   button after Next opens a card spanning the left column: group volume
   (`/Main/groupVolume`, steps of 2, hold to repeat, shown at once and sent

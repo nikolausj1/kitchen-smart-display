@@ -1,8 +1,8 @@
 ---
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
-modified: 2026-09-24
-version: 1.6
+modified: 2026-10-09
+version: 1.7
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -246,6 +246,37 @@ motion reading as real, so we model it rather than spinning both hubs at one spe
 - **Wear overlay** goes on top of the text so scuffs cross the ink.
 - **Radio**: no art; the station name goes in the album line, the song line holds the
   current title if Sonos reports one.
+
+## The label, v2 (decided 2026-10-09 after three concept rounds)
+
+Justin's review on the TV: the tape is great, the label is too small. Three
+concept rounds on real deck pixels (`_review/mockups/mixtape-label-concepts*.html`,
+builders in `scripts/mixtape/build_label_concepts*.py`) settled this:
+
+- **Printed, not stuck on.** Art and text are ink in the paper: the cover is
+  multiplied and soft-lit into the paper grain with its blacks lifted to about
+  5% (print density), text is dark ink multiplied or translucent white ink,
+  there are no drop shadows or sticker borders anywhere, and the tape's wear
+  (light / medium / heavy) crosses art and ink alike. The before/after pair in
+  round 3 is the reference.
+- **Three layouts rotate per tape**, picked by a slice of the same FNV-1a hash
+  that picks the shell: **Fit left** (default, about half the time: the square
+  cover at full paper height on the left, title and artist on paper above the
+  window, album under the wheels), **Split** (cover fills the left half, text
+  right) and **Fill width** (the cover's upper part behind everything, ink
+  chosen by luminance and detail behind each text block, with a printed
+  gradient band as the fallback, never a shadow).
+- **Typeset, four families rotating** per tape: grotesk, condensed caps, serif
+  italic, typewriter (all tvOS system fonts). Title largest, artist about 60%,
+  album about 45%. The handwriting survives only in the fallback.
+- **Album line always present** (station name for radio), small, under the
+  wheels. Omitted only when empty or identical to the title.
+- **No-art fallback** (missing cover, radio): the homemade handwritten tape,
+  Caveat in blue ballpoint on ruled lines, title wrapping before shrinking.
+- Dropped on the way: the L-shape, Inverse and Two-tone concepts, the sticker,
+  the brand header strip on art labels (the brand lives on the shell), and the
+  round 1 manifest `artSlotRect` / `textLines` layout, which is superseded.
+- Wear: medium by default; heavy reserved for about two of the fourteen.
 
 ## Choosing the tape
 

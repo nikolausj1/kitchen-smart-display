@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-10-03
-version: 5.12
+modified: 2026-10-09
+version: 5.13
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -61,8 +61,6 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: the Entry board drawing at the Echo 15's full 1920x1080; calling the Echos done
 - [ ] **Describe the Countdown Art in Immich** - give the seven Countdown Art images their keywords in their Immich descriptions (backpack: "school, first day, last day"; balloons: "birthday, bday, party"; mark_kim: "mark, kim, visit"; camper: "camping, camp, trip"; cabin: "cabin, lake"; pumpkin: "halloween"; minnesota: "mn, minneapolis"), and put `countdown` in the description of any other event you want a tile for (one is marked so far). The dashboard's Calendars card shows which art each countdown matched (~10 min)
       - unblocks: the countdown tiles picking the right art without an `image:` line in every event
-- [ ] **Pick a Mixtape label layout** - open `_review/mockups/mixtape-label-concepts.html`, choose among six concepts (full-bleed art, blurred full-bleed, tall art column, wide banner, two-line hierarchy, sticker), Copy decisions, paste into chat (~10 min)
-      - unblocks: the label rebuild, redeploy, and merging `feature/mixtape`
 - [ ] **Confirm two Home Assistant choices** - the hub seeded "Turn off downstairs" as `light.turn_off` on the `light.downstairs` group (Home Assistant has no script or scene of that name) and the basement light as the room group `light.basement_basement`, not the switch's own `light.basement_light_switch`. Say yes, or which to use instead (~2 min)
       - unblocks: the Home Assistant buttons doing what you expect (both actions are on the whitelist, ready for an HA button on a board)
 - [ ] **A few minutes with the agent for the first real Home Assistant action, then decide the switch** - no command has ever been sent to the house (the hub's action log was empty at 13:05 on 2026-09-27). Together: turn on "Allow actions from screens" on the dashboard's Home Assistant card, press one harmless action (the basement light), watch it happen and appear under Recent actions, then turn the switch off again, or leave it on once the dashboard PIN is decided (~10 min)
@@ -71,7 +69,7 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: turning Home Assistant actions on safely
 - [ ] **Consider lowering the Echo Show 15's darkness to 0.5 or 0.6** - dashboard, the `echo-show15` screen, Entry board card, "Darken photos". It runs 0.8, so bright photos hit the 0.9 cap; with the new scrims and adaptive darkness, 0.5 to 0.6 reads well (~2 min)
       - unblocks: brighter photos by the front door without losing the text
-- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (110 commits over `main` at `736683e`, with Mixtape and the Today layouts inside it), not pushed and not merged. Merging waits on the Mixtape label pick since the branch includes Mixtape (~20 min to read)
+- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (110 commits over `main` at `736683e`, with Mixtape and the Today layouts inside it), not pushed and not merged. The Mixtape label pick landed 2026-10-09 and the v2 label is being built on this branch (~20 min to read)
       - unblocks: merging to main and pushing to GitHub; the Pi lock-down step after the soak week
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
