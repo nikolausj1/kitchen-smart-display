@@ -1,8 +1,8 @@
 ---
 title: "Mixtape asset scripts"
 created: 2026-09-23
-modified: 2026-09-23
-version: 1.3
+modified: 2026-10-09
+version: 1.4
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [mixtape, blender, scripts, assets]
 ---
@@ -173,6 +173,45 @@ detail, in about 3 s. Real-ESRGAN smeared the metal; EDSR was 40x slower.
     /tmp/vtsr art-src/mixtape/reference/horizon_deck_reference.png out_4x.png
 
 Then resize to 3840x2160 with Lanczos (PIL) and crop the odd row.
+
+## Deck plate edit pass 2: wordmark, key lamp, output knob (2026-10-09)
+
+`edit_deck_plate.py` (system python3: numpy, opencv-python, Pillow) reads the
+needle-free 4K plate `tvos/Resources/Mixtape/deck/deck_empty.png`, leaves it
+untouched, and writes a new final plate plus sprites. Hand work only (cloning,
+Poisson blending, typesetting), no image generation. About 20 s.
+
+    python3 scripts/mixtape/edit_deck_plate.py
+
+| Step | How | Output |
+|------|-----|--------|
+| NIKOLAUS wordmark | HORIZON erased by a Poisson clone of the brushed faceplate just below it; NIKOLAUS set in SF Pro (variable `SFNS.ttf`, wdth 121, wght 610), the closest face on this Mac to HORIZON (per-letter IoU 0.74; Futura Medium 0.43, Avenir Next Demi Bold 0.52, no Eurostile here). Same cap height (45 px), baseline, left edge and ink as HORIZON; tracking fitted to HORIZON then tightened 2.5 px so the 8 letters keep a 69 px gap to STEREO. | `art-src/mixtape/plates/deck_empty_nikolaus.png`, `wordmark-compare.png` |
+| Unlit PLAY | FF's top rows (gap, bevel, highlight) remapped onto PLAY's cap edges, toned by a per-channel gain field so PLAY keeps its own sheen. | `art-src/mixtape/plates/deck_empty_nikolaus_unlit.png` |
+| Key lamp sprites | The lit PLAY rows as an RGBA overlay, and the same rows remapped onto the narrower PAUSE cap. Drawn source-over (see below). | `deck/glow_play.png`, `deck/glow_pause.png`, `art-src/mixtape/plates/glow-compare.png` |
+| Output knob | The cone-brushed top face (not the chrome skirt or rim, which are round and must not turn) cut as a centred disc with a 1 px feather; the plate under it gets the same face with the dot painted out radially; the dot alone as a second sprite. | `deck/knob.png`, `deck/knob_dot.png`, `deck/deck_empty_v2.png`, `art-src/mixtape/plates/knob-compare.png` |
+
+`deck_empty_v2.png` is the final plate: NIKOLAUS, PLAY unlit, knob face without
+its dot. It sits beside `deck_empty.png`; the app switches when the lead decides.
+
+New `plate-manifest.json` keys (normalised like the rest; merged in, so rerun this
+after `gen_deck_plate.py finish`, then `build_tape_assets.py --manifest-only` to
+copy them into `mixtape-manifest.json`):
+
+- `glows.play`, `glows.pause`: x, y, w, h of each lamp sprite. Not additive: under
+  the amber strip the unlit cap has a white bevel highlight, and adding light cannot
+  turn white amber (a `.plusLighter` difference sprite blew out with colour
+  fringes). Draw normally; opacity 1 is the photo's lit key, fade opacity to dim.
+- `knob.center` (x, y), `knob.radius` and `knob.spriteSize` (fractions of plate
+  HEIGHT): the face disc and the square sprite centred on it.
+- `knob.dotAngleDeg` 43.2 (the dot at rest, clockwise from up), `knob.minAngleDeg`
+  -147.6 and `knob.maxAngleDeg` 147.8 (the MIN and MAX major ticks). For volume v:
+  target = min + v (max - min); rotate the sprite clockwise by target - dotAngleDeg.
+  The photo's knob rests at 64.6%.
+- `knob.tickCenter`: the printed tick ring's centre (about 10 px up-left of the
+  face, which stands proud of the plate). Reference only.
+- Prefer rotating `knob_dot.png` over a static face: a real cone-brushed knob's
+  highlights stay put as it turns, while rotating `knob.png` turns them too
+  (visible at 100% in `knob-compare.png`, row 1 against row 2).
 
 ## Tape collection (2026-09-23)
 
