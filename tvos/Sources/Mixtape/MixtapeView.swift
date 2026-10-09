@@ -117,7 +117,7 @@ private struct MixtapeAnimatedLayer: View {
                 let sr = F.rect(tape.spriteRect)
                 TapeGroup(tape: tape, load: load, images: imgs,
                           packTexture: model.deckImages?.pack ?? imgs.pack,
-                          art: load.artURL.flatMap { model.art[$0] },
+                          label: model.label,
                           F: F, angleL: model.clock.angleL, angleR: model.clock.angleR,
                           f: f)
                     .frame(width: sr.width, height: sr.height)
@@ -302,7 +302,7 @@ private struct TapeGroup: View {
     let load: MixtapeLoad
     let images: MixtapeTapeImages
     let packTexture: UIImage?
-    let art: UIImage?
+    let label: MixtapeLabelImage?
     let F: MixFrame
     let angleL: Double
     let angleR: Double
@@ -318,6 +318,12 @@ private struct TapeGroup: View {
         return ZStack(alignment: .topLeading) {
             Image(uiImage: images.sprite).resizable()
                 .frame(width: sr.width, height: sr.height)
+
+            // The printed label: one pre-composed image per track (paper,
+            // printed art, ink, wear), transparent over the window, drawn
+            // under the packs and hubs so the reels sit over everything.
+            MixtapeLabelLayer(label: label, size: sr.size)
+                .equatable()
 
             // Tape packs, seen through the window only. tape.png is opaque with
             // the photo's own packs baked into the window, so the window is
@@ -366,9 +372,6 @@ private struct TapeGroup: View {
                     .position(x: lx(tape.hubR.x), y: ly(tape.hubR.y))
             }
 
-            MixtapeLabel(tape: tape, load: load, art: art, W: F.W, H: F.H, origin: sr.origin,
-                         frameOrigin: F.frameRect.origin)
-                .equatable()
         }
         .frame(width: sr.width, height: sr.height, alignment: .topLeading)
     }
@@ -412,150 +415,28 @@ private struct TapeGroup: View {
 
 // MARK: - Label
 
-// Album art in the slot, then artist / album / song in the tape's hand font and
-// ink. Equatable so SwiftUI skips it on every animation frame.
-private struct MixtapeLabel: View, Equatable {
-    let tape: MixtapeTape
-    let load: MixtapeLoad
-    let art: UIImage?
-    let W: CGFloat
-    let H: CGFloat
-    let origin: CGPoint        // sprite origin, screen space
-    let frameOrigin: CGPoint   // frame origin, screen space
+// The pre-composed printed label (MixtapeLabelRenderer): one image, placed on
+// the sprite's paper rect. Equatable on the image identity, so SwiftUI skips
+// it on every animation frame; a new label crossfades in.
+private struct MixtapeLabelLayer: View, Equatable {
+    let label: MixtapeLabelImage?
+    let size: CGSize
 
-    static func == (a: Self, b: Self) -> Bool {
-        a.tape == b.tape && a.load == b.load && a.art === b.art && a.W == b.W && a.H == b.H
-            && a.origin == b.origin
-    }
-
-    private func lx(_ v: Double) -> CGFloat { frameOrigin.x + v * W - origin.x }
-    private func ly(_ v: Double) -> CGFloat { frameOrigin.y + v * H - origin.y }
+    static func == (a: Self, b: Self) -> Bool { a.label?.image === b.label?.image && a.size == b.size }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if let slot = tape.artSlotRect, !load.isRadio {
-                Group {
-                    if let art {
-                        Image(uiImage: art).resizable().scaledToFill()
-                            .frame(width: slot.w * W, height: slot.h * H)
-                            .clipped()
-                            .opacity(0.95)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(width: slot.w * W, height: slot.h * H)
-                .offset(x: lx(slot.x), y: ly(slot.y))
-                .animation(.easeIn(duration: 0.4), value: art != nil)
-            }
-            ForEach(Array(tape.textLines.enumerated()), id: \.offset) { i, line in
-                let text = value(for: line.field)
-                // A caption with nothing after it (a radio stream has no
-                // artist) is hidden; the other lines keep their baselines.
-                if tape.printedFields, !text.isEmpty {
-                    caption(for: line)
-                }
-                if !text.isEmpty {
-                    handLine(text, line: line, seed: i)
-                }
+            if let label {
+                Image(uiImage: label.image).resizable()
+                    .interpolation(.high)
+                    .frame(width: label.paper.width * size.width, height: label.paper.height * size.height)
+                    .offset(x: label.paper.minX * size.width, y: label.paper.minY * size.height)
+                    .id(ObjectIdentifier(label.image))
+                    .transition(.opacity)
             }
         }
-    }
-
-    private func value(for field: String) -> String {
-        switch field {
-        case "artist": return load.artist
-        case "album":  return load.isRadio ? load.station : (load.album.isEmpty ? load.station : load.album)
-        case "song", "title": return load.title
-        default: return ""
-        }
-    }
-
-    private var ink: Color { Color(hex: tape.inkColorHex) ?? HandFont.ink }
-
-    private var fontName: String {
-        UIFont(name: tape.font, size: 12) != nil ? tape.font : HandFont.postScriptName
-    }
-
-    // Font size whose x-height matches the manifest's, shrunk to fit the line's
-    // max width down to 60% of nominal; past that, the tail is ellipsised.
-    private func handLine(_ text: String, line: MixtapeTextLine, seed: Int) -> some View {
-        let name = fontName
-        let ref = UIFont(name: name, size: 100) ?? .systemFont(ofSize: 100)
-        let nominal = line.xHeight * H / max(0.01, ref.xHeight / 100)
-        let maxW = line.maxWidth * W
-        // Fit to 97% so SwiftUI's own layout (which kerns a hair wider than the
-        // CoreText measure) does not ellipsise a line that was shrunk to fit.
-        let fitW = maxW * 0.97
-        let natural = (text as NSString).size(withAttributes: [.font: ref.withSize(nominal)]).width
-        let size = natural > fitW ? max(nominal * 0.6, nominal * fitW / natural) : nominal
-        // A hair of hand-written tilt, stable per tape and line.
-        let tilt = (Double(fnv1a32(tape.id + "\(seed)") % 100) / 100 - 0.5) * 1.2
-        // A zero-size anchor at the baseline start; the text hangs off it by
-        // its first baseline, so the manifest's baselineY is exact.
-        return Color.clear.frame(width: 0, height: 0)
-            .overlay(alignment: .topLeading) {
-                Text(text)
-                    .font(.custom(name, size: size))
-                    .foregroundStyle(ink.opacity(0.92))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: maxW, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .alignmentGuide(.top) { $0[.firstTextBaseline] }
-                    .rotationEffect(.degrees(tilt), anchor: .bottomLeading)
-            }
-            .offset(x: lx(line.x), y: ly(line.baselineY))
-    }
-
-    // Pre-printed field names (printed label styles): a small-caps sans in a
-    // printed ink grey, sitting on the value's baseline at the manifest's
-    // captionX. The value starts at line.x, so each caption must end a small
-    // gap short of it. All captions share ONE size, as a printed form would:
-    // nominal from the smallest line's x-height, shrunk just enough that the
-    // widest caption (e.g. STATION on a radio tape) still fits its room.
-    private static let captionKern = 0.10
-
-    private func captionLabel(_ line: MixtapeTextLine) -> String {
-        switch line.field {
-        case "artist": return "ARTIST"
-        case "album": return load.isRadio ? "STATION" : "ALBUM"
-        default: return "SONG"
-        }
-    }
-
-    private func captionWidth(_ label: String, size: CGFloat) -> CGFloat {
-        let f = UIFont.systemFont(ofSize: size, weight: .medium)
-        return (label as NSString).size(withAttributes: [.font: f, .kern: size * Self.captionKern]).width
-    }
-
-    private var captionSize: CGFloat {
-        let xh = tape.textLines.map(\.xHeight).min() ?? 0.01
-        let nominal = xh * H * 0.95 / 0.70          // cap height about 0.95 x-height
-        var size = nominal
-        for line in tape.textLines {
-            let room = (line.x - (line.captionX ?? line.x)) * W - 0.004 * W
-            guard room > 0 else { continue }
-            let w = captionWidth(captionLabel(line), size: nominal)
-            size = min(size, nominal * room / max(1, w))
-        }
-        return size
-    }
-
-    private func caption(for line: MixtapeTextLine) -> some View {
-        let label = captionLabel(line)
-        let size = captionSize
-        let bx = line.captionX ?? line.x
-        let by = line.captionBaselineY ?? (line.baselineY - line.xHeight * 1.9)
-        return Color.clear.frame(width: 0, height: 0)
-            .overlay(alignment: .topLeading) {
-                Text(label)
-                    .font(.system(size: size, weight: .medium))
-                    .kerning(size * Self.captionKern)
-                    .foregroundStyle(Color(red: 0.30, green: 0.30, blue: 0.31).opacity(0.85))
-                    .fixedSize()
-                    .alignmentGuide(.top) { $0[.firstTextBaseline] }
-            }
-            .offset(x: lx(bx), y: ly(by))
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .animation(.easeInOut(duration: 0.4), value: label.map { ObjectIdentifier($0.image) })
     }
 }
 

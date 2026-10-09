@@ -699,6 +699,26 @@ def concept_B(L, style="grotesk"):
     return STYLES[style]["label"]
 
 
+def concept_B_centred(L, style="grotesk"):
+    """B with every line centred: title across the top, artist under it, album under the wheels."""
+    m = meta_of(L)
+    L.cover_width_top()
+    L.blocks.append(Block("title + artist", [(m["song"], "title", T_PX + 6), (m["artist"], "sub", A_PX)],
+                          (PAD, 20, L.w - PAD, L.strip_h - 16), align="center", style=style, valign="center"))
+    L.blocks.append(album_block(L, "center", style=style))
+    return STYLES[style]["label"] + ", centred"
+
+
+def main_bc():
+    """Only the centred Fill width variant: python3 build_label_concepts_3.py bc"""
+    os.makedirs(OUT, exist_ok=True)
+    scene = Scene()
+    for sh, cov in ((BLACK, "dark"), (WHITE, "bright")):
+        render(scene, f"Bc_{sh}", sh, cov, concept_B_centred)
+    for key, lbl, sh, cov in INK_TESTS:
+        render(scene, "Bc_" + key[2:], sh, cov, concept_B_centred)
+
+
 def concept_C(L, style="grotesk"):
     m = meta_of(L)
     L.cover_width_top()
@@ -1265,4 +1285,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "bc":
+        main_bc()
+    else:
+        main()

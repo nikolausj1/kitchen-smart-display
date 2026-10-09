@@ -429,27 +429,31 @@ private struct AlbumArt: View {
 //   optional: ... defaults write $B debug.fakeMusicRapid -bool YES
 //   (then terminate and relaunch the app)
 //
-// Cycle (105 s): six tracks of 16 s each, then a 9 s stopped gap. The gap is
+// Cycle (153 s): nine tracks of 16 s each, then a 9 s stopped gap. The gap is
 // longer than Mixtape's 5 s stop grace so the eject-to-empty actually plays
 // (about 5 s of grace, 1 s of eject and door, 3 s of empty well) before track
 // one inserts again. Track two pauses for 3 s in the middle (reels ease out,
-// PAUSE key latches). Track four is radio (station name, duration 0, no art).
+// PAUSE key latches). Track four is radio (station name, duration 0, no art);
+// track nine has no art (the handwritten label).
 // Durations are 18 s starting at 1 s, so over each 16 s window the packs sweep
 // from nearly all on the left reel to nearly all on the right.
 //
-// Tapes (fnv1a32(key) mod 14, see the manifest): memorex_dbs_blank,
-// tdk_sax_printed, sony_hf_blank (long-title shrink test), basf_ce2_printed
-// (radio, STATION caption), maxell_udxl2_printed, memorex_dbs_printed.
+// Tapes, layouts and typesets per track are noted on `tracks`. Covers named
+// "local:" are the round 3 test covers (art-src/mixtape/reference/covers):
+//   D=$(xcrun simctl get_app_container "$SIM" $B data)/Documents/fake-covers
+//   mkdir -p "$D" && cp art-src/mixtape/reference/covers/cover_*.png "$D"/
 //
-// debug.fakeMusicRapid: at the start of track six, two decoy tracks come
-// first, so three track changes land 0.7 s apart (decoy A, decoy B, track
-// six). Mixtape must coalesce them: ONE eject of track five and ONE insert,
-// of track six's tape. The model logs "mixtape eject:" / "mixtape insert:".
+// debug.fakeMusicRapid: at the start of the last track, two decoy tracks
+// come first, so three track changes land 0.7 s apart (decoy A, decoy B, the
+// last track). Mixtape must coalesce them: ONE eject of track eight and ONE
+// insert, of the last track's tape. The model logs "mixtape eject:" / "mixtape insert:".
 @MainActor
 final class FakeMusicSequence: ObservableObject {
     @Published private(set) var state = SonosState.empty
     private var timer: Timer?
-    private let epoch = Date()
+    // debug.fakeMusicStart (seconds): start part way into the cycle, e.g.
+    // 16 * 6 + 3 to open on track seven, for targeted captures.
+    private let epoch = Date().addingTimeInterval(-UserDefaults.standard.double(forKey: "debug.fakeMusicStart"))
 
     private struct Fake {
         let title, artist, album: String
@@ -458,21 +462,38 @@ final class FakeMusicSequence: ObservableObject {
         var durationMs = 18_000
         var startMs = 1_000
     }
+    // Chosen by hash so one loop shows every label case (tape / layout /
+    // typeset from fnv1a32(key), see MixtapeLabelStyle.pick).
     private let tracks: [Fake] = [
+        // memorex_dbs_blank (black), fit left, condensed
         Fake(title: "Landslide", artist: "Fleetwood Mac", album: "Fleetwood Mac",
              art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg"),
+        // tdk_sax_printed (black), fill width, grotesk; dark cover (R2 white ink)
         Fake(title: "Take On Me", artist: "a-ha", album: "Hunting High and Low",
-             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg"),
+             art: "local:cover_night_city.png"),
+        // sony_hf_blank (white), fit left, typewriter; long-name shrink and ellipsis
         Fake(title: "A Very Long Song Title That Will Not Fit On The Label At All",
              artist: "The Unreasonably Named Orchestra Of Eastern Kentucky",
              album: "Harvest Moon",
              art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg"),
+        // radio: basf_ce2_printed, handwritten, station under the wheels
         Fake(title: "Morning Edition", artist: "", album: "", art: nil,
              station: "KEXP 90.3 FM", durationMs: 0, startMs: 0),
-        Fake(title: "Clair de Lune", artist: "Claude Debussy", album: "Suite bergamasque",
-             art: "immich-0069d7ca-ea58-4a45-aa49-4077eec30356.jpg"),
-        Fake(title: "Blue in Green", artist: "Miles Davis", album: "Kind of Blue",
-             art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg"),
+        // tdk_sax_printed (black), split, serif
+        Fake(title: "So What", artist: "Miles Davis", album: "Kind of Blue",
+             art: "local:cover_warm_abstract.png"),
+        // sony_hf_blank (white), split, typewriter
+        Fake(title: "Lovely Day", artist: "Bill Withers", album: "Menagerie",
+             art: "immich-00ab580d-f6af-45d0-9776-b2421315fc86.jpg"),
+        // fuji_dr_blank (white), fill width, condensed; bright cover (R3 dark ink)
+        Fake(title: "Harvest Moon", artist: "Neil Young", album: "Harvest Moon",
+             art: "local:cover_pale_sky.png"),
+        // tdk_sax_blank (black), fill width, condensed; busy cover (R4 band)
+        Fake(title: "Everlong", artist: "Foo Fighters", album: "The Colour and the Shape",
+             art: "local:cover_busy_pattern.png"),
+        // basf_ce2_printed, no art: the handwritten homemade label
+        Fake(title: "Home Recording", artist: "Unknown Artist", album: "Kitchen Tapes Vol. 2",
+             art: nil),
     ]
     // Rapid-skip decoys (tapes maxell_udxl2_blank, tdk_sax_blank).
     private let decoys: [Fake] = [
@@ -528,13 +549,24 @@ final class FakeMusicSequence: ObservableObject {
         return make(tracks[i], elapsedS: e)
     }
 
+    // "local:<name>" = Documents/fake-covers/<name> in the app container
+    // (copy covers there with simctl get_app_container ... data); anything
+    // else is a stub photo on the hub.
+    private static func artURL(_ name: String) -> URL? {
+        if name.hasPrefix("local:") {
+            return FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+                .appendingPathComponent("fake-covers").appendingPathComponent(String(name.dropFirst(6)))
+        }
+        return URL(string: AppConfig.photosBase.absoluteString + "/stub-photos/" + name)
+    }
+
     private func make(_ f: Fake, elapsedS: Double) -> SonosState {
         let q = (elapsedS * 2).rounded(.down) / 2
         return SonosState(
             playing: true, paused: false,
             track: NowPlayingTrack(
                 title: f.title, artist: f.artist, album: f.album,
-                albumArtURL: f.art.flatMap { URL(string: AppConfig.photosBase.absoluteString + "/stub-photos/" + $0) },
+                albumArtURL: f.art.flatMap(Self.artURL),
                 durationMs: f.durationMs,
                 elapsedMs: f.durationMs == 0 ? 0 : min(f.durationMs, f.startMs + Int(q * 1000))),
             stationName: f.station, volume: 30, loaded: true)

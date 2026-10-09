@@ -67,7 +67,9 @@ final class MixtapeModel: ObservableObject {
     @Published private(set) var phase: Phase = .empty
     @Published private(set) var phaseStart = Date()
     @Published private(set) var current: MixtapeLoad?
-    @Published private(set) var art: [URL: UIImage] = [:]
+    /// The printed label for `current`, composed once per insert off the
+    /// main thread (MixtapeLabelRenderer), so a frame draws one image.
+    @Published private(set) var label: MixtapeLabelImage?
     @Published private(set) var deckImages: MixtapeDeckImages?
     @Published private(set) var tapeImages: [String: MixtapeTapeImages] = [:]
     @Published private(set) var pressDate: Date?
@@ -93,13 +95,19 @@ final class MixtapeModel: ObservableObject {
     private var lastState: SonosState?
     private var graceTask: Task<Void, Never>?
     private var idleTask: Task<Void, Never>?
+    private var art: [URL: UIImage] = [:]
+    private var artFailed: Set<URL> = []
     private var artInFlight: Set<URL> = []
+    private var labelTask: Task<Void, Never>?
     private var artOrder: [URL] = []
     private var tapeLoading: Set<String> = []
 
     init() {
         manifest = MixtapeManifest.load()
         loadDeckImages()
+        for line in MixtapeLabelRenderer.fontReport.lines {
+            MixtapeManifest.log.info("mixtape fonts: \(line, privacy: .public)")
+        }
     }
 
     var tapes: [MixtapeTape] { manifest?.tapes ?? [] }
@@ -158,6 +166,9 @@ final class MixtapeModel: ObservableObject {
                 current = w
                 setPhase(.seated)
                 prefetch(w, variant: w.variant)
+                // Cold start: the tape is already seated; its label fades in
+                // once the art has had its chance to load (cap 1.5 s).
+                relabel(w, waitForArt: true, isInsert: true)
             } else {
                 setPhase(.empty)
             }
@@ -179,6 +190,8 @@ final class MixtapeModel: ObservableObject {
                 c.album = w.album
                 current = c
                 prefetch(w, variant: c.variant)
+                // Re-print with the late metadata (crossfades in the view).
+                relabel(c, waitForArt: true, isInsert: false)
             }
         }
         kick()
@@ -250,6 +263,7 @@ final class MixtapeModel: ObservableObject {
                 await hold(.opening, Self.doorTime)
                 await hold(.ejecting, Self.ejectTime)
                 current = nil
+                label = nil
                 setPhase(.gap)
             } else if phase == .empty || phase == .closing || phase == .seated {
                 guard desired != nil else { break }
@@ -274,7 +288,7 @@ final class MixtapeModel: ObservableObject {
                 guard let d = desired else { break }
                 let now = Date()
                 let settled = now.timeIntervalSince(desiredSince) >= Self.settle
-                let artReady = d.artURL.map { art[$0] != nil } ?? true
+                let artReady = d.isRadio || (d.artURL.map { art[$0] != nil || artFailed.contains($0) } ?? true)
                 let tapeReady = tapeImages[tapes.isEmpty ? "" : tapes[pickVariant(for: d.key) % tapes.count].id] != nil
                 let waitedOnAssets = now.timeIntervalSince(max(t0, desiredSince)) >= Self.artCap
                 if settled && ((artReady && tapeReady) || waitedOnAssets) { break }
@@ -285,7 +299,12 @@ final class MixtapeModel: ObservableObject {
             next.variant = pickVariant(for: next.key)
             lastVariant = next.variant
             if let t = tape(for: next) { await ensureTapeImages(t) }
+            // Print the new label while the tape is out of frame.
+            labelTask?.cancel()
+            let printed = await composeLabel(next)
+            logLabel(next, printed)
             current = next
+            label = printed
             MixtapeManifest.log.info("mixtape insert: \(next.key, privacy: .public) -> \(self.tape(for: next)?.id ?? "?", privacy: .public)")
             await hold(.inserting, Self.insertTime)
             await hold(.closing, Self.doorTime)
@@ -326,14 +345,71 @@ final class MixtapeModel: ObservableObject {
             }
             guard let self else { return }
             self.artInFlight.remove(url)
-            guard let img else { return }
+            guard let img else {
+                self.artFailed.insert(url)
+                MixtapeManifest.log.info("mixtape art failed: \(url.absoluteString, privacy: .public)")
+                return
+            }
             self.art[url] = img
+            // Art that lands after a handwritten label was printed (late poll):
+            // re-print the seated tape with its cover.
+            if let c = self.current, c.artURL == url, self.label?.handwritten ?? true, self.phase == .seated {
+                self.relabel(c, waitForArt: false, isInsert: false)
+            }
             self.artOrder.append(url)
             // Small LRU: the current tape, the next one, and a few spares.
             while self.artOrder.count > 8 {
                 let old = self.artOrder.removeFirst()
                 if old != self.current?.artURL && old != self.desired?.artURL { self.art[old] = nil }
             }
+        }
+    }
+
+    // MARK: - Label
+
+    /// Composes the label for `load` on a background thread. Needs the tape
+    /// sprite; uses the art if it is in the cache (no art = handwritten).
+    func composeLabel(_ load: MixtapeLoad) async -> MixtapeLabelImage? {
+        guard let t = tape(for: load) else { return nil }
+        await ensureTapeImages(t)
+        guard let sprite = tapeImages[t.id]?.sprite.cgImage else { return nil }
+        let artImg = load.isRadio ? nil : load.artURL.flatMap { art[$0]?.cgImage }
+        let album = load.isRadio ? load.station : load.album
+        let input = MixtapeLabelInput(tape: t, tapeCount: tapes.count, key: load.key, title: load.title,
+                                      artist: load.artist, album: album, art: artImg, sprite: sprite)
+        return await Task.detached(priority: .userInitiated) { MixtapeLabelRenderer.render(input) }.value
+    }
+
+    private func relabel(_ load: MixtapeLoad, waitForArt: Bool, isInsert: Bool) {
+        labelTask?.cancel()
+        labelTask = Task { [weak self] in
+            guard let self else { return }
+            if waitForArt, let url = load.artURL, !load.isRadio {
+                let t0 = Date()
+                while self.art[url] == nil, !self.artFailed.contains(url),
+                      Date().timeIntervalSince(t0) < Self.artCap {
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                }
+            }
+            guard !Task.isCancelled else { return }
+            let printed = await self.composeLabel(load)
+            guard !Task.isCancelled, self.current?.key == load.key else { return }
+            if isInsert || self.loggedKey != load.key { self.logLabel(load, printed) }
+            self.label = printed
+        }
+    }
+
+    // Once per insert: "mixtape label: key -> tape / layout / typeset".
+    private var loggedKey: String?
+
+    private func logLabel(_ load: MixtapeLoad, _ l: MixtapeLabelImage?) {
+        loggedKey = load.key
+        let tapeID = tape(for: load)?.id ?? "?"
+        let pick = MixtapeLabelStyle.pick(key: load.key, tapeCount: tapes.count)
+        let layout = l?.style.layout.rawValue ?? "none"
+        MixtapeManifest.log.info("mixtape label: \(load.key, privacy: .public) -> \(tapeID, privacy: .public) / \(layout, privacy: .public) / \(pick.typeset.rawValue, privacy: .public) (hash layout \(pick.layout.rawValue, privacy: .public), \(Int(l?.millis ?? 0)) ms)")
+        for line in l?.inks ?? [] {
+            MixtapeManifest.log.info("mixtape ink: \(load.key, privacy: .public): \(line, privacy: .public)")
         }
     }
 
@@ -366,7 +442,16 @@ final class MixtapeModel: ObservableObject {
     }
 
     func ensureTapeImages(_ t: MixtapeTape) async {
-        guard tapeImages[t.id] == nil, !tapeLoading.contains(t.id) else { return }
+        guard tapeImages[t.id] == nil else { return }
+        if tapeLoading.contains(t.id) {
+            // Another caller is decoding it: wait for that load (cap 5 s), so
+            // the label composer never runs without its sprite.
+            let t0 = Date()
+            while tapeLoading.contains(t.id), Date().timeIntervalSince(t0) < 5 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
+            return
+        }
         tapeLoading.insert(t.id)
         let imgs = await Task.detached(priority: .userInitiated) { () -> MixtapeTapeImages? in
             func load(_ rel: String?) -> UIImage? {
