@@ -2,7 +2,7 @@
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
 modified: 2026-10-09
-version: 1.7
+version: 1.8
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -499,6 +499,43 @@ Known gaps for the on-device review:
 - No label wear overlay (element 6) and no edge thickness on the tilting door.
 - Real-remote key press and the true frame rate are unverified until the TV is
   awake; the simulator recording's small hitches were the 4K encoder.
+
+## Label v2 build log (2026-10-09)
+
+- `tvos/Sources/Mixtape/MixtapeLabelRenderer.swift`: a Core Graphics port of
+  the round 3 concept builder. One label image per track, composed off the main
+  thread while the tape is out of frame (0.3 to 0.8 s, up to 2.2 s for the band
+  cases), transparent over the window, drawn under the packs and hubs. Paper
+  extent measured from the sprite and cached per tape. Steady-state CPU
+  unchanged (about 18.5% in the Debug simulator build); the compose is the
+  only new cost.
+- Layout = `[fit, fit, split, fill][(h/n) % 4]`, typeset = `(h/(4n)) % 4`, with
+  `h` the FNV-1a of the tape key and `n` the tape count, so shell, layout and
+  typeset vary independently and are stable across launches.
+- Fonts resolved on tvOS 26.5: Helvetica Neue (grotesk), Baskerville italic
+  (serif), American Typewriter, Caveat (fallback). **Avenir Next Condensed is
+  not on tvOS**; the condensed typeset uses Futura Condensed ExtraBold caps
+  with tracking. Every typeset has a candidate chain and drops to grotesk.
+- Fill width ink rules R1 to R5 ported including the busyness measure; the
+  gradient band fired as designed on the busy cover (lighten band at 51 to 59%,
+  dark ink) and on a near-threshold album line.
+- Handwritten fallback: a long title wraps to two lines and the artist then
+  joins the album line as "artist, album".
+- Label textures in `tvos/Resources/Mixtape/label/` (3.4 MB) from
+  `scripts/mixtape/build_label_assets.py`.
+- Deck plate v2 assets (`scripts/mixtape/edit_deck_plate.py`): the wordmark is
+  **NIKOLAUS**, hand set in SF Pro at width 121 / weight 610 (best letter-shape
+  match to the original at 0.74; Gill Sans 0.63, Avenir 0.52, Futura 0.43),
+  same cap height, baseline and ink; the baked PLAY glow painted out and both
+  PLAY and PAUSE glows extracted as normal-blend sprites (`deck.glows`), lit by
+  play state; the OUTPUT knob's indicator dot cut as a sprite (`deck.knob`,
+  MIN -147.6 deg, MAX +147.8 deg, rest 43.2 deg) and rotated by Sonos volume.
+  Only the dot rotates: rotating the brushed face drags its highlights round,
+  which a real knob never does.
+- Known gaps after this round: label corners are a 22 px rounded rectangle, not
+  the real paper outline (visible on the chamfered Memorex); no pressure
+  variation in the ballpoint ink; paper stock chosen by measured warmth; a late
+  art poll crossfades a handwritten label to a printed one while seated.
 
 ## Review log
 

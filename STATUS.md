@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-10-09
-version: 5.13
+version: 5.14
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -69,7 +69,7 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: turning Home Assistant actions on safely
 - [ ] **Consider lowering the Echo Show 15's darkness to 0.5 or 0.6** - dashboard, the `echo-show15` screen, Entry board card, "Darken photos". It runs 0.8, so bright photos hit the 0.9 cap; with the new scrims and adaptive darkness, 0.5 to 0.6 reads well (~2 min)
       - unblocks: brighter photos by the front door without losing the text
-- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (110 commits over `main` at `736683e`, with Mixtape and the Today layouts inside it), not pushed and not merged. The Mixtape label pick landed 2026-10-09 and the v2 label is being built on this branch (~20 min to read)
+- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (110 commits over `main` at `736683e`, with Mixtape and the Today layouts inside it), not pushed and not merged. The Mixtape label v2 and deck v2 landed on this branch 2026-10-09 and are installed on the TV (~20 min to read)
       - unblocks: merging to main and pushing to GitHub; the Pi lock-down step after the soak week
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential

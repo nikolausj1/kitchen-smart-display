@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-10-09
-version: 8.6
+version: 8.7
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -363,12 +363,13 @@ Remaining:
 
 ### Apple TV / Frame TV app
 
-- **Mixtape follow-ups** (POLISH, after Justin's on-device review) - apply the
-  vector brand headers to the "printed" tapes; a label wear overlay; keep the
-  tapes' own hub rims visible around the live packs; door edge thickness;
-  align the inpainted spindles with the hubs (about 30 px high); verify the
-  Siri Remote key press and frame rate on the real TV. Detail in
-  `docs/designs/mixtape.md`, "Known gaps".
+- **Mixtape follow-ups** (POLISH) - clip the label to the real paper outline
+  (the chamfered Memorex shows a square art corner); ballpoint pressure
+  variation on the handwritten fallback; keep the tapes' own hub rims visible
+  around the live packs; door edge thickness; align the inpainted spindles with
+  the hubs (about 30 px high); verify the Siri Remote key press and frame rate
+  on the real TV. The brand-header idea is dropped (the brand lives on the
+  shell). Detail in `docs/designs/mixtape.md`, "Label v2 build log".
 
 Phase 1 shipped (per-view mats, Framed Now Playing, Today mat, linear nav, smooth
 progress bar). Remaining:
@@ -1317,6 +1318,13 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-10-09 - Mixtape label v2 and deck v2 on the Apple TV** (`feature/echo-hub`,
+  installed on the Living Room TV). Printed labels: the cover and text as ink in
+  the paper, Fit left default with Split and centred Fill width rotating in,
+  four typesets, wear across art and ink, a handwritten fallback for no art and
+  radio, album always under the wheels. Deck: NIKOLAUS wordmark, PLAY and PAUSE
+  glows driven by play state, the OUTPUT knob's dot tracking Sonos volume.
+  Build log: `docs/designs/mixtape.md`, "Label v2 build log".
 - **2026-09-28 - Hourly Show modes, night skies, editor controls.** The
   hourly block's Show dropdown (five modes, `lib/hourlyMoments.js`); the
   editor's `showIf` on a type's fields, two-handle hour slider and time
