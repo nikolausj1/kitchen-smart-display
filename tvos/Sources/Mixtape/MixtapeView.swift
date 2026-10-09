@@ -5,15 +5,18 @@ import UIKit
 // Replaces the mat when musicMatMode == .framed and framedBackdrop == .mixtape.
 //
 // Layering, back to front:
-//   1. deck plate (deck_empty.png): a plain Image OUTSIDE the TimelineView, so
-//      it is composited once and never re-rendered per frame;
+//   1. deck plate (deck_empty_v2.png): a plain Image OUTSIDE the TimelineView,
+//      so it is composited once and never re-rendered per frame;
+//   1b. the deck's state sprites, also outside the TimelineView (they change
+//      on state, animated by SwiftUI): the PLAY / PAUSE lamp glows and the
+//      OUTPUT knob's dot turned for volume;
 //   then, inside the TimelineView (the only per-frame subtree):
 //   2. the open well (well_open.png), only while a tape or the door is shown,
 //      so the door baked into the plate never shows twice;
 //   3. the tape group: sprite, pack discs, hub sprites, label content, moving
 //      as one unit on eject and insert;
 //   4. the door glass, then the door frame, tilted together on the hinge;
-//   5. transport key overlays and the VU needles.
+//   5. the pressed PLAY cap (150 ms dip) and the VU needles.
 // Everything is placed from the normalised manifest; nothing is hand-tuned.
 
 struct MixtapeView: View {
@@ -30,6 +33,11 @@ struct MixtapeView: View {
                 if let deck = model.deckImages {
                     MixtapePlate(image: deck.plate, rect: F.frameRect)
                         .equatable()
+                        .transition(.opacity)
+                    MixtapeDeckState(deck: model.manifest?.deck ?? .fallback, images: deck, F: F,
+                                     playLit: model.playing && model.current != nil,
+                                     pauseLit: model.paused && model.current != nil,
+                                     volume: model.volume)
                         .transition(.opacity)
                 }
                 TimelineView(.animation(minimumInterval: nil, paused: model.timelinePaused)) { ctx in
@@ -225,35 +233,31 @@ private struct MixtapeAnimatedLayer: View {
 
     // MARK: Keys
 
+    // The press dip on PLAY (decoration, decision 14). The cap is cropped
+    // from the plate (unlit in v2), so a lit lamp is redrawn inside the cap
+    // and dips with it; the lamp's part in the gap above stays put.
     @ViewBuilder
     private func keyOverlays(_ imgs: MixtapeDeckImages) -> some View {
         let pressed = model.pressDate.map { now.timeIntervalSince($0) < 0.15 } ?? false
         let playing = model.playing && model.current != nil
-        let pausedLatched = model.paused && model.current != nil
-        if let r = deck.keyCaps["play"] {
+        if pressed, let r = deck.keyCaps["play"], let cap = imgs.caps["play"] {
             let cr = F.rect(r)
             let toward: CGFloat = cr.midX < F.frameRect.midX ? 1 : -1
-            if pressed, let cap = imgs.caps["play"] {
+            ZStack(alignment: .topLeading) {
                 Image(uiImage: cap).resizable()
                     .frame(width: cr.width, height: cr.height)
-                    .overlay(Color.black.opacity(0.16))
-                    .position(x: cr.midX + toward * F.px(2), y: cr.midY + F.px(2))
+                if playing, let g = imgs.glows["play"], let gn = deck.glows["play"] {
+                    let gr = F.rect(gn)
+                    Image(uiImage: g).resizable()
+                        .frame(width: gr.width, height: gr.height)
+                        .offset(x: gr.minX - cr.minX, y: gr.minY - cr.minY)
+                }
             }
-            if playing { capGlow(cr) }
+            .frame(width: cr.width, height: cr.height, alignment: .topLeading)
+            .clipped()
+            .overlay(Color.black.opacity(0.16))
+            .position(x: cr.midX + toward * F.px(2), y: cr.midY + F.px(2))
         }
-        if pausedLatched, let r = deck.keyCaps["pause"] {
-            capGlow(F.rect(r))
-        }
-    }
-
-    private func capGlow(_ cr: CGRect) -> some View {
-        RoundedRectangle(cornerRadius: F.px(10))
-            .fill(LinearGradient(colors: [Color(red: 1, green: 0.72, blue: 0.36).opacity(0.22),
-                                          Color(red: 1, green: 0.62, blue: 0.28).opacity(0.06)],
-                                 startPoint: .top, endPoint: .bottom))
-            .blendMode(.screen)
-            .frame(width: cr.width, height: cr.height)
-            .position(x: cr.midX, y: cr.midY)
     }
 
     // MARK: VU needles
@@ -289,6 +293,55 @@ private struct MixtapeAnimatedLayer: View {
                 .clipped()
                 .position(x: clip.midX, y: clip.midY)
             }
+        }
+    }
+}
+
+// MARK: - Deck state sprites
+
+// The lamps and the OUTPUT knob: drawn above the plate, below the door, and
+// outside the TimelineView, so they redraw only when state changes.
+//   - glow_play / glow_pause are the lit key rows themselves (lamp strip, the
+//     glow in the gap above it, the warm faceplate edge), drawn source-over at
+//     deck.glows; opacity 1 is the photo's lit key. 250 ms fade on change.
+//   - knob_dot.png turns over the plate's dotless face: clockwise by
+//     (min + v (max - min)) - dotAngleDeg, v = volume / 100. 400 ms ease.
+private struct MixtapeDeckState: View {
+    let deck: MixtapeDeck
+    let images: MixtapeDeckImages
+    let F: MixFrame
+    let playLit: Bool
+    let pauseLit: Bool
+    let volume: Int?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            lamp("play", lit: playLit)
+            lamp("pause", lit: pauseLit)
+            if let dot = images.knobDot {
+                let side = deck.knob.spriteSize * F.H
+                Image(uiImage: dot).resizable()
+                    .interpolation(.high)
+                    .frame(width: side, height: side)
+                    .rotationEffect(.degrees(deck.knob.rotation(volume: volume)))
+                    .animation(.easeInOut(duration: 0.4), value: volume)
+                    .position(x: F.x(deck.knob.center.x), y: F.y(deck.knob.center.y))
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func lamp(_ key: String, lit: Bool) -> some View {
+        if let img = images.glows[key], let n = deck.glows[key] {
+            let r = F.rect(n)
+            Image(uiImage: img).resizable()
+                .interpolation(.high)
+                .frame(width: r.width, height: r.height)
+                .opacity(lit ? 1 : 0)
+                .animation(.easeInOut(duration: 0.25), value: lit)
+                .position(x: r.midX, y: r.midY)
         }
     }
 }

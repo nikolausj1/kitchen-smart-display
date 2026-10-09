@@ -77,6 +77,10 @@ struct MixtapeDeck: Equatable {
     var vuPivots: [String: NPoint]
     var vuArcRadiusH: Double          // fraction of height
     var vuDomes: [String: NPoint]
+    /// Lamp sprites (glow_play.png / glow_pause.png) drawn source-over at
+    /// these rects over deck_empty_v2, whose PLAY is unlit.
+    var glows: [String: NRect]
+    var knob: MixtapeKnob
 
     // Values from art-src/mixtape/plates/plate-manifest.json (2026-09-23), used
     // for any key the manifest omits.
@@ -101,7 +105,30 @@ struct MixtapeDeck: Equatable {
                    "right": NPoint(x: 0.85706, y: 0.52951)],
         vuArcRadiusH: 0.24668,
         vuDomes: ["left": NPoint(x: 0.14474, y: 0.39341),
-                  "right": NPoint(x: 0.85526, y: 0.39341)])
+                  "right": NPoint(x: 0.85526, y: 0.39341)],
+        glows: ["play":  NRect(x: 0.2987, y: 0.79769, w: 0.12057, h: 0.02963),
+                "pause": NRect(x: 0.70286, y: 0.79769, w: 0.10833, h: 0.02963)],
+        knob: MixtapeKnob(center: NPoint(x: 0.82773, y: 0.59097), spriteSize: 0.12407,
+                          dotAngleDeg: 43.2, minAngleDeg: -147.6, maxAngleDeg: 147.8))
+}
+
+/// The OUTPUT knob (scripts/mixtape/README.md, edit_deck_plate). The plate
+/// carries the face without its dot; only knob_dot.png turns, so the
+/// cone-brushed highlights stay put as on a real knob.
+struct MixtapeKnob: Equatable {
+    var center: NPoint
+    var spriteSize: Double            // fraction of plate HEIGHT
+    var dotAngleDeg: Double           // the dot as painted, clockwise from up
+    var minAngleDeg: Double           // MIN tick
+    var maxAngleDeg: Double           // MAX tick
+
+    /// Clockwise rotation of knob_dot.png for a Sonos volume (0...100); nil
+    /// (not loaded) leaves the dot where it was painted.
+    func rotation(volume: Int?) -> Double {
+        guard let volume else { return 0 }
+        let v = min(1, max(0, Double(volume) / 100))
+        return (minAngleDeg + v * (maxAngleDeg - minAngleDeg)) - dotAngleDeg
+    }
 }
 
 struct MixtapeManifest {
@@ -209,6 +236,16 @@ struct MixtapeManifest {
         if let v = num(any("vu_arc_radius_h", "vuArcRadiusH")) { deck.vuArcRadiusH = v }
         if let m = any("vu_hub_domes", "vuHubDomes") as? [String: Any] {
             for (k, v) in m { if let p = point(v) { deck.vuDomes[k] = p } }
+        }
+        if let m = any("glows") as? [String: Any] {
+            for (k, v) in m { if let r = rect(v) { deck.glows[k.lowercased()] = r } }
+        }
+        if let k = any("knob") as? [String: Any] {
+            if let p = point(k["center"]) { deck.knob.center = p }
+            if let v = num(k["spriteSize"] ?? k["sprite_size"]) { deck.knob.spriteSize = v }
+            if let v = num(k["dotAngleDeg"] ?? k["dot_angle_deg"]) { deck.knob.dotAngleDeg = v }
+            if let v = num(k["minAngleDeg"] ?? k["min_angle_deg"]) { deck.knob.minAngleDeg = v }
+            if let v = num(k["maxAngleDeg"] ?? k["max_angle_deg"]) { deck.knob.maxAngleDeg = v }
         }
         return deck
     }

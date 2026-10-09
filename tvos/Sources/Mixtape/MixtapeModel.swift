@@ -38,6 +38,10 @@ struct MixtapeDeckImages {
     /// Wound-tape pack disc (brown, faint spiral, alpha outside), shared by
     /// every tape in place of the per-tape pack.png.
     var pack: UIImage? = nil
+    /// Lamp sprites by key ("play", "pause"), drawn at deck.glows.
+    var glows: [String: UIImage] = [:]
+    /// The OUTPUT knob's dot alone, turned for volume over the plate's face.
+    var knobDot: UIImage? = nil
 }
 
 struct MixtapeTapeImages {
@@ -79,6 +83,8 @@ final class MixtapeModel: ObservableObject {
     // the last poll and add wall-clock time while playing.
     @Published private(set) var playing = false
     @Published private(set) var paused = false
+    /// Sonos volume 0...100 for the OUTPUT knob; nil until a loaded poll.
+    @Published private(set) var volume: Int?
     private(set) var durationMs = 0
     private(set) var anchorElapsedMs = 0
     private(set) var anchorDate = Date()
@@ -142,6 +148,7 @@ final class MixtapeModel: ObservableObject {
         durationMs = s.track?.durationMs ?? 0
         if playing != s.playing { playing = s.playing }
         if paused != s.paused { paused = s.paused }
+        if volume != s.volume { volume = s.volume }
 
         let active = s.playing || s.paused
         let hasTrack = s.track != nil || !s.stationName.isEmpty
@@ -422,7 +429,9 @@ final class MixtapeModel: ObservableObject {
                     guard let url = MixtapeManifest.fileURL("deck/\(name).png") else { return nil }
                     return UIImage(contentsOfFile: url.path)?.preparingForDisplay()
                 }
-                guard let plate = load("deck_empty") else { return nil }
+                // v2: NIKOLAUS wordmark, PLAY unlit (the lamp is a sprite),
+                // knob face without its dot (the dot is a sprite).
+                guard let plate = load("deck_empty_v2") ?? load("deck_empty") else { return nil }
                 let deck = MixtapeManifest.load()?.deck ?? .fallback
                 var caps: [String: UIImage] = [:]
                 if let cg = plate.cgImage {
@@ -434,7 +443,10 @@ final class MixtapeModel: ObservableObject {
                 }
                 return MixtapeDeckImages(plate: plate, wellOpen: load("well_open"),
                                          glass: load("door_glass"), frame: load("door_frame"),
-                                         caps: caps, pack: load("pack_shared"))
+                                         caps: caps, pack: load("pack_shared"),
+                                         glows: ["play": load("glow_play"), "pause": load("glow_pause")]
+                                            .compactMapValues { $0 },
+                                         knobDot: load("knob_dot"))
             }.value
             self?.deckImages = imgs
             if imgs == nil { MixtapeManifest.log.error("Mixtape deck plate failed to load") }

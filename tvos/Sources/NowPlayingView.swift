@@ -447,6 +447,10 @@ private struct AlbumArt: View {
 // come first, so three track changes land 0.7 s apart (decoy A, decoy B, the
 // last track). Mixtape must coalesce them: ONE eject of track eight and ONE
 // insert, of the last track's tape. The model logs "mixtape eject:" / "mixtape insert:".
+//
+// Volume ramps 20 -> 75 over the first half of the cycle and 75 -> 40 over
+// the second, so Mixtape's OUTPUT knob can be seen turning. The mapping to
+// knob angles is logged once at start ("mixtape knob:").
 @MainActor
 final class FakeMusicSequence: ObservableObject {
     @Published private(set) var state = SonosState.empty
@@ -471,9 +475,12 @@ final class FakeMusicSequence: ObservableObject {
         // tdk_sax_printed (black), fill width, grotesk; dark cover (R2 white ink)
         Fake(title: "Take On Me", artist: "a-ha", album: "Hunting High and Low",
              art: "local:cover_night_city.png"),
-        // sony_hf_blank (white), fit left, typewriter; long-name shrink and ellipsis
-        Fake(title: "A Very Long Song Title That Will Not Fit On The Label At All",
-             artist: "The Unreasonably Named Orchestra Of Eastern Kentucky",
+        // sony_hf_blank (white), fit left, typewriter; long name: the title
+        // wraps to two lines, the block shrinks (to 0.75), and only then the
+        // second line ellipsises (typewriter is the widest face: a clean fit
+        // would need the title at about 40% size); the artist ellipsises
+        Fake(title: "A Very Long Song Title That Tests The Label",
+             artist: "The Grand Old Radio Orchestra Of Eastern Kentucky",
              album: "Harvest Moon",
              art: "immich-0073a090-1533-49e6-a1c2-e5b5f3cf4c34.jpg"),
         // radio: basf_ce2_printed, handwritten, station under the wheels
@@ -509,6 +516,11 @@ final class FakeMusicSequence: ObservableObject {
     func startIfEnabled() {
         guard timer == nil,
               UserDefaults.standard.bool(forKey: "debug.fakeMusicSequence") else { return }
+        let knob = (MixtapeManifest.load()?.deck ?? .fallback).knob
+        let map = [0, 20, 40, 75, 100].map { v in
+            "\(v) -> \(String(format: "%.1f", knob.minAngleDeg + Double(v) / 100 * (knob.maxAngleDeg - knob.minAngleDeg))) deg (dot \(String(format: "%+.1f", knob.rotation(volume: v))))"
+        }.joined(separator: ", ")
+        MixtapeManifest.log.info("mixtape knob: fake volume ramp 20 -> 75 -> 40 over \(Int(self.cycle)) s; volume -> angle (dot rotation from its painted \(knob.dotAngleDeg)): \(map, privacy: .public)")
         tick()
         // 0.1 s ticks so the rapid-skip changes land on time; the published
         // state only changes when it differs (elapsed is quantised to 0.5 s,
@@ -523,7 +535,20 @@ final class FakeMusicSequence: ObservableObject {
         if next != state { state = next }
     }
 
+    // 20 -> 75 over the first half of the cycle, 75 -> 40 over the second.
+    private func volume(at t: Double) -> Int {
+        let half = cycle / 2
+        let v = t < half ? 20 + 55 * (t / half) : 75 - 35 * ((t - half) / half)
+        return Int(v.rounded())
+    }
+
     private func compute() -> SonosState {
+        var st = computeTrack()
+        st.volume = volume(at: Date().timeIntervalSince(epoch).truncatingRemainder(dividingBy: cycle))
+        return st
+    }
+
+    private func computeTrack() -> SonosState {
         let t = Date().timeIntervalSince(epoch).truncatingRemainder(dividingBy: cycle)
         let n = tracks.count
         let i = Int(t / slot)

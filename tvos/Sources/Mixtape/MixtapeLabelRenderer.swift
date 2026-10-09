@@ -194,19 +194,23 @@ enum MixtapeLabelRenderer {
         return t.trimmingCharacters(in: .whitespaces) + "\u{2026}"
     }
 
-    /// Typeset: one line, shrink to 70%, then ellipsis. Hand (wrap = true):
-    /// two balanced lines before shrinking (down to 60%), then ellipsis.
+    /// One line, shrink to 70%, then ellipsis. wrap = true: two balanced
+    /// lines before shrinking (hand down to 60%, typeset down to 70%), then
+    /// the greedy first line and an ellipsised second. A typeset Block with
+    /// wrapTitle may shrink further as a whole before it accepts that
+    /// ellipsis (Block.layout, kMinUncut).
     private static func fit(_ raw: String, _ face: Face, px: CGFloat, tf: Typeface, maxW: CGFloat,
                             wrap: Bool) -> ([String], CTFont) {
         let text = face.caps ? raw.uppercased() : raw
         let tr = face.tracking
         if wrap {
+            let floor: CGFloat = tf.handScale != nil ? 0.6 : 0.7
             let f0 = font(face, px: px, tf: tf)
             if width(text, f0, tr) <= maxW { return ([text], f0) }
             let words = text.split(separator: " ").map(String.init)
             if words.count > 1 {
                 var s = px
-                while s >= px * 0.6 {
+                while s >= px * floor {
                     let f = font(face, px: s, tf: tf)
                     var best: (CGFloat, [String])?
                     for i in 1..<words.count {
@@ -217,7 +221,7 @@ enum MixtapeLabelRenderer {
                     if let best { return (best.1, f) }
                     s -= 2
                 }
-                let f = font(face, px: px * 0.6, tf: tf)
+                let f = font(face, px: px * floor, tf: tf)
                 var first: [String] = []
                 for w in words {
                     if width((first + [w]).joined(separator: " "), f, tr) > maxW { break }
@@ -227,8 +231,6 @@ enum MixtapeLabelRenderer {
                 let second = width(rest, f, tr) > maxW ? ellipsize(rest, f, tr, maxW) : rest
                 return (first.isEmpty ? [ellipsize(text, f, tr, maxW)] : [first.joined(separator: " "), second], f)
             }
-            let f = font(face, px: px * 0.6, tf: tf)
-            return ([width(text, f, tr) > maxW ? ellipsize(text, f, tr, maxW) : text], f)
         }
         var s = px
         while s >= px * 0.7 {
@@ -255,6 +257,8 @@ enum MixtapeLabelRenderer {
         var align: Align = .left
         var tf: Typeface
         var wrapTitle = false
+        /// The artist may wrap to two lines, but only when the title took one.
+        var wrapSub = false
         var baselines: [CGFloat]?      // fixed baselines (handwritten)
         var forced: Ink?
         var laid: [Laid] = []
@@ -267,17 +271,31 @@ enum MixtapeLabelRenderer {
 
         private func face(_ r: Role) -> Face { r == .title ? tf.title : (r == .sub ? tf.sub : tf.album) }
 
+        /// Typeset wrap blocks (Fit left, Split): the whole block keeps
+        /// scaling down to this before a title ellipsis is accepted, so a
+        /// long title wraps, then shrinks, and only then ellipsises.
+        static let kMinUncut: CGFloat = 0.75
+
         func layout() {
             let hand = tf.handScale != nil
+            let avoidCut = wrapTitle && baselines == nil && !hand
             var k: CGFloat = 1
             var out: [(String, CTFont, CGFloat, Bool)] = []
             var base: [CGFloat] = []
+            var fallback: ([(String, CTFont, CGFloat, Bool)], [CGFloat])?
             for _ in 0..<50 {
                 out = []
+                var titleLines = 0
+                var titleCut = false
                 for (text, role, px) in lines where !text.isEmpty {
                     let fc = face(role)
+                    let wrap = (role == .title && wrapTitle) || (role == .sub && wrapSub && titleLines <= 1)
                     let (ls, f) = MixtapeLabelRenderer.fit(text, fc, px: px * k, tf: tf, maxW: box.width,
-                                                           wrap: wrapTitle && role == .title)
+                                                           wrap: wrap)
+                    if role == .title {
+                        titleLines = ls.count
+                        titleCut = (ls.last?.hasSuffix("\u{2026}") ?? false) && !text.hasSuffix("\u{2026}")
+                    }
                     for (j, t) in ls.enumerated() { out.append((t, f, fc.tracking, j > 0)) }
                 }
                 guard !out.isEmpty else { return }
@@ -293,6 +311,12 @@ enum MixtapeLabelRenderer {
                 if baselines != nil || hgt <= box.height {
                     let top = box.minY + (box.height - hgt) / 2
                     base = base.map { $0 + top }
+                    if avoidCut && titleCut {
+                        // Fits, but the title is cut: remember this, try smaller.
+                        if fallback == nil { fallback = (out, base) }
+                        if k * 0.96 >= Self.kMinUncut { k *= 0.96; continue }
+                        (out, base) = fallback!
+                    }
                     break
                 }
                 k *= 0.96
@@ -549,15 +573,23 @@ enum MixtapeLabelRenderer {
                 let side = H - 20
                 setArt(cover: CGRect(x: 10, y: 10, width: side, height: side))
                 let tx = 10 + side + 44
-                blocks.append(Block("title + artist", [(title, .title, T), (input.artist, .sub, A)],
-                                    CGRect(x: tx, y: 22, width: W - pad - tx, height: stripH - 40), tf: tf))
+                let tb = Block("title + artist", [(title, .title, T), (input.artist, .sub, A)],
+                               CGRect(x: tx, y: 22, width: W - pad - tx, height: stripH - 40), tf: tf)
+                // Long names wrap to two lines before shrinking; the block
+                // still scales as a whole to stay above the window.
+                tb.wrapTitle = true
+                tb.wrapSub = true
+                blocks.append(tb)
                 blocks.append(albumBlock(x0: tx, align: .left, tf: tf))
                 blocks.forEach { $0.forced = .dark }
             case .split:
                 let xm = (W / 2).rounded()
                 setArt(cover: CGRect(x: 0, y: 0, width: xm, height: H))
-                blocks.append(Block("title + artist", [(title, .title, T - 12), (input.artist, .sub, A - 6)],
-                                    CGRect(x: xm + 40, y: 20, width: W - pad - xm - 40, height: stripH - 34), tf: tf))
+                let tb = Block("title + artist", [(title, .title, T - 12), (input.artist, .sub, A - 6)],
+                               CGRect(x: xm + 40, y: 20, width: W - pad - xm - 40, height: stripH - 34), tf: tf)
+                tb.wrapTitle = true
+                tb.wrapSub = true
+                blocks.append(tb)
                 blocks.append(albumBlock(x0: xm + 40, align: .right, tf: tf))
                 blocks.forEach { $0.forced = .dark }
             case .fillWidth:
