@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-10-09
-version: 5.14
+modified: 2026-10-10
+version: 5.15
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -69,8 +69,6 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: turning Home Assistant actions on safely
 - [ ] **Consider lowering the Echo Show 15's darkness to 0.5 or 0.6** - dashboard, the `echo-show15` screen, Entry board card, "Darken photos". It runs 0.8, so bright photos hit the 0.9 cap; with the new scrims and adaptive darkness, 0.5 to 0.6 reads well (~2 min)
       - unblocks: brighter photos by the front door without losing the text
-- [ ] **Review `feature/echo-hub`** - everything deployed since 2026-09-22 is committed on the branch (110 commits over `main` at `736683e`, with Mixtape and the Today layouts inside it), not pushed and not merged. The Mixtape label v2 and deck v2 landed on this branch 2026-10-09 and are installed on the TV (~20 min to read)
-      - unblocks: merging to main and pushing to GitHub; the Pi lock-down step after the soak week
 - [ ] **Rotate or delete the `immich-go-import` API key** - it has all permissions and was pasted in chat during the import (~10 min)
       - unblocks: closing off an exposed high-privilege credential
 - [ ] **HANDED TO THIS PROJECT'S AGENT 2026-08-28, no longer waiting on Justin. Review and merge `triage/2026-08-24`, then delete the wip snapshot branch** (~15 min). Justin, 2026-08-28: "I'm not sure what this is and happy to have the field agent take care of it." Next session: do the review and the merge on your own judgment, delete `wip/uncommitted-snapshot-2026-08-12`, and say what you merged in `## Health`. Come back to him only if the review turns up something that changes behaviour he would notice on a screen. (updated via Oracle at Justin's direction, 2026-08-28)

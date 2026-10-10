@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-09
-version: 8.7
+modified: 2026-10-10
+version: 8.8
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -826,6 +826,10 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-10 - `feature/echo-hub` merged to `main`** (fast-forward, 128
+  commits: the hub migration, Echo Show, layout editor, Entry board, Today
+  layouts and Mixtape with label v2 and deck v2) after Justin checked the
+  Mixtape build on the TV. Local only; `origin/main` is behind until pushed.
 - **2026-10-09 - Mixtape label v2 decided: printed labels, three rotating
   layouts, four typesets, handwritten fallback.** After three concept rounds on
   real deck pixels Justin picked the round 3 recommendation: Fit left as the
