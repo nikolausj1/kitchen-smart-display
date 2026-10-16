@@ -1,7 +1,8 @@
 import SwiftUI
 
 // FluidBackdrop - host view for the Metal fluid backdrops (Backdrop.metal):
-// Marble (paint folding into itself) and Ink (rising, billowing turbulence).
+// Marble (paint folding into itself) and Smoke (rising, billowing turbulence).
+// Caustics, Ripple and Bars were pruned with Lava (docs/designs/music-videos.md).
 // The shader domain-warps the blurred album texture, so every streak is
 // literally the cover's own pixels.
 //
@@ -11,13 +12,13 @@ import SwiftUI
 // any visible edge and still land inside real texture, so the flow never
 // drags in transparent border pixels.
 struct FluidBackdrop: View {
-    enum Style { case marble, smoke, ripple, caustics, bars }
+    enum Style { case marble, smoke }
 
     let url: URL?
     let opening: CGRect
     let style: Style
-    // Smoke and Ripple warp a field of palette colors (same extraction Lava
-    // uses) instead of the album texture - cleaner, more graphic motion.
+    // Smoke warps a field of palette colors (AlbumPalette) instead of the
+    // album texture - cleaner, more graphic motion.
     @State private var palette: [Color] = []
 
     private static let overscan: CGFloat = 1.45
@@ -61,9 +62,6 @@ struct FluidBackdrop: View {
         switch style {
         case .marble:   name = "marbleBackdrop"
         case .smoke:    name = "smokeBackdrop"
-        case .ripple:   name = "rippleBackdrop"
-        case .caustics: name = "causticsBackdrop"
-        case .bars:     name = "barsBackdrop"
         }
         return Shader(function: ShaderFunction(library: .default, name: name),
                       arguments: args)
@@ -73,7 +71,7 @@ struct FluidBackdrop: View {
     // texture - four overlapping copies (offset, rescaled, one mirrored, at
     // partial opacity) dissolve faces and objects into pure color texture
     // while keeping the cover's true palette; a red dot in one corner ends up
-    // distributed across the canvas. Ink: a fixed field of palette colors -
+    // distributed across the canvas. Smoke: a fixed field of palette colors -
     // the shader supplies all the motion, the field supplies color regions.
     @ViewBuilder
     private func source(width: CGFloat, height: CGFloat) -> some View {
@@ -100,7 +98,7 @@ struct FluidBackdrop: View {
             // Light blur on top of the scramble: abstracts the seams while
             // keeping structure for the warp to visibly carry.
             .blur(radius: height * 0.022)
-        case .smoke, .ripple, .caustics, .bars:
+        case .smoke:
             paletteField(width: width, height: height)
         }
     }

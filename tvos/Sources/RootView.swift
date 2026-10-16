@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 // View selection for the TV shell.
 enum TVView: Int, CaseIterable {
@@ -110,6 +111,9 @@ struct RootView: View {
     @StateObject private var sonos = SonosController()
     @StateObject private var photoRemote = PhotoRemoteSignal()
     @StateObject private var mixtapeRemote = MixtapeRemoteSignal()
+    // Owned here (not by MusicVideosView) so a long press on the center button
+    // can mark the current video wrong from the shell.
+    @StateObject private var videoFeed = MusicVideoFeed()
     @StateObject private var settingsNav = SettingsNav()
     @StateObject private var dim = DimModel()
     @FocusState private var focused: Bool
@@ -137,7 +141,10 @@ struct RootView: View {
             // allowedPressTypes=[.select] catches it instead. In Settings it
             // toggles the highlighted row, same as play/pause - that's the
             // button thumbs reach for.
-            .background(SelectPressCatcher(onSelect: { handleSelect() }))
+            // A long press on the same button is its own recognizer: on Now
+            // Playing with Music Videos up it marks the video wrong.
+            .background(SelectPressCatcher(onSelect: { handleSelect() },
+                                           onLongPress: { handleSelectLongPress() }))
             // Menu exits Settings back to the prior view. Only attached while in
             // Settings, so elsewhere Menu keeps its default (exit app) behavior.
             .modifier(ExitToSettingsParent(active: router.view == .settings,
@@ -166,11 +173,24 @@ struct RootView: View {
             // Resuming a suspended app (the common "TV just woke" path) doesn't
             // re-run boot, so re-check the morning auto-show on every wake.
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active { router.autoShowTodayIfDue(settings: model.settings) }
+                if phase == .active {
+                    router.autoShowTodayIfDue(settings: model.settings)
+                    revertVideosIfIdle()
+                }
             }
             // And catch the already-awake case where the window opens with no wake.
             .onReceive(morningTick) { _ in
                 router.autoShowTodayIfDue(settings: model.settings)
+            }
+            // The Music Videos one-hour auto-off, checked on the hub settings
+            // poll's 30 s cadence. A task loop rather than another Timer
+            // publisher: this struct is rebuilt every second (the clock), which
+            // would keep restarting a publisher before it could fire.
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    revertVideosIfIdle()
+                }
             }
             // A dashboard nudge ("Show Photos" on the hub's admin page), one-shot,
             // arriving through the 30 s hub settings poll. Same as a remote
@@ -200,7 +220,7 @@ struct RootView: View {
             SettingsView(nav: settingsNav, dim: dim)
         case .music:
             NowPlayingView(controller: sonos, mat: tvSettings.musicMatMode,
-                           mixtapeRemote: mixtapeRemote)
+                           videoFeed: videoFeed, mixtapeRemote: mixtapeRemote)
         }
     }
 
@@ -245,8 +265,9 @@ struct RootView: View {
     }
 
     // Center (select) button: toggle in Settings; on Now Playing it cycles
-    // the Framed backdrop live (no Settings trip needed). Deliberately inert
-    // elsewhere (no accidental Sonos transport from a resting thumb).
+    // the Framed backdrop live (Drift, Smoke, Marble, Mixtape, Music Videos,
+    // no Settings trip needed). Deliberately inert elsewhere (no accidental
+    // Sonos transport from a resting thumb).
     private func handleSelect() {
         switch router.view {
         case .settings:
@@ -263,6 +284,23 @@ struct RootView: View {
         default:
             break
         }
+    }
+
+    // Center button, held: on Now Playing with Music Videos up, deny the video
+    // that is playing; the hub re-matches and the screen shows Resolving until
+    // it lands. Returns true when it acted, so the release that follows the
+    // hold is swallowed instead of also stepping the backdrop.
+    private func handleSelectLongPress() -> Bool {
+        guard router.view == .music,
+              tvSettings.musicMatMode == .framed,
+              tvSettings.framedBackdrop == .videos else { return false }
+        return videoFeed.reportWrong()
+    }
+
+    // The one-hour auto-off for Music Videos (TVSettings.revertVideosIfIdle).
+    private func revertVideosIfIdle() {
+        tvSettings.revertVideosIfIdle(lastPlayingAt: sonos.lastPlayingAt,
+                                      playingNow: sonos.state.playing)
     }
 
     // Shared by select and play/pause: toggle the highlighted row; no-op on
@@ -294,7 +332,7 @@ struct RootView: View {
         case .todayMat:      tvSettings.todayMatEnabled = (dir > 0)   // left=Off, right=On
         case .photosMat:     tvSettings.photosMatEnabled = (dir > 0)  // left=Off, right=On
         case .musicMat:      tvSettings.stepMusicMat(dir)             // Off/Fit/Framed
-        case .musicBackdrop: tvSettings.stepFramedBackdrop(dir)       // Still/Drift/Lava/...
+        case .musicBackdrop: tvSettings.stepFramedBackdrop(dir)       // Drift/Smoke/Marble/Mixtape/Music Videos
         case .artDisplay:    tvSettings.stepArtDisplay(dir)               // SB/Fill/Fill+Music
         case .artFacts:      tvSettings.artFacts = (dir > 0)          // left=Off, right=On
         case .autoDim:       tvSettings.autoDim = (dir > 0)           // left=Off, right=On
@@ -331,28 +369,64 @@ struct RootView: View {
 // for the history of remote-input approaches here.)
 private struct SelectPressCatcher: UIViewRepresentable {
     let onSelect: () -> Void
+    /// Returns true when the hold did something; the release is then ignored.
+    let onLongPress: () -> Bool
 
     func makeUIView(context: Context) -> CatcherView {
         let v = CatcherView()
         v.onSelect = onSelect
+        v.onLongPress = onLongPress
         return v
     }
-    func updateUIView(_ v: CatcherView, context: Context) { v.onSelect = onSelect }
+    func updateUIView(_ v: CatcherView, context: Context) {
+        v.onSelect = onSelect
+        v.onLongPress = onLongPress
+    }
 
     final class CatcherView: UIView {
         var onSelect: (() -> Void)?
-        private var recognizer: UITapGestureRecognizer?
+        var onLongPress: (() -> Bool)?
+        private var tap: UITapGestureRecognizer?
+        private var hold: UILongPressGestureRecognizer?
+        // Set when a hold was acted on, so the release's tap is skipped. The tap
+        // recognizer fires on release however long the button was down, so
+        // without this a long press would also step the backdrop.
+        private var swallowNextTap = false
 
         override func didMoveToWindow() {
             super.didMoveToWindow()
-            guard let window, recognizer == nil else { return }
+            guard let window, tap == nil else { return }
             let tap = UITapGestureRecognizer(target: self, action: #selector(fire))
             tap.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
             window.addGestureRecognizer(tap)
-            recognizer = tap
+            self.tap = tap
+            let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
+            hold.allowedPressTypes = [NSNumber(value: UIPress.PressType.select.rawValue)]
+            hold.minimumPressDuration = 0.8
+            window.addGestureRecognizer(hold)
+            self.hold = hold
         }
 
-        @objc private func fire() { onSelect?() }
+        @objc private func fire() {
+            if swallowNextTap { swallowNextTap = false; return }
+            onSelect?()
+        }
+
+        @objc private func held(_ g: UILongPressGestureRecognizer) {
+            switch g.state {
+            case .began:
+                swallowNextTap = onLongPress?() ?? false
+            case .ended, .cancelled, .failed:
+                // The release's tap may land just after this; clear the flag
+                // once it has had its chance, so a stray flag never eats a
+                // later, real press.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                    self?.swallowNextTap = false
+                }
+            default:
+                break
+            }
+        }
     }
 }
 

@@ -184,7 +184,11 @@ extension TVSettings {
         if let v = t.autoDim, v != autoDim { autoDim = v }
         if let v = t.manualBrightness, v != manualBrightness { manualBrightness = v }
         if let v = t.artFacts, v != artFacts { artFacts = v }
-        if let v = t.framedBackdrop, let b = FramedBackdrop(rawValue: v), b != framedBackdrop { framedBackdrop = b }
+        // Removed styles in a stale registry decode as Smoke (FramedBackdrop.init(stored:)).
+        if let v = t.framedBackdrop {
+            let b = FramedBackdrop(stored: v)
+            if b != framedBackdrop { framedBackdrop = b }
+        }
         if let v = t.artDisplay, let a = ArtDisplay(rawValue: v), a != artDisplay { artDisplay = a }
     }
 

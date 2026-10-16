@@ -9,6 +9,9 @@ import SwiftUI
 //   .framed - the opening is filled with a blurred album-art wash, the crisp
 //             square cover floats centered on top, and the track title/artist
 //             are handwritten on the bottom mat band (cohesive with Photos).
+//             Its backdrop cycles Drift -> Smoke -> Marble, then two stops that
+//             replace the whole layout: Mixtape (the cassette deck) and Music
+//             Videos (the muted full-bleed video, MusicVideosView).
 //
 // Transport (prev/next/play-pause) is driven by the Siri Remote via the shell's
 // handler -> Sonos. The TV always targets the "Main" Sonos room.
@@ -20,15 +23,19 @@ struct NowPlayingView: View {
     // transport from any view) and injects it here as an observed object.
     @ObservedObject var sonos: SonosController
     @ObservedObject var mixtapeRemote: MixtapeRemoteSignal
+    // Owned by the shell so the remote's center-button long press can reach it.
+    @ObservedObject var videoFeed: MusicVideoFeed
     let mat: MusicMatMode
     #if targetEnvironment(simulator)
     @StateObject private var fakeSequence = FakeMusicSequence()
     #endif
 
     init(controller: SonosController, mat: MusicMatMode,
+         videoFeed: MusicVideoFeed,
          mixtapeRemote: MixtapeRemoteSignal = MixtapeRemoteSignal()) {
         self.sonos = controller
         self.mat = mat
+        self.videoFeed = videoFeed
         self.mixtapeRemote = mixtapeRemote
     }
 
@@ -80,8 +87,8 @@ struct NowPlayingView: View {
     }
 
     // Transient label shown after the center button cycles the Framed
-    // backdrop (RootView.handleSelect), so Still/Drift-style near-twins are
-    // distinguishable without a Settings trip.
+    // backdrop (RootView.handleSelect), so the new stop is named without a
+    // Settings trip.
     @State private var backdropToast: String?
     @State private var backdropToastID = 0
 
@@ -92,10 +99,14 @@ struct NowPlayingView: View {
                 case .off:    fullBleed(geo.size)
                 case .fit:    fitted(geo.size)
                 case .framed:
-                    if tvSettings.framedBackdrop == .mixtape {
+                    switch tvSettings.framedBackdrop {
+                    case .mixtape:
                         // Mixtape replaces the mat: the deck is its own frame.
                         MixtapeView(state: s, remote: mixtapeRemote)
-                    } else {
+                    case .videos:
+                        // So does Music Videos: the picture is full bleed.
+                        MusicVideosView(sonosState: s, feed: videoFeed)
+                    default:
                         framed(geo.size)
                     }
                 }
@@ -275,14 +286,11 @@ struct NowPlayingView: View {
     }
 
     // The opening fill behind the cover, per the Framed Backdrop setting:
-    // Still (original static wash), Drift (wash on a slow wander), Lava
-    // (palette blobs, LavaBackdrop.swift), or the Metal fluids Marble / Ink
+    // Drift (the wash on a slow wander), or the Metal fluids Smoke / Marble
     // (FluidBackdrop.swift + Backdrop.metal).
     @ViewBuilder
     private func blurredFill(url: URL?, opening: CGRect) -> some View {
         switch tvSettings.framedBackdrop {
-        case .still:
-            washBody(url: url, opening: opening, scale: 1, offset: .zero)
         case .drift:
             // ~20 updates/s keeps steps sub-pixel at these speeds while
             // costing a fraction of a per-frame timeline. The transform sits
@@ -292,26 +300,18 @@ struct NowPlayingView: View {
                 let d = Self.drift(ctx.date, opening: opening)
                 washBody(url: url, opening: opening, scale: d.scale, offset: d.offset)
             }
-        case .lava:
-            LavaBackdrop(url: url, opening: opening)
         case .smoke:
             FluidBackdrop(url: url, opening: opening, style: .smoke)
-        case .caustics:
-            FluidBackdrop(url: url, opening: opening, style: .caustics)
-        case .ripple:
-            FluidBackdrop(url: url, opening: opening, style: .ripple)
-        case .bars:
-            FluidBackdrop(url: url, opening: opening, style: .bars)
         case .marble:
             FluidBackdrop(url: url, opening: opening, style: .marble)
-        case .mixtape:
-            // Never reached: Mixtape replaces the whole framed layout (body).
+        case .mixtape, .videos:
+            // Never reached: Mixtape and Music Videos replace the whole framed
+            // layout (body).
             washBody(url: url, opening: opening, scale: 1, offset: .zero)
         }
     }
 
-    // The blurred-wash fill (shared by Still and Drift; Drift animates the
-    // post-blur transform).
+    // The blurred-wash fill (Drift animates the post-blur transform).
     @ViewBuilder
     private func washBody(url: URL?, opening: CGRect, scale: CGFloat, offset: CGSize) -> some View {
         Group {

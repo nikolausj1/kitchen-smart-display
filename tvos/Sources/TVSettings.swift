@@ -68,35 +68,39 @@ enum ArtDisplay: Int, CaseIterable {
 }
 
 // What fills the mat opening behind the cover in Framed music mode, ordered
-// subtle -> aggressive (Justin's curation). Raw values are persisted; the
-// 2026-06-11 reorder (Marble to last, Ink renamed Smoke, Ripple added) was a
-// one-time remap of stored values - keep them stable from here.
+// subtle -> aggressive, with Mixtape and Music Videos at the end because they
+// replace the mat entirely. Raw values are persisted AND synced to the hub
+// (config.tv.framedBackdrop), so they are stable and not contiguous: the
+// 2026-10-16 prune (docs/designs/music-videos.md) removed Still 0, Lava 2,
+// Caustics 4, Ripple 5 and Bars 6, and the survivors kept their numbers. Never
+// reuse a removed number; decode stored values through `init(stored:)`.
 enum FramedBackdrop: Int, CaseIterable {
-    case still    = 0   // the original static blurred wash
     case drift    = 1   // the wash on a slow Lissajous wander + scale breathe
-    case lava     = 2   // palette-extracted color blobs on slow orbits
     case smoke    = 3   // Metal shader: palette colors billowing like smoke
-    case caustics = 4   // Metal shader: sunlit-pool light webs in palette colors
-    case ripple   = 5   // Metal shader: sound-waves of palette color radiating
-                        // out from behind the cover, prismatic crests
-    case bars     = 6   // Metal shader: faux EQ bars in palette colors
-                        // (noise-driven - Sonos exposes no audio analysis)
+                        // (the default, and where every removed value lands)
     case marble   = 7   // Metal shader: scrambled album texture folding like
                         // stirred paint (the most aggressive)
     case mixtape  = 8   // full-screen cassette deck (MixtapeView); replaces
                         // the mat entirely, see docs/designs/mixtape.md
+    case videos   = 9   // full-bleed muted music video (MusicVideosView);
+                        // replaces the mat entirely, see docs/designs/music-videos.md
+
+    static let fallback: FramedBackdrop = .smoke
+
+    /// Decodes a stored or hub-synced raw value. Removed values (0, 2, 4, 5, 6)
+    /// and anything unknown load as Smoke, so an old UserDefaults entry or a
+    /// stale registry never lands on a style that no longer exists.
+    init(stored raw: Int) {
+        self = FramedBackdrop(rawValue: raw) ?? .fallback
+    }
 
     var label: String {
         switch self {
-        case .still:    return "Still"
         case .drift:    return "Drift"
-        case .lava:     return "Lava"
         case .smoke:    return "Smoke"
-        case .caustics: return "Caustics"
-        case .ripple:   return "Ripple"
-        case .bars:     return "Bars"
         case .marble:   return "Marble"
         case .mixtape:  return "Mixtape"
+        case .videos:   return "Music Videos"
         }
     }
 }
@@ -115,6 +119,9 @@ final class TVSettings: ObservableObject {
         static let manualBrightness = "tv.manualBrightness"
         static let artFacts = "tv.artFacts"
         static let framedBackdrop = "tv.framedBackdrop"
+        // Local only, deliberately NOT in the hub payload: where the one-hour
+        // auto-off returns to (see revertVideosIfIdle).
+        static let framedBackdropBeforeVideos = "tv.framedBackdropBeforeVideos"
         static let artDisplay = "tv.artDisplay"
     }
 
@@ -155,7 +162,10 @@ final class TVSettings: ObservableObject {
         didSet { UserDefaults.standard.set(artFacts, forKey: Key.artFacts) }
     }
     @Published var framedBackdrop: FramedBackdrop {
-        didSet { UserDefaults.standard.set(framedBackdrop.rawValue, forKey: Key.framedBackdrop) }
+        didSet {
+            UserDefaults.standard.set(framedBackdrop.rawValue, forKey: Key.framedBackdrop)
+            noteBackdropChange(from: oldValue)
+        }
     }
     @Published var artDisplay: ArtDisplay {
         didSet { UserDefaults.standard.set(artDisplay.rawValue, forKey: Key.artDisplay) }
@@ -192,9 +202,9 @@ final class TVSettings: ObservableObject {
         manualBrightness = (d.object(forKey: Key.manualBrightness) as? Double) ?? 1.0
         // Art facts default ON - the educational half of the art feature.
         artFacts = (d.object(forKey: Key.artFacts) as? Bool) ?? true
-        // Framed music backdrop defaults to the new lava blobs.
+        // Framed music backdrop defaults to Smoke; removed styles load as Smoke.
         framedBackdrop = (d.object(forKey: Key.framedBackdrop) as? Int)
-            .flatMap(FramedBackdrop.init(rawValue:)) ?? .lava
+            .map(FramedBackdrop.init(stored:)) ?? .fallback
         // Art rendering defaults to the shadow box (the chosen-from-comps look).
         artDisplay = (d.object(forKey: Key.artDisplay) as? Int)
             .flatMap(ArtDisplay.init(rawValue:)) ?? .shadowBox
@@ -210,6 +220,10 @@ final class TVSettings: ObservableObject {
             selectedAlbumIds = nil   // All albums
         }
 
+        // Launching straight onto Music Videos counts as picking it just now,
+        // so the one-hour silence clock starts at launch, not at the last song.
+        if framedBackdrop == .videos { videosSelectedAt = Date() }
+
         // Everything above has loaded from UserDefaults, so the hub sees this
         // TV's real values on first contact rather than a half-built object.
         startHubSync()
@@ -224,6 +238,8 @@ final class TVSettings: ObservableObject {
     /// Suppresses the outbound PATCH while applying a payload we just received,
     /// so a poll cannot echo straight back to the hub.
     var applyingFromHub = false
+    /// When Music Videos last became the backdrop (or the app launched on it).
+    var videosSelectedAt: Date?
 
     // MARK: - Duration
 
@@ -324,14 +340,64 @@ final class TVSettings: ObservableObject {
 
     var framedBackdropLabel: String { framedBackdrop.label }
 
-    // Step Still -> Drift -> Lava. Left/right clamps; play/pause wraps.
+    // Step Drift -> Smoke -> Marble -> Mixtape -> Music Videos. Left/right
+    // clamps; play/pause and the center button wrap. Indexes allCases, not the
+    // raw value: the raw values have gaps since the prune.
     func stepFramedBackdrop(_ dir: Int, wrap: Bool = false) {
         let all = FramedBackdrop.allCases
-        let i = framedBackdrop.rawValue
+        let i = all.firstIndex(of: framedBackdrop) ?? 0
         let next = wrap
             ? (i + dir + all.count) % all.count
             : min(all.count - 1, max(0, i + dir))
         framedBackdrop = all[next]
+    }
+
+    // MARK: - Music Videos auto-off
+
+    /// How long Sonos may stay silent before Music Videos steps aside.
+    static let videosIdleLimit: TimeInterval = 60 * 60
+
+    /// Remembers where to return to. Called from the backdrop's didSet, so it
+    /// covers the remote, Settings and the hub dashboard alike. Entering Music
+    /// Videos stores the backdrop it replaced (unless one is already stored, so
+    /// a hub echo cannot overwrite it); leaving by any route clears the key.
+    private func noteBackdropChange(from old: FramedBackdrop) {
+        let d = UserDefaults.standard
+        if framedBackdrop == .videos, old != .videos {
+            d.set(old.rawValue, forKey: Key.framedBackdropBeforeVideos)
+            videosSelectedAt = Date()
+        } else if framedBackdrop != .videos {
+            d.removeObject(forKey: Key.framedBackdropBeforeVideos)
+        }
+    }
+
+    /// The one-hour revert (decision 12): with Music Videos up and Sonos silent
+    /// for 60 minutes, restore the backdrop it replaced (Smoke if unknown) and
+    /// clear the key. "Silent since" is the later of the last playing poll and
+    /// the moment Music Videos was selected (or the app launched with it), so
+    /// picking it while the room is quiet does not bounce straight back, and a
+    /// cold launch with no Sonos history waits out its own hour. Runs on a
+    /// 30 s loop in the shell (the hub settings poll's cadence) and on
+    /// scenePhase .active.
+    @discardableResult
+    func revertVideosIfIdle(lastPlayingAt: Date?, playingNow: Bool, now: Date = Date()) -> Bool {
+        guard framedBackdrop == .videos, !playingNow else { return false }
+        let silentSince = [lastPlayingAt, videosSelectedAt].compactMap { $0 }.max() ?? now
+        #if targetEnvironment(simulator)
+        // Sim-only: `defaults write <bundle> debug.videoIdleSeconds -float 20`
+        // shortens the hour so the revert can be watched.
+        let limit = UserDefaults.standard.object(forKey: "debug.videoIdleSeconds") as? Double
+            ?? Self.videosIdleLimit
+        #else
+        let limit = Self.videosIdleLimit
+        #endif
+        guard now.timeIntervalSince(silentSince) >= limit else { return false }
+        let d = UserDefaults.standard
+        let before = (d.object(forKey: Key.framedBackdropBeforeVideos) as? Int)
+            .map(FramedBackdrop.init(stored:)) ?? .fallback
+        framedBackdrop = (before == .videos) ? .fallback : before   // didSet clears the key
+        d.removeObject(forKey: Key.framedBackdropBeforeVideos)
+        return true
     }
 
     // MARK: - Brightness (manual mode)

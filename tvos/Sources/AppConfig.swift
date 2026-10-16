@@ -13,7 +13,13 @@ enum AppConfig {
     // here is exactly what broke the simulator when the Pi's lease moved from
     // .4.127 to .7.131.
     #if targetEnvironment(simulator)
-    static let photosBase = URL(string: "http://192.168.4.61:8095")!
+    // Sim-only override for working against a stub hub: `defaults write
+    // <bundle> debug.hubBase http://127.0.0.1:8098`. Unset = the real hub.
+    static let photosBase: URL = {
+        if let s = UserDefaults.standard.string(forKey: "debug.hubBase"),
+           let u = URL(string: s) { return u }
+        return URL(string: "http://192.168.4.61:8095")!
+    }()
     #else
     static let photosBase = URL(string: "http://nuc.local:8095")!
     #endif
