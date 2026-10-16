@@ -19,7 +19,9 @@
       "deck_empty": "deck_empty_4k.png",
       "door_frame": "door_frame_4k.png",
       "door_glass": "door_glass_4k.png",
-      "deck_v2": "tvos/Resources/Mixtape/deck/deck_empty_v2.png"
+      "deck_v2": "tvos/Resources/Mixtape/deck/deck_empty_v2.png",
+      "deck_v3": "tvos/Resources/Mixtape/deck/deck_empty_v3.png",
+      "deck_v3_counter": "tvos/Resources/Mixtape/deck/deck_empty_v3_counter.png"
     },
     "empty_well_candidate": 2,
     "well": {
@@ -157,7 +159,8 @@
       "door_frame / door_glass redraw the door over a tape; over the empty well the glass would tint twice, so draw them only when a tape is shown or the door moves.",
       "VU pivots are the scale-arc centres, below the faces (hidden by the hub dome); draw the needle from the pivot and clip it to the face.",
       "glows: glow_play.png / glow_pause.png are the lit key rows (lamp strip, the glow in the gap above it, the warm faceplate edge) drawn NORMAL (source-over) at the rect over deck_empty_v2, whose PLAY is unlit. Opacity 1 = the photo lit key; animate opacity to fade the lamp. Not additive: see scripts/mixtape/edit_deck_plate.py.",
-      "knob: knob.png is the face only (radius and spriteSize are fractions of the plate HEIGHT; the sprite is centred on center). Rotate it clockwise by (target - dotAngleDeg), where target = minAngleDeg + volume * (maxAngleDeg - minAngleDeg). The plate under it is the same face without the dot. Alternative: leave the face static and rotate knob_dot.png (same canvas) instead, which keeps the cone-brushed highlights fixed as on a real knob."
+      "knob: knob.png is the face only (radius and spriteSize are fractions of the plate HEIGHT; the sprite is centred on center). Rotate it clockwise by (target - dotAngleDeg), where target = minAngleDeg + volume * (maxAngleDeg - minAngleDeg). The plate under it is the same face without the dot. Alternative: leave the face static and rotate knob_dot.png (same canvas) instead, which keeps the cone-brushed highlights fixed as on a real knob.",
+      "rims: tapes[i].rims.left / right (rect, file) are the shell around each hub, drawn OVER the live packs (after the packs, before or after the hub sprites: they do not overlap the hub disc). With them the packs are only seen through the clear inner window, so use rims.packMinRadius / packMaxRadius (real cassette proportions) instead of the window-limited packMinRadius / packMaxRadius; the packs still clip to the windowRect capsule."
     ],
     "glows": {
       "play": {
@@ -187,6 +190,88 @@
         "x": 0.82513,
         "y": 0.58819
       }
+    },
+    "door_edges": {
+      "top": {
+        "x": 0.26667,
+        "y": 0.12342,
+        "w": 0.46406,
+        "h": 0.00417
+      },
+      "bottom": {
+        "x": 0.26667,
+        "y": 0.68899,
+        "w": 0.46406,
+        "h": 0.00417
+      },
+      "thicknessFraction": 0.00417,
+      "files": {
+        "top": "deck/door_edge_top.png",
+        "bottom": "deck/door_edge_bottom.png"
+      },
+      "note": "rects are the strips at full thickness (sin(tilt) = 1), attached to the door rect: top sits on the door's top edge and grows upward (its last row is the front arris), bottom hangs from the door's bottom edge (its first row is the arris). Scale height by sin(tilt) and move with the door's projected edge. For a bottom-hinged door tilting out, only the top edge faces the camera; the bottom strip is for a hinge model that shows it."
+    },
+    "spindles": {
+      "left": {
+        "x": 0.41768,
+        "y": 0.37377
+      },
+      "right": {
+        "x": 0.58026,
+        "y": 0.37409
+      },
+      "note": "empty-well spindle centres in deck_empty_v3 and well_open.png: the mean of the 14 tapes' hubL / hubR"
+    },
+    "counter": {
+      "housing": {
+        "x": 0.7974,
+        "y": 0.41991,
+        "w": 0.04167,
+        "h": 0.03519
+      },
+      "window": {
+        "x": 0.80104,
+        "y": 0.42593,
+        "w": 0.03438,
+        "h": 0.02315
+      },
+      "digitCells": [
+        {
+          "x": 0.80104,
+          "y": 0.42593,
+          "w": 0.01042,
+          "h": 0.02315
+        },
+        {
+          "x": 0.81302,
+          "y": 0.42593,
+          "w": 0.01042,
+          "h": 0.02315
+        },
+        {
+          "x": 0.825,
+          "y": 0.42593,
+          "w": 0.01042,
+          "h": 0.02315
+        }
+      ],
+      "digitStripFile": "deck/counter_digits.png",
+      "digitStripCells": 11,
+      "digitHeightFraction": 0.02315,
+      "glassFile": "deck/counter_glass.png",
+      "glassRect": {
+        "x": 0.80104,
+        "y": 0.42593,
+        "w": 0.03438,
+        "h": 0.02315
+      },
+      "resetButton": {
+        "x": 0.84245,
+        "y": 0.42963,
+        "w": 0.00885,
+        "h": 0.01574
+      },
+      "note": "counter_digits.png is 11 cells (0..9 then 0); show drum value v (0 <= v < 10, fractional while rolling) by offsetting the strip up by v * cell height inside each digitCell (clip to the cell). The extra 0 makes 9 -> 0 roll seamlessly. Draw counter_glass.png over the digits at glassRect (fixed cylinder shading and drum separators). The housing is baked into deck_empty_v3_counter.png."
     }
   },
   "hashCheck": {
@@ -268,7 +353,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.37816,
+            "y": 0.31158,
+            "w": 0.12266,
+            "h": 0.12731
+          },
+          "file": "tapes/test_black/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.50082,
+            "y": 0.31158,
+            "w": 0.12109,
+            "h": 0.12731
+          },
+          "file": "tapes/test_black/rim_R.png"
+        },
+        "packMinRadius": 0.04153,
+        "packMaxRadius": 0.10049,
+        "clearShell": false
+      }
     },
     {
       "id": "test_clear",
@@ -343,7 +451,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1b1b1f",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.3888,
+            "y": 0.32035,
+            "w": 0.11224,
+            "h": 0.10787
+          },
+          "file": "tapes/test_clear/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.50104,
+            "y": 0.32035,
+            "w": 0.1125,
+            "h": 0.10787
+          },
+          "file": "tapes/test_clear/rim_R.png"
+        },
+        "packMinRadius": 0.02871,
+        "packMaxRadius": 0.0936,
+        "clearShell": true
+      }
     },
     {
       "id": "tdk_sax_printed",
@@ -424,7 +555,30 @@
       ],
       "printedFields": true,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38057,
+            "y": 0.31057,
+            "w": 0.11979,
+            "h": 0.11481
+          },
+          "file": "tapes/tdk_sax_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.50037,
+            "y": 0.31057,
+            "w": 0.11927,
+            "h": 0.11481
+          },
+          "file": "tapes/tdk_sax_printed/rim_R.png"
+        },
+        "packMinRadius": 0.03719,
+        "packMaxRadius": 0.09939,
+        "clearShell": false
+      }
     },
     {
       "id": "tdk_sax_blank",
@@ -499,7 +653,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1b1b1f",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.3876,
+            "y": 0.31167,
+            "w": 0.11068,
+            "h": 0.11667
+          },
+          "file": "tapes/tdk_sax_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49828,
+            "y": 0.31167,
+            "w": 0.10938,
+            "h": 0.11667
+          },
+          "file": "tapes/tdk_sax_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03583,
+        "packMaxRadius": 0.09261,
+        "clearShell": false
+      }
     },
     {
       "id": "maxell_udxl2_printed",
@@ -580,7 +757,30 @@
       ],
       "printedFields": true,
       "inkColor": "#1b1b1f",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38406,
+            "y": 0.31577,
+            "w": 0.11484,
+            "h": 0.11343
+          },
+          "file": "tapes/maxell_udxl2_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.4989,
+            "y": 0.31577,
+            "w": 0.11406,
+            "h": 0.11343
+          },
+          "file": "tapes/maxell_udxl2_printed/rim_R.png"
+        },
+        "packMinRadius": 0.03843,
+        "packMaxRadius": 0.09619,
+        "clearShell": false
+      }
     },
     {
       "id": "maxell_udxl2_blank",
@@ -655,7 +855,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38933,
+            "y": 0.30401,
+            "w": 0.11198,
+            "h": 0.12963
+          },
+          "file": "tapes/maxell_udxl2_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.5013,
+            "y": 0.30401,
+            "w": 0.10755,
+            "h": 0.12963
+          },
+          "file": "tapes/maxell_udxl2_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03256,
+        "packMaxRadius": 0.09341,
+        "clearShell": false
+      }
     },
     {
       "id": "sony_hf_printed",
@@ -736,7 +959,30 @@
       ],
       "printedFields": true,
       "inkColor": "#4a4a50",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.39012,
+            "y": 0.31934,
+            "w": 0.10885,
+            "h": 0.10278
+          },
+          "file": "tapes/sony_hf_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49897,
+            "y": 0.31934,
+            "w": 0.10677,
+            "h": 0.10278
+          },
+          "file": "tapes/sony_hf_printed/rim_R.png"
+        },
+        "packMinRadius": 0.03766,
+        "packMaxRadius": 0.09175,
+        "clearShell": false
+      }
     },
     {
       "id": "sony_hf_blank",
@@ -811,7 +1057,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.39421,
+            "y": 0.32124,
+            "w": 0.10521,
+            "h": 0.1037
+          },
+          "file": "tapes/sony_hf_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49942,
+            "y": 0.32124,
+            "w": 0.10573,
+            "h": 0.1037
+          },
+          "file": "tapes/sony_hf_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03609,
+        "packMaxRadius": 0.0885,
+        "clearShell": false
+      }
     },
     {
       "id": "basf_ce2_printed",
@@ -892,7 +1161,30 @@
       ],
       "printedFields": true,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.37806,
+            "y": 0.31901,
+            "w": 0.12161,
+            "h": 0.11481
+          },
+          "file": "tapes/basf_ce2_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49967,
+            "y": 0.31901,
+            "w": 0.12109,
+            "h": 0.11481
+          },
+          "file": "tapes/basf_ce2_printed/rim_R.png"
+        },
+        "packMinRadius": 0.03398,
+        "packMaxRadius": 0.10022,
+        "clearShell": true
+      }
     },
     {
       "id": "basf_ce2_blank",
@@ -967,7 +1259,30 @@
       ],
       "printedFields": false,
       "inkColor": "#7a1f1f",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38877,
+            "y": 0.31683,
+            "w": 0.10964,
+            "h": 0.11157
+          },
+          "file": "tapes/basf_ce2_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49841,
+            "y": 0.31683,
+            "w": 0.11094,
+            "h": 0.11157
+          },
+          "file": "tapes/basf_ce2_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03612,
+        "packMaxRadius": 0.09136,
+        "clearShell": true
+      }
     },
     {
       "id": "memorex_dbs_printed",
@@ -1048,7 +1363,30 @@
       ],
       "printedFields": true,
       "inkColor": "#1b1b1f",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38155,
+            "y": 0.30546,
+            "w": 0.11849,
+            "h": 0.12593
+          },
+          "file": "tapes/memorex_dbs_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.50004,
+            "y": 0.30546,
+            "w": 0.11823,
+            "h": 0.12593
+          },
+          "file": "tapes/memorex_dbs_printed/rim_R.png"
+        },
+        "packMinRadius": 0.03818,
+        "packMaxRadius": 0.09673,
+        "clearShell": false
+      }
     },
     {
       "id": "memorex_dbs_blank",
@@ -1123,7 +1461,30 @@
       ],
       "printedFields": false,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.39174,
+            "y": 0.32667,
+            "w": 0.10651,
+            "h": 0.1125
+          },
+          "file": "tapes/memorex_dbs_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49825,
+            "y": 0.32667,
+            "w": 0.10938,
+            "h": 0.1125
+          },
+          "file": "tapes/memorex_dbs_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03689,
+        "packMaxRadius": 0.08998,
+        "clearShell": false
+      }
     },
     {
       "id": "fuji_dr_printed",
@@ -1204,7 +1565,30 @@
       ],
       "printedFields": true,
       "inkColor": "#1d2a6b",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.38765,
+            "y": 0.32539,
+            "w": 0.11042,
+            "h": 0.11343
+          },
+          "file": "tapes/fuji_dr_printed/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49807,
+            "y": 0.32539,
+            "w": 0.11016,
+            "h": 0.11343
+          },
+          "file": "tapes/fuji_dr_printed/rim_R.png"
+        },
+        "packMinRadius": 0.04053,
+        "packMaxRadius": 0.09246,
+        "clearShell": false
+      }
     },
     {
       "id": "fuji_dr_blank",
@@ -1279,7 +1663,30 @@
       ],
       "printedFields": false,
       "inkColor": "#4a4a50",
-      "font": "Caveat-Regular"
+      "font": "Caveat-Regular",
+      "rims": {
+        "left": {
+          "rect": {
+            "x": 0.39003,
+            "y": 0.32212,
+            "w": 0.10964,
+            "h": 0.10417
+          },
+          "file": "tapes/fuji_dr_blank/rim_L.png"
+        },
+        "right": {
+          "rect": {
+            "x": 0.49966,
+            "y": 0.32212,
+            "w": 0.11042,
+            "h": 0.10417
+          },
+          "file": "tapes/fuji_dr_blank/rim_R.png"
+        },
+        "packMinRadius": 0.03737,
+        "packMaxRadius": 0.09346,
+        "clearShell": false
+      }
     }
   ]
 }

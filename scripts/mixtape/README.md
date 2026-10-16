@@ -1,8 +1,8 @@
 ---
 title: "Mixtape asset scripts"
 created: 2026-09-23
-modified: 2026-10-09
-version: 1.4
+modified: 2026-10-16
+version: 1.5
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [mixtape, blender, scripts, assets]
 ---
@@ -212,6 +212,54 @@ copy them into `mixtape-manifest.json`):
 - Prefer rotating `knob_dot.png` over a static face: a real cone-brushed knob's
   highlights stay put as it turns, while rotating `knob.png` turns them too
   (visible at 100% in `knob-compare.png`, row 1 against row 2).
+
+## Polish round: hub rims, door edges, spindles, tape counter (2026-10-16)
+
+`polish_assets.py` (system python3: numpy, opencv-python, Pillow). Hand work
+only, no image generation, no API cost. Stages run in this order (`all` runs
+them all, about 40 s); each reads only files on disk:
+
+    python3 scripts/mixtape/polish_assets.py all
+    python3 scripts/mixtape/polish_assets.py rims       # or door, spindles, counter, manifest
+
+| Stage | What | Output |
+|-------|------|--------|
+| `rims` | Per tape, the shell around each hub opening cut from that tape's own `tape.png` (same 4K pixels). Alpha = the app's window clip (the `windowRect` capsule, grown 1.5 px so its soft edge does not leave a dark line) minus the hub disc (r < `hubRadius`) minus the clear inner window between the hubs (strongest edges between the hubs; four tapes overridden by eye in `INNER_OVERRIDES`). Clear / smoke shells (`test_clear`, both `basf_ce2`) are cut at 60% alpha over the pack's swept area, opaque outside it. Fuji is tagged clear but came out opaque and is cut as opaque. | `tapes/<id>/rim_L.png`, `rim_R.png`, `art-src/mixtape/tapes/rims.json`, `art-src/mixtape/polish/rims-check-*.png`, `rims-dark-disc.png` |
+| `door` | 9 px (0.00417 of plate height) edge strips, the door's full width, sampled per column from `door_frame.png`'s chrome top rail (rows 299 to 311) and its bottom bar (rows 1332 to 1396), lit by a vertical gradient with a 1 px arris highlight. Top is lit, bottom is the shadowed underside. | `deck/door_edge_top.png`, `deck/door_edge_bottom.png`, `polish/door-edges-check.png` |
+| `spindles` | Both empty-well spindles moved onto the mean of the 14 tapes' hub centres (left +6, +34 px; right -54, +38 px at 4K). The area is split into a quadratic background (fitted on an annulus r 230 to 330, head block excluded) and the feature (disc, the light pooled round it, grain); the feature moves under a wide radial window (full to r 150, gone by r 260) and grain is put back in the vacated disc. The diff is asserted to stay inside the two spindle windows. `well_open.png` carries the same spindles and gets the same move (its pre-move copy is kept as `art-src/mixtape/plates/well_open_v2spindles.png` and is the input on reruns). | `deck/deck_empty_v3.png`, `deck/well_open.png`, `polish/spindles-check.png`, `spindles-zoom-2x.png` |
+| `counter` | A 3-digit mechanical counter above the OUTPUT legend, centred over the knob: chrome rim (160 x 76 px) with a drop shadow, a recessed black bezel, a 132 x 50 window of three blank drums (40 px, 6 px apart), and a round chrome RESET button to its right. Built in numpy; the plate is byte-identical outside the housing box (asserted). Digits: Helvetica numerals at 60% of the drum height, white on near-black, subtle per-cell cylinder shading. | `deck/deck_empty_v3_counter.png`, `deck/counter_digits.png` (40 x 550, 11 cells), `deck/counter_glass.png`, `polish/counter-compare.png`, `counter-placement.png` |
+| `manifest` | Deck keys are merged into `plate-manifest.json` by each stage; this runs `build_tape_assets.py --manifest-only`, then merges the per-tape rims from `rims.json` into `mixtape-manifest.json`. | `tvos/Resources/Mixtape/mixtape-manifest.json` |
+
+`build_tape_assets.py` rebuilds tape entries from the measurements and knows
+nothing of rims: **rerun `polish_assets.py manifest` after any
+`build_tape_assets.py` run**, or the rims drop out of the app manifest.
+
+New manifest keys (normalised like the rest):
+
+- `tapes[i].rims.left` / `.right`: `rect` (x, y, w, h of the sprite in the frame)
+  and `file` (relative to the manifest). Draw OVER the live packs, under or over
+  the hub sprites (they do not overlap the hub disc).
+- `tapes[i].rims.packMinRadius` / `packMaxRadius` (fractions of frame width) and
+  `clearShell`. With the rims on, the packs are seen only through the clear inner
+  window, and the old window-limited radii (`packMaxRadius` 0.028 to 0.035) put the
+  whole pack behind the shell. These take real cassette proportions instead: full
+  pack 0.58 of the hub spacing, bare spool held just short of the inner window
+  edge (as on a real tape, an empty reel shows nothing in the window), so the full
+  pack reaches about two thirds across the window. Keep clipping to the capsule.
+- `deck.door_edges`: `top` and `bottom` rects at full thickness (sin(tilt) = 1)
+  attached to the door rect's top edge (growing up; its last row is the arris)
+  and bottom edge (hanging down; its first row is the arris), `thicknessFraction`,
+  `files`. Scale the height by sin(tilt). For a bottom-hinged door tilting out
+  only the top edge faces the camera; the bottom strip is there if the door model
+  shows it.
+- `deck.plates.deck_v3`, `deck.plates.deck_v3_counter`; `deck.spindles.left` /
+  `.right` (the new spindle centres).
+- `deck.counter`: `housing`, `window`, `digitCells` (three rects), `digitStripFile`,
+  `digitStripCells` 11, `digitHeightFraction` (one cell = one window height, of
+  plate height), `glassFile` / `glassRect` (draw over the digits: fixed cylinder
+  shading and the drum separators), `resetButton`. To show drum value v (0 <= v < 10,
+  fractional while rolling) offset the strip up by v x cell height inside the cell
+  and clip; the trailing 0 makes 9 to 0 roll without a jump.
 
 ## Tape collection (2026-09-23)
 
