@@ -45,6 +45,11 @@ struct MixtapeDeckImages {
     /// The door glass's coverage as an opaque mask (1/8 scale, full frame),
     /// for the specular sweep during the swing. Built once from door_glass.
     var glassMask: UIImage? = nil
+    /// door_edge_top.png: the door's top edge, shown as it tips open.
+    var doorEdgeTop: UIImage? = nil
+    /// counter_digits.png (the 11-cell roller strip) and counter_glass.png.
+    var counterDigits: UIImage? = nil
+    var counterGlass: UIImage? = nil
 
     /// door_glass is a faint smoke (alpha about 0.25), so its own alpha is too
     /// weak to mask with; this thresholds it to full coverage, downsampled
@@ -71,6 +76,48 @@ struct MixtapeTapeImages {
     var sprite: UIImage
     var hub: UIImage?
     var pack: UIImage?
+    /// The shell around each hub (tapes/<id>/rim_L.png, rim_R.png).
+    var rimL: UIImage? = nil
+    var rimR: UIImage? = nil
+    /// The hub sprite's drawn diameter, fraction of frame width: sized so
+    /// its toothed ring (the alpha edge) reaches just under the rim's hole.
+    var hubDiameter: Double? = nil
+
+    /// hub.png carries a few px of clear padding round the ring, so drawn at
+    /// 2 * hubRadius the ring came out about 6% small and a dark ring of the
+    /// window cavity showed between it and the shell. Measures the alpha
+    /// edge (mean over 16 rays, last pixel with alpha > 50%) and returns the
+    /// diameter that puts it 1.5 px (at 4K) past the measured hubRadius, so
+    /// it tucks under the rim, which is drawn over it.
+    static func hubDiameter(_ img: UIImage?, hubRadius: Double, frameW: Double) -> Double? {
+        guard let cg = img?.cgImage else { return nil }
+        let w = cg.width, h = cg.height
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = ctx.data else { return nil }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let p = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        let cx = Double(w - 1) / 2, cy = Double(h - 1) / 2
+        var sum = 0.0
+        let rays = 16
+        for k in 0..<rays {
+            let a = Double(k) * 2 * .pi / Double(rays)
+            var last = 0.0
+            var r = 0.0
+            while r < Double(min(w, h)) / 2 {
+                let x = Int((cx + r * cos(a)).rounded()), y = Int((cy + r * sin(a)).rounded())
+                if x < 0 || y < 0 || x >= w || y >= h { break }
+                if p[(y * w + x) * 4 + 3] > 128 { last = r }
+                r += 0.5
+            }
+            sum += last
+        }
+        let edge = sum / Double(rays) + 0.5
+        guard edge > 4 else { return nil }
+        let want = hubRadius * frameW + 1.5
+        return Double(w) * (want / edge) / frameW
+    }
 }
 
 @MainActor
@@ -152,6 +199,14 @@ final class MixtapeModel: ObservableObject {
         let extra = playing ? max(0, now.timeIntervalSince(anchorDate) * 1000) : 0
         let p = min(1, max(0, (Double(anchorElapsedMs) + extra) / Double(durationMs)))
         return 0.15 + 0.7 * p
+    }
+
+    /// Seconds into the current track, the same anchor-plus-wall-clock as
+    /// windFraction (the reels), for the tape counter. Nil for radio.
+    func elapsedSeconds(_ now: Date) -> Double? {
+        guard durationMs > 0 else { return nil }
+        let extra = playing ? max(0, now.timeIntervalSince(anchorDate) * 1000) : 0
+        return min(Double(durationMs), Double(anchorElapsedMs) + extra) / 1000
     }
 
     // MARK: - Sonos input
@@ -452,10 +507,17 @@ final class MixtapeModel: ObservableObject {
                     guard let url = MixtapeManifest.fileURL("deck/\(name).png") else { return nil }
                     return UIImage(contentsOfFile: url.path)?.preparingForDisplay()
                 }
-                // v2: NIKOLAUS wordmark, PLAY unlit (the lamp is a sprite),
-                // knob face without its dot (the dot is a sprite).
-                guard let plate = load("deck_empty_v2") ?? load("deck_empty") else { return nil }
+                // v3 counter: the v2 plate (NIKOLAUS wordmark, PLAY unlit, knob
+                // face without its dot) with the empty-well spindles moved onto
+                // the tapes' hub centres and the tape counter housing above
+                // OUTPUT. Identical to v2 outside those two areas.
                 let deck = MixtapeManifest.load()?.deck ?? .fallback
+                func loadRel(_ rel: String?) -> UIImage? {
+                    guard let rel, let url = MixtapeManifest.fileURL(rel) else { return nil }
+                    return UIImage(contentsOfFile: url.path)?.preparingForDisplay()
+                }
+                guard let plate = loadRel(deck.plateFile) ?? load("deck_empty_v3_counter")
+                        ?? load("deck_empty_v2") ?? load("deck_empty") else { return nil }
                 var caps: [String: UIImage] = [:]
                 if let cg = plate.cgImage {
                     let W = Double(cg.width), H = Double(cg.height)
@@ -471,7 +533,10 @@ final class MixtapeModel: ObservableObject {
                                          glows: ["play": load("glow_play"), "pause": load("glow_pause")]
                                             .compactMapValues { $0 },
                                          knobDot: load("knob_dot"),
-                                         glassMask: MixtapeDeckImages.coverageMask(glass))
+                                         glassMask: MixtapeDeckImages.coverageMask(glass),
+                                         doorEdgeTop: loadRel(deck.doorEdgeTop?.file),
+                                         counterDigits: loadRel(deck.counter?.stripFile),
+                                         counterGlass: loadRel(deck.counter?.glassFile))
             }.value
             self?.deckImages = imgs
             if imgs == nil { MixtapeManifest.log.error("Mixtape deck plate failed to load") }
@@ -490,13 +555,18 @@ final class MixtapeModel: ObservableObject {
             return
         }
         tapeLoading.insert(t.id)
+        let frameW = manifest?.frameW ?? 3840
         let imgs = await Task.detached(priority: .userInitiated) { () -> MixtapeTapeImages? in
             func load(_ rel: String?) -> UIImage? {
                 guard let rel, let url = MixtapeManifest.fileURL(rel) else { return nil }
                 return UIImage(contentsOfFile: url.path)?.preparingForDisplay()
             }
             guard let sprite = load(t.tapeFile) else { return nil }
-            return MixtapeTapeImages(sprite: sprite, hub: load(t.hubFile), pack: load(t.packFile))
+            let hub = load(t.hubFile)
+            return MixtapeTapeImages(sprite: sprite, hub: hub, pack: load(t.packFile),
+                                     rimL: load(t.rims?.leftFile), rimR: load(t.rims?.rightFile),
+                                     hubDiameter: MixtapeTapeImages.hubDiameter(hub, hubRadius: t.hubRadius,
+                                                                                frameW: frameW))
         }.value
         tapeLoading.remove(t.id)
         if let imgs { tapeImages[t.id] = imgs }
@@ -521,6 +591,12 @@ final class MixtapeClock {
         var f: Double
         var r0: Double
         var R: Double
+        /// Tape counter: the tape in the well (nil = none), whether it is
+        /// being inserted (the counter resets), and elapsed seconds of the
+        /// track (nil for radio: the counter just follows the reels).
+        var counterKey: String? = nil
+        var counterReset = false
+        var elapsed: Double? = nil
     }
 
     private var last: Date?
@@ -552,6 +628,13 @@ final class MixtapeClock {
     private var kickT: Double?         // seconds since the song-start swing began
     private var kickedKey: String?
     private var wasDriving = false
+    /// Tape counter value (0...999, fractional) and the three drums shown,
+    /// hundreds / tens / ones, each 0...10 (10 = the strip's trailing 0).
+    private(set) var counter = 0.0
+    private(set) var drums: [Double] = [0, 0, 0]
+    private var counterKey: String?
+    private var resetT: Double?
+    private var resetFrom: [Double] = [0, 0, 0]
     private let phases: [Double] = (0..<16).map { _ in Double.random(in: 0..<(2 * .pi)) }
 
     struct Reels { var rs: Double; var rt: Double }
@@ -578,6 +661,71 @@ final class MixtapeClock {
         stepReels(dt, i)
         stepLight(dt, i)
         stepNeedles(dt, i)
+        stepCounter(dt, i)
+    }
+
+    // MARK: Tape counter
+
+    // A real deck's counter at play speed turns about once every 2 s, so it
+    // reads elapsed / 2 (clamped to 999). It is geared to the take-up reel:
+    // it advances with the reel drive (so it coasts to a stop on pause and
+    // stays put when stopped) and is steered gently onto elapsed / 2 from
+    // the same smoothed elapsed time as the reels, so it never jumps. The
+    // insert presses RESET: each drum rolls back to 0 in 0.4 s.
+    static let counterRate = 0.5       // counts per second of tape
+    static let resetTime = 0.4
+
+    private func stepCounter(_ dt: Double, _ i: Inputs) {
+        let target = i.elapsed.map { min(999, max(0, $0 * Self.counterRate)) }
+        if i.counterReset {
+            if resetT == nil {
+                resetT = 0
+                resetFrom = drums
+                counterKey = i.counterKey
+            }
+            resetT! += dt
+            let u = min(1, resetT! / Self.resetTime)
+            let e = u * u * (3 - 2 * u)
+            drums = resetFrom.map { $0 * (1 - e) }
+            counter = 0
+            return
+        }
+        resetT = nil
+        if let k = i.counterKey, k != counterKey {
+            // A tape seated without an insert (cold start): read it as is.
+            counterKey = k
+            counter = target ?? 0
+        }
+        if i.counterKey != nil {
+            var step = Self.counterRate * drive * dt
+            if let target, drive > 0.01 {
+                let err = target - counter
+                if err < -2 || err > 6 {
+                    // A seek: roll there briskly (about 0.5 s), either way.
+                    step = err * min(1, dt / 0.5)
+                } else {
+                    // Steer onto the poll, never running backwards.
+                    step = max(0, step + err * min(1, dt / 1.5))
+                }
+            }
+            counter = min(999, max(0, counter + step))
+        }
+        drums = Self.drums(counter)
+    }
+
+    /// Drum values for a counter reading: each drum sits on its digit and
+    /// rolls to the next over the last 20% of a count (the ones drum), the
+    /// tens and hundreds carried along only while every drum to their right
+    /// is rolling over from 9, as on a mechanical counter.
+    static func drums(_ c: Double) -> [Double] {
+        let n = Int(c.rounded(.down))
+        let fr = n >= 999 ? 0 : c - Double(n)
+        let u = min(1, max(0, (fr - 0.8) / 0.2))
+        let roll = u * u * (3 - 2 * u)
+        let ones = Double(n % 10) + roll
+        let tens = Double((n / 10) % 10) + (n % 10 == 9 ? roll : 0)
+        let hund = Double((n / 100) % 10) + (n % 100 == 99 ? roll : 0)
+        return [hund, tens, ones]
     }
 
     // MARK: Reels

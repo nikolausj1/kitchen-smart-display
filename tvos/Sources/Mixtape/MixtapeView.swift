@@ -5,7 +5,8 @@ import UIKit
 // Replaces the mat when musicMatMode == .framed and framedBackdrop == .mixtape.
 //
 // Layering, back to front:
-//   1. deck plate (deck_empty_v2.png): a plain Image OUTSIDE the TimelineView,
+//   1. deck plate (deck_empty_v3_counter.png: v2 with the spindles on the
+//      tapes' hub centres and the tape counter housing): a plain Image OUTSIDE the TimelineView,
 //      so it is composited once and never re-rendered per frame;
 //   1b. the deck's state sprites, also outside the TimelineView (they change
 //      on state, animated by SwiftUI): the PLAY / PAUSE lamp glows and the
@@ -13,12 +14,15 @@ import UIKit
 //   then, inside the TimelineView (the only per-frame subtree):
 //   2. the open well (well_open.png), only while a tape or the door is shown,
 //      so the door baked into the plate never shows twice;
-//   3. the tape group: sprite, the lit window (lamp glow, pack discs with
-//      their edge light, hub sprites), label content, moving as one unit on
-//      eject and insert;
+//   3. the tape group: sprite, label, the lit window (lamp glow, pack discs
+//      with their edge light), hub sprites, then the shell rims around the
+//      hubs (so the packs sit behind the window's edge), moving as one unit
+//      on eject and insert;
 //   4. the door glass (its reflection drifting slowly, a specular sweep
-//      during the swing), then the door frame, tilted together on the hinge;
-//   5. the pressed PLAY cap (150 ms dip) and the VU needles.
+//      during the swing), then the door frame and its top edge, tilted
+//      together on the hinge;
+//   5. the pressed PLAY cap (150 ms dip), the VU needles and the tape
+//      counter's roller digits under their glass.
 // The per-frame values (reel angles with spin-up, coast, rock-back, wow and
 // flutter; the lamp flicker; the reflection drift; the needle springs) all
 // come from MixtapeClock.
@@ -116,7 +120,10 @@ private struct MixtapeAnimatedLayer: View {
             playing: tape != nil && model.playing && phase == .seated,
             paused: model.paused, lampOn: lampOn,
             key: phase == .seated ? model.current?.key : nil,
-            f: f, r0: tape?.packMinRadius ?? 0.03, R: tape?.packMaxRadius ?? 0.04))
+            f: f, r0: tape?.packMinRadius ?? 0.03, R: tape?.packMaxRadius ?? 0.04,
+            counterKey: phase == .inserting || phase == .closing || phase == .seated ? model.current?.key : nil,
+            counterReset: phase == .inserting,
+            elapsed: model.elapsedSeconds(now)))
         let showDoor = tape != nil || door > 0.001
 
         return ZStack(alignment: .topLeading) {
@@ -151,6 +158,7 @@ private struct MixtapeAnimatedLayer: View {
                 keyOverlays(imgs)
             }
             vuNeedles()
+            if let imgs = model.deckImages { tapeCounter(imgs) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
@@ -215,13 +223,38 @@ private struct MixtapeAnimatedLayer: View {
                     .blendMode(.screen)
             }
             if let fImg = imgs.frame { Image(uiImage: fImg).resizable().brightness(-0.18 * open) }
+            if open > 0.001, let edge = imgs.doorEdgeTop, let e = deck.doorEdgeTop {
+                doorEdge(edge, e, open: open, size: fr.size)
+            }
         }
         .frame(width: fr.width, height: fr.height)
-        .rotation3DEffect(.degrees(-72 * open), axis: (x: 1, y: 0, z: 0),
+        .rotation3DEffect(.degrees(-Self.doorMaxTilt * open), axis: (x: 1, y: 0, z: 0),
                           anchor: UnitPoint(x: deck.door.midX, y: deck.doorHingeY),
                           perspective: 0.55)
         .position(x: fr.midX, y: fr.midY)
     }
+
+    // The door's thickness: its top edge strip, on the door rect's top edge
+    // and growing up from it (its last row is the front arris), in the
+    // door's own space so it tilts and keystones with the frame. A face at
+    // right angles to the door shows sin(tilt) of its depth to the camera,
+    // but drawn in the door's plane the tilt also foreshortens it by
+    // cos(tilt), so its in-plane height is depth * tan(tilt): on screen it
+    // grows from 0 shut to the full strip at the swing's maximum. Only the
+    // top edge: on a bottom-hinged door the underside faces away.
+    private func doorEdge(_ img: UIImage, _ e: MixtapeDoorEdge, open: Double, size: CGSize) -> some View {
+        let tilt = MixtapeAnimatedLayer.doorMaxTilt * open * .pi / 180
+        let full = e.rect.h * size.height
+        let h = full * sin(tilt) / max(0.2, cos(tilt))
+        let w = e.rect.w * size.width
+        let bottom = deck.door.y * size.height
+        return Image(uiImage: img).resizable()
+            .frame(width: w, height: h)
+            .position(x: e.rect.midX * size.width, y: bottom - h / 2)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    static let doorMaxTilt = 72.0
 
     // The glass catching the room light as it tilts: a soft diagonal band
     // that travels down the glass as the door falls open (and back up as it
@@ -306,6 +339,36 @@ private struct MixtapeAnimatedLayer: View {
             .clipped()
             .overlay(Color.black.opacity(0.16))
             .position(x: cr.midX + toward * F.px(2), y: cr.midY + F.px(2))
+        }
+    }
+
+    // MARK: Tape counter
+
+    // Three roller drums: counter_digits.png (0..9 then 0, one window height
+    // per cell) offset up by the drum's value inside each digitCell and
+    // clipped to it, then the fixed glass (cylinder shading, separators).
+    // Only the three offsets change per frame (MixtapeClock.drums).
+    @ViewBuilder
+    private func tapeCounter(_ imgs: MixtapeDeckImages) -> some View {
+        if let c = deck.counter, let strip = imgs.counterDigits {
+            ForEach(0..<c.digitCells.count, id: \.self) { k in
+                let cell = F.rect(c.digitCells[k])
+                let v = model.clock.drums[min(k, model.clock.drums.count - 1)]
+                Image(uiImage: strip).resizable()
+                    .interpolation(.high)
+                    .frame(width: cell.width, height: cell.height * CGFloat(c.stripCells))
+                    .offset(y: -v * cell.height)
+                    .frame(width: cell.width, height: cell.height, alignment: .top)
+                    .clipped()
+                    .position(x: cell.midX, y: cell.midY)
+            }
+            if let g = imgs.counterGlass {
+                let gr = F.rect(c.glassRect)
+                Image(uiImage: g).resizable()
+                    .interpolation(.high)
+                    .frame(width: gr.width, height: gr.height)
+                    .position(x: gr.midX, y: gr.midY)
+            }
         }
     }
 
@@ -411,7 +474,7 @@ private struct TapeGroup: View {
         func lx(_ v: Double) -> CGFloat { F.x(v) - sr.minX }
         func ly(_ v: Double) -> CGFloat { F.y(v) - sr.minY }
         let radii = MixtapeClock.radii(f: f, r0: tape.packMinRadius, R: tape.packMaxRadius)
-        let hubD = 2 * tape.hubRadius * F.W
+        let hubD = (images.hubDiameter ?? 2 * tape.hubRadius) * F.W
 
         return ZStack(alignment: .topLeading) {
             Image(uiImage: images.sprite).resizable()
@@ -477,8 +540,27 @@ private struct TapeGroup: View {
                     .position(x: lx(tape.hubR.x), y: ly(tape.hubR.y))
             }
 
+            // The shell around each hub, over the packs and the hub rings:
+            // the packs now sit behind the window's edge and show only
+            // through the clear inner window (and, on clear and smoke
+            // shells, faintly through the shell itself). The lamp, the pack
+            // edge light and the glint are in that inner window, which the
+            // rims leave clear. Static images, cut from this tape.png.
+            if let rims = tape.rims {
+                if let l = images.rimL { rim(l, rims.leftRect, sr) }
+                if let r = images.rimR { rim(r, rims.rightRect, sr) }
+            }
+
         }
         .frame(width: sr.width, height: sr.height, alignment: .topLeading)
+    }
+
+    private func rim(_ img: UIImage, _ r: NRect, _ sr: CGRect) -> some View {
+        let rr = F.rect(r)
+        return Image(uiImage: img).resizable()
+            .interpolation(.high)
+            .frame(width: rr.width, height: rr.height)
+            .position(x: rr.midX - sr.minX, y: rr.midY - sr.minY)
     }
 
     /// The reference window glow (sampled about (182, 111, 42) mid-window).

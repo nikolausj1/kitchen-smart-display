@@ -64,6 +64,40 @@ struct MixtapeTape: Equatable, Identifiable {
     var printedFields: Bool
     var inkColorHex: String
     var font: String
+    /// The shell around each hub (polish_assets.py rims), drawn over the
+    /// packs and hubs; nil on a manifest without them.
+    var rims: MixtapeRims? = nil
+}
+
+/// tapes[i].rims: the shell around each hub opening, cut from the tape's own
+/// tape.png. With them the packs are seen only through the clear inner
+/// window, so the tape's pack radii come from rims.packMinRadius /
+/// packMaxRadius (real cassette proportions) instead of the window fill.
+struct MixtapeRims: Equatable {
+    var leftRect: NRect
+    var leftFile: String
+    var rightRect: NRect
+    var rightFile: String
+    var clearShell: Bool
+}
+
+/// deck.counter: the 3-digit mechanical tape counter baked into
+/// deck_empty_v3_counter.png. counter_digits.png is `stripCells` cells
+/// (0..9 then 0) stacked vertically; each drum shows value v by offsetting
+/// the strip up by v cells inside its digitCell. counter_glass.png goes over.
+struct MixtapeCounter: Equatable {
+    var digitCells: [NRect]
+    var stripFile: String
+    var stripCells: Int
+    var glassFile: String
+    var glassRect: NRect
+}
+
+/// deck.door_edges.top: the door's top edge strip at full thickness
+/// (sin(tilt) = 1), sitting on the door rect's top edge and growing up.
+struct MixtapeDoorEdge: Equatable {
+    var rect: NRect
+    var file: String
 }
 
 struct MixtapeDeck: Equatable {
@@ -81,6 +115,10 @@ struct MixtapeDeck: Equatable {
     /// these rects over deck_empty_v2, whose PLAY is unlit.
     var glows: [String: NRect]
     var knob: MixtapeKnob
+    var doorEdgeTop: MixtapeDoorEdge? = nil
+    var counter: MixtapeCounter? = nil
+    /// The plate file (relative to the Mixtape folder), newest first.
+    var plateFile: String? = nil
 
     // Values from art-src/mixtape/plates/plate-manifest.json (2026-09-23), used
     // for any key the manifest omits.
@@ -169,8 +207,10 @@ struct MixtapeManifest {
         let fw = num(frame?["w"]) ?? 3840
         let fh = num(frame?["h"]) ?? 2160
         let deck = parseDeck(root["deck"] as? [String: Any] ?? [:])
+        // With rims the pack radii are the manifest's real proportions; the
+        // window fill only applies to tapes without them.
         let tapes = (root["tapes"] as? [[String: Any]] ?? []).compactMap(parseTape)
-            .map { windowFilledPack($0, aspect: fh / fw) }
+            .map { $0.rims == nil ? windowFilledPack($0, aspect: fh / fw) : $0 }
 
         // Shared FNV-1a test vector: both renderers must pick the same tape.
         var ok = true
@@ -247,6 +287,31 @@ struct MixtapeManifest {
             if let v = num(k["minAngleDeg"] ?? k["min_angle_deg"]) { deck.knob.minAngleDeg = v }
             if let v = num(k["maxAngleDeg"] ?? k["max_angle_deg"]) { deck.knob.maxAngleDeg = v }
         }
+        if let e = any("door_edges", "doorEdges") as? [String: Any], let r = rect(e["top"]) {
+            let file = (e["files"] as? [String: Any])?["top"] as? String ?? "deck/door_edge_top.png"
+            deck.doorEdgeTop = MixtapeDoorEdge(rect: r, file: file)
+        }
+        if let c = any("counter") as? [String: Any] {
+            let cells = (c["digitCells"] as? [Any] ?? []).compactMap(rect)
+            if cells.count == 3 {
+                deck.counter = MixtapeCounter(
+                    digitCells: cells,
+                    stripFile: c["digitStripFile"] as? String ?? "deck/counter_digits.png",
+                    stripCells: Int(num(c["digitStripCells"]) ?? 11),
+                    glassFile: c["glassFile"] as? String ?? "deck/counter_glass.png",
+                    glassRect: rect(c["glassRect"]) ?? rect(c["window"]) ?? cells[0])
+            }
+        }
+        // plates.deck_v3_counter is a repo path (tvos/Resources/Mixtape/...);
+        // keep the part under the Mixtape folder.
+        if let p = any("plates") as? [String: Any] {
+            for k in ["deck_v3_counter", "deck_v3", "deck_v2"] {
+                if let f = p[k] as? String {
+                    deck.plateFile = f.components(separatedBy: "Resources/Mixtape/").last
+                    break
+                }
+            }
+        }
         return deck
     }
 
@@ -278,6 +343,19 @@ struct MixtapeManifest {
         else if let a = t["printedFields"] as? [Any] { printed = !a.isEmpty }
         else { printed = false }
 
+        var rims: MixtapeRims?
+        var pMin = packMin, pMax = max(packMax, packMin)
+        if let r = t["rims"] as? [String: Any],
+           let l = r["left"] as? [String: Any], let rr = r["right"] as? [String: Any],
+           let lRect = rect(l["rect"]), let lFile = l["file"] as? String,
+           let rRect = rect(rr["rect"]), let rFile = rr["file"] as? String {
+            rims = MixtapeRims(leftRect: lRect, leftFile: lFile, rightRect: rRect, rightFile: rFile,
+                               clearShell: r["clearShell"] as? Bool ?? false)
+            if let a = num(r["packMinRadius"]), let b = num(r["packMaxRadius"]), b > a {
+                pMin = a; pMax = b
+            }
+        }
+
         return MixtapeTape(
             id: id,
             brand: t["brand"] as? String ?? "",
@@ -289,14 +367,15 @@ struct MixtapeManifest {
             hubFile: files["hub"] as? String,
             packFile: files["pack"] as? String,
             spriteRect: sprite, hubL: hubL, hubR: hubR, hubRadius: hubRadius,
-            packMinRadius: packMin, packMaxRadius: max(packMax, packMin),
+            packMinRadius: pMin, packMaxRadius: pMax,
             windowRect: rect(t["windowRect"]),
             labelRect: rect(t["labelRect"]),
             artSlotRect: rect(t["artSlotRect"]),
             textLines: lines,
             printedFields: printed,
             inkColorHex: t["inkColor"] as? String ?? "#1d2a6b",
-            font: t["font"] as? String ?? HandFont.postScriptName)
+            font: t["font"] as? String ?? HandFont.postScriptName,
+            rims: rims)
     }
 
     // MARK: - Loose JSON helpers
