@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-10
-version: 8.8
+modified: 2026-10-16
+version: 8.9
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -365,11 +365,15 @@ Remaining:
 
 - **Mixtape follow-ups** (POLISH) - clip the label to the real paper outline
   (the chamfered Memorex shows a square art corner); ballpoint pressure
-  variation on the handwritten fallback; keep the tapes' own hub rims visible
-  around the live packs; door edge thickness; align the inpainted spindles with
-  the hubs (about 30 px high); verify the Siri Remote key press and frame rate
-  on the real TV. The brand-header idea is dropped (the brand lives on the
-  shell). Detail in `docs/designs/mixtape.md`, "Label v2 build log".
+  variation on the handwritten fallback; verify the Siri Remote key press,
+  volume knob and frame rate on the real TV. Hub rims, door edge, spindles and
+  the counter shipped 2026-10-16. The brand-header idea is dropped (the brand
+  lives on the shell).
+- **Mixtape delight round** (TODO, Justin's pick from the 2026-10-16 list):
+  Side B flip at an album's midpoint; a growing handwritten tracklist on the
+  radio tape; easter-egg tapes for specific artists or seasons; rewind on
+  previous-track; night dimming of the lamps and meters with the auto-dim
+  curve; idle behaviour for a long-empty well.
 
 Phase 1 shipped (per-view mats, Framed Now Playing, Today mat, linear nav, smooth
 progress bar). Remaining:
@@ -1322,6 +1326,13 @@ captures decisions made during working sessions.
 
 Newest first.
 
+- **2026-10-16 - Mixtape polish round, realism items 1 to 7** (`feature/mixtape-polish`):
+  reel spin-up and coast with a rock-back, wow and flutter, a flickering lamp
+  in the window with pack edge light, drifting glass with a specular sweep on
+  the swing, hash-driven VU character with a song-start bounce, per-tape hub
+  rims so the packs sit behind the shell, door edge thickness, aligned
+  spindles, and a mechanical tape counter. Detail: `docs/designs/mixtape.md`,
+  "Polish round".
 - **2026-10-09 - Mixtape label v2 and deck v2 on the Apple TV** (`feature/echo-hub`,
   installed on the Living Room TV). Printed labels: the cover and text as ink in
   the paper, Fit left default with Split and centred Fill width rotating in,

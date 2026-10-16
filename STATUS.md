@@ -1,8 +1,8 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-10-10
-version: 5.15
+modified: 2026-10-16
+version: 5.16
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -82,6 +82,8 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
       - unblocks: building the auto-switch feature consistently on both surfaces
 
 ## Next Up
+
+0. Review the Mixtape polish round on the TV (`feature/mixtape-polish`, installed 2026-10-16): reel spin-up, lamp in the window, VU bounce, hub rims, tape counter; then merge to `main`.
 
 1. Justin: the 27 W supply for the kitchen Pi (urgent: 312 dips this boot by 13:04 on 2026-09-27), one tap on each Echo after the 10:42 deploy, then Advertise as Player on the Apple TV (see Waiting on Me).
 2. With Justin: confirm the two seeded Home Assistant choices, then the first real action, then the dashboard PIN and the actions switch, which is what brings the Home Assistant buttons and picker built on 2026-09-27 to life (they draw disabled until then).

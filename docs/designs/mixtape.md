@@ -1,8 +1,8 @@
 ---
 title: "Mixtape - Cassette Deck Now Playing"
 created: 2026-09-23
-modified: 2026-10-09
-version: 1.8
+modified: 2026-10-16
+version: 1.9
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, kitchen-display, music, now-playing, mixtape, blender]
 ---
@@ -536,6 +536,43 @@ Known gaps for the on-device review:
   the real paper outline (visible on the chamfered Memorex); no pressure
   variation in the ballpoint ink; paper stock chosen by measured warmth; a late
   art poll crossfades a handwritten label to a printed one while seated.
+
+## Polish round (2026-10-16), items 1 to 7 of the realism list
+
+On `feature/mixtape-polish`, three workers (motion, assets, wiring):
+
+- **Tape physics**: reels spin up over 0.35 s (cubic ease-out) and coast down
+  over 0.45 s; on pause the supply reel rocks back 4 degrees with one overshoot.
+  Wow and flutter multiply the base speed by
+  `1 + 0.012 sin(2 pi 0.6 t) + 0.004 sin(2 pi 7 t + phase)`, a different phase
+  per hub; the pack edge jitters under half a frame pixel. v/r and the progress
+  mapping unchanged.
+- **Lamp in the window**: a warm elliptical glow between the hubs at about half
+  the reference's intensity, flickering about 2% at 4 to 8 Hz with a 0.1 Hz
+  breathe, on while powered, fading as the door opens. Fixed upper-left edge
+  light on each pack plus one glint per revolution. All light layers are
+  images drawn once; a first version with live angular gradients hit 85% CPU
+  and was replaced.
+- **Glass**: the reflection streaks drift 1.5% of the door width on 40 s and
+  65 s periods and breathe plus or minus 15% over 30 s; a specular band
+  travels down the glass during the swing.
+- **VU character**: each song gets a level from -8 to +1 via
+  `fnv1a32("vu:" + key)`, needles are damped springs that bounce to about 0 on
+  song start, fall with a bounce on pause and land softly on stop. Hash-driven
+  character, not audio; the code says so.
+- **Hub rims per tape** (`tapes[i].rims`): the shell around each hub opening cut
+  from tape.png and drawn over the live packs, so the packs sit behind the
+  window edge; clear shells at 60% alpha. Pack radii switch to real cassette
+  proportions (`rims.packMinRadius / packMaxRadius`, about 0.041 / 0.10 of
+  frame width): an empty spool shows nothing, a full pack reaches two thirds
+  across the window.
+- **Door edge** strips (`deck.door_edges`) scaled by sin(tilt) on the swing.
+- **Spindles** moved onto the mean hub centre (about 34 px at 4K), plate v3.
+- **Tape counter** (`deck.counter`): hand-built housing above the OUTPUT knob
+  (chrome rim, black bezel, RESET button), roller digit strip 0 to 9 to 0,
+  glass overlay for drum shading; counts elapsed seconds / 2, resets to 000 on
+  insert, freezes on pause. The only honest extra on the deck.
+- Steady-state simulator CPU unchanged at about 15.5% app.
 
 ## Review log
 
