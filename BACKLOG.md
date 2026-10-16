@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-10-16
-version: 8.9
+version: 9.0
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -192,6 +192,28 @@ the art. Concepts sheet: `_review/mockups/mixtape-label-concepts.html`
 (six concepts on real deck and tape pixels). Justin picks, then it is built
 and redeployed; merge after that.
 
+### Music Videos: muted video backdrop for the Apple TV (DESIGN, decided 2026-10-16)
+
+When friends are over, the living room TV shows the official music video for the
+song Sonos is playing, muted, as a new stop in the Framed backdrop cycle next to
+Mixtape. Picking the backdrop is the switch. The hub does the matching
+(yt-dlp search, official video or nothing, Sonos duration as the gate), streams
+the first play within seconds while it saves a 720p file with audio to
+`\\MissionControl\Media\Music Videos TV` (100 GB cap, least recently played
+evicted, an `overrides\` folder that always wins), prefetches the next track on
+Spotify queues, and gets a Videos page on the dashboard (collection, Re-match,
+paste a link, per-favorite Yes/No, yt-dlp health). On the TV: seek once to the
+Sonos position then free-run, hold the last frame when a video runs short, snow
+or a test pattern with the art on a miss, a long press on the center button to
+mark a video wrong, and a revert to the previous backdrop after an hour of
+silence. The same round prunes the cycle to Drift, Smoke, Marble, Mixtape plus
+Music Videos (removed values load as Smoke, Smoke becomes the default). Phase 1
+is the engine with a plain look; phase 2 is a nostalgic TV skin (CRT, VHS,
+scrambled cable, test pattern) explored with ChatGPT renders first. Setup gate:
+the hub service must run under Justin's account to write to the NAS. Full design,
+contract, states, scoring and the ChatGPT prompt: `docs/designs/music-videos.md`
+(v1.0). **Not built; waits on Justin's OK.**
+
 ### Sonos and /api/state to the hub (BUILT 2026-09-24, see Recently Shipped)
 
 Built on `feature/echo-hub` together with the Echo Show screen; the final
@@ -363,6 +385,10 @@ Remaining:
 
 ### Apple TV / Frame TV app
 
+- **Music Videos backdrop + backdrop pruning** (DESIGN, decided 2026-10-16,
+  waits on Justin's OK to build) - see Active design topics and
+  `docs/designs/music-videos.md`. Phase 1 starts with the NAS service-account
+  setup and the AVPlayer stream spike.
 - **Mixtape follow-ups** (POLISH) - clip the label to the real paper outline
   (the chamfered Memorex shows a square art corner); ballpoint pressure
   variation on the handwritten fallback; verify the Siri Remote key press,
@@ -830,6 +856,15 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-16 - Music Videos decided (grill session), not built.** A muted
+  official-video backdrop for the Apple TV, fifth stop in the Framed cycle, hub
+  resolver with stream-first playback and a 720p-with-audio collection on the
+  NAS (100 GB cap, adjustable), official video or nothing, seek once then
+  free-run, hold the last frame, snow or test pattern for misses, per-favorite
+  No, one-hour revert, long press to mark a video wrong, yt-dlp and ffmpeg on
+  the NUC self-updating weekly. Backdrops pruned to Drift, Smoke, Marble,
+  Mixtape and Music Videos; Smoke is the new default. Engine first, nostalgic
+  TV skin second. `docs/designs/music-videos.md`.
 - **2026-10-10 - `feature/echo-hub` merged to `main`** (fast-forward, 128
   commits: the hub migration, Echo Show, layout editor, Entry board, Today
   layouts and Mixtape with label v2 and deck v2) after Justin checked the

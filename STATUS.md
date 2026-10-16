@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-10-16
-version: 5.16
+version: 5.17
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -18,6 +18,8 @@ Kitchen Smart Display covers the family's screens, all fed by one hub (FrameServ
 Active Development. Five screens are registered with the hub (plus `dev-mac` for testing): the kitchen Pi, the Living Room Apple TV, and three Echo Shows running the kitchen web app in Silk: the family-room Echo Show 10 (which now follows the Apple TV's Plex playback), the Echo Show 15 by the front door (the Entry board, its home view) and the office Echo Show 5 (its Today is the flip clock). All five were polling the hub at 13:05 on 2026-09-27. Every screen depends on FrameServer on the NUC and nothing else on the LAN. The work since 2026-08-18 is committed on `feature/echo-hub` (110 commits at `736683e`) and deployed, not merged or pushed.
 
 ## Health
+
+**2026-10-16, evening: Music Videos is designed and waiting on Justin's OK to build.** A grill session settled a muted official-music-video backdrop for the Apple TV, picked from the same cycle as Mixtape: the hub matches the Sonos track through yt-dlp, streams the first play and saves a 720p file to the NAS folder Justin made (`\\MissionControl\Media\Music Videos TV`, 100 GB cap), the TV seeks once and free-runs, misses show snow or a test pattern with the art, and the backdrop cycle shrinks to Drift, Smoke, Marble, Mixtape and Music Videos. Phase 1 is the engine, phase 2 a nostalgic TV skin from ChatGPT renders. One setup gate: the hub service has to run under Justin's account to write to the NAS. Design: `docs/designs/music-videos.md`. Nothing built.
 
 **2026-10-03, 17:47: Now Playing has a Sound popover, deployed to the hub and the kitchen Pi (build `ed21a22`; the Echos pick it up on their deploy reload).** A speaker button beside the transport opens volume (steps of 2, hold to repeat, the whole group moves together) and chips to add or remove the Playroom and Family Room. It closes itself after 6 s idle. Checked at the kitchen's 1920x1080 and the Echo Show 10's 1280x800 with every Sonos command stubbed, so no speaker was touched; the real join, leave and group-volume calls still need one live try.
 
@@ -83,7 +85,9 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Next Up
 
-0. Review the Mixtape polish round on the TV (`feature/mixtape-polish`, installed 2026-10-16): reel spin-up, lamp in the window, VU bounce, hub rims, tape counter; then merge to `main`.
+0. Justin's OK on Music Videos (`docs/designs/music-videos.md`), then phase 1: the NAS service-account setup, the AVPlayer stream spike, the hub resolver, the TV backdrop and the pruning.
+
+0b. Review the Mixtape polish round on the TV (`feature/mixtape-polish`, installed 2026-10-16): reel spin-up, lamp in the window, VU bounce, hub rims, tape counter; then merge to `main`.
 
 1. Justin: the 27 W supply for the kitchen Pi (urgent: 312 dips this boot by 13:04 on 2026-09-27), one tap on each Echo after the 10:42 deploy, then Advertise as Player on the Apple TV (see Waiting on Me).
 2. With Justin: confirm the two seeded Home Assistant choices, then the first real action, then the dashboard PIN and the actions switch, which is what brings the Home Assistant buttons and picker built on 2026-09-27 to life (they draw disabled until then).
