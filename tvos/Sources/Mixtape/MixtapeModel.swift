@@ -42,6 +42,29 @@ struct MixtapeDeckImages {
     var glows: [String: UIImage] = [:]
     /// The OUTPUT knob's dot alone, turned for volume over the plate's face.
     var knobDot: UIImage? = nil
+    /// The door glass's coverage as an opaque mask (1/8 scale, full frame),
+    /// for the specular sweep during the swing. Built once from door_glass.
+    var glassMask: UIImage? = nil
+
+    /// door_glass is a faint smoke (alpha about 0.25), so its own alpha is too
+    /// weak to mask with; this thresholds it to full coverage, downsampled
+    /// (the mask is upscaled, which softens its edge by a pixel or two).
+    static func coverageMask(_ img: UIImage?) -> UIImage? {
+        guard let cg = img?.cgImage else { return nil }
+        let w = max(1, cg.width / 8), h = max(1, cg.height / 8)
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let data = ctx.data else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let p = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        for i in 0..<(w * h) {
+            let a: UInt8 = p[i * 4 + 3] > 8 ? 255 : 0
+            p[i * 4] = a; p[i * 4 + 1] = a; p[i * 4 + 2] = a; p[i * 4 + 3] = a
+        }
+        return ctx.makeImage().map { UIImage(cgImage: $0) }
+    }
 }
 
 struct MixtapeTapeImages {
@@ -441,12 +464,14 @@ final class MixtapeModel: ObservableObject {
                         if let c = cg.cropping(to: px) { caps[k] = UIImage(cgImage: c) }
                     }
                 }
+                let glass = load("door_glass")
                 return MixtapeDeckImages(plate: plate, wellOpen: load("well_open"),
-                                         glass: load("door_glass"), frame: load("door_frame"),
+                                         glass: glass, frame: load("door_frame"),
                                          caps: caps, pack: load("pack_shared"),
                                          glows: ["play": load("glow_play"), "pause": load("glow_pause")]
                                             .compactMapValues { $0 },
-                                         knobDot: load("knob_dot"))
+                                         knobDot: load("knob_dot"),
+                                         glassMask: MixtapeDeckImages.coverageMask(glass))
             }.value
             self?.deckImages = imgs
             if imgs == nil { MixtapeManifest.log.error("Mixtape deck plate failed to load") }
@@ -479,16 +504,55 @@ final class MixtapeModel: ObservableObject {
     }
 }
 
-// MixtapeClock - per-frame integrator for the reels and the VU needles. A plain
-// class stepped from inside the TimelineView, so its mutations never trigger a
-// SwiftUI update of their own.
+// MixtapeClock - per-frame integrator for the reels, the lamp, the door
+// reflection and the VU needles. A plain class stepped from inside the
+// TimelineView, so its mutations never trigger a SwiftUI update of their own.
+//
+// Every ambient motion here runs on `t`, time accumulated from the frames the
+// TimelineView actually draws (dt capped at 0.1 s), not wall time: when the
+// timeline pauses while idle, nothing jumps when it resumes.
 final class MixtapeClock {
+    struct Inputs {
+        var driving: Bool       // seated and playing: the capstan pulls tape
+        var playing: Bool
+        var paused: Bool
+        var lampOn: Bool        // the deck lamp behind the window
+        var key: String?        // the seated tape's key (VU character)
+        var f: Double
+        var r0: Double
+        var R: Double
+    }
+
     private var last: Date?
+    /// Ambient seconds (see above), randomly offset so launches differ.
+    private(set) var t = Double.random(in: 0..<1000)
     private(set) var angleL = 0.0      // degrees, clockwise positive
     private(set) var angleR = 0.0
-    private var run = 0.0              // 0..1 linear ramp of the reel drive
-    private(set) var vu: [Double] = [-20, -20]
-    private let phases: [Double] = (0..<6).map { _ in Double.random(in: 0..<(2 * .pi)) }
+    /// Reel drive 0..1 (fraction of full speed).
+    private(set) var drive = 0.0
+    private var rampUp = false
+    private var rampFrom = 0.0
+    private var rampT = 0.0
+    private var rockT: Double?         // seconds into the pause rock-back
+    private var rockApplied = 0.0
+    /// Pack edge jitter, -1...1 per pack (well under a pixel in the view).
+    private(set) var packJitter: [Double] = [0, 0]
+    /// Deck lamp, 0...1 including the flicker (multiply into the glow).
+    private(set) var lamp = 0.0
+    private var lampLevel = 0.0
+    /// Door reflection drift, -1...1 (times 1.5% of the door width), and
+    /// its opacity factor (1 +/- 0.15).
+    private(set) var reflectionDrift = 0.0
+    private(set) var reflectionOpacity = 1.0
+    /// VU needle angles in degrees from vertical (the plate's printed scale).
+    private(set) var needleDeg: [Double] = [MixtapeClock.vuAngle(-20), MixtapeClock.vuAngle(-20)]
+    private var needleVel: [Double] = [0, 0]
+    private var vuKey: String?
+    private var vuLevel: [Double] = [-4, -4]
+    private var kickT: Double?         // seconds since the song-start swing began
+    private var kickedKey: String?
+    private var wasDriving = false
+    private let phases: [Double] = (0..<16).map { _ in Double.random(in: 0..<(2 * .pi)) }
 
     struct Reels { var rs: Double; var rt: Double }
 
@@ -500,34 +564,203 @@ final class MixtapeClock {
                      rt: sqrt(r0 * r0 + f * a))
     }
 
-    func step(now: Date, driving: Bool, playing: Bool, f: Double, r0: Double, R: Double) {
+    // Reel transport timings (a real deck: the capstan grabs, the reels coast).
+    static let spinUp = 0.35
+    static let spinDown = 0.45
+    static let rockStart = 0.36        // into the spin-down, as tension lets go
+    static let rockDeg = 4.0
+    static let rockTime = 0.3
+
+    func step(now: Date, _ i: Inputs) {
         let dt = min(0.1, max(0, now.timeIntervalSince(last ?? now)))
         last = now
+        t += dt
+        stepReels(dt, i)
+        stepLight(dt, i)
+        stepNeedles(dt, i)
+    }
 
-        // Reels: ease in and out over 0.3 s (pause spec), smoothstepped.
-        let rate = dt / 0.3
-        run = driving ? min(1, run + rate) : max(0, run - rate)
-        let k = run * run * (3 - 2 * run)
-        if k > 0 {
+    // MARK: Reels
+
+    private func stepReels(_ dt: Double, _ i: Inputs) {
+        if i.driving != rampUp {
+            rampUp = i.driving
+            rampFrom = drive
+            rampT = 0
+            // PAUSE (not stop, not eject): the supply reel rocks back a few
+            // degrees as the tape tension releases at the end of the coast.
+            rockT = (!i.driving && i.paused && drive > 0.5) ? -Self.rockStart : nil
+            rockApplied = 0
+        }
+        rampT += dt
+        if rampUp {
+            // Spin-up: the pinch roller grabs, speed comes in hard then
+            // eases onto the capstan (cubic ease-out over 0.35 s).
+            let u = min(1, rampT / Self.spinUp)
+            drive = rampFrom + (1 - rampFrom) * (1 - pow(1 - u, 3))
+        } else {
+            // Spin-down: the reels coast to a stop, losing most speed early
+            // and creeping at the end (not the symmetric ease of the spin-up).
+            let u = min(1, rampT / Self.spinDown)
+            drive = rampFrom * pow(1 - u, 1.7)
+        }
+
+        // Wow and flutter: the base angular speed micro-varies, a slow 0.6 Hz
+        // wow and a faint 7 Hz flutter, each hub on its own phase.
+        func wf(_ h: Int) -> Double {
+            1 + 0.012 * sin(2 * .pi * 0.6 * t + phases[h])
+              + 0.004 * sin(2 * .pi * 7 * t + phases[h + 2])
+        }
+        if drive > 0 {
             // Constant tape speed: omega = v / r, with v set so the near-empty
             // take-up (r = r0) turns 0.7 rev/s.
-            let v = 0.7 * r0
-            let r = Self.radii(f: f, r0: r0, R: R)
-            angleL = (angleL + k * 360 * (v / r.rs) * dt).truncatingRemainder(dividingBy: 360)
-            angleR = (angleR + k * 360 * (v / r.rt) * dt).truncatingRemainder(dividingBy: 360)
+            let v = 0.7 * i.r0
+            let r = Self.radii(f: i.f, r0: i.r0, R: i.R)
+            angleL = (angleL + drive * wf(0) * 360 * (v / r.rs) * dt).truncatingRemainder(dividingBy: 360)
+            angleR = (angleR + drive * wf(1) * 360 * (v / r.rt) * dt).truncatingRemainder(dividingBy: 360)
         }
 
-        // VU needles. Sonos exposes no audio levels, so this is ambient motion
-        // driven by play state only, NOT the music (same honesty caveat as the
-        // `bars` backdrop): a slow wander between -10 and 0 VU while playing,
-        // resting at -20 otherwise. Revisit if the BPM lookup ever lands.
-        let t = now.timeIntervalSinceReferenceDate
-        for i in 0..<2 {
-            let p = phases[i * 3], q = phases[i * 3 + 1], s = phases[i * 3 + 2]
-            let n = 0.5 * sin(t * 0.9 + p) + 0.3 * sin(t * 2.3 + q) + 0.2 * sin(t * 4.1 + s)
-            let target = playing ? (-5 + 5 * n) : -20
-            let tau = playing ? 0.18 : 0.45
-            vu[i] += (target - vu[i]) * (1 - exp(-dt / tau))
+        if let rt = rockT {
+            let s = rt + dt
+            rockT = s
+            if s > 0 {
+                // Back about 4 degrees with one small overshoot, settled by 0.3 s.
+                let c = min(s, Self.rockTime)
+                let target = -Self.rockDeg * (1 - exp(-c / 0.07) * cos(.pi * c / 0.15))
+                angleL += target - rockApplied
+                rockApplied = target
+                if s >= Self.rockTime { rockT = nil }
+            }
         }
+
+        // The pack edges breathe by a fraction of a pixel while tape moves.
+        for h in 0..<2 {
+            let n = 0.5 * sin(2 * .pi * 3.1 * t + phases[4 + h])
+                  + 0.35 * sin(2 * .pi * 7.3 * t + phases[6 + h])
+                  + 0.15 * sin(2 * .pi * 12.9 * t + phases[8 + h])
+            packJitter[h] = drive * n
+        }
+    }
+
+    // MARK: Lamp and glass
+
+    private func stepLight(_ dt: Double, _ i: Inputs) {
+        // On in 0.35 s, out in 0.3 s (the eject dims it to nothing).
+        let tau = i.lampOn ? 0.35 : 0.3
+        lampLevel += ((i.lampOn ? 1 : 0) - lampLevel) * (1 - exp(-dt / tau))
+        // Filament flicker, about 2% between 4 and 8 Hz, on a 0.1 Hz breathe.
+        let fl = 0.45 * sin(2 * .pi * 4.3 * t + phases[10])
+               + 0.35 * sin(2 * .pi * 6.1 * t + phases[11])
+               + 0.20 * sin(2 * .pi * 7.7 * t + phases[12])
+        let breathe = sin(2 * .pi * 0.1 * t + phases[13])
+        lamp = lampLevel * (1 + 0.02 * fl + 0.03 * breathe)
+
+        // Room light on the door glass: a slow lateral drift, two periods
+        // with an irrational ratio (Lissajous), so it never visibly repeats;
+        // and a +/- 15% opacity breathe over 30 s.
+        reflectionDrift = 0.65 * sin(2 * .pi * t / 40 + phases[14])
+                        + 0.35 * sin(2 * .pi * t / (40 * 1.6180339) + phases[15])
+        reflectionOpacity = 1 + 0.15 * sin(2 * .pi * t / 30 + phases[3])
+    }
+
+    // MARK: VU needles
+
+    // VU NEEDLES ARE CHARACTER, NOT AUDIO. Sonos exposes no audio levels, so
+    // nothing here hears the music (same honesty caveat as the `bars`
+    // backdrop). Each song gets a loudness level from a stable hash of its
+    // tape key (-8 to +1 VU), so the same song always sits at the same place;
+    // the needles wander around it on a slow sum of sines, biased so quiet
+    // songs stay low and loud ones occasionally kiss the red. The needle
+    // itself is a damped spring in angle, with a bounce off the rest peg.
+    // Revisit if the BPM lookup (BACKLOG, "Tempo-locked backdrops") lands.
+
+    /// dB -> degrees from vertical, read off the plate's printed scale.
+    static func vuAngle(_ db: Double) -> Double {
+        let pts: [(Double, Double)] = [(-20, -26.3), (-10, -17.5), (-5, -8.4), (0, 0), (6, 25)]
+        if db <= pts[0].0 { return pts[0].1 }
+        for i in 1..<pts.count where db <= pts[i].0 {
+            let (a, fa) = pts[i - 1], (b, fb) = pts[i]
+            return fa + (fb - fa) * (db - a) / (b - a)
+        }
+        return pts.last!.1
+    }
+
+    static let restDeg = vuAngle(-20)
+    static let pinDeg = 29.0           // the needle's stop past +6
+
+    /// Hash-driven loudness for a tape key, -8...+1 VU, per channel.
+    static func vuCharacter(key: String) -> [Double] {
+        let h = fnv1a32("vu:" + key)
+        let level = -8 + 9 * Double(h & 0xFFFF) / 65535
+        let skew = 1.2 * (Double((h >> 16) & 0xFF) / 255 - 0.5)   // L/R balance
+        return [level + skew / 2, level - skew / 2]
+    }
+
+    static let kickTime = 1.1          // the song-start swing, then the wander
+
+    private func stepNeedles(_ dt: Double, _ i: Inputs) {
+        if let k = i.key, k != vuKey {
+            vuKey = k
+            vuLevel = Self.vuCharacter(key: k)
+            MixtapeManifest.log.info("mixtape vu: \(k, privacy: .public) -> \(String(format: "%.1f / %.1f", self.vuLevel[0], self.vuLevel[1]), privacy: .public) VU (hash character, not audio)")
+            kickT = nil
+        }
+        // Song start: the reels just started on a freshly seated tape.
+        // (A resume after a pause just rises back into the wander.)
+        if i.driving && !wasDriving, let k = vuKey, k != kickedKey {
+            kickedKey = k
+            kickT = 0
+        }
+        wasDriving = i.driving
+        if let k = kickT {
+            kickT = k + dt
+            if k + dt > Self.kickTime || !i.playing { kickT = nil }
+        }
+
+        for c in 0..<2 {
+            var target: Double, w: Double, zeta: Double, bounce: Double
+            if i.playing {
+                if let k = kickT, k < Self.kickTime {
+                    // Swing up to about 0 VU, two overshoots, then wander.
+                    target = Self.vuAngle(c == 0 ? 0 : -0.6)
+                    w = 2 * .pi * 1.35; zeta = 0.36; bounce = 0.3
+                } else {
+                    target = Self.vuAngle(wanderDb(c))
+                    w = 2 * .pi * 2.1; zeta = 0.72; bounce = 0.3
+                }
+            } else {
+                // Pause: drop to -20 and bounce a little off the peg.
+                // Stop: drop and stay (a softer landing).
+                target = Self.restDeg
+                w = 2 * .pi * 1.7; zeta = 0.62; bounce = i.paused ? 0.32 : 0.12
+            }
+            // Semi-implicit Euler, substepped for stability at low frame rates.
+            let n = max(1, Int((dt / (1.0 / 240)).rounded(.up)))
+            let h = dt / Double(n)
+            var x = needleDeg[c], v = needleVel[c]
+            for _ in 0..<n {
+                v += (w * w * (target - x) - 2 * zeta * w * v) * h
+                x += v * h
+                if x < Self.restDeg { x = Self.restDeg; if v < 0 { v = -v * bounce } }
+                if x > Self.pinDeg { x = Self.pinDeg; if v > 0 { v = -v * 0.3 } }
+            }
+            needleDeg[c] = x
+            needleVel[c] = v
+        }
+    }
+
+    /// The wander around the song's level, in dB.
+    private func wanderDb(_ c: Int) -> Double {
+        let level = vuLevel[c]
+        let loud = min(1, max(0, (level + 8) / 9))
+        let p = phases[c * 3], q = phases[c * 3 + 1], s = phases[c * 3 + 2]
+        let n = 0.5 * sin(t * 0.9 + p) + 0.3 * sin(t * 2.3 + q) + 0.2 * sin(t * 4.1 + s)
+        // Quiet songs swing further down than up; loud songs reach higher.
+        var db = level + (n >= 0 ? n * (1.6 + 2.6 * loud) : n * 3.2)
+        // Now and then a loud song's peak kisses the red (a short, sharp
+        // excursion about once every 12 s, scaled by how loud the song is).
+        let burst = pow(max(0, sin(t * 0.53 + q + Double(c) * 0.4)), 14)
+        db += 3.2 * pow(loud, 1.5) * burst
+        return db
     }
 }

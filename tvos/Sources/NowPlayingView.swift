@@ -448,6 +448,13 @@ private struct AlbumArt: View {
 // last track). Mixtape must coalesce them: ONE eject of track eight and ONE
 // insert, of the last track's tape. The model logs "mixtape eject:" / "mixtape insert:".
 //
+// Motion polish capture (spin-up, VU swing, lamp, door sweep, pause
+// rock-back): debug.fakeMusicStart -float 12 opens 4 s before track one's
+// eject, so a 60 s recording holds an eject, a song start (track two's
+// insert, reels up, needles swing and bounce), steady play, the 3 s pause
+// and resume, and the next eject at track three. The model logs each tape's
+// hash-driven VU level ("mixtape vu:").
+//
 // Volume ramps 20 -> 75 over the first half of the cycle and 75 -> 40 over
 // the second, so Mixtape's OUTPUT knob can be seen turning. The mapping to
 // knob angles is logged once at start ("mixtape knob:").

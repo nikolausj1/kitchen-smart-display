@@ -13,10 +13,15 @@ import UIKit
 //   then, inside the TimelineView (the only per-frame subtree):
 //   2. the open well (well_open.png), only while a tape or the door is shown,
 //      so the door baked into the plate never shows twice;
-//   3. the tape group: sprite, pack discs, hub sprites, label content, moving
-//      as one unit on eject and insert;
-//   4. the door glass, then the door frame, tilted together on the hinge;
+//   3. the tape group: sprite, the lit window (lamp glow, pack discs with
+//      their edge light, hub sprites), label content, moving as one unit on
+//      eject and insert;
+//   4. the door glass (its reflection drifting slowly, a specular sweep
+//      during the swing), then the door frame, tilted together on the hinge;
 //   5. the pressed PLAY cap (150 ms dip) and the VU needles.
+// The per-frame values (reel angles with spin-up, coast, rock-back, wow and
+// flutter; the lamp flicker; the reflection drift; the needle springs) all
+// come from MixtapeClock.
 // Everything is placed from the normalised manifest; nothing is hand-tuned.
 
 struct MixtapeView: View {
@@ -102,12 +107,16 @@ private struct MixtapeAnimatedLayer: View {
         let tape = model.tape(for: model.current)
         let f = model.windFraction(now)
         let driving = phase == .seated && model.playing
-        if let tape {
-            model.clock.step(now: now, driving: driving, playing: model.playing && phase == .seated,
-                             f: f, r0: tape.packMinRadius, R: tape.packMaxRadius)
-        } else {
-            model.clock.step(now: now, driving: false, playing: false, f: f, r0: 0.03, R: 0.04)
-        }
+        // The lamp behind the window is on while the deck is playing or
+        // paused with a tape in; it dims out as the door opens for the eject.
+        let lampOn = tape != nil && model.current != nil && (model.playing || model.paused)
+            && (phase == .seated || phase == .closing)
+        model.clock.step(now: now, .init(
+            driving: tape != nil && driving,
+            playing: tape != nil && model.playing && phase == .seated,
+            paused: model.paused, lampOn: lampOn,
+            key: phase == .seated ? model.current?.key : nil,
+            f: f, r0: tape?.packMinRadius ?? 0.03, R: tape?.packMaxRadius ?? 0.04))
         let showDoor = tape != nil || door > 0.001
 
         return ZStack(alignment: .topLeading) {
@@ -127,7 +136,7 @@ private struct MixtapeAnimatedLayer: View {
                           packTexture: model.deckImages?.pack ?? imgs.pack,
                           label: model.label,
                           F: F, angleL: model.clock.angleL, angleR: model.clock.angleR,
-                          f: f)
+                          f: f, lamp: model.clock.lamp, jitter: model.clock.packJitter)
                     .frame(width: sr.width, height: sr.height)
                     .scaleEffect(m.scale)
                     .blur(radius: m.blur * F.px(1))
@@ -181,23 +190,63 @@ private struct MixtapeAnimatedLayer: View {
         if let g = imgs.glass, smoke < 0.999 {
             // Flat (closed) glass, reflections only. Kept outside the rotated
             // group so the screen blend composites against the tape itself.
+            // Room light changes: the streaks drift sideways (1.5% of the door
+            // width, Lissajous, see MixtapeClock) and breathe +/- 15%. Under
+            // the screen blend the smoke is black and drops out, so only the
+            // reflections move; its rim carries no streaks, so the shift never
+            // shows an edge. A transform and an opacity: no redraw of the 4K
+            // image. (Over the empty well the full-smoke glass stays still.)
+            let drift = model.clock.reflectionDrift * 0.015 * deck.door.w * F.W
             Image(uiImage: g).resizable()
                 .frame(width: fr.width, height: fr.height)
                 .blendMode(.screen)
-                .opacity(1 - smoke)
-                .position(x: fr.midX, y: fr.midY)
+                .opacity((1 - smoke) * model.clock.reflectionOpacity / 1.15)
+                .position(x: fr.midX + drift, y: fr.midY)
         }
         ZStack {
-            if let g = imgs.glass, smoke > 0.001 { Image(uiImage: g).resizable().opacity(smoke) }
-            if let fImg = imgs.frame { Image(uiImage: fImg).resizable() }
+            if let g = imgs.glass, smoke > 0.001 {
+                Image(uiImage: g).resizable().opacity(smoke)
+                    // A touch darker as it tips away from the lamp above the deck.
+                    .brightness(-0.18 * open)
+            }
+            if open > 0.001 && open < 0.999, let mask = imgs.glassMask {
+                specularSweep(open: open, size: fr.size)
+                    .mask { Image(uiImage: mask).resizable() }
+                    .blendMode(.screen)
+            }
+            if let fImg = imgs.frame { Image(uiImage: fImg).resizable().brightness(-0.18 * open) }
         }
         .frame(width: fr.width, height: fr.height)
         .rotation3DEffect(.degrees(-72 * open), axis: (x: 1, y: 0, z: 0),
                           anchor: UnitPoint(x: deck.door.midX, y: deck.doorHingeY),
                           perspective: 0.55)
-        // A touch darker as it tips away from the lamp above the deck.
-        .brightness(-0.18 * open)
         .position(x: fr.midX, y: fr.midY)
+    }
+
+    // The glass catching the room light as it tilts: a soft diagonal band
+    // that travels down the glass as the door falls open (and back up as it
+    // closes), brightest mid-swing. Drawn in the door's own (full-frame)
+    // space, so it tilts with the glass; masked to the glass.
+    private func specularSweep(open: Double, size: CGSize) -> some View {
+        let d = deck.door
+        let dw = d.w * size.width, dh = d.h * size.height
+        let peak = pow(sin(.pi * open), 1.3)
+        let warm = Color(red: 1.0, green: 0.95, blue: 0.86)
+        return ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(LinearGradient(stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: warm.opacity(0.22 * peak), location: 0.32),
+                    .init(color: warm.opacity(0.62 * peak), location: 0.5),
+                    .init(color: warm.opacity(0.22 * peak), location: 0.68),
+                    .init(color: .clear, location: 1),
+                ], startPoint: .top, endPoint: .bottom))
+                .frame(width: dw * 1.5, height: dh * 0.38)
+                .rotationEffect(.degrees(-12))
+                .position(x: d.midX * size.width,
+                          y: (d.y - 0.25 * d.h + open * 1.5 * d.h) * size.height)
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     // MARK: Tape motion
@@ -262,16 +311,8 @@ private struct MixtapeAnimatedLayer: View {
 
     // MARK: VU needles
 
-    // dB -> degrees from vertical, read off the plate's printed scale.
-    static func vuAngle(_ db: Double) -> Double {
-        let pts: [(Double, Double)] = [(-20, -26.3), (-10, -17.5), (-5, -8.4), (0, 0), (6, 25)]
-        if db <= pts[0].0 { return pts[0].1 }
-        for i in 1..<pts.count where db <= pts[i].0 {
-            let (a, fa) = pts[i - 1], (b, fb) = pts[i]
-            return fa + (fb - fa) * (db - a) / (b - a)
-        }
-        return pts.last!.1
-    }
+    // Angles come from MixtapeClock (a damped spring per needle, driven by a
+    // per-song hash character, not by audio; see the comment there).
 
     @ViewBuilder
     private func vuNeedles() -> some View {
@@ -286,7 +327,7 @@ private struct MixtapeAnimatedLayer: View {
                     Capsule()
                         .fill(Color(white: 0.08).opacity(0.85))
                         .frame(width: F.px(5), height: len)
-                        .rotationEffect(.degrees(Self.vuAngle(model.clock.vu[i])), anchor: .bottom)
+                        .rotationEffect(.degrees(model.clock.needleDeg[i]), anchor: .bottom)
                         .position(x: px, y: py - len / 2)
                 }
                 .frame(width: clip.width, height: clip.height, alignment: .topLeading)
@@ -360,6 +401,10 @@ private struct TapeGroup: View {
     let angleL: Double
     let angleR: Double
     let f: Double
+    /// The deck lamp, 0...1 with its flicker (MixtapeClock.lamp).
+    let lamp: Double
+    /// Pack edge jitter per pack, -1...1 (MixtapeClock.packJitter).
+    let jitter: [Double]
 
     var body: some View {
         let sr = F.rect(tape.spriteRect)
@@ -381,27 +426,34 @@ private struct TapeGroup: View {
             // Tape packs, seen through the window only. tape.png is opaque with
             // the photo's own packs baked into the window, so the window is
             // first covered by a dark cavity (so the baked packs never show
-            // through mismatched), then both live packs go on top. The cavity
-            // is not flat black: a faint amber glow sits in the middle, the
-            // way the reference deck's lamp lights the tape between the reels.
+            // through mismatched), then both live packs go on top. Behind the
+            // window sits the deck's lamp: a warm radial glow centred between
+            // the hubs, the reference deck's window glow in colour at about
+            // half its strength (so the label still leads), with a faint
+            // flicker and breathe (MixtapeClock.lamp). It is on while playing
+            // or paused and dims out with the eject.
             // The clip is the window's stadium (the manifest windowRect with
             // fully rounded ends): its corners are label paper on every tape.
             if let w = tape.windowRect {
                 let wr = CGRect(x: lx(w.x), y: ly(w.y), width: w.w * F.W, height: w.h * F.H)
+                let cx = (lx(tape.hubL.x) + lx(tape.hubR.x)) / 2
+                let cy = (ly(tape.hubL.y) + ly(tape.hubR.y)) / 2
+                let span = abs(lx(tape.hubR.x) - lx(tape.hubL.x))
                 ZStack(alignment: .topLeading) {
-                    ZStack {
-                        Color(white: 0.03)
-                        EllipticalGradient(colors: [Self.amber.opacity(0.08),
-                                                    Self.amber.opacity(0.03), .clear],
-                                           center: .center, startRadiusFraction: 0,
-                                           endRadiusFraction: 0.5)
+                    Color(white: 0.03)
+                        .frame(width: wr.width, height: wr.height)
+                        .offset(x: wr.minX, y: wr.minY)
+                    if lamp > 0.002 {
+                        EllipticalGradient(stops: Self.lampStops, center: .center,
+                                           startRadiusFraction: 0, endRadiusFraction: 0.5)
+                            .frame(width: span * 1.35, height: wr.height * 1.15)
+                            .opacity(min(1, lamp))
+                            .position(x: cx, y: cy)
                     }
-                    .frame(width: wr.width, height: wr.height)
-                    .offset(x: wr.minX, y: wr.minY)
                     if let pack = packTexture {
-                        packDisc(pack, r: radii.rs, angle: angleL)
+                        packDisc(pack, r: radii.rs, angle: angleL, jitter: jitter[0])
                             .position(x: lx(tape.hubL.x), y: ly(tape.hubL.y))
-                        packDisc(pack, r: radii.rt, angle: angleR)
+                        packDisc(pack, r: radii.rt, angle: angleR, jitter: jitter[1])
                             .position(x: lx(tape.hubR.x), y: ly(tape.hubR.y))
                     }
                 }
@@ -429,18 +481,30 @@ private struct TapeGroup: View {
         .frame(width: sr.width, height: sr.height, alignment: .topLeading)
     }
 
-    static let amber = Color(red: 1.0, green: 0.66, blue: 0.30)
+    /// The reference window glow (sampled about (182, 111, 42) mid-window).
+    static let lampAmber = Color(red: 1.0, green: 0.61, blue: 0.24)
+    static let lampStops: [Gradient.Stop] = [
+        .init(color: lampAmber.opacity(0.44), location: 0),
+        .init(color: lampAmber.opacity(0.30), location: 0.28),
+        .init(color: lampAmber.opacity(0.12), location: 0.62),
+        .init(color: .clear, location: 1),
+    ]
 
     // A wound pack of brown oxide tape: the shared pack texture drawn at the
     // pack's current radius and turning with its hub. The raw texture is a
     // deep, saturated brown; it is desaturated and lifted a little toward the
     // reference's warmer, dustier brown. On top, the outer wraps darken
-    // (a radial falloff to the edge, the pack's side in shadow) and a soft
-    // warm highlight sits on the upper-left, as the deck lamp catches it.
-    // Neither overlay rotates, so the light stays put while the tape turns.
-    private func packDisc(_ img: UIImage, r: Double, angle: Double) -> some View {
+    // (a radial falloff to the edge, the pack's side in shadow), a soft warm
+    // highlight sits on the upper-left, and the pack's edge catches the light
+    // there as a bright arc. None of those rotate, so the light stays put
+    // while the tape turns; all scale with the pack's radius. One faint glint
+    // does ride the pack round (one per revolution), so the rotation reads
+    // even where the texture is uniform. The edge breathes by a fraction of a
+    // pixel while tape moves (MixtapeClock.packJitter).
+    private func packDisc(_ img: UIImage, r: Double, angle: Double, jitter: Double) -> some View {
         let full = 2 * tape.packMaxRadius * F.W
-        let d = 2 * r * F.W
+        let d = 2 * r * F.W + 2 * jitter * F.px(0.45)
+        let lit = 0.5 + 0.5 * min(1, lamp)
         return ZStack {
             Image(uiImage: img).resizable()
                 .interpolation(.high)
@@ -448,15 +512,24 @@ private struct TapeGroup: View {
                 .rotationEffect(.degrees(angle))
                 .saturation(Self.packSaturation)
                 .brightness(Self.packLift)
-            Circle()
-                .fill(RadialGradient(colors: [.clear, .clear, .black.opacity(0.18), .black.opacity(0.42)],
-                                     center: .center, startRadius: 0, endRadius: d / 2))
+            // The outer wraps' shadow, then the light that stays put: the
+            // warm upper-left highlight and the edge arc (a soft wide band
+            // and a thin bright line centred on the upper-left), then the
+            // travelling glint, a short arc just inside the edge. All are
+            // images drawn once (PackLight) and only scaled per frame: as
+            // live Shapes with gradients they were re-rasterised every frame
+            // as the radius changes (the angular-gradient arcs alone cost
+            // about 65% CPU in the simulator).
+            Image(uiImage: PackLight.shade).resizable()
                 .frame(width: d, height: d)
-            Circle()
-                .fill(RadialGradient(colors: [Self.amber.opacity(0.30), Self.amber.opacity(0.10), .clear],
-                                     center: UnitPoint(x: 0.30, y: 0.28),
-                                     startRadius: 0, endRadius: d * 0.62))
+            Image(uiImage: PackLight.light).resizable()
                 .blendMode(.screen)
+                .opacity(lit)
+                .frame(width: d, height: d)
+            Image(uiImage: PackLight.glint).resizable()
+                .rotationEffect(.degrees(angle))
+                .blendMode(.screen)
+                .opacity(lit)
                 .frame(width: d, height: d)
         }
         .frame(width: full, height: full)
@@ -464,6 +537,89 @@ private struct TapeGroup: View {
 
     static let packSaturation = 0.72
     static let packLift = 0.10
+}
+
+// The pack's edge light, drawn once at 512 px with Core Graphics and scaled
+// to each pack. Angles run clockwise from +x (screen coordinates), so 225 deg
+// is the upper-left.
+enum PackLight {
+    static let size = 512.0
+    static let warm = UIColor(red: 1.0, green: 0.86, blue: 0.66, alpha: 1)
+
+    /// The outer wraps in shadow: clear to the middle, then black 0.18 and
+    /// 0.42 at the edge (the stops the live gradient used).
+    static let shade: UIImage = render { ctx in
+        clipDisc(ctx)
+        radial(ctx, center: CGPoint(x: size / 2, y: size / 2), radius: size / 2,
+               colors: [.clear, .clear, UIColor(white: 0, alpha: 0.18), UIColor(white: 0, alpha: 0.42)],
+               locations: [0, 1.0 / 3, 2.0 / 3, 1])
+    }
+
+    /// Everything fixed to the light, drawn screen: the warm upper-left
+    /// highlight (amber 0.30 -> 0.10 -> clear, as before), plus the edge arc,
+    /// a wide soft band (7% of the diameter) and a thin line (1.6%).
+    static let light: UIImage = render { ctx in
+        clipDisc(ctx)
+        let amber = UIColor(red: 1.0, green: 0.66, blue: 0.30, alpha: 1)
+        radial(ctx, center: CGPoint(x: 0.30 * size, y: 0.28 * size), radius: 0.62 * size,
+               colors: [amber.withAlphaComponent(0.30), amber.withAlphaComponent(0.10), .clear],
+               locations: [0, 0.5, 1])
+        band(ctx, center: 225, halfSpan: 65, width: 0.07, inset: 0, alpha: 0.20, layers: 6)
+        band(ctx, center: 225, halfSpan: 50, width: 0.016, inset: 0, alpha: 0.55, layers: 2)
+    }
+
+    private static func clipDisc(_ ctx: CGContext) {
+        ctx.addEllipse(in: CGRect(x: 0, y: 0, width: size, height: size))
+        ctx.clip()
+    }
+
+    private static func radial(_ ctx: CGContext, center: CGPoint, radius: Double,
+                               colors: [UIColor], locations: [CGFloat]) {
+        guard let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                 colors: colors.map(\.cgColor) as CFArray, locations: locations) else { return }
+        ctx.drawRadialGradient(g, startCenter: center, startRadius: 0, endCenter: center,
+                               endRadius: radius, options: [])
+    }
+
+    /// One glint per revolution, rotated with the pack.
+    static let glint: UIImage = render { ctx in
+        band(ctx, center: 17, halfSpan: 17, width: 0.035, inset: 0.05, alpha: 0.16, layers: 3)
+    }
+
+    private static func render(_ draw: (CGContext) -> Void) -> UIImage {
+        let fmt = UIGraphicsImageRendererFormat()
+        fmt.scale = 1
+        fmt.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: fmt)
+            .image { draw($0.cgContext) }
+    }
+
+    // An arc band inside the disc's edge, its alpha falling off smoothly to
+    // both ends (cosine) and across its width (concentric layers, softest
+    // outermost), drawn as 1-degree segments.
+    private static func band(_ ctx: CGContext, center: Double, halfSpan: Double, width: Double,
+                             inset: Double, alpha: Double, layers: Int) {
+        let c = size / 2
+        ctx.setLineCap(.butt)
+        for l in 0..<layers {
+            let lu = layers == 1 ? 0.5 : Double(l) / Double(layers - 1)       // 0 outer .. 1 inner
+            let across = sin(.pi * (0.15 + 0.7 * lu))                         // soft both sides
+            let lw = width * size / Double(layers)
+            let r = c - inset * size - (Double(l) + 0.5) * lw
+            ctx.setLineWidth(lw + 0.6)
+            var a = center - halfSpan
+            while a < center + halfSpan {
+                let u = (a - center) / halfSpan
+                let along = 0.5 + 0.5 * cos(.pi * u)
+                ctx.setStrokeColor(warm.withAlphaComponent(alpha * along * across).cgColor)
+                let t0 = a * .pi / 180, t1 = (a + 1.1) * .pi / 180
+                ctx.move(to: CGPoint(x: c + r * cos(t0), y: c + r * sin(t0)))
+                ctx.addLine(to: CGPoint(x: c + r * cos(t1), y: c + r * sin(t1)))
+                ctx.strokePath()
+                a += 1
+            }
+        }
+    }
 }
 
 // MARK: - Label
