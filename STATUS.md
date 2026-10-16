@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-10-16
-version: 5.17
+version: 5.18
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags:
 ---
@@ -19,7 +19,9 @@ Active Development. Five screens are registered with the hub (plus `dev-mac` for
 
 ## Health
 
-**2026-10-16, evening: Music Videos is designed and waiting on Justin's OK to build.** A grill session settled a muted official-music-video backdrop for the Apple TV, picked from the same cycle as Mixtape: the hub matches the Sonos track through yt-dlp, streams the first play and saves a 720p file to the NAS folder Justin made (`\\MissionControl\Media\Music Videos TV`, 100 GB cap), the TV seeks once and free-runs, misses show snow or a test pattern with the art, and the backdrop cycle shrinks to Drift, Smoke, Marble, Mixtape and Music Videos. Phase 1 is the engine, phase 2 a nostalgic TV skin from ChatGPT renders. One setup gate: the hub service has to run under Justin's account to write to the NAS. Design: `docs/designs/music-videos.md`. Nothing built.
+**2026-10-16, night: Music Videos phase 1 is built on `feature/music-videos` and the hub side is deployed, dormant until the NAS folder is configured.** Five workers under a Fable lead built the hub resolver (stream-first with a background download to the NAS, 134 new tests, 648 total), the Range-forwarding stream proxy, the dashboard's Music videos card, the TV backdrop with its six states checked in the simulator, the backdrop pruning (Still, Lava, Caustics, Ripple and Bars are gone; Smoke is the default) and `setup-videos.ps1`. The spike proved the design's riskiest piece: a proxied 720p video-only mp4 plays and seeks in AVFoundation. Scoring was revised against live YouTube data (the video title must contain the song title; the duration window is half to double). Nothing shows on any screen yet: the hub answers "not configured" until `MUSIC_VIDEOS_DIR` is set, and the TV build is not installed. Found on the way: the TV's `morningTick` timer never fires (BACKLOG).
+
+**2026-10-16, evening: Music Videos is designed.** A grill session settled a muted official-music-video backdrop for the Apple TV, picked from the same cycle as Mixtape: the hub matches the Sonos track through yt-dlp, streams the first play and saves a 720p file to the NAS folder Justin made (`\\MissionControl\Media\Music Videos TV`, 100 GB cap), the TV seeks once and free-runs, misses show snow or a test pattern with the art, and the backdrop cycle shrinks to Drift, Smoke, Marble, Mixtape and Music Videos. Phase 1 is the engine, phase 2 a nostalgic TV skin from ChatGPT renders. One setup gate: the hub service has to run under Justin's account to write to the NAS. Design: `docs/designs/music-videos.md`. Nothing built.
 
 **2026-10-03, 17:47: Now Playing has a Sound popover, deployed to the hub and the kitchen Pi (build `ed21a22`; the Echos pick it up on their deploy reload).** A speaker button beside the transport opens volume (steps of 2, hold to repeat, the whole group moves together) and chips to add or remove the Playroom and Family Room. It closes itself after 6 s idle. Checked at the kitchen's 1920x1080 and the Echo Show 10's 1280x800 with every Sonos command stubbed, so no speaker was touched; the real join, leave and group-volume calls still need one live try.
 
@@ -85,7 +87,7 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Next Up
 
-0. Justin's OK on Music Videos (`docs/designs/music-videos.md`), then phase 1: the NAS service-account setup, the AVPlayer stream spike, the hub resolver, the TV backdrop and the pruning.
+0. Music Videos, Justin's two steps: run `frameserver/setup-videos.ps1` on the NUC and switch the service to his account (design doc, "Setup on the NUC"), then install the TV build from `feature/music-videos` and try a real long press. Then a Spotify evening, and phase 2 (the nostalgic TV skin) from the ChatGPT renders.
 
 0b. Review the Mixtape polish round on the TV (`feature/mixtape-polish`, installed 2026-10-16): reel spin-up, lamp in the window, VU bounce, hub rims, tape counter; then merge to `main`.
 

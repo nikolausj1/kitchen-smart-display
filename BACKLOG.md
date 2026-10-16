@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-10-16
-version: 9.0
+version: 9.2
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -192,7 +192,7 @@ the art. Concepts sheet: `_review/mockups/mixtape-label-concepts.html`
 (six concepts on real deck and tape pixels). Justin picks, then it is built
 and redeployed; merge after that.
 
-### Music Videos: muted video backdrop for the Apple TV (DESIGN, decided 2026-10-16)
+### Music Videos: muted video backdrop for the Apple TV (phase 1 BUILT 2026-10-16 on `feature/music-videos`, hub deployed, TV not installed)
 
 When friends are over, the living room TV shows the official music video for the
 song Sonos is playing, muted, as a new stop in the Framed backdrop cycle next to
@@ -212,7 +212,18 @@ is the engine with a plain look; phase 2 is a nostalgic TV skin (CRT, VHS,
 scrambled cable, test pattern) explored with ChatGPT renders first. Setup gate:
 the hub service must run under Justin's account to write to the NAS. Full design,
 contract, states, scoring and the ChatGPT prompt: `docs/designs/music-videos.md`
-(v1.0). **Not built; waits on Justin's OK.**
+(v1.3). **Phase 1 built 2026-10-16** (Fable lead, five Sonnet workers): the hub
+resolver with its 134 tests, the stream proxy, the dashboard card, the TV
+backdrop with all six states checked in the simulator against a stub hub, the
+pruning, and `setup-videos.ps1`. The spike proved stream-first (a proxied
+video-only 720p mp4 plays and seeks in AVFoundation). Waiting on Justin: run
+the setup script on the NUC and switch the service account so the hub can
+write to the NAS, then install the TV build and try a real long press, which
+the simulator cannot send. Found on the way: `RootView`'s `morningTick` timer
+never fires because the 1 Hz clock rebuilds the view and restarts the
+publisher, so the Today morning auto-show has been dead code; the videos
+revert uses a `.task` loop instead (BACKLOG item under Apple TV).
+
 
 ### Sonos and /api/state to the hub (BUILT 2026-09-24, see Recently Shipped)
 
@@ -389,6 +400,11 @@ Remaining:
   waits on Justin's OK to build) - see Active design topics and
   `docs/designs/music-videos.md`. Phase 1 starts with the NAS service-account
   setup and the AVPlayer stream spike.
+- **`morningTick` never fires** (BUG, found 2026-10-16) - `RootView` is rebuilt
+  every second by the 1 Hz clock, which restarts the Timer publisher before it
+  can tick, so the Today morning auto-show it drives never happens. The Music
+  Videos revert sidestepped it with a `.task` loop; move the morning check to
+  the same loop or hoist the timer out of the rebuilt view.
 - **Mixtape follow-ups** (POLISH) - clip the label to the real paper outline
   (the chamfered Memorex shows a square art corner); ballpoint pressure
   variation on the handwritten fallback; verify the Siri Remote key press,
@@ -856,6 +872,22 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-16 - The Sound card becomes a mixer (per-room volume), mockup
+  done, not built.** Group volume stays the hero on top; when Main is grouped,
+  one compact row per room in the group sits under it (Main first, then
+  Playroom and Family Room, then anything grouped from the Sonos app): white
+  tick to leave, name, number, minus, track, plus, steps of 2 with hold to
+  repeat (`/<room>/volume/N`). Rooms outside the group stay as "Also play in"
+  chips, tucked into one compact line under the rows. Main alone: the card is
+  unchanged from today. Volume model: Sonos group volume is the mean of the
+  room volumes (live: Family Room 19, Main 7, Playroom 8, group 11), so the
+  rows are the truth and the group number is derived from them; stepping the
+  group scales every room in proportion, stepping a room moves only that room.
+  Only the touched row is optimistic; the rest follow the next poll. Auto-close
+  8 s when rows show, 6 s solo. Echo Show rows drop the track (narrow column).
+  Three rows fit above the transport on the kitchen; four slide the card down
+  over the transport rather than clipping. Not now: draggable tracks, per-room
+  mute, the Apple TV. Mockup: `_review/mockups/sound-mixer-mockup.html`.
 - **2026-10-16 - Music Videos decided (grill session), not built.** A muted
   official-video backdrop for the Apple TV, fifth stop in the Framed cycle, hub
   resolver with stream-first playback and a 720p-with-audio collection on the
