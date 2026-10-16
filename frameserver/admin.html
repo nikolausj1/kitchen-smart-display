@@ -318,6 +318,40 @@
     .ha-table .ha-row > *:first-child, .ha-actions-table .ha-row > *:first-child { grid-column: 1 / -1; }
   }
   /* ==== /home assistant ==================================================== */
+
+  /* ==== music videos: the collection list =================================
+     paintVideoCollection / videoRow. One grid per row: thumbnail, text,
+     actions; the actions drop under the text on a phone. */
+  .vid-list { display: grid; margin-bottom: .6rem; }
+  .vid-row {
+    display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: .8rem;
+    align-items: start; padding: .65rem 0; border-top: 1px solid var(--line);
+  }
+  .vid-row:first-child { border-top: 0; }
+  .vid-thumb {
+    position: relative; width: 112px; aspect-ratio: 16 / 9; overflow: hidden;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .vid-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .vid-info { min-width: 0; font-size: .88rem; overflow-wrap: anywhere; }
+  .vid-title { font-weight: 600; }
+  .vid-pin {
+    margin-left: .5rem; padding: .05rem .4rem; border: 1px solid var(--accent); border-radius: 999px;
+    color: var(--accent); font-size: .7rem; font-weight: 500; vertical-align: .08em;
+  }
+  .vid-meta { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+  .vid-pick { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .45rem; }
+  .vid-pick input[type=text] { flex: 1; min-width: 12rem; }
+  .vid-actions { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: flex-end; }
+  .vid-actions button, .vid-pick button { padding: .35rem .65rem; }
+  @media (max-width: 620px) {
+    .vid-row { grid-template-columns: 96px minmax(0, 1fr); }
+    .vid-thumb { width: 96px; }
+    .vid-actions { grid-column: 1 / -1; justify-content: flex-start; }
+    .vid-actions button, .vid-pick button { min-height: 44px; }
+    .vid-pick input[type=text] { min-height: 44px; font-size: 16px; }
+  }
+  /* ==== /music videos ===================================================== */
 </style>
 </head>
 <body>
@@ -770,10 +804,10 @@ function renderDevice(dev) {
       select([[0, 'Shadow box'], [1, 'Fill'], [2, 'Fill + music']], tv.artDisplay,
         (v) => patchDevice(dev.id, { tv: { artDisplay: Number(v) } })))
     row(b, 'Music backdrop', 'Framed Now Playing background',
-      select([[0, 'Still'], [1, 'Drift'], [2, 'Lava'], [3, 'Smoke'], [4, 'Caustics'],
-        [5, 'Ripple'], [6, 'Bars'], [7, 'Marble'], [8, 'Mixtape']],
-        // Nothing stored means the TV is on its own default, Lava (TVSettings.swift).
-        tv.framedBackdrop ?? 2,
+      select([[1, 'Drift'], [3, 'Smoke'], [7, 'Marble'], [8, 'Mixtape'], [9, 'Music videos']],
+        // Nothing stored means the TV is on its own default, Smoke (TVSettings.swift).
+        // The removed styles (0, 2, 4, 5, 6) load as Smoke on the TV, so show them as Smoke.
+        [1, 3, 7, 8, 9].includes(Number(tv.framedBackdrop)) ? tv.framedBackdrop : 3,
         (v) => patchDevice(dev.id, { tv: { framedBackdrop: Number(v) } })))
 
     const m = card('Mats', 'Picture-frame mat per view')
@@ -1036,6 +1070,7 @@ function renderShared() {
   renderArt()
   renderWeather()
   renderHomeAssistant()
+  renderVideos()
   // Paint the status from what was last fetched, so a re-render does not flash
   // "Loading", then refetch it if that is over a minute old.
   paintExtras()
@@ -1632,6 +1667,321 @@ function paintHaLog(box) {
 }
 // ==== /home assistant ========================================================
 
+// ==== music videos: the hub's video resolver and collection =================
+// frameserver/lib/video*.mjs, docs/designs/music-videos.md. Reads
+// GET /api/video/health (every 30 s), GET /api/video/collection and the Sonos
+// favorites (every 60 s), and again right after any action. The status lines
+// are repainted in place; the favorites and the collection list are redrawn
+// only when their data changed and nothing in them has focus, so an open
+// "Pick..." box or a half-typed link is never thrown away.
+const VIDEO_HEALTH_MS = 30 * 1000
+const VIDEO_COLLECTION_MS = 60 * 1000
+const VIDEO_FAILS_RED = 3
+const GIB = 1024 * 1024 * 1024
+let vid = { health: null, collection: null, favorites: null, healthAt: 0, collAt: 0 }
+let vidHealthJob = null
+let vidCollJob = null
+let vidFavSig = null
+let vidCollSig = null
+const vidPickOpen = new Set()   // keys with the "Pick..." box open
+const vidPickText = new Map()   // key -> what has been typed so far
+
+// 12.4 GB, 830 MB. Binary units, so the default 100 GiB cap reads "100 GB".
+function fmtBytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return '0 MB'
+  if (n >= GIB) return `${(n / GIB).toFixed(1).replace(/\.0$/, '')} GB`
+  return `${Math.max(1, Math.round(n / (1024 * 1024)))} MB`
+}
+
+// The hub may send ISO strings or epoch ms; ageSpan() wants ISO.
+function isoOf(v) {
+  const t = seenTime(v)
+  return t == null ? '' : new Date(t).toISOString()
+}
+
+// "Pandora station name (My Station)" is how Sonos labels a user's own
+// stations; the trailing tag is noise in a list of names.
+const favLabel = (name) => String(name || '').replace(/\s*\(My Station\)\s*$/i, '').trim() || String(name || '')
+
+// True while a text box or dropdown inside box has focus: redrawing then would
+// throw away what is being typed or an open menu. (A focused button is fine.)
+function inField(box) {
+  const a = document.activeElement
+  return !!a && box.contains(a) && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)
+}
+
+function videoGet(path) {
+  return api(path).then((data) => ({ data }), (e) => ({ error: String(e.message || e) }))
+}
+
+function loadVideoHealth() {
+  if (vidHealthJob) return vidHealthJob
+  vidHealthJob = videoGet('/api/video/health')
+    .then((h) => { vid.health = h; vid.healthAt = Date.now(); paintVideo() })
+    .finally(() => { vidHealthJob = null })
+  return vidHealthJob
+}
+
+function loadVideoCollection() {
+  if (vidCollJob) return vidCollJob
+  vidCollJob = Promise.all([videoGet('/api/video/collection'), videoGet('/api/sonos/Main/favorites')])
+    .then(([c, f]) => { vid.collection = c; vid.favorites = f; vid.collAt = Date.now(); paintVideo() })
+    .finally(() => { vidCollJob = null })
+  return vidCollJob
+}
+
+// Everything, now: after an action, and when the House-wide pane opens stale.
+function loadVideo(force) {
+  const jobs = []
+  if (force || Date.now() - vid.healthAt >= VIDEO_HEALTH_MS) jobs.push(loadVideoHealth())
+  if (force || Date.now() - vid.collAt >= VIDEO_COLLECTION_MS) jobs.push(loadVideoCollection())
+  return Promise.all(jobs)
+}
+
+function renderVideos() {
+  const c = card('Music videos',
+    'The official video for whatever is playing on Sonos, matched and kept by the hub for the Apple TV. ' +
+    'Pick which Sonos favorites get videos, and fix wrong matches here.')
+  const status = make('div'); status.id = 'vidStatus'
+  const capBox = make('div'); capBox.id = 'vidCap'
+  const favs = make('div', 'status-block'); favs.id = 'vidFavs'
+  const coll = make('div', 'status-block'); coll.id = 'vidColl'
+  c.append(status, capBox, favs, coll)
+
+  // The cap is built once and only its value is refreshed (paintVideoStatus),
+  // so a health tick never replaces the box mid-edit.
+  const cap = numberInput('', async (gb) => {
+    if (gb == null || !Number.isFinite(gb) || gb < 1) { toast('Cap must be at least 1 GB'); paintVideoStatus(); return }
+    try {
+      const merged = await patchShared({ video: { capBytes: Math.round(gb * GIB) } })
+      if (merged && typeof merged === 'object') shared = merged
+    } catch (e) { toast(`Not saved: ${e.message || e}`) }
+    loadVideoHealth()
+  }, { min: 1, step: 1 })
+  cap.id = 'vidCapInput'
+  row(capBox, 'Cache cap (GB)', 'Least recently played videos are removed above this. Hand-picked files are never counted.', cap)
+
+  vidFavSig = null
+  vidCollSig = null
+  paintVideo()
+  loadVideo()
+}
+
+function paintVideo() {
+  if (!$('#vidStatus')) return
+  paintVideoStatus()
+  paintVideoFavorites()
+  paintVideoCollection()
+  updateAges()
+}
+
+function paintVideoStatus() {
+  const box = $('#vidStatus')
+  const capBox = $('#vidCap')
+  if (!box) return
+  box.innerHTML = ''
+  const h = vid.health
+  capBox.hidden = true
+  if (!h) { infoRow(box, 'Music videos', make('span', 'muted', 'Loading…')); return }
+  if (h.error) { infoRow(box, 'Music videos', make('span', 'bad', `Could not read /api/video/health: ${h.error}`)); return }
+  const d = h.data || {}
+  if (!d.configured) {
+    infoRow(box, 'Configured', make('span', 'bad', 'Not configured: set MUSIC_VIDEOS_DIR on the hub'))
+    return
+  }
+  const cfg = make('span', 'ok', 'Yes')
+  infoRow(box, 'Configured', (() => {
+    const w = make('span'); w.append(cfg, document.createTextNode(' '), make('code', null, String(d.dir || '')))
+    return w
+  })())
+  infoRow(box, 'Reachable', make('span', d.reachable ? 'ok' : 'bad', d.reachable ? 'Yes' : 'No (the folder cannot be read right now)'))
+
+  const y = d.ytdlp || {}
+  const yl = make('span')
+  yl.append(document.createTextNode(y.version ? `${y.version} · last OK ` : 'not found · last OK '))
+  yl.appendChild(y.lastOkAt ? ageSpan(isoOf(y.lastOkAt), 'never') : make('span', 'muted', 'never'))
+  infoRow(box, 'yt-dlp', yl)
+  const fails = Number(y.consecutiveFailures) || 0
+  const red = fails >= VIDEO_FAILS_RED
+  const fl = make('span', red ? 'bad' : (fails ? '' : 'ok'),
+    fails ? `${fails} in a row${red && y.lastError ? `: ${y.lastError}` : ''}` : 'None')
+  infoRow(box, 'Consecutive failures', fl)
+  const f = d.ffmpeg || {}
+  infoRow(box, 'ffmpeg', make('span', f.found ? 'ok' : 'bad', f.found ? 'Found' : 'Not found'))
+  const q = d.queue || {}
+  infoRow(box, 'Queue', make('span', null, `${q.resolving ?? 0} resolving, ${q.downloading ?? 0} downloading`))
+  const ca = d.cache || {}
+  const capBytes = ca.capBytes || (shared.video && shared.video.capBytes) || 100 * GIB
+  infoRow(box, 'Cache', make('span', (ca.bytes || 0) > capBytes ? 'bad' : null,
+    `${fmtBytes(ca.bytes || 0)} of ${fmtBytes(capBytes)}${ca.count != null ? ` · ${ca.count} video${ca.count === 1 ? '' : 's'}` : ''}`))
+
+  capBox.hidden = false
+  const input = $('#vidCapInput')
+  if (input && document.activeElement !== input) input.value = String(Math.round(capBytes / GIB * 10) / 10)
+}
+
+function paintVideoFavorites() {
+  const box = $('#vidFavs')
+  if (!box) return
+  const f = vid.favorites
+  const names = !f || f.error ? null
+    : (Array.isArray(f.data) ? f.data : [])
+      .map((x) => (typeof x === 'string' ? x : (x && (x.title || x.name)) || ''))
+      .filter(Boolean)
+  const prefs = (shared.video && shared.video.favorites) || {}
+  const sig = JSON.stringify([f ? (f.error || names) : null, prefs])
+  if (sig === vidFavSig || inField(box)) return
+  vidFavSig = sig
+  box.innerHTML = ''
+  box.appendChild(make('h3', null, 'Sonos favorites'))
+  if (!f) { box.appendChild(make('p', 'empty-note', 'Loading…')); return }
+  if (f.error) { box.appendChild(make('p', 'err-line', `Could not read the Sonos favorites: ${f.error}`)); return }
+  if (!names.length) { box.appendChild(make('p', 'empty-note', 'No Sonos favorites found.')); return }
+  for (const name of names) {
+    const sel = select([['yes', 'Yes'], ['no', 'No']], prefs[name] === 'no' ? 'no' : 'yes', async (v) => {
+      try {
+        // The hub deep-merges, so only this favorite goes over the wire.
+        const merged = await patchShared({ video: { favorites: { [name]: v } } })
+        if (merged && typeof merged === 'object') shared = merged
+      } catch (e) { toast(`Not saved: ${e.message || e}`) }
+    })
+    row(box, favLabel(name), '', sel)
+  }
+}
+
+// Collection rows, newest play first.
+function paintVideoCollection() {
+  const box = $('#vidColl')
+  if (!box) return
+  const h = vid.health && vid.health.data
+  if (h && !h.configured) { box.hidden = true; return }
+  box.hidden = false
+  const c = vid.collection
+  const entries = c && c.data && Array.isArray(c.data.entries) ? c.data.entries.slice() : []
+  entries.sort((a, b) => (seenTime(b.lastPlayedAt) ?? -1) - (seenTime(a.lastPlayedAt) ?? -1))
+  const sig = JSON.stringify([c ? (c.error || entries) : null, [...vidPickOpen].sort()])
+  if (sig === vidCollSig || inField(box)) return
+  vidCollSig = sig
+  box.innerHTML = ''
+  const title = make('h3', null, 'Collection')
+  if (c && c.data) title.appendChild(make('small', null, `${entries.length} song${entries.length === 1 ? '' : 's'}, most recently played first`))
+  box.appendChild(title)
+  if (!c) { box.appendChild(make('p', 'empty-note', 'Loading…')); return }
+  if (c.error) { box.appendChild(make('p', 'err-line', `Could not read /api/video/collection: ${c.error}`)); return }
+  if (!entries.length) box.appendChild(make('p', 'empty-note', 'Nothing matched yet. Play something with Music Videos on.'))
+  const list = make('div', 'vid-list')
+  for (const e of entries) list.appendChild(videoRow(e))
+  box.appendChild(list)
+
+  const bar = make('div', 'toolbar')
+  const clear = make('button', 'danger', 'Clear cache')
+  clear.onclick = () => videoAction(clear, '/api/video/clear', {},
+    'Delete every cached video? Hand-picked files are kept.', (r) => `Cleared${r && r.removed != null ? `: ${r.removed} file${r.removed === 1 ? '' : 's'}` : ''}`)
+  bar.append(clear, make('span', 'note', 'Hand-picked files are untouched.'))
+  box.appendChild(bar)
+}
+
+function videoRow(e) {
+  const key = String(e.key || '')
+  const r = make('div', 'vid-row')
+
+  const thumb = make('div', 'vid-thumb')
+  if (!(e.status === 'none' && !e.thumb)) {
+    const img = document.createElement('img')
+    img.alt = ''
+    img.loading = 'lazy'
+    img.onerror = () => { img.hidden = true }
+    img.src = `/api/video/thumb/${encodeURIComponent(key)}`
+    thumb.appendChild(img)
+  }
+  r.appendChild(thumb)
+
+  const info = make('div', 'vid-info')
+  const head = make('div', 'vid-title', `${e.artist || '?'} - ${e.title || key}`)
+  if (e.pinned) head.appendChild(make('span', 'vid-pin', 'pinned'))
+  info.appendChild(head)
+  let match
+  if (e.status === 'none') match = make('div', 'muted', 'no video')
+  else if (e.source === 'override') match = make('div', 'muted', 'override')
+  else match = make('div', 'muted', [e.videoTitle, e.channel].filter(Boolean).join(' · ') || 'matched')
+  info.appendChild(match)
+  const meta = make('div', 'vid-meta')
+  meta.append(
+    document.createTextNode(`${e.source === 'override' || e.status === 'none' ? '' : fmtBytes(e.bytes || 0) + ' · '}` +
+      `${e.plays || 0} play${e.plays === 1 ? '' : 's'} · last played `),
+    e.lastPlayedAt ? ageSpan(isoOf(e.lastPlayedAt), 'never') : make('span', null, 'never'))
+  info.appendChild(meta)
+
+  if (vidPickOpen.has(key)) {
+    const pick = make('div', 'vid-pick')
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.placeholder = 'YouTube link or video id'
+    input.value = vidPickText.get(key) || ''
+    input.oninput = () => vidPickText.set(key, input.value)
+    const save = make('button', 'action', 'Save')
+    const go = () => {
+      const url = input.value.trim()
+      if (!url) { toast('Paste a YouTube link first'); return }
+      videoAction(save, '/api/video/pick', { key, url }, null,
+        (res) => `Picked${res && res.video && res.video.videoTitle ? `: ${res.video.videoTitle}` : ''}`,
+        () => { vidPickOpen.delete(key); vidPickText.delete(key) })
+    }
+    save.onclick = go
+    input.onkeydown = (ev) => { if (ev.key === 'Enter') go() }
+    const cancel = make('button', 'ghost', 'Cancel')
+    cancel.onclick = () => { vidPickOpen.delete(key); vidPickText.delete(key); vidCollSig = null; paintVideoCollection() }
+    pick.append(input, save, cancel)
+    info.appendChild(pick)
+  }
+  r.appendChild(info)
+
+  const acts = make('div', 'vid-actions')
+  const rematch = make('button', 'ghost', 'Re-match')
+  rematch.onclick = () => videoAction(rematch, '/api/video/wrong', { key }, null,
+    (res) => `Re-matched${res && res.video ? `: ${res.video.videoTitle || res.video.status || 'done'}` : ''}`)
+  const pickBtn = make('button', 'ghost', 'Pick…')
+  pickBtn.onclick = () => {
+    if (vidPickOpen.has(key)) vidPickOpen.delete(key); else vidPickOpen.add(key)
+    vidCollSig = null; paintVideoCollection()
+    const mine = [...document.querySelectorAll('.vid-row')].find((x) => x.dataset.key === key)
+    const inp = mine && mine.querySelector('.vid-pick input')
+    if (inp) inp.focus()
+  }
+  const del = make('button', 'danger', 'Delete')
+  del.onclick = () => videoAction(del, '/api/video/delete', { key },
+    `Remove "${e.artist || ''} - ${e.title || key}" from the collection?`, () => 'Deleted')
+  acts.append(rematch, pickBtn, del)
+  r.appendChild(acts)
+  r.dataset.key = key
+  return r
+}
+
+// POST a collection action, then look again right away. confirmText (if any) is
+// asked first; text(result) is the toast; done() runs after a success.
+async function videoAction(btn, path, body, confirmText, text, done) {
+  if (confirmText && !confirm(confirmText)) return
+  btn.disabled = true
+  const label = btn.textContent
+  if (path.endsWith('/pick')) btn.textContent = 'Saving…'
+  try {
+    const res = await api(path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    if (res && res.ok === false) throw new Error(res.error || 'the hub said no')
+    if (done) done()
+    toast(text(res))
+  } catch (e) {
+    toast(`Failed: ${String(e.message || e)}`)
+  }
+  btn.disabled = false
+  btn.textContent = label
+  vidCollSig = null
+  await loadVideo(true)
+}
+// ==== /music videos ==========================================================
+
+
 // The read-only house-wide status. Fetched when the House-wide pane opens and
 // every minute while it is open, then painted in place (paintExtras): it never
 // rebuilds the calendar table, so it cannot disturb an edit.
@@ -2066,8 +2416,16 @@ setInterval(() => {
   if (selected === '__shared__' && !document.hidden) loadExtras(true)
 }, EXTRAS_MS)
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && selected === '__shared__') loadExtras()
+  if (!document.hidden && selected === '__shared__') { loadExtras(); loadVideo() }
 })
+// Music videos: health every 30 s, the collection and favorites every 60 s,
+// while the House-wide pane is open.
+setInterval(() => {
+  if (selected === '__shared__' && !document.hidden && $('#vidStatus')) loadVideoHealth()
+}, VIDEO_HEALTH_MS)
+setInterval(() => {
+  if (selected === '__shared__' && !document.hidden && $('#vidStatus')) loadVideoCollection()
+}, VIDEO_COLLECTION_MS)
 </script>
 </body>
 </html>

@@ -43,6 +43,18 @@
 //                                     a person card: TMDB (lib/tmdb.mjs) + what
 //                                     else of theirs is in the Plex library
 //   GET  /api/plex/image?path=&w=&h=  a Plex image, the token added here
+//   GET  /api/video/now?room=Main     Music Videos: the playing Sonos track and its
+//                                     video (lib/videoResolver.mjs); calling it
+//                                     is what makes the hub watch Sonos
+//   GET|HEAD /api/video/play/<key>    the video: the collection file (Range) or
+//                                     the live stream proxied (Range forwarded)
+//   GET  /api/video/thumb/<key>       its jpg
+//   POST /api/video/wrong {key}       deny the match, match again
+//   POST /api/video/pick {key, url}   hand-pick a YouTube link (pinned)
+//   POST /api/video/delete {key}      forget a song and its files
+//   POST /api/video/clear             empty the cache (overrides stay)
+//   GET  /api/video/collection        every match, for the dashboard
+//   GET  /api/video/health            folder, yt-dlp, ffmpeg, cache vs cap
 //   GET  /api/weather                 the one weather feed (lib/weather.mjs):
 //                                     Apple WeatherKit when configured, else
 //                                     Open-Meteo, with automatic fallback
@@ -63,7 +75,10 @@
 // optional), PLEX_FIXTURE (tests). WeatherKit (docs/designs/panels-and-controls.md,
 // "One weather feed"): WEATHERKIT_KEY_FILE (default secrets/weatherkit.p8, never
 // in git), WEATHERKIT_TEAM_ID, WEATHERKIT_KEY_ID, WEATHERKIT_SERVICE_ID,
-// WEATHER_SOURCE (auto|weatherkit|open-meteo, default auto). Home Assistant
+// WEATHER_SOURCE (auto|weatherkit|open-meteo, default auto). Music Videos
+// (docs/designs/music-videos.md): MUSIC_VIDEOS_DIR (the collection, unset = off),
+// YTDLP_PATH, FFMPEG_PATH, VIDEO_ROOM (default Main), VIDEO_STREAM_FORMAT,
+// VIDEO_DOWNLOAD_FORMAT, VIDEO_LOCAL_DIR (default data/video). Home Assistant
 // (lib/homeAssistant.mjs): HA_URL and HA_TOKEN or HA_TOKEN_FILE (default
 // secrets/ha-token.txt). Keys and tokens are never logged.
 //
@@ -80,6 +95,7 @@
 
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
+import { Readable } from 'node:stream'
 import { createReadStream, existsSync, readFileSync, readdirSync, writeFileSync, renameSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path'
@@ -107,6 +123,7 @@ import { alertsHealth, getAlerts, startAlertsRefresher, weatherAlertsFor } from 
 import { headlineFor } from './lib/headline.mjs'
 import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
 import { createTmdb } from './lib/tmdb.mjs'
+import { createVideoResolver } from './lib/videoResolver.mjs'
 import { createHomeAssistant } from './lib/homeAssistant.mjs'
 import {
   DEFAULT_SCHOOL_SLUG,
@@ -126,6 +143,7 @@ const ENV_KEYS = [
   'PLEX_URL', 'PLEX_TOKEN', 'PLEX_TOKEN_FILE', 'PLEX_FIXTURE', 'TMDB_API_KEY', 'TMDB_API_KEY_FILE',
   'WEATHERKIT_KEY_FILE', 'WEATHERKIT_TEAM_ID', 'WEATHERKIT_KEY_ID', 'WEATHERKIT_SERVICE_ID', 'WEATHER_SOURCE',
   'HA_URL', 'HA_TOKEN', 'HA_TOKEN_FILE',
+  'MUSIC_VIDEOS_DIR', 'YTDLP_PATH', 'FFMPEG_PATH', 'VIDEO_ROOM', 'VIDEO_LOCAL_DIR',
 ]
 const PHOTOS_DIR = process.env.STUB_PHOTOS_DIR || join(ROOT, 'photos')
 const SCRIPTS_DIR = process.env.FRAMESERVER_SCRIPTS_DIR || join(ROOT, 'scripts')
@@ -170,6 +188,11 @@ const MIME = {
   '.mp3': 'audio/mpeg',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
   '.map': 'application/json',
   '.webmanifest': 'application/manifest+json',
 }
@@ -484,6 +507,18 @@ const plex = createPlex({
   fixtureFile: PLEX_FIXTURE,
 })
 
+// --- Music Videos (lib/videoResolver.mjs) ----------------------------------------------
+// Idle until a screen calls /api/video/now; unconfigured (no MUSIC_VIDEOS_DIR)
+// it answers every route and does nothing. It reads Sonos through the same
+// SONOS_UPSTREAM the /api/sonos proxy uses.
+const video = createVideoResolver({
+  env: process.env,
+  root: ROOT,
+  getShared,
+  sonosUpstream: SONOS_UPSTREAM,
+  log: (m) => console.log(m),
+})
+
 // Everything derived from the shared settings refreshes as soon as its inputs
 // move: location and departure hour (travel default, air quality), the
 // calendar list (Google). Each is a string compare unless something changed.
@@ -776,6 +811,83 @@ async function serveAppFile(req, res, urlPath) {
   }, { ranges: true })
 }
 
+// --- Music Videos: the live stream, proxied --------------------------------------
+// The TV plays /api/video/play/<key> whatever the source. For a song not in the
+// collection yet that is a googlevideo URL the resolver found with yt-dlp; the
+// hub fetches it (the URL is bound to this box's IP) and relays the bytes, the
+// client's Range header forwarded untouched (AVPlayer opens with bytes=0-1,
+// then bytes=0-<end>, then open-ended ranges). Status 200/206/416 and
+// Content-Type / Length / Range / Accept-Ranges pass through; the upstream is
+// dropped when the client goes away. A 403/404/410 means the URL expired early:
+// the resolver fetches a new one and this request answers 502.
+const VIDEO_CONNECT_MS = 10_000
+
+async function proxyVideoStream(req, res, key, stream) {
+  const ac = new AbortController()
+  res.on('close', () => ac.abort())
+  const connect = setTimeout(() => ac.abort(new Error('connect timeout')), VIDEO_CONNECT_MS)
+  const head = req.method === 'HEAD'
+  const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; FrameServer)' }
+  // HEAD: ask for one byte; the total comes back in Content-Range.
+  const range = head ? 'bytes=0-0' : req.headers.range
+  if (range) headers.Range = range
+  let up
+  try {
+    up = await fetch(stream.url, { headers, signal: ac.signal })
+  } catch (e) {
+    clearTimeout(connect)
+    if (res.destroyed) return
+    video.streamFailed(key)
+    return json(res, 502, { error: `stream upstream: ${e && e.cause ? e.cause.message || e.cause.code : e.message}` })
+  }
+  clearTimeout(connect)
+  if (up.status !== 200 && up.status !== 206 && up.status !== 416) {
+    ac.abort()
+    if ([403, 404, 410].includes(up.status)) video.streamFailed(key)
+    return json(res, 502, { error: `stream upstream: HTTP ${up.status}` })
+  }
+  const out = {
+    'Content-Type': up.headers.get('content-type') || 'video/mp4',
+    'Accept-Ranges': up.headers.get('accept-ranges') || 'bytes',
+    'Cache-Control': 'no-store',
+  }
+  let status = up.status
+  if (head) {
+    const total = /\/(\d+)\s*$/.exec(up.headers.get('content-range') || '')?.[1] ?? up.headers.get('content-length')
+    status = 200
+    if (total != null) out['Content-Length'] = total
+    ac.abort()
+    cors(res)
+    res.writeHead(status, out)
+    return res.end()
+  }
+  for (const h of ['content-length', 'content-range']) {
+    const v = up.headers.get(h)
+    if (v) out[h.replace(/(^|-)(\w)/g, (_, a, c) => a + c.toUpperCase())] = v
+  }
+  cors(res)
+  res.writeHead(status, out)
+  if (!up.body || status === 416) return res.end()
+  const body = Readable.fromWeb(up.body)
+  body.on('error', () => res.destroy())
+  res.on('close', () => body.destroy())
+  body.pipe(res)
+}
+
+async function serveVideo(req, res, key) {
+  const p = await video.play(key)
+  if (!p) return json(res, 404, { error: 'video not ready' })
+  if (p.kind === 'file') {
+    const st = await statFile(p.path)
+    if (!st) return json(res, 404, { error: 'video file missing' })
+    return sendFile(req, res, p.path, st, {
+      'Content-Type': MIME[extname(p.path).toLowerCase()] || 'video/mp4',
+      'Cache-Control': 'no-store',
+    }, { ranges: true })
+  }
+  return proxyVideoStream(req, res, key, p)
+}
+
 // --- Sonos proxy -----------------------------------------------------------------
 // Port of _proxy_sonos from pi/kiosk-server.py. Every screen polls through
 // here every 1.5 s, so requests are not logged; an outage is logged when it
@@ -851,6 +963,7 @@ async function handle(req, res) {
       alerts: alertsHealth(),
       airQuality: state.airQuality ? state.airQuality.label : null,
       plex: { ...plex.health(), tmdb: tmdb.configured() },
+      video: video.health(),
       ha: ha.brief(),
     })
   }
@@ -1166,6 +1279,57 @@ async function handle(req, res) {
     return res.end(req.method === 'HEAD' ? undefined : r.body)
   }
 
+  // --- Music Videos (lib/videoResolver.mjs) ---
+  if (path === '/api/video/now') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, await video.now(url.searchParams.get('room') || undefined))
+  }
+
+  const videoFile = path.match(/^\/api\/video\/(play|thumb)\/([^/]+)$/)
+  if (videoFile) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: 'GET or HEAD only' })
+    let key
+    try {
+      key = decodeURIComponent(videoFile[2])
+    } catch {
+      return json(res, 400, { error: 'bad key' })
+    }
+    if (videoFile[1] === 'play') return serveVideo(req, res, key)
+    const file = video.thumb(key)
+    const st = file ? await statFile(file) : null
+    if (!st) return json(res, 404, { error: 'no thumbnail' })
+    return sendFile(req, res, file, st, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=300' })
+  }
+
+  if (path === '/api/video/collection') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    return json(res, 200, await video.collection())
+  }
+
+  if (path === '/api/video/health') {
+    if (req.method !== 'GET') return json(res, 405, { error: 'GET only' })
+    await video.probe()
+    return json(res, 200, video.health())
+  }
+
+  if (path === '/api/video/wrong' || path === '/api/video/pick' || path === '/api/video/delete' || path === '/api/video/clear') {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'POST only' })
+    let body
+    try {
+      body = await readBody(req)
+    } catch (e) {
+      return json(res, 400, { ok: false, error: String(e.message || e) })
+    }
+    const key = typeof body?.key === 'string' ? body.key : ''
+    if (path !== '/api/video/clear' && !key) return json(res, 400, { ok: false, error: 'key required' })
+    const r = path === '/api/video/wrong' ? await video.wrong(key)
+      : path === '/api/video/pick' ? await video.pick(key, body?.url)
+      : path === '/api/video/delete' ? await video.remove(key)
+      : await video.clear()
+    const status = r.ok ? 200 : r.error === 'not configured' ? 503 : r.error === 'unknown song' ? 404 : 409
+    return json(res, status, r)
+  }
+
   // --- Home Assistant (lib/homeAssistant.mjs) ---
   // The snapshot the dashboard card (and later, panels) read; never cached.
   if (path === '/api/ha/state') {
@@ -1258,6 +1422,7 @@ const restoredWeather = startWeatherRefresher(getLocation, { dir: ROOT, getNwsAl
 startAlertsRefresher(getLocation)
 const restoredAir = air.start()
 const restoredPlex = plex.start()
+const restoredVideo = video.start()
 const restoredHa = ha.start()
 
 function envSummary() {
@@ -1293,6 +1458,9 @@ server.listen(PORT, BIND, () => {
   console.log(`  plex   : ${PLEX_FIXTURE ? `FIXTURE ${PLEX_FIXTURE} (instead of /status/sessions)` : PLEX_URL}; ` +
               `token ${plex.configured() ? 'present' : `MISSING (${PLEX_TOKEN_FILE}): /api/plex/now reports it`}; ` +
               `${restoredPlex.players} known player(s); TMDB key ${tmdb.configured() ? 'present' : 'absent (cast from Plex)'}`)
+  console.log(`  video  : ${restoredVideo.configured
+    ? `${restoredVideo.dir} (local ${restoredVideo.localDir}); room ${process.env.VIDEO_ROOM || 'Main'}, idle until /api/video/now is called`
+    : 'NOT CONFIGURED (MUSIC_VIDEOS_DIR unset): /api/video/* answers "not configured"'}`)
   console.log(`  ha     : ${ha.configured() ? `configured (${restoredHa.entities} whitelisted entit${restoredHa.entities === 1 ? 'y' : 'ies'})` : 'NOT CONFIGURED (HA_URL / HA_TOKEN missing): /api/ha/state reports it'}` +
               `${restoredHa.seeded ? '; whitelist seeded from the built-in list' : ''}`)
   console.log(`  cached : schoolcal ${cachedSchool.calendar ?? 'none'} | lunch ${cachedSchool.lunch ?? 'none'} | ` +

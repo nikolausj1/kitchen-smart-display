@@ -1,0 +1,17 @@
+[
+  {
+    "title": "Classic Rock Party",
+    "uri": "x-rincon-cpcontainer:1006206cspotify%3aplaylist%3a37i9dQZF1DX4UtSsGT1Sbe?sid=9&flags=8300&sn=3",
+    "metadata": "<DIDL-Lite><item id=\"10062a6cspotify%3aplaylist%3a37i9dQZF1DX4UtSsGT1Sbe\"><dc:title>Classic Rock Party</dc:title></item></DIDL-Lite>"
+  },
+  {
+    "title": "Morning Instrumentals (My Station)",
+    "uri": "x-sonosapi-radio:ST%3a2349834912384?sid=236&flags=8300&sn=5",
+    "metadata": "<DIDL-Lite><item><dc:title>Morning Instrumentals (My Station)</dc:title></item></DIDL-Lite>"
+  },
+  {
+    "title": "Daft Punk Radio (My Station)",
+    "uri": "x-sonosapi-radio:ST%3a8873310021?sid=236&flags=8300&sn=5",
+    "metadata": "<DIDL-Lite><item><dc:title>Daft Punk Radio (My Station)</dc:title></item></DIDL-Lite>"
+  }
+]

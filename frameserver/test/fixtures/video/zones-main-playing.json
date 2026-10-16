@@ -1,0 +1,72 @@
+[
+  {
+    "uuid": "RINCON_542A1B0C7D2E01400:3412",
+    "coordinator": {
+      "uuid": "RINCON_542A1B0C7D2E01400",
+      "state": {
+        "currentTrack": {
+          "artist": "Fleetwood Mac",
+          "title": "Dreams (2004 Remaster)",
+          "album": "Rumours (Super Deluxe)",
+          "albumArtUri": "/getaa?s=1&u=x-sonos-spotify%3aspotify%253atrack%253a0ofHAoxe9vBkTCp2UQIavz%3fsid%3d9%26flags%3d8232%26sn%3d3",
+          "absoluteAlbumArtUri": "http://192.168.4.41:1400/getaa?s=1&u=x-sonos-spotify%3aspotify%253atrack%253a0ofHAoxe9vBkTCp2UQIavz%3fsid%3d9%26flags%3d8232%26sn%3d3",
+          "duration": 257,
+          "uri": "x-sonos-spotify:spotify%3atrack%3a0ofHAoxe9vBkTCp2UQIavz?sid=9&flags=8232&sn=3",
+          "trackUri": "x-sonos-spotify:spotify%3atrack%3a0ofHAoxe9vBkTCp2UQIavz?sid=9&flags=8232&sn=3",
+          "type": "track",
+          "stationName": ""
+        },
+        "nextTrack": {
+          "artist": "Eagles",
+          "title": "Hotel California (2013 Remaster)",
+          "album": "Hotel California (2013 Remaster)",
+          "albumArtUri": "/getaa?s=1&u=x-sonos-spotify%3aspotify%253atrack%253a40riOy7x9W7GXjyGp4pjAv%3fsid%3d9%26flags%3d8232%26sn%3d3",
+          "duration": 391,
+          "uri": "x-sonos-spotify:spotify%3atrack%3a40riOy7x9W7GXjyGp4pjAv?sid=9&flags=8232&sn=3"
+        },
+        "volume": 22,
+        "mute": false,
+        "equalizer": { "bass": 0, "treble": 0, "loudness": true },
+        "zoneState": "PLAYING",
+        "playerState": "PLAYING",
+        "elapsedTime": 41,
+        "elapsedTimeFormatted": "00:00:41",
+        "playbackState": "PLAYING",
+        "playMode": { "repeat": "none", "shuffle": true, "crossfade": false }
+      },
+      "roomName": "Main",
+      "coordinator": "RINCON_542A1B0C7D2E01400",
+      "groupState": { "volume": 22, "mute": false },
+      "avTransportUri": "x-rincon-queue:RINCON_542A1B0C7D2E01400#0",
+      "avTransportUriMetadata": "<DIDL-Lite xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\"><item id=\"1004206cspotify%3aplaylist%3a37i9dQZF1DX4UtSsGT1Sbe\" parentID=\"-1\" restricted=\"true\"><dc:title>Classic Rock Party</dc:title><upnp:class>object.container.playlistContainer</upnp:class></item></DIDL-Lite>"
+    },
+    "members": [
+      { "uuid": "RINCON_542A1B0C7D2E01400", "roomName": "Main", "coordinator": "RINCON_542A1B0C7D2E01400", "state": { "volume": 22, "mute": false } },
+      { "uuid": "RINCON_542A1B0C7D2E02500", "roomName": "Kitchen", "coordinator": "RINCON_542A1B0C7D2E01400", "state": { "volume": 18, "mute": false } }
+    ]
+  },
+  {
+    "uuid": "RINCON_B8E937A3F4C001400:88",
+    "coordinator": {
+      "uuid": "RINCON_B8E937A3F4C001400",
+      "state": {
+        "currentTrack": { "artist": "", "title": "", "album": "", "duration": 0, "uri": "", "stationName": "" },
+        "nextTrack": { "artist": "", "title": "", "album": "", "duration": 0, "uri": "" },
+        "volume": 12,
+        "mute": false,
+        "zoneState": "STOPPED",
+        "playerState": "STOPPED",
+        "elapsedTime": 0,
+        "playbackState": "STOPPED"
+      },
+      "roomName": "Bedroom",
+      "coordinator": "RINCON_B8E937A3F4C001400",
+      "groupState": { "volume": 12, "mute": false },
+      "avTransportUri": "",
+      "avTransportUriMetadata": ""
+    },
+    "members": [
+      { "uuid": "RINCON_B8E937A3F4C001400", "roomName": "Bedroom", "coordinator": "RINCON_B8E937A3F4C001400", "state": { "volume": 12, "mute": false } }
+    ]
+  }
+]

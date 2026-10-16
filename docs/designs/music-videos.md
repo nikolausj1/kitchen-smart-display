@@ -2,7 +2,7 @@
 title: "Music Videos - Muted Video Backdrop for the Apple TV"
 created: 2026-10-16
 modified: 2026-10-16
-version: 1.0
+version: 1.3
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags: [design, apple-tv, music, now-playing, music-videos, frameserver, sonos, youtube, nas]
 ---
@@ -160,14 +160,29 @@ live stream.
 - **Search**: `yt-dlp "ytsearch8:<artist> <title> official video"` with
   `--flat-playlist --dump-json`, no API key, no quota. Each candidate carries
   id, title, channel, duration and view count.
-- **Score**, highest wins, below a floor is a miss:
-  - channel contains the artist name, or ends in "VEVO": strong plus
-  - title contains "official video" or "official music video": plus
-  - duration within 20 percent or 45 seconds of the Sonos duration: required
-  - title contains lyric, lyrics, live, cover, karaoke, reaction, audio,
-    visualizer, fan, 8D, slowed, sped up, hour: rejected
+- **Score**, highest wins, below a floor of 40 is a miss (rules revised
+  2026-10-16 against live search data, see the header of `videoMatch.mjs`):
+  - the video title must contain the song title, both normalized like the
+    key with spaces ignored: required (this is what stops "Gypsy" winning for
+    "Dreams" when both are the same artist and a similar length)
+  - duration: missing, shorter than half or longer than twice the Sonos
+    duration: rejected (official videos run long or short, Blinding Lights is
+    3:20 on Sonos and 4:22 on YouTube, Get Lucky 6:09 against 4:08); within
+    20 percent or 45 s: +15, so a close cut beats an extended one
+  - title contains lyric, lyrics, live, cover, karaoke, reaction, audio only,
+    official audio, visualizer, fan made, 8D, slowed, sped up, nightcore,
+    instrumental, hour, loop, tutorial, teaser, trailer, behind the scenes,
+    making of: rejected, unless the Sonos title or artist carries the word
   - channel ends in " - Topic": rejected (auto-generated art-only uploads)
-  - view count: tie-break only
+  - channel contains the artist name, or ends in "VEVO": +50
+  - title contains "official video" or "official music video": +30;
+    "official": +10; the song title: +10
+  - view count: up to +10, as log10, a tie-break
+  - The floor stays at 40 on purpose. A re-upload titled "Official Video"
+    passes without channel points (Get Lucky, whose own channel only has the
+    audio upload), because the right pictures still reach the screen and a
+    long press fixes a bad one; requiring the artist's channel would turn
+    every label-channel upload into a miss.
 - **Denied candidates** per key are remembered, so "wrong" moves to the next
   one and never comes back to a rejected id.
 - **Overrides** win before any search: `overrides\Artist - Title.mp4`, flat or
@@ -182,6 +197,20 @@ live stream.
   proving which format `AVPlayer` plays cleanly: a progressive mp4, or the HLS
   manifest some client types return.** This is the most volatile piece of the
   design and the one that proves or disproves "stream first".
+- **Spike result (2026-10-16, on the Mac with AVFoundation).** The video-only
+  720p avc1 mp4 (itag 136) that the default selector returns plays and seeks in
+  AVPlayer when the hub proxies it with Range forwarding; AVPlayer opens with
+  `bytes=0-1`, then `bytes=0-<end>`, then open-ended ranges, and the direct URL
+  answers 206 for all of them. The URL expires about 6 h after resolve and is
+  bound to the house's public IP. No combined progressive mp4 exists any more,
+  the ios client's HLS is SABR-gated, and a video-only HLS playlist downloads
+  but never starts. The default client (visionos) needs no PO token. Two
+  gotchas: yt-dlp prints a JavaScript-runtime warning on every call, so the hub
+  keys success off the exit code only; and AVFoundation reports exactly twice
+  the true duration for these streams, so the TV takes the end of a video from
+  the hub's `videoDurationMs`, never from the player. Timing: `-g` about 1.5 s,
+  a flat `ytsearch` about 1.4 s, which is the first-play latency budget.
+  Harness: the scratchpad's `spike/proxy.mjs` and `spike/avtest.swift`.
 - **Download**, in the background after the stream starts:
   `bv*[height<=720][ext=mp4]+ba[ext=m4a]/b[height<=720]`, merged to mp4 by
   ffmpeg (a copy, no re-encode, a second or two), plus a jpg thumbnail. Written
@@ -278,6 +307,80 @@ inputs. Hold, Miss, Ad and Resolving get their fun treatments here.
 the hub's file on the Pi; the family-room Echo; a house-state flag with time and
 group rules if the picker proves too manual; a "TV is the source" mode if a Sonos
 soundbar ever sits on that TV.
+
+## Setup on the NUC
+
+`frameserver/setup-videos.ps1` does everything except the one step that needs a
+password. It is idempotent, so re-running it is also the repair. It never touches
+the service's account, its other nssm settings, the other `AppEnvironmentExtra`
+entries or the photos, and `deploy.sh` never writes to `bin\`, so the binaries
+survive deploys.
+
+**What it does**
+
+1. Creates `C:\Services\FrameServer\bin`.
+2. Downloads `yt-dlp.exe` (GitHub latest release) when missing, else runs
+   `yt-dlp.exe -U`; prints the version.
+3. Downloads gyan.dev's `ffmpeg-release-essentials.zip` when `ffmpeg.exe` or
+   `ffprobe.exe` is missing, keeps only those two, deletes the zip; prints the
+   `ffmpeg -version` line.
+4. Creates or corrects the scheduled task `SmartDisplayYtDlpUpdate`: Sundays
+   04:00, SYSTEM, whether or not anyone is logged on, running `bin\yt-dlp.exe -U`.
+5. Merges `MUSIC_VIDEOS_DIR`, `YTDLP_PATH` and `FFMPEG_PATH` into the service's
+   `AppEnvironmentExtra`, keeping other keys, and restarts the service only if
+   that changed anything (the hub is down for a few seconds).
+6. Prints the service account instructions below.
+
+**Run it from the Mac**, at the repo root:
+
+```
+scp -i ~/.ssh/sportsbox_nuc_ed25519 frameserver/setup-videos.ps1 micro@nuc.local:C:/Services/setup-videos.ps1
+ssh -i ~/.ssh/sportsbox_nuc_ed25519 micro@nuc.local "powershell -NoProfile -ExecutionPolicy Bypass -File C:\Services\setup-videos.ps1"
+```
+
+Add `-Check` to the ssh line for a report that changes nothing (versions, task,
+environment, service account, and whether the NAS path is reachable from that
+shell, which is not proof for the service). `-VideosDir` overrides the default
+`\\MissionControl\Media\Music Videos TV`.
+
+**The manual step: the service account** (Justin, once). Local System cannot
+authenticate to the NAS, so the service must run as a real account:
+
+1. On the NUC: `nssm get SmartDisplayFrameServer ObjectName`.
+2. If it says `LocalSystem`:
+   `nssm set SmartDisplayFrameServer ObjectName .\<windows user> <password>`.
+   nssm normally grants "Log on as a service" itself; confirm under
+   `secpol.msc`, Local Policies, User Rights Assignment. The account needs
+   read and write on `C:\Services\FrameServer` (a local administrator has it).
+3. Signed in as that same user (console or RDP; Credential Manager is per
+   account and often unavailable over ssh), store the NAS login:
+   `cmdkey /add:MissionControl /user:<nas user> /pass` (it prompts for the
+   password). The NAS account needs read and write on the folder.
+4. `nssm restart SmartDisplayFrameServer`.
+
+**Verify.** From the NUC (or the Mac, with the hub address):
+
+```
+(Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8095/api/video/health).Content
+```
+
+Read `"reachable": true` (the service itself can see the folder), the yt-dlp
+version and `ffmpeg.found`. `"reachable": false` with the account changed means
+the credentials in step 3 belong to a different user than the service runs as.
+
+**Rollback**
+
+```
+nssm set SmartDisplayFrameServer ObjectName LocalSystem
+Unregister-ScheduledTask -TaskName SmartDisplayYtDlpUpdate -Confirm:$false
+nssm restart SmartDisplayFrameServer
+```
+
+The three environment entries are harmless to leave (the hub treats the feature
+as off without a reachable folder); to remove them, `nssm set
+SmartDisplayFrameServer AppEnvironmentExtra` with only the other entries listed
+(`nssm get ... AppEnvironmentExtra` first). The binaries in `bin\` can simply be
+deleted.
 
 ## Risks
 
