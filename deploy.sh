@@ -178,7 +178,17 @@ if [ "$TARGET" = all ] || [ "$TARGET" = pi ]; then
   echo "==> Kitchen Pi: server + panel scripts"
   rsync -a pi/kiosk-server.py pi/labwc-autostart pi/kiosk-restart.sh \
            pi/photo-refresh.sh pi/photo-refresh.service pi/photo-refresh.timer \
+           pi/wifi-selfheal.sh pi/wifi-selfheal.service \
            "$PI_HOST:/home/pi/"
+
+  echo "==> Kitchen Pi: Wi-Fi self-heal unit (boot-time, see pi/wifi-selfheal.sh)"
+  # Installed and enabled on every deploy so a re-imaged Pi gets it too.
+  # Running it once now is a no-op while the profile is present, and
+  # proves the unit works on this Pi before the next unattended boot.
+  ssh "$PI_HOST" 'chmod +x /home/pi/wifi-selfheal.sh \
+    && sudo install -m 644 /home/pi/wifi-selfheal.service /etc/systemd/system/wifi-selfheal.service \
+    && sudo systemctl daemon-reload && sudo systemctl enable --quiet wifi-selfheal.service \
+    && sudo systemctl start wifi-selfheal.service && journalctl -b -t wifi-selfheal --no-pager | tail -n 1'
 
   echo "==> Kitchen Pi: build inputs (rollback path, kept current but dormant)"
   ssh "$PI_HOST" 'mkdir -p /home/pi/photo-build/scripts'

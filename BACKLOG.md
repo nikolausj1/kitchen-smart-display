@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-16
-version: 9.2
+modified: 2026-10-22
+version: 9.5
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -543,7 +543,25 @@ progress bar). Remaining:
   profile that hangs a screen unattended and reads as a software fault. The
   likely cause of the 2026-09-22 outage. Fix: the official Raspberry Pi 27W
   USB-C PD supply into a real AC socket. Nothing is wrong with the SD card (no
-  I/O errors, no ext4 journal replay) or the Pi itself. **Check the total budget
+  I/O errors, no ext4 journal replay) or the Pi itself. **Corrected 2026-10-22: the
+  dips do destroy files.** The kitchen went off Wi-Fi on 2026-10-20 and stayed
+  dark until found on 2026-10-21: a 17 s boot at 15:04 lost power while
+  NetworkManager was rewriting its connection files, and both
+  `/etc/netplan/90-NM-*.yaml` came back zero bytes (classic ext4 truncation on
+  power loss), so the Pi booted with no Wi-Fi profile and no way to say so.
+  Fixed over a temporary Ethernet cable on 2026-10-22: the `journey24`
+  connection rebuilt with nmcli from the cloud-init
+  `/boot/firmware/network-config`, now a keyfile in
+  `/etc/NetworkManager/system-connections/`. A plug-in USB-A charger in
+  place of the outlet port did not help (7 dips in the first 8 minutes).
+  **Built the same day:** `pi/wifi-selfheal.sh` + `wifi-selfheal.service`
+  (installed and enabled by `deploy.sh pi`) run at every boot after
+  NetworkManager: zero-byte connection files go to
+  `/home/pi/wifi-selfheal-backup/`, and if no Wi-Fi profile is left the
+  script rebuilds it from `/boot/firmware/network-config` and brings it up.
+  Tested on the Pi on 2026-10-22 by deleting the profile: healed and back on
+  Wi-Fi in 5 s. Each boot logs one line (`journalctl -b -t wifi-selfheal`).
+  The power supply is still the real fix; this only closes one failure mode. **Check the total budget
   on that outlet:** per the front door entry below, the EVICIV panel is also
   powered from an outlet USB port, and a dual-USB outlet typically shares one
   2.4A budget across both ports. A Pi 5 alone wants more than the whole outlet
@@ -872,8 +890,8 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
-- **2026-10-16 - The Sound card becomes a mixer (per-room volume), mockup
-  done, not built.** Group volume stays the hero on top; when Main is grouped,
+- **2026-10-16 - The Sound card becomes a mixer (per-room volume); built the
+  same day, see Recently Shipped.** Group volume stays the hero on top; when Main is grouped,
   one compact row per room in the group sits under it (Main first, then
   Playroom and Family Room, then anything grouped from the Sonos app): white
   tick to leave, name, number, minus, track, plus, steps of 2 with hold to
@@ -1391,8 +1409,28 @@ captures decisions made during working sessions.
 
 ## Recently Shipped
 
+- **2026-10-22 - Kitchen Wi-Fi self-heal.** After the 2026-10-20 brownout
+  truncated NetworkManager's connection files and took the kitchen off Wi-Fi
+  for a day, `pi/wifi-selfheal.sh` + `wifi-selfheal.service` now restore the
+  profile from the Imager's `network-config` at every boot. Deployed and
+  tested on the Pi (profile deleted, healed in 5 s).
 Newest first.
 
+- **2026-10-16 - Sound card mixer: per-room volume on Now Playing** (deployed
+  to the hub and the kitchen Pi at 16:12, build `5c762f0`; the Echos pick it up
+  on their reload; not committed). When Main is grouped the card shows one
+  row per room under the group volume: white tick to leave (a speaker for
+  Main, which cannot), name, number, minus, track, plus; steps of 2 with hold
+  to repeat through `/<room>/volume/N`. The zones poll now carries
+  `roomVolumes`; the group number is the mean of the rows, so a room step
+  moves it at once while a group step shows its own target until the rows
+  catch up. Join chips tuck into one compact line when rows are showing;
+  auto-close is 8 s grouped, 6 s solo; a card too tall for the space above the
+  transport slides down over it; Echo rows (`body[data-kiosk="echo"]`) drop
+  the track. Checked live against the Main group at 1920x1080 and the Echo's
+  1280x800 (one Playroom step up and back). Files: `useSonosState.js`,
+  `SoundControl.jsx`, `NowPlaying.css`. Mockup:
+  `_review/mockups/sound-mixer-mockup.html`.
 - **2026-10-16 - Mixtape polish round, realism items 1 to 7** (`feature/mixtape-polish`):
   reel spin-up and coast with a rock-back, wow and flutter, a flickering lamp
   in the window with pack edge light, drifting glass with a specular sweep on

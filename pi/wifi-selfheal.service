@@ -1,0 +1,20 @@
+# Restore the kitchen Pi's Wi-Fi profile at boot if a power loss truncated it
+# (one shot, every boot). Installed by deploy to /etc/systemd/system/ and
+# enabled there. Runs after NetworkManager is up and before the network-online
+# wait, so a healed profile counts toward "online" for everything after it.
+# Check a boot with `journalctl -b -t wifi-selfheal` or /home/pi/wifi-selfheal.log.
+# See pi/wifi-selfheal.sh.
+[Unit]
+Description=Restore kitchen Wi-Fi profile if a power loss truncated it
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=NetworkManager-wait-online.service
+RequiresMountsFor=/boot/firmware
+
+[Service]
+Type=oneshot
+ExecStart=/home/pi/wifi-selfheal.sh
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
