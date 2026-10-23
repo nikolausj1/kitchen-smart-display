@@ -224,52 +224,52 @@
     },
     "counter": {
       "housing": {
-        "x": 0.7974,
-        "y": 0.41991,
-        "w": 0.04167,
-        "h": 0.03519
+        "x": 0.75365,
+        "y": 0.425,
+        "w": 0.06042,
+        "h": 0.04907
       },
       "window": {
-        "x": 0.80104,
-        "y": 0.42593,
-        "w": 0.03438,
-        "h": 0.02315
+        "x": 0.75885,
+        "y": 0.43333,
+        "w": 0.05,
+        "h": 0.03241
       },
       "digitCells": [
         {
-          "x": 0.80104,
-          "y": 0.42593,
-          "w": 0.01042,
-          "h": 0.02315
+          "x": 0.75885,
+          "y": 0.43333,
+          "w": 0.0151,
+          "h": 0.03241
         },
         {
-          "x": 0.81302,
-          "y": 0.42593,
-          "w": 0.01042,
-          "h": 0.02315
+          "x": 0.7763,
+          "y": 0.43333,
+          "w": 0.0151,
+          "h": 0.03241
         },
         {
-          "x": 0.825,
-          "y": 0.42593,
-          "w": 0.01042,
-          "h": 0.02315
+          "x": 0.79375,
+          "y": 0.43333,
+          "w": 0.0151,
+          "h": 0.03241
         }
       ],
       "digitStripFile": "deck/counter_digits.png",
       "digitStripCells": 11,
-      "digitHeightFraction": 0.02315,
+      "digitHeightFraction": 0.03241,
       "glassFile": "deck/counter_glass.png",
       "glassRect": {
-        "x": 0.80104,
-        "y": 0.42593,
-        "w": 0.03438,
-        "h": 0.02315
+        "x": 0.75885,
+        "y": 0.43333,
+        "w": 0.05,
+        "h": 0.03241
       },
       "resetButton": {
-        "x": 0.84245,
-        "y": 0.42963,
-        "w": 0.00885,
-        "h": 0.01574
+        "x": 0.81979,
+        "y": 0.43843,
+        "w": 0.0125,
+        "h": 0.02222
       },
       "note": "counter_digits.png is 11 cells (0..9 then 0); show drum value v (0 <= v < 10, fractional while rolling) by offsetting the strip up by v * cell height inside each digitCell (clip to the cell). The extra 0 makes 9 -> 0 roll seamlessly. Draw counter_glass.png over the digits at glassRect (fixed cylinder shading and drum separators). The housing is baked into deck_empty_v3_counter.png."
     }
