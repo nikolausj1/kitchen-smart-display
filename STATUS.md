@@ -1,9 +1,9 @@
 ---
 title: "STATUS - Smart Display"
 created: 2026-07-24
-modified: 2026-10-22
-version: 5.24
-author: Claude Opus 5.5 (claude-opus-5-5)
+modified: 2026-10-31
+version: 5.28
+author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
 
@@ -18,6 +18,10 @@ Kitchen Smart Display covers the family's screens, all fed by one hub (FrameServ
 Active Development. Five screens are registered with the hub (plus `dev-mac` for testing): the kitchen Pi, the Living Room Apple TV, and three Echo Shows running the kitchen web app in Silk: the family-room Echo Show 10 (which now follows the Apple TV's Plex playback), the Echo Show 15 by the front door (the Entry board, its home view) and the office Echo Show 5 (its Today is the flip clock). All five were polling the hub at 13:05 on 2026-09-27. Every screen depends on FrameServer on the NUC and nothing else on the LAN. The work since 2026-08-18 is committed on `feature/echo-hub` (110 commits at `736683e`) and deployed, not merged or pushed.
 
 ## Health
+
+**2026-10-31: the Apple TV Photos view got a center-button music toggle and a bare full-bleed mode; installed on the Living Room TV at 13:19, not committed.** The Siri Remote center button now turns the album-art corner thumbnail and the handwritten track lines on and off, with a short "Music On" / "Music Off" toast; on an art-album artwork with the mat on it keeps its old job of cycling Art Display. The setting (`photosMusicThumbnail`) lives only on the TV and survives relaunches. With the mat off the white location and date caption is gone, so mat off plus music off shows a bare full-bleed picture with nothing on it. The Xcode 27.2 update had dropped the Metal Toolchain again (840 MB, re-downloaded once); the simulator build and the device build were both green after that. Not yet tried from the couch: a center press on a family photo, then Photos Mat off for the bare picture.
+
+**2026-10-29: the Family Room could not be adjusted from the kitchen for six days; fixed with a service restart.** The Family Room Playbar took a new address on 2026-10-23 and the Sonos service on the NUC kept the old one, so every command to that speaker hung and failed while its readings stayed correct. Restarting `SmartDisplaySonosAPI` cleared it (Family Room volume answers in 0.06 s again). It will recur on the next address change until the Playbar gets a DHCP reservation (Waiting on Me); the card should also stop a stuck speaker from stalling the display (BACKLOG, "Sonos write hardening").
 
 **2026-10-16, 16:12: the Now Playing Sound card is a mixer, deployed to the hub and the kitchen Pi (build `5c762f0`; the Echos pick it up on their reload), not committed.** When the kitchen's room is grouped, the card shows one volume row per room under the group volume (Main, Playroom, Family Room, plus anything grouped from the Sonos app), each with a tick to leave, a number and minus and plus, steps of 2 with hold to repeat. The group number is the mean of the rows, as Sonos computes it, so the two always agree. Checked live against the real group from the dev server at the kitchen's 1920x1080 and the Echo Show's 1280x800, including one Playroom step up and back through Sonos. The deploy's hub test gate failed once on 2 of 648 tests and was green on four reruns, so those two are flaky; not yet identified. Next: a live try of the tick-to-leave on the wall, and commit.
 

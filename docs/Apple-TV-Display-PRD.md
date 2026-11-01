@@ -1,8 +1,8 @@
 ---
 title: Apple TV / Frame TV Display PRD
 created: 2026-05-30
-modified: 2026-06-16
-version: 2.1.0
+modified: 2026-10-31
+version: 2.1.1
 author: Justin Nikolaus
 tags: [smart-display, apple-tv, frame-tv, prd, tvos]
 ---
@@ -90,6 +90,8 @@ Out of scope (Phase 2 or later):
 
 - Navigation: swipe or click left and right cycles between Today, Photos, Now Playing. Settings is excluded (kitchen-only).
 - Photos view: clickpad left/right is previous / next photo.
+- Photos view, center button: toggles the music presence (album-art corner thumbnail plus the handwritten track lines on the mat) with a brief "Music On" / "Music Off" toast; the choice is TV-local and persists across relaunches. On an art-album artwork with the mat on, the button instead cycles Art Display (Shadow Box / Fill / Fill + Music, the last only while the music presence is shown).
+- Photos view, mat off: no caption is drawn; with music off too the photo is a bare full-bleed image.
 - Now Playing view: clickpad left/right is previous / next track; the play/pause button toggles play/pause; the dedicated volume buttons map to Sonos volume up/down (intercepted and routed to node-sonos-http-api, not TV audio).
 - Today view: no interactive commands (glance-only).
 - Menu button: exits the app (tvOS default behavior).

@@ -94,8 +94,10 @@ struct PhotosView: View {
         GeometryReader { geo in
             // Z-order (bottom -> top):
             //   photo -> album art (in opening) -> mat border -> handwritten
-            //   metadata (printed on the mat). When the mat is OFF, fall back
-            //   to the white caption + a plain corner album art.
+            //   metadata (printed on the mat). When the mat is OFF nothing is
+            //   drawn on the photo except the plain corner album art when music
+            //   is on; with music off it is a bare full-bleed image (decided
+            //   2026-10-31).
             let matOn = tvSettings.photosMatEnabled
             // Via the `music` property (not sonos directly) so the sim-only
             // debug.fakeMusic flag actually fakes the corner + music line.
@@ -104,13 +106,16 @@ struct PhotosView: View {
             // has no album covers - UNLESS the art display is Fill + Music,
             // which deliberately invites it back (year/movement move to the
             // mat's bottom-center to free the right corner). Fill + Music
-            // renders as plain Fill while nothing is playing.
+            // renders as plain Fill while nothing is playing. The center
+            // button can also switch the whole presence off (the TV-local
+            // photosMusicThumbnail flag), which behaves like nothing playing.
             let m = music
+            let musicOn = m.show && tvSettings.photosMusicThumbnail
             let artDisplay: ArtDisplay = {
                 let d = tvSettings.artDisplay
-                return (d == .fillMusic && !m.show) ? .fill : d
+                return (d == .fillMusic && !musicOn) ? .fill : d
             }()
-            let showMusic = m.show && (currentArt == nil || artDisplay == .fillMusic)
+            let showMusic = musicOn && (currentArt == nil || artDisplay == .fillMusic)
             ZStack {
                 Color.black
                 if let item = engine.current {
@@ -171,17 +176,11 @@ struct PhotosView: View {
                                    artFact: centered ? nil : currentArtFact,
                                    artCenterYear: centered ? currentArt?.year : nil,
                                    artCenterMovement: centered ? currentArt?.movement : nil)
-                } else if let item = engine.current {
-                    // Unmatted fallback: white caption over the photo.
-                    ExifCaptionOverlay(item: item,
-                                       settings: model.settings.slideshow,
-                                       generation: engine.generation,
-                                       edgeInset: 40)
                 }
 
-                // Center-button Art Display toggle feedback (mirrors the
-                // Now Playing backdrop toast).
-                if let toast = artToast, currentArtPhoto != nil {
+                // Center-button feedback (Art Display mode or Music On/Off;
+                // mirrors the Now Playing backdrop toast).
+                if let toast {
                     Text(toast)
                         .font(.system(size: geo.size.width * 0.018, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.92))
@@ -196,7 +195,7 @@ struct PhotosView: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .animation(.easeInOut(duration: 0.8), value: engine.generation)
-            .animation(.easeInOut(duration: 0.3), value: artToast)
+            .animation(.easeInOut(duration: 0.3), value: toast)
         }
         .ignoresSafeArea()
         .task(id: photosKey) {
@@ -232,28 +231,44 @@ struct PhotosView: View {
             case .next: engine.next()
             case .previous: engine.previous()
             case .select:
-                // Center button while an artwork is up (inert on regular
-                // photos): Shadow Box <-> Fill, with Fill + Music joining
-                // the rotation only while a track is playing.
+                // Center button: while an artwork is up with the mat on it
+                // cycles Shadow Box <-> Fill, with Fill + Music joining the
+                // rotation only while the presence is actually showing.
+                // Everywhere else (ordinary photos, or the mat off) it toggles
+                // the music presence (album-art corner + track lines).
                 if currentArtPhoto != nil, tvSettings.photosMatEnabled {
-                    tvSettings.cycleArtDisplay(musicActive: music.show)
+                    tvSettings.cycleArtDisplay(
+                        musicActive: music.show && tvSettings.photosMusicThumbnail)
+                } else {
+                    tvSettings.photosMusicThumbnail.toggle()
                 }
             }
         }
-        // Flash the new mode's name after a center-button toggle.
+        // Flash the new mode's name after a center-button toggle (only while
+        // an artwork is up, as before; Art Display can change elsewhere).
         .onChange(of: tvSettings.artDisplay) { _, newVal in
-            artToast = newVal.label
-            artToastID += 1
-            let id = artToastID
-            Task {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                if id == artToastID { artToast = nil }
-            }
+            if currentArtPhoto != nil { flashToast(newVal.label) }
+        }
+        // ...and the music presence's state after the center button flips it.
+        .onChange(of: tvSettings.photosMusicThumbnail) { _, on in
+            flashToast(on ? "Music On" : "Music Off")
         }
     }
 
-    @State private var artToast: String?
-    @State private var artToastID = 0
+    @State private var toast: String?
+    @State private var toastID = 0
+
+    // Show the capsule for 1.5 s; a newer toast supersedes an older one's
+    // pending clear via the id check.
+    private func flashToast(_ text: String) {
+        toast = text
+        toastID += 1
+        let id = toastID
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if id == toastID { toast = nil }
+        }
+    }
 
     // Re-run the slideshow task when album selection / sort change, or when the
     // TV-local photo duration changes (so the new interval is applied live).
@@ -635,69 +650,6 @@ private struct HandwrittenMat: View {
                 .padding(.leading, leadingPad)
                 .padding(.trailing, trailingPad)
                 .padding(.top, top)
-        }
-    }
-}
-
-private struct ExifCaptionOverlay: View {
-    let item: DisplayItem
-    let settings: SlideshowSettings
-    let generation: Int
-    var edgeInset: CGFloat = 40   // distance from screen edge (clears mat when on)
-    @State private var visible = true
-
-    private var exif: PhotoExif? {
-        switch item {
-        case .landscape(let p): return p.exif
-        case .portraitSolo(let p): return p.exif
-        case .portraitPair(let a, _): return a.exif
-        }
-    }
-
-    var body: some View {
-        let e = exif
-        let hasText = (e?.location?.isEmpty == false) || (e?.date?.isEmpty == false)
-        return VStack {
-            Spacer()
-            HStack {
-                if hasText, visible {
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let loc = e?.location, !loc.isEmpty {
-                            Text(loc).font(.system(size: 40, weight: .semibold))
-                        }
-                        if let d = e?.date, !d.isEmpty {
-                            Text(d).font(.system(size: 30, weight: .regular))
-                                .foregroundStyle(.white.opacity(0.85))
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.7), radius: 10, y: 2)
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 30)
-                    .transition(.opacity)
-                }
-                Spacer()
-            }
-            .padding(40)
-        }
-        .onChange(of: generation) { _, _ in
-            visible = true
-            if settings.autoDismissExif {
-                let secs = Double(settings.exifVisibleSeconds)
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000))
-                    withAnimation(.easeOut(duration: 0.5)) { visible = false }
-                }
-            }
-        }
-        .onAppear {
-            if settings.autoDismissExif {
-                let secs = Double(settings.exifVisibleSeconds)
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(secs * 1_000_000_000))
-                    withAnimation(.easeOut(duration: 0.5)) { visible = false }
-                }
-            }
         }
     }
 }

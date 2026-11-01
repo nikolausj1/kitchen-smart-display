@@ -17,6 +17,10 @@ import Combine
 //   photoDurationSeconds - slideshow dwell per photo on the TV (from a fixed
 //                          list of choices; independent of the kitchen)
 //   photosMatEnabled     - whether the picture-frame mat is drawn on Photos
+//   photosMusicThumbnail - whether the Photos view shows the Now Playing
+//                          presence (album-art corner + handwritten track
+//                          lines); TV-local, toggled by the center button,
+//                          not synced to the hub
 //   musicMatMode         - how Now Playing relates to the mat: off (full-bleed),
 //                          fit (current layout inside the opening), or framed
 //                          (blurred ambient fill + metadata on the mat)
@@ -111,6 +115,7 @@ final class TVSettings: ObservableObject {
         static let photoDuration = "tv.photoDurationSeconds"
         static let legacyMatEnabled = "tv.matEnabled"   // pre per-view split
         static let photosMatEnabled = "tv.photosMatEnabled"
+        static let photosMusicThumbnail = "tv.photosMusicThumbnail"
         static let musicMatMode = "tv.musicMatMode"
         static let todayMatEnabled = "tv.todayMatEnabled"
         static let legacyAlbumId = "tv.albumId"          // pre multi-select
@@ -143,6 +148,9 @@ final class TVSettings: ObservableObject {
     }
     @Published var photosMatEnabled: Bool {
         didSet { UserDefaults.standard.set(photosMatEnabled, forKey: Key.photosMatEnabled) }
+    }
+    @Published var photosMusicThumbnail: Bool {
+        didSet { UserDefaults.standard.set(photosMusicThumbnail, forKey: Key.photosMusicThumbnail) }
     }
     @Published var musicMatMode: MusicMatMode {
         didSet { UserDefaults.standard.set(musicMatMode.rawValue, forKey: Key.musicMatMode) }
@@ -192,6 +200,8 @@ final class TVSettings: ObservableObject {
         let legacyMat = d.object(forKey: Key.legacyMatEnabled) as? Bool
         photosMatEnabled = (d.object(forKey: Key.photosMatEnabled) as? Bool)
             ?? legacyMat ?? true
+        // Music presence on Photos defaults ON (the center button hides it).
+        photosMusicThumbnail = (d.object(forKey: Key.photosMusicThumbnail) as? Bool) ?? true
         // Music mat defaults to Framed (the full mat treatment).
         musicMatMode = (d.object(forKey: Key.musicMatMode) as? Int)
             .flatMap(MusicMatMode.init(rawValue:)) ?? .framed

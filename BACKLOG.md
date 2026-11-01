@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-22
-version: 9.5
+modified: 2026-10-31
+version: 9.8
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -914,6 +914,20 @@ captures decisions made during working sessions.
   No, one-hour revert, long press to mark a video wrong, yt-dlp and ffmpeg on
   the NUC self-updating weekly. Backdrops pruned to Drift, Smoke, Marble,
   Mixtape and Music Videos; Smoke is the new default. Engine first, nostalgic
+- **2026-10-31 - Apple TV Photos: the center button splits by photo type; mat
+  off means no caption; music off hides the corner and the lines; the setting
+  stays on the TV.** On an art-album artwork with the mat on, the center button
+  keeps cycling Art Display (Shadow Box, Fill, Fill + Music); on ordinary photos
+  or any photo with the mat off, it toggles the music presence (corner art plus
+  track lines), with a 1.5 s toast. Fill + Music only joins the rotation while
+  the music presence is shown. Chosen over making the thumbnail toggle win
+  everywhere, and over short press vs long press. With the mat off the whole
+  white caption goes, not just the date, and music off hides both the corner
+  art and the lines, so mat off plus music off is a bare full-bleed image for
+  full-screen pictures with no metadata. Persistence by whatever is easiest:
+  local UserDefaults (`tv.photosMusicThumbnail`, default on), no hub sync, no
+  Settings row. Built and installed on the Living Room TV at 13:19, after
+  re-downloading the Metal Toolchain that the Xcode 27.2 update dropped.
   TV skin second. `docs/designs/music-videos.md`.
 - **2026-10-10 - `feature/echo-hub` merged to `main`** (fast-forward, 128
   commits: the hub migration, Echo Show, layout editor, Entry board, Today
@@ -1414,8 +1428,6 @@ captures decisions made during working sessions.
   for a day, `pi/wifi-selfheal.sh` + `wifi-selfheal.service` now restore the
   profile from the Imager's `network-config` at every boot. Deployed and
   tested on the Pi (profile deleted, healed in 5 s).
-Newest first.
-
 - **2026-10-16 - Sound card mixer: per-room volume on Now Playing** (deployed
   to the hub and the kitchen Pi at 16:12, build `5c762f0`; the Echos pick it up
   on their reload; not committed). When Main is grouped the card shows one
@@ -1433,6 +1445,21 @@ Newest first.
   `_review/mockups/sound-mixer-mockup.html`.
 - **2026-10-16 - Mixtape polish round, realism items 1 to 7** (`feature/mixtape-polish`):
   reel spin-up and coast with a rock-back, wow and flutter, a flickering lamp
+Newest first.
+
+- **2026-10-31 - Apple TV Photos: center button toggles the music presence, and
+  a bare full-bleed mode** (`feature/music-videos`; installed on the Living
+  Room TV at 13:19; not committed). On the
+  Photos view the Siri Remote center button turns the album-art corner
+  thumbnail and the handwritten track lines on the mat on and off, with a 1.5 s
+  "Music On" / "Music Off" toast. It is a TV-local setting
+  (`photosMusicThumbnail`, UserDefaults `tv.photosMusicThumbnail`, default on),
+  kept across relaunches, not synced to the hub, no Settings row. An artwork
+  from an art album with the mat on keeps the old center-button job (cycling
+  Art Display: Shadow Box, Fill, Fill + Music, which joins the rotation only
+  while the music presence shows). With the mat off the unmatted white
+  location + date caption is gone (`ExifCaptionOverlay` removed), so mat off
+  plus music off is a bare full-bleed image with nothing drawn on it.
   in the window with pack edge light, drifting glass with a specular sweep on
   the swing, hash-driven VU character with a song-start bounce, per-tape hub
   rims so the packs sit behind the shell, door edge thickness, aligned

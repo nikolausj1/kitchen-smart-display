@@ -266,8 +266,9 @@ struct RootView: View {
 
     // Center (select) button: toggle in Settings; on Now Playing it cycles
     // the Framed backdrop live (Drift, Smoke, Marble, Mixtape, Music Videos,
-    // no Settings trip needed). Deliberately inert elsewhere (no accidental
-    // Sonos transport from a resting thumb).
+    // no Settings trip needed). On Photos it cycles Art Display or toggles the
+    // music presence. Deliberately inert on Today (no accidental Sonos
+    // transport from a resting thumb).
     private func handleSelect() {
         switch router.view {
         case .settings:
@@ -278,8 +279,9 @@ struct RootView: View {
                 tvSettings.stepFramedBackdrop(1, wrap: true)
             }
         case .photos:
-            // PhotosView decides: toggles Art Display (Shadow Box / Fill)
-            // when an artwork is up, inert on regular photos.
+            // PhotosView decides: cycles Art Display when an artwork is up
+            // with the mat on, otherwise toggles the music presence
+            // (album-art corner + track lines) on/off.
             photoRemote.send(.select)
         default:
             break
