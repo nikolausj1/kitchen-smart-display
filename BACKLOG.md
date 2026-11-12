@@ -1,8 +1,8 @@
 ---
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
-modified: 2026-10-31
-version: 9.8
+modified: 2026-11-11
+version: 9.10
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -192,7 +192,7 @@ the art. Concepts sheet: `_review/mockups/mixtape-label-concepts.html`
 (six concepts on real deck and tape pixels). Justin picks, then it is built
 and redeployed; merge after that.
 
-### Music Videos: muted video backdrop for the Apple TV (phase 1 BUILT 2026-10-16 on `feature/music-videos`, hub deployed, TV not installed)
+### Music Videos: muted video backdrop for the Apple TV (phase 1 BUILT 2026-10-16 on `feature/music-videos`, hub deployed and reaching the NAS since 2026-11-11, TV not installed)
 
 When friends are over, the living room TV shows the official music video for the
 song Sonos is playing, muted, as a new stop in the Framed backdrop cycle next to
@@ -415,6 +415,21 @@ Remaining:
   waits on Justin's OK to build) - see Active design topics and
   `docs/designs/music-videos.md`. Phase 1 starts with the NAS service-account
   setup and the AVPlayer stream spike.
+- **Music Videos follow-ups from the first evening** (TODO, 2026-11-11: twelve
+  songs, ten matched and saved, two missed) - (1) still-image uploads: "King
+  of Spain" and "Guilty Filthy Soul" matched the artist's own channel but the
+  files are about 4 MB for three and a half minutes, which is a cover held on
+  screen, not a video; after a download, measure the video bitrate (ffprobe)
+  and treat anything under about 300 kbps as a miss. (2) Label channels: the
+  real "Your Easy Lovin' Ain't Pleasin' Nothin'" video is on Stones Throw
+  with a plain title and scores 31.6, under the floor of 40, next to fan
+  re-uploads at 28 to 30; nothing in a flat search says a channel is a label,
+  so today this is a dashboard Pick. An allow-list of label channels on the
+  dashboard would fix it. (3) A live session can win when its title does not
+  say "live" ("MoneyGrabber (12 of 15)", Live from Daryl's House, on the
+  band's channel); the long press is the fix. Fixed the same day: "&" and
+  "and" now match in titles (Miike Snow, "Black & Blue" against the artist's
+  "Black and Blue"), and remixes are rejected unless Sonos is playing one.
 - **`morningTick` never fires** (BUG, found 2026-10-16) - `RootView` is rebuilt
   every second by the 1 Hz clock, which restarts the Timer publisher before it
   can tick, so the Today morning auto-show it drives never happens. The Music
@@ -519,7 +534,7 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
-- **Sonos write hardening** (TODO, from the 2026-10-29 stale-address incident) -
+- **Sonos write hardening** (parts 2 and 3 BUILT 2026-10-29 and committed 2026-11-11, the watchdog NOT DEPLOYED; part 1 waits on Justin) -
   three parts: (1) Justin: a DHCP reservation on the router for the Family
   Room Playbar, `94:9F:3E:61:11:84`, so its address stops changing; (2) the
   card aborts volume, join and leave requests client-side after about 3 s so
