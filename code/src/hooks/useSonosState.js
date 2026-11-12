@@ -72,12 +72,15 @@ function findPlayerInZones(zones, roomName) {
 
 // Grouping facts for the Sound popover, from the same /zones poll:
 //   groupMembers  room names in our group, ours included
-//   groupVolume   the group's volume (Sonos app's main slider); equals the
-//                 room volume when the room plays alone
+//   groupVolume   the group's volume (Sonos app's main slider): the mean of the
+//                 members' volumes, so it equals the room volume when the room
+//                 plays alone
+//   roomVolumes   { roomName: volume } for every room in our group, so the
+//                 Sound card can show and set each one
 //   elsewhere     { roomName: label } for rooms playing in some OTHER group,
 //                 so a join can warn that it takes the room over
 function parseGrouping(zones, roomName) {
-  const out = { groupMembers: [roomName], groupVolume: null, elsewhere: {} }
+  const out = { groupMembers: [roomName], groupVolume: null, roomVolumes: {}, elsewhere: {} }
   if (!Array.isArray(zones)) return out
   for (const group of zones) {
     const members = (group.members || []).map((m) => m.roomName)
@@ -85,6 +88,9 @@ function parseGrouping(zones, roomName) {
     if (members.includes(roomName)) {
       out.groupMembers = members
       out.groupVolume = c.groupState?.volume ?? null
+      for (const m of group.members || []) {
+        if (typeof m.state?.volume === 'number') out.roomVolumes[m.roomName] = m.state.volume
+      }
     } else if (c.state?.playbackState === 'PLAYING') {
       const t = c.state.currentTrack || {}
       const label = String(t.uri).includes('htastream')
@@ -143,6 +149,7 @@ export default function useSonosState() {
     volume: 0,
     groupMembers: [room],
     groupVolume: null,
+    roomVolumes: {},
     elsewhere: {},
     loading: true,
     error: null,
@@ -215,21 +222,47 @@ export default function useSonosState() {
   return state
 }
 
+// How long one Sonos command may hang before the screen gives up on it.
+// node-sonos-http-api holds a player's address from discovery; when a player
+// moves (2026-10-29: the Family Room Playbar changed IP and the API kept the
+// old one for six days) every write to it hangs 21 s upstream and the hub's
+// proxy answers 502 after 6 s. The Sound card sends a volume step every 250 ms
+// while a button is held, so without a short abort those hung requests filled
+// Chromium's six connections to the hub and stalled the /zones poll: the card
+// looked dead. 3 s is longer than any healthy command (under 0.1 s through
+// the hub) and short enough that a stuck player costs one slot at a time.
+export const SONOS_ACTION_TIMEOUT_MS = 3000
+
+// One fire-and-forget Sonos command. Never rejects: a failure is a console
+// warning and nothing else, so a caller can drop the promise. `fetchImpl` is
+// for tests; the app always uses the global fetch.
+export async function sendSonosCommand(
+  url,
+  { timeoutMs = SONOS_ACTION_TIMEOUT_MS, fetchImpl = fetch } = {},
+) {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), timeoutMs)
+  try {
+    await fetchImpl(url, { method: 'GET', cache: 'no-store', signal: ac.signal })
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      console.warn(`sonos action timed out after ${timeoutMs / 1000}s`, url)
+    } else {
+      console.warn('sonos action failed', url, e)
+    }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Hook for transport + favorite actions, bound to current Settings.
 export function useSonosActions() {
   const { sonos } = useSettings()
   return useMemo(() => {
     // `path` is relative to the API base; `send` prefixes this screen's room.
-    const sendRaw = async (path) => {
-      try {
-        await fetch(`${sonos.apiBase}${path}`, {
-          method: 'GET',
-          cache: 'no-store',
-        })
-      } catch (e) {
-        console.warn('sonos action failed', path, e)
-      }
-    }
+    // Callers do not await: a command that hangs is abandoned after
+    // SONOS_ACTION_TIMEOUT_MS and the next poll shows what the player did.
+    const sendRaw = (path) => sendSonosCommand(`${sonos.apiBase}${path}`)
     const send = (path) => sendRaw(`/${encodeURIComponent(sonos.room)}${path}`)
     return {
       play: () => send('/play'),
@@ -241,6 +274,9 @@ export function useSonosActions() {
       volumeDown: () => send('/volume/-5'),
       // Absolute, so a burst of optimistic taps lands on what the screen shows.
       setGroupVolume: (v) => send(`/groupVolume/${Math.round(v)}`),
+      // One room's own volume; the group's follows as the new mean.
+      setRoomVolume: (other, v) =>
+        sendRaw(`/${encodeURIComponent(other)}/volume/${Math.round(v)}`),
       // Pull another room into this screen's group, or send it back out.
       joinRoom: (other) =>
         sendRaw(`/${encodeURIComponent(other)}/join/${encodeURIComponent(sonos.room)}`),

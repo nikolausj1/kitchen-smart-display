@@ -218,10 +218,15 @@
 }
 .snd.is-open {
   opacity: 1;
-  transform: none;
+  /* A card too tall for the space above the transport (four or more rows)
+   * slides down over it rather than clipping at the top of the screen. */
+  transform: translateY(var(--snd-shift, 0px));
   visibility: visible;
   pointer-events: auto;
   transition-delay: 0s;
+}
+.snd.is-shifted::after {
+  display: none;
 }
 /* Caret: the lower half of a rotated square, so it never doubles up over the
  * card. Sits 1px low to cover the card's bottom border at its base. */
@@ -289,6 +294,156 @@
   height: 1px;
   background: rgba(255, 255, 255, 0.1);
   margin: 2.2vw 0 1.9vw;
+}
+/* Grouped, the card has more to hold, so the divider breathes a little less. */
+.snd.is-grouped .snd__divider {
+  margin: 1.7vw 0 1.4vw;
+}
+
+/* --- Room rows (grouped only): tick to leave, name, number, -, track, + --- */
+
+.snd__mix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55vw;
+  margin-top: 1vw;
+}
+.snd__row {
+  display: grid;
+  grid-template-columns: max(2vw, 22px) minmax(0, 1.5fr) auto max(3.2vw, 48px) minmax(4.5vw, 1fr) max(3.2vw, 48px);
+  align-items: center;
+  gap: 0.9vw;
+  min-height: max(3.2vw, 48px);
+  transition: opacity 0.2s;
+}
+.snd__row.is-pending {
+  opacity: 0.5;
+}
+.snd__row-name {
+  font-size: 1.4vw;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.snd__row-num {
+  font-size: 1.75vw;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.3vw;
+  text-align: right;
+}
+.np__btn.snd__row-step {
+  width: max(3.2vw, 48px);
+  height: max(3.2vw, 48px);
+  min-width: 0;
+  min-height: 0;
+}
+.snd__row-track {
+  height: max(0.5vw, 5px);
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.snd__row-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+/* The joined chip's white tick, carried over to the row; tap it to leave.
+ * This screen's own room shows a speaker there instead and cannot leave. */
+.snd__leave {
+  width: max(2vw, 22px);
+  height: max(2vw, 22px);
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  background: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.snd__leave svg {
+  width: 70%;
+  height: 70%;
+  fill: none;
+  stroke: #000000;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.snd__row.is-pending .snd__leave {
+  background: none;
+  border: max(0.15vw, 2px) solid #ffffff;
+  border-top-color: transparent;
+  animation: snd-spin 0.7s linear infinite;
+}
+.snd__row.is-pending .snd__leave svg {
+  opacity: 0;
+}
+.snd__home {
+  width: max(2vw, 22px);
+  height: max(2vw, 22px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.snd__home-glyph {
+  width: 100%;
+  height: 100%;
+  fill: rgba(255, 255, 255, 0.55);
+}
+.snd__home-glyph .snd__wave {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+/* Grouped, the join chips tuck into one compact line under the rows, label at
+ * the left, so two rows plus a chip still fit above the transport. */
+.snd.is-grouped .snd__join {
+  display: flex;
+  align-items: center;
+  gap: 1.3vw;
+  margin-top: 1.3vw;
+}
+.snd.is-grouped .snd__join .snd__label {
+  flex: none;
+}
+.snd.is-grouped .snd__rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8vw;
+  margin-top: 0;
+  flex: 1 1 auto;
+}
+.snd.is-grouped .snd__room {
+  min-height: max(3.2vw, 48px);
+  padding: 0.4vw 1.2vw 0.4vw 0.8vw;
+  gap: 0.7vw;
+}
+.snd.is-grouped .snd__room-name {
+  font-size: 1.25vw;
+}
+.snd.is-grouped .snd__ring {
+  width: max(1.7vw, 20px);
+  height: max(1.7vw, 20px);
+}
+
+/* Echo Show (?kiosk=echo): the column is too narrow for a track worth
+ * reading, so its rows are tick, name, number, minus, plus. */
+body[data-kiosk='echo'] .snd__row {
+  grid-template-columns: max(2vw, 22px) minmax(0, 1fr) auto max(3.2vw, 48px) max(3.2vw, 48px);
+  gap: 1vw;
+}
+body[data-kiosk='echo'] .snd__row-track {
+  display: none;
 }
 
 .snd__rooms {
