@@ -29,6 +29,8 @@ import './BriefingLayout.css'
 // The masthead name. A const for now; it becomes a per-screen setting
 // (display.houseName) as soon as Settings grows a text field for it.
 const HOUSE_NAME = 'Nikolaus House'
+// Demo mode (and so every recording) never prints the real family name.
+const DEMO_HOUSE_NAME = 'Maple House'
 
 export default function BriefingLayout() {
   const d = useTodayData()
@@ -42,7 +44,7 @@ export default function BriefingLayout() {
     <div className="tl-root tl-briefing">
       <div className="tl-briefing__col tl-briefing__col--left">
         <header className="tl-briefing__masthead">
-          <span className="tl-briefing__house">{HOUSE_NAME}</span>
+          <span className="tl-briefing__house">{d.demo ? DEMO_HOUSE_NAME : HOUSE_NAME}</span>
           <span className="tl-briefing__greeting">{d.greeting}</span>
         </header>
 

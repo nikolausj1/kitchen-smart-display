@@ -269,7 +269,7 @@ test('chipIds: the ids given, else every mode on the whitelist', () => {
     'input_boolean.mode_vacation',
     'input_boolean.mode_working_late',
   ])
-  assert.deepEqual(chipIds('person.justin, person.sheena', DEMO), ['person.justin', 'person.sheena'])
+  assert.deepEqual(chipIds('person.alex, person.jordan', DEMO), ['person.alex', 'person.jordan'])
   assert.deepEqual(chipIds('', null), [])
 })
 
@@ -342,14 +342,14 @@ test('haOptionsKey changes with the options, not with the states', () => {
 
 // --- The demo -----------------------------------------------------------------------------
 
-test('the demo house: garage open, door locked, Justin home, Sheena away, Auto, downstairs on', () => {
+test('the demo house: garage open, door locked, Alex home, Jordan away, Auto, downstairs on', () => {
   const s = (id) => DEMO.entities[id].state
   assert.equal(DEMO.status, 'ok')
   assert.equal(DEMO.actionsEnabled, true)
   assert.equal(s('cover.garage_door_controller'), 'open')
   assert.equal(s('lock.front_door_smart_code_with_home_connect_technology'), 'locked')
-  assert.equal(s('person.justin'), 'home')
-  assert.equal(s('person.sheena'), 'not_home')
+  assert.equal(s('person.alex'), 'home')
+  assert.equal(s('person.jordan'), 'not_home')
   assert.equal(s('input_select.day_part_override'), 'Auto')
   assert.equal(s('light.downstairs'), 'on')
   assert.deepEqual(DEMO.entities['input_select.day_part_override'].options, [

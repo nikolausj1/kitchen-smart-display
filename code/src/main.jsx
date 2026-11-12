@@ -1,3 +1,8 @@
+// ?record=1 (docs/designs/recording-mode.md): the fixture clock and the offline
+// fixture hub must be in place before any other module reads the time or
+// fetches, so these two come first.
+import './lib/recordMode.js'
+import './lib/recordNetwork.js'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 // Inter font - shipped inside the build so the kiosk renders correctly even

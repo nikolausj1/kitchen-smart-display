@@ -23,6 +23,7 @@ import { decideWear } from '../lib/wear.js'
 import { buildAgendaDays, countdownsFor } from '../lib/agenda.js'
 import useDailyForecast from './useDailyForecast.js'
 import { useDemoMode } from './demoMode.js'
+import { RECORD } from '../../../lib/recordMode.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
 import {
   DEMO_AIR_QUALITY,
@@ -366,7 +367,10 @@ export default function useTodayData() {
   // handed us, so a panel button drives the real, house-shared countdown.
   const timer = useMemo(
     () =>
-      demo
+      // Under ?record=1 the REAL countdown runs against the fixture clock
+      // (lib/recordMode.js) so its band really turns green -> yellow on screen;
+      // plain ?demo=1 keeps its frozen 18-minutes-green timer.
+      demo && !RECORD
         ? { ...DEMO_TIMER, target: demoTarget, actions: timerState.actions }
         : {
             mode: timerState.mode,

@@ -8,6 +8,8 @@ import useLunch from '../../hooks/useLunch.js'
 import useSchoolCalendar from '../../hooks/useSchoolCalendar.js'
 import { useSettings } from '../../lib/settings.js'
 import { decideTravelMode } from '../../lib/travelDefault.js'
+import { useDemoMode } from '../TodayLayouts/data/demoMode.js'
+import { DEMO_SCHOOL } from '../TodayLayouts/data/demo.js'
 import {
   isNoSchoolToday,
   lunchEntreeForToday,
@@ -87,20 +89,21 @@ export default function TodayView() {
   // School-schedule data. Dev params for previewing without the Pi endpoints:
   //   ?noschool=1  force the no-school full-width layout
   //   ?demo=1      inject a sample lunch + activities band
+  // ?demo=1 and ?record=1 both turn the demo store on (data/demoMode.js); the
+  // fixtures are the Today layouts' own, so every layout shows the same invented
+  // school day.
   const params = new URLSearchParams(window.location.search)
-  const demo = params.get('demo') === '1'
+  const { on: demo } = useDemoMode()
   const forceNoSchool = params.get('noschool') === '1'
 
   const calendar = useSchoolCalendar()
   const lunch = useLunch()
   const now = new Date()
-  const noSchool = forceNoSchool || isNoSchoolToday(school, calendar, now)
+  const noSchool = forceNoSchool || (demo ? DEMO_SCHOOL.noSchool : isNoSchoolToday(school, calendar, now))
 
-  const entree = demo ? "Chef's Choice" : lunchEntreeForToday(lunch, now)
-  const grab = demo ? 'Turkey and Cheese Wrap' : grabForToday(lunch, now)
-  const activities = demo
-    ? [{ name: 'Vinny', label: 'Library' }, { name: 'Chase', label: 'Coding' }]
-    : activitiesForToday(school, now)
+  const entree = demo ? DEMO_SCHOOL.entree : lunchEntreeForToday(lunch, now)
+  const grab = demo ? DEMO_SCHOOL.grab : grabForToday(lunch, now)
+  const activities = demo ? DEMO_SCHOOL.activities : activitiesForToday(school, now)
 
   // Slim band segments, suppressed on no-school days.
   const band = noSchool

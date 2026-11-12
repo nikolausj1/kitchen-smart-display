@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { RECORD } from '../../../lib/recordMode.js'
 
 // demoMode - whether the Today layouts show the demo fixtures (data/demo.js).
 //
@@ -13,7 +14,8 @@ import { useSyncExternalStore } from 'react'
 
 function readInitial() {
   if (typeof window === 'undefined') return { on: false, since: null }
-  const on = new URLSearchParams(window.location.search).get('demo') === '1'
+  // ?record=1 (lib/recordMode.js) is demo mode plus a fixture clock and no network.
+  const on = RECORD || new URLSearchParams(window.location.search).get('demo') === '1'
   return { on, since: on ? Date.now() : null }
 }
 

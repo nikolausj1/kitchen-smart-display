@@ -38,6 +38,9 @@ This folder contains the Kitchen Smart Display project: a wall-mounted 15.6" tou
   NUC), Google Calendar (future).
 - Design references: `docs/designs/echo-show-and-hub.md`,
   `docs/designs/device-registry.md`, `docs/designs/sonos-and-state-to-the-hub.md`.
+- Screen recordings (public-safe, fictional data, countdown turns yellow on load):
+  `http://localhost:5173/?record=1&view=today`; parameters in
+  `docs/designs/recording-mode.md`. `demo.js` fixtures are public-safe, keep them so.
 
 ## Folder Structure
 

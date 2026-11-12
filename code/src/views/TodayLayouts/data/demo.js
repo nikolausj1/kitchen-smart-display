@@ -1,12 +1,19 @@
 import { dateKey } from '../../../lib/schoolDay.js'
 import { cleanHaSnapshot, mergeHa } from '../../../lib/haState.js'
 import { wmoToIcon, wmoDescription } from './wmo.js'
+import { RECORD } from '../../../lib/recordMode.js'
 
+// PUBLIC-SAFE: every name, school, address and event in this file is invented.
+// Nothing here may name a real person, school, street or family photo; the
+// recording mode (lib/recordMode.js, docs/designs/recording-mode.md) publishes
+// it. Keep it that way when adding fixtures.
+//
 // Demo fixtures for ?demo=1 - a full, plausible Today with music playing, a
 // school day in progress and a timer counting down, so the layouts can be
 // designed and screenshotted without Sonos, the lunch proxy or the morning
-// actually being 7:24 AM. Photos are deliberately NOT faked: the slideshow is
-// the one source that always has real data to show.
+// actually being 7:24 AM. Photos are NOT faked under plain ?demo=1 (the
+// slideshow is the one source that always has real data to show); ?record=1
+// swaps in generated ones (data/demoPhotos.js).
 
 // Album art as an inline SVG data URI so the demo works with no network and no
 // Sonos: a warm sunset gradient behind a pale disc. Encoded once at module
@@ -57,8 +64,8 @@ export const DEMO_SCHOOL = {
   entree: 'Chicken Tenders',
   grab: 'Turkey & Cheese Wrap',
   activities: [
-    { name: 'Vinny', label: 'Library' },
-    { name: 'Chase', label: 'Coding' },
+    { name: 'Milo', label: 'Library' },
+    { name: 'Theo', label: 'Coding' },
   ],
 }
 
@@ -73,7 +80,7 @@ export const DEMO_TIMER = {
 }
 export const DEMO_TIMER_MINUTES = 18
 
-// Five plausible early-September Seattle days. code is a WMO code, so the icon
+// Five plausible early-autumn days. code is a WMO code, so the icon
 // and description come from the same table the live data uses.
 const DEMO_DAYS = [
   { code: 2, highF: 68, lowF: 52, precipPct: 10 },
@@ -324,7 +331,7 @@ export function demoFeed(sinceMs) {
         severity: 'Moderate',
         urgency: 'Expected',
         certainty: 'Likely',
-        headline: 'Wind Advisory issued by NWS Seattle WA: southwest winds 20 to 30 mph with gusts to 45 mph',
+        headline: 'Wind Advisory issued by NWS Maple Harbor: southwest winds 20 to 30 mph with gusts to 45 mph',
         description: 'Southwest winds 20 to 30 mph with gusts up to 45 mph. Gusty winds will blow around unsecured objects.',
         onset: new Date(hour0.getTime() - 3600000).toISOString(),
         ends: alertEnds.toISOString(),
@@ -346,8 +353,8 @@ export function demoFeed(sinceMs) {
 // there by useTodayData (a state initializer), so nothing slides with the clock.
 
 export const DEMO_CALENDARS = [
-  { id: 'justin@example.com', label: 'Justin', color: '#e0457b' },
-  { id: 'sheena@example.com', label: 'Sheena', color: '#4a90e2' },
+  { id: 'alex@example.com', label: 'Alex', color: '#e0457b' },
+  { id: 'jordan@example.com', label: 'Jordan', color: '#4a90e2' },
 ]
 
 // Fixed on purpose: the default names the 5:00 pm soccer below, whatever the
@@ -355,7 +362,7 @@ export const DEMO_CALENDARS = [
 // kinds the hub can send (docs/designs/entry-board.md), so the amber alert
 // line and the blue-grey weather dot can be seen without a storm.
 export const DEMO_HEADLINES = {
-  next: { text: 'Vinny soccer at 5:00 pm', kind: 'next', eventId: 'demo-soccer', until: null },
+  next: { text: 'Milo soccer at 5:00 pm', kind: 'next', eventId: 'demo-soccer', until: null },
   alert: { text: 'Wind Advisory until 9 pm', kind: 'alert', eventId: null, until: null },
   weather: { text: 'Rain from 3 pm', kind: 'weather', eventId: null, until: null },
 }
@@ -431,11 +438,11 @@ function demoAllDay(base, id, cal, title, offsetDays, lengthDays) {
 const DEMO_SPAN = { back: 21, ahead: 21 } // days -21 .. +20
 
 const DEMO_PLACES = {
-  field: 'Magnolia Playfield South, 2518 34th Ave W, Seattle, WA 98199',
-  pool: 'Queen Anne Pool, 1920 1st Ave W, Seattle, WA 98119',
-  school: 'Lawton Elementary School, 4000 27th Ave W, Seattle, WA 98199',
-  market: 'Ballard Farmers Market, 5345 Ballard Ave NW, Seattle, WA 98107',
-  piano: 'Magnolia Music Studio, 3213 W McGraw St, Seattle, WA 98199',
+  field: 'Cedar Park Field, 48 Cedar Park Rd, Maple Harbor',
+  pool: 'Harbor Pool, 300 Quay St, Maple Harbor',
+  school: 'Willowbrook Elementary School, 120 Orchard Ln, Maple Harbor',
+  market: 'Maple Harbor Farmers Market, 12 Market Sq, Maple Harbor',
+  piano: 'Fernhill Music Studio, 77 Fern St, Maple Harbor',
 }
 
 // By weekday (0 Sunday): [calendar 'j' | 's', title, start, end, place?, description?].
@@ -445,23 +452,23 @@ const DEMO_WEEK = {
     ['s', 'Grocery run', [16, 0], [17, 0]],
   ],
   1: [
-    ['s', 'Chase piano lesson', [16, 0], [16, 45], 'piano'],
-    ['j', 'Vinny soccer practice', [17, 0], [18, 0], 'field', 'Bring shin guards and water'],
+    ['s', 'Theo piano lesson', [16, 0], [16, 45], 'piano'],
+    ['j', 'Milo soccer practice', [17, 0], [18, 0], 'field', 'Bring shin guards and water'],
   ],
   2: [
     ['s', 'Swim lessons', [16, 30], [17, 15], 'pool'],
     ['s', 'Book club', [19, 0], [21, 0], null, 'This month: The Overstory'],
   ],
   3: [
-    ['j', 'Chase coding club', [15, 30], [16, 30], 'school'],
+    ['j', 'Theo coding club', [15, 30], [16, 30], 'school'],
     ['j', 'Recycling out', [20, 0], [20, 15]],
   ],
   4: [
     ['s', 'Yoga', [7, 0], [8, 0]],
-    ['j', 'Vinny soccer practice', [17, 0], [18, 15], 'field', 'Bring shin guards and water'],
+    ['j', 'Milo soccer practice', [17, 0], [18, 15], 'field', 'Bring shin guards and water'],
   ],
   5: [
-    ['s', 'Coffee with Priya', [10, 0], [11, 0]],
+    ['s', 'Coffee with Rosa', [10, 0], [11, 0]],
     ['j', 'Pizza night', [18, 0], [19, 30]],
   ],
   6: [
@@ -473,7 +480,7 @@ const DEMO_WEEK = {
 function demoWeekDay(base, offset, cals) {
   const d = dayOffset(base, offset)
   return (DEMO_WEEK[d.getDay()] || []).map(([c, title, from, to, place, description], i) =>
-    demoTimed(base, `demo-w${offset}-${i}`, c === 's' ? cals.sheena : cals.justin, title, offset, from, to, {
+    demoTimed(base, `demo-w${offset}-${i}`, c === 's' ? cals.jordan : cals.alex, title, offset, from, to, {
       location: place ? DEMO_PLACES[place] : '',
       description,
     })
@@ -481,26 +488,26 @@ function demoWeekDay(base, offset, cals) {
 }
 
 // The one-offs, by day from the demo's day.
-function demoOneOffs(base, { justin, sheena }) {
+function demoOneOffs(base, { alex, jordan }) {
   return [
-    demoAllDay(base, 'demo-books', justin, 'Library books due', -4, 1),
-    demoTimed(base, 'demo-denver', justin, 'Justin in Denver', -10, [9, 0], [18, 0], { location: 'Denver, CO' }, -8),
-    demoAllDay(base, 'demo-picture', sheena, 'Picture day', -15, 1),
-    demoTimed(base, 'demo-haircut', sheena, 'Vinny haircut', -2, [11, 0], [11, 30]),
+    demoAllDay(base, 'demo-books', alex, 'Library books due', -4, 1),
+    demoTimed(base, 'demo-conference', alex, 'Alex at a conference', -10, [9, 0], [18, 0], {}, -8),
+    demoAllDay(base, 'demo-picture', jordan, 'Picture day', -15, 1),
+    demoTimed(base, 'demo-haircut', jordan, 'Milo haircut', -2, [11, 0], [11, 30]),
     // Four at once, three days out.
-    demoTimed(base, 'demo-carpool', justin, 'Carpool pickup', 3, [17, 0], [17, 30]),
-    demoTimed(base, 'demo-call', sheena, 'Call with Grandma', 3, [17, 0], [17, 45]),
-    demoTimed(base, 'demo-ptc', sheena, 'Parent-teacher conference', 3, [17, 15], [17, 45], { location: DEMO_PLACES.school }),
-    demoTimed(base, 'demo-cleaners', justin, 'Pick up dry cleaning', 3, [17, 20], [17, 40]),
+    demoTimed(base, 'demo-carpool', alex, 'Carpool pickup', 3, [17, 0], [17, 30]),
+    demoTimed(base, 'demo-call', jordan, 'Call with Grandma', 3, [17, 0], [17, 45]),
+    demoTimed(base, 'demo-ptc', jordan, 'Parent-teacher conference', 3, [17, 15], [17, 45], { location: DEMO_PLACES.school }),
+    demoTimed(base, 'demo-cleaners', alex, 'Pick up dry cleaning', 3, [17, 20], [17, 40]),
     // The same dinner on both calendars: consolidate shows it once.
-    demoTimed(base, 'demo-parkers-j', justin, 'Dinner with the Parkers', 4, [18, 30], [20, 30], { location: 'The Parkers’, 2811 W Newton St, Seattle, WA 98199' }),
-    demoTimed(base, 'demo-parkers-s', sheena, 'Dinner with the Parkers', 4, [18, 30], [20, 30]),
-    demoAllDay(base, 'demo-grandparents', sheena, 'Grandparents visiting', 5, 4),
-    demoAllDay(base, 'demo-grandma-bday', justin, 'Grandma’s birthday', 5, 1),
-    demoAllDay(base, 'demo-fallbreak', justin, 'Fall break', 11, 9),
-    demoAllDay(base, 'demo-cabin', sheena, 'Cabin weekend', 12, 2),
-    demoTimed(base, 'demo-flu', sheena, 'Flu shots', 8, [15, 30], [16, 0], { location: 'Magnolia Pharmacy, 3217 W McGraw St, Seattle, WA 98199' }),
-    demoTimed(base, 'demo-recital', justin, 'Chase piano recital', 9, [18, 0], [19, 0], { location: DEMO_PLACES.piano }),
+    demoTimed(base, 'demo-okafors-a', alex, 'Dinner with the Okafors', 4, [18, 30], [20, 30], { location: 'The Okafors’, 9 Linden Way, Maple Harbor' }),
+    demoTimed(base, 'demo-okafors-j', jordan, 'Dinner with the Okafors', 4, [18, 30], [20, 30]),
+    demoAllDay(base, 'demo-grandparents', jordan, 'Grandparents visiting', 5, 4),
+    demoAllDay(base, 'demo-grandma-bday', alex, 'Grandma’s birthday', 5, 1),
+    demoAllDay(base, 'demo-fallbreak', alex, 'Fall break', 11, 9),
+    demoAllDay(base, 'demo-cabin', jordan, 'Cabin weekend', 12, 2),
+    demoTimed(base, 'demo-flu', jordan, 'Flu shots', 8, [15, 30], [16, 0], { location: 'Harbor Pharmacy, 15 Quay St, Maple Harbor' }),
+    demoTimed(base, 'demo-recital', alex, 'Theo piano recital', 9, [18, 0], [19, 0], { location: DEMO_PLACES.piano }),
   ]
 }
 
@@ -534,27 +541,27 @@ function sortLikeTheHub(list) {
 export function demoCalendar(today) {
   const base = new Date(today)
   base.setHours(0, 0, 0, 0)
-  const [justin, sheena] = DEMO_CALENDARS
+  const [alex, jordan] = DEMO_CALENDARS
 
   const firstThree = [
-    demoAllDay(base, 'demo-pj', sheena, 'PJ and Stuffy day', 0, 1),
-    demoTimed(base, 'demo-dentist', sheena, 'Chase dentist', 0, [8, 15], [9, 0]),
-    demoTimed(base, 'demo-lunch', justin, 'Lunch with Dana', 0, [12, 30], [13, 30]),
-    demoTimed(base, 'demo-soccer', justin, 'Vinny soccer', 0, [17, 0], [18, 15], {
+    demoAllDay(base, 'demo-pj', jordan, 'PJ and Stuffy day', 0, 1),
+    demoTimed(base, 'demo-dentist', jordan, 'Theo dentist', 0, [8, 15], [9, 0]),
+    demoTimed(base, 'demo-lunch', alex, 'Lunch with Casey', 0, [12, 30], [13, 30]),
+    demoTimed(base, 'demo-soccer', alex, 'Milo soccer', 0, [17, 0], [18, 15], {
       location: DEMO_PLACES.field,
       description: 'Bring shin guards and water',
     }),
-    demoAllDay(base, 'demo-chicago', sheena, 'Sheena in Chicago', 1, 2),
-    demoTimed(base, 'demo-piano', sheena, 'Chase piano lesson', 1, [16, 0], [16, 45], { location: DEMO_PLACES.piano }),
-    demoTimed(base, 'demo-bts', justin, 'Back to school night', 1, [18, 30], [20, 0], { location: DEMO_PLACES.school }),
-    demoTimed(base, 'demo-swim', justin, 'Vinny swim meet', 2, [9, 0], [11, 30], { location: DEMO_PLACES.pool }),
+    demoAllDay(base, 'demo-trip', jordan, 'Jordan on a work trip', 1, 2),
+    demoTimed(base, 'demo-piano', jordan, 'Theo piano lesson', 1, [16, 0], [16, 45], { location: DEMO_PLACES.piano }),
+    demoTimed(base, 'demo-bts', alex, 'Back to school night', 1, [18, 30], [20, 0], { location: DEMO_PLACES.school }),
+    demoTimed(base, 'demo-swim', alex, 'Milo swim meet', 2, [9, 0], [11, 30], { location: DEMO_PLACES.pool }),
   ]
   const weeks = []
   for (let i = -DEMO_SPAN.back; i < DEMO_SPAN.ahead; i++) {
     if (i >= 0 && i <= 2) continue
-    demoWeekDay(base, i, { justin, sheena }).forEach((e) => weeks.push(e))
+    demoWeekDay(base, i, { alex, jordan }).forEach((e) => weeks.push(e))
   }
-  const events = sortLikeTheHub(firstThree.concat(weeks, demoOneOffs(base, { justin, sheena })))
+  const events = sortLikeTheHub(firstThree.concat(weeks, demoOneOffs(base, { alex, jordan })))
   const range = { from: dateKey(dayOffset(base, -DEMO_SPAN.back)), to: dateKey(dayOffset(base, DEMO_SPAN.ahead)) }
 
   const countdowns = [
@@ -566,8 +573,8 @@ export function demoCalendar(today) {
       leadDays: 30,
       image: null,
       emoji: '\u{1F382}',
-      calendarLabel: justin.label,
-      color: justin.color,
+      calendarLabel: alex.label,
+      color: alex.color,
       tileColor: '#8e4ed8',
     },
     {
@@ -576,10 +583,12 @@ export function demoCalendar(today) {
       date: dateKey(dayOffset(base, 12)),
       daysLeft: 12,
       leadDays: 30,
-      image: '/countdown-art/demo-missing-cabin.png',
-      emoji: null,
-      calendarLabel: sheena.label,
-      color: sheena.color,
+      // Under ?record=1 nothing may leave the page, and art is fetched from the
+      // hub by an <img>: use an emoji tile instead of the missing-art fallback.
+      image: RECORD ? null : '/countdown-art/demo-missing-cabin.png',
+      emoji: RECORD ? '\u{1F3D5}' : null,
+      calendarLabel: jordan.label,
+      color: jordan.color,
       tileColor: '#2f9e44',
     },
   ]
@@ -593,7 +602,7 @@ export function demoCalendar(today) {
 // (hooks/useHomeAssistant.js), faked: the whitelist the hub was seeded with
 // (the same ids, labels and kinds, so a layout saved against the real one
 // draws here too, and the same ten actions), in a plausible afternoon: the
-// garage open 38 minutes, the front door locked, Justin home and Sheena
+// garage open 38 minutes, the front door locked, Alex home and Jordan
 // away, working late on and the other modes off, the day part on Auto, the
 // downstairs lights on. Actions are on, so the buttons look live; a press
 // only animates (demoHaAction). Like the calendar, the demo always wins over
@@ -616,8 +625,8 @@ const DEMO_HA_ENTITIES = [
   ['input_select.day_part_override', 'Day part', 'select', 'Auto', 245, { friendly_name: 'Day Part Override', options: DEMO_DAY_PARTS }],
   ['light.downstairs', 'Downstairs lights', 'light', 'on', 52, { friendly_name: 'Downstairs' }],
   ['light.basement_basement', 'Basement', 'light', 'off', 410, { friendly_name: 'Basement' }],
-  ['person.justin', 'Justin', 'person', 'home', 312, { friendly_name: 'Justin' }],
-  ['person.sheena', 'Sheena', 'person', 'not_home', 174, { friendly_name: 'Sheena' }],
+  ['person.alex', 'Alex', 'person', 'home', 312, { friendly_name: 'Alex' }],
+  ['person.jordan', 'Jordan', 'person', 'not_home', 174, { friendly_name: 'Jordan' }],
 ]
 
 // The hub's seed actions (frameserver/lib/homeAssistant.mjs SEED_ACTIONS).
