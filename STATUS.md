@@ -2,7 +2,7 @@
 title: "STATUS - Smart Display"
 created: 2026-07-24
 modified: 2026-11-11
-version: 5.30
+version: 5.31
 author: Claude Fable 5.1 (claude-fable-5-1)
 tags:
 ---
@@ -25,7 +25,7 @@ Active Development. Five screens are registered with the hub (plus `dev-mac` for
 
 **2026-10-16, 16:12: the Now Playing Sound card is a mixer, deployed to the hub and the kitchen Pi (build `5c762f0`; the Echos pick it up on their reload), not committed.** When the kitchen's room is grouped, the card shows one volume row per room under the group volume (Main, Playroom, Family Room, plus anything grouped from the Sonos app), each with a tick to leave, a number and minus and plus, steps of 2 with hold to repeat. The group number is the mean of the rows, as Sonos computes it, so the two always agree. Checked live against the real group from the dev server at the kitchen's 1920x1080 and the Echo Show's 1280x800, including one Playroom step up and back through Sonos. The deploy's hub test gate failed once on 2 of 648 tests and was green on four reruns, so those two are flaky; not yet identified. Next: a live try of the tick-to-leave on the wall, and commit.
 
-**2026-11-11, evening: Music Videos played end to end on the living room TV, and the branch is merged to `main` and pushed.** The TV build was installed at about 16:30 and Justin ran the first real session: twelve songs seen in four minutes of skipping, ten matched and saved to the NAS as 720p files (195 MB), two missed. Two scoring fixes followed from the misses ("&" and "and" now match in titles; remixes are rejected) and are committed but not on the hub until the next deploy, which also brings the Sonos watchdog. Open from the evening (BACKLOG): two matches are still-image uploads, one real video sits on a label channel under the floor, one live session won. Searching and downloading happen only while the TV shows the Music Videos backdrop on Now Playing; the hub goes idle a minute after the TV stops asking.
+**2026-11-11, evening: Music Videos played end to end on the living room TV, and the branch is merged to `main` and pushed.** The TV build was installed at about 16:30 and Justin ran the first real session: twelve songs seen in four minutes of skipping, ten matched and saved to the NAS as 720p files (195 MB), two missed. Two scoring fixes followed from the misses ("&" and "and" now match in titles; remixes are rejected) and went to the hub with a deploy at 17:03, which also brought the Sonos watchdog live (the dashboard has a Sonos card; no restarts, no timeouts at deploy); every service and all four awake screens answered afterwards. Open from the evening (BACKLOG): two matches are still-image uploads, one real video sits on a label channel under the floor, one live session won. Searching and downloading happen only while the TV shows the Music Videos backdrop on Now Playing; the hub goes idle a minute after the TV stops asking.
 
 **2026-11-11: Music Videos can reach its NAS folder, and the work that sat uncommitted in the shared checkout is committed.** Justin ran `setup-videos.ps1` on the NUC and switched the hub service to the `micro` account with the MissionControl login stored; the hub reports the folder reachable and has written its `cache`, `overrides` and README there, and photos, calendar, weather, Plex, Home Assistant and all seven Sonos zones still answer under the new account. Still not done: the TV build from `feature/music-videos` is not installed, so no video has played end to end. Four pieces of other sessions' work were committed on the branch as separate commits (the Sound card mixer and the 3 s Sonos command abort, the hub's Sonos watchdog, the web app's recording mode, the kitchen frame part scripts), `main`'s Mixtape counter commit was merged in, and an intermittent failure in the video index tests (cleanup racing a background write, about one run in four) is fixed: 661 hub tests, 30 clean runs. The Sonos watchdog is built and tested but not deployed. Plan: test Music Videos on the TV, merge to `main` and push, then Aquarium (`feature/aquarium`, 45 commits) merges `main` in.
 
@@ -100,7 +100,7 @@ The other remaining risk is unchanged: the full-permission `immich-go-import` AP
 
 ## Next Up
 
-0. Music Videos: `./deploy.sh all` to put the two scoring fixes and the Sonos watchdog on the hub; Justin sets the morning instrumental station to No on the dashboard and tries a real long press; tell the Aquarium session `main` is ready to merge in. Then phase 2, the nostalgic TV skin: Justin runs the ChatGPT prompt (design doc appendix), picks a direction, and it is built as a view over the phase 1 states.
+0. Music Videos: one tap on each Echo after the 17:03 hub deploy on 2026-11-11; a `./deploy.sh pi` outside a school morning brings the kitchen level; Justin sets the morning instrumental station to No on the dashboard and tries a real long press; tell the Aquarium session `main` is ready to merge in. Then phase 2, the nostalgic TV skin: Justin runs the ChatGPT prompt (design doc appendix), picks a direction, and it is built as a view over the phase 1 states.
 
 0b. Review the Mixtape polish round on the TV (`feature/mixtape-polish`, installed 2026-10-16): reel spin-up, lamp in the window, VU bounce, hub rims, tape counter; then merge to `main`.
 

@@ -2,7 +2,7 @@
 title: "Kitchen Smart Display - Backlog & Tracker"
 created: 2026-06-08
 modified: 2026-11-11
-version: 9.10
+version: 9.11
 author: Claude Opus 5.5 (claude-opus-5-5)
 tags: [backlog, roadmap, decisions, progress, apple-tv, kitchen-display]
 ---
@@ -534,7 +534,7 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
-- **Sonos write hardening** (parts 2 and 3 BUILT 2026-10-29 and committed 2026-11-11, the watchdog NOT DEPLOYED; part 1 waits on Justin) -
+- **Sonos write hardening** (parts 2 and 3 BUILT 2026-10-29, committed and the watchdog DEPLOYED to the hub 2026-11-11; part 1 waits on Justin) -
   three parts: (1) Justin: a DHCP reservation on the router for the Family
   Room Playbar, `94:9F:3E:61:11:84`, so its address stops changing; (2) the
   card aborts volume, join and leave requests client-side after about 3 s so
