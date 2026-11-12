@@ -125,6 +125,7 @@ import { DEFAULT_PLEX_URL, createPlex } from './lib/plex.mjs'
 import { createTmdb } from './lib/tmdb.mjs'
 import { createVideoResolver } from './lib/videoResolver.mjs'
 import { createHomeAssistant } from './lib/homeAssistant.mjs'
+import { createSonosWatchdog } from './lib/sonosWatchdog.mjs'
 import {
   DEFAULT_SCHOOL_SLUG,
   getCachedSchoolCal,
@@ -896,6 +897,11 @@ const SONOS_TIMEOUT_MS = 6000
 let sonosDownSince = 0
 let sonosLastLog = 0
 
+// Restarts the API service when writes to one player keep timing out while
+// reads still answer: the stale-address case (lib/sonosWatchdog.mjs). Its
+// status rides on /healthz under `sonos` for the dashboard.
+const sonosWatchdog = createSonosWatchdog({ log: (m) => console.log(m) })
+
 async function proxySonos(req, res, url) {
   if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'GET only' })
   // The rest of the path and the query string as received, still
@@ -909,6 +915,7 @@ async function proxySonos(req, res, url) {
       console.log(`[sonos] upstream back after ${Math.round((Date.now() - sonosDownSince) / 1000)}s`)
       sonosDownSince = 0
     }
+    sonosWatchdog.noteOk(rest)
     cors(res)
     res.writeHead(up.status, {
       'Content-Type': up.headers.get('content-type') || 'application/json',
@@ -918,11 +925,19 @@ async function proxySonos(req, res, url) {
     return res.end(body)
   } catch (e) {
     const now = Date.now()
-    if (!sonosDownSince || now - sonosLastLog > 5 * 60_000) {
-      console.warn(`[sonos] upstream ${SONOS_UPSTREAM} unreachable: ${e.message}`)
-      sonosLastLog = now
+    // A write that times out is the API waiting on one player (connect
+    // ETIMEDOUT to a stale address takes 21 s upstream, longer than our 6 s),
+    // not the API being down: it feeds the watchdog, not the outage log.
+    const timedOut = /timed out/.test(String(e.message))
+    if (timedOut && sonosWatchdog.classifyPath(rest)) {
+      sonosWatchdog.noteTimeout(rest)
+    } else {
+      if (!sonosDownSince || now - sonosLastLog > 5 * 60_000) {
+        console.warn(`[sonos] upstream ${SONOS_UPSTREAM} unreachable: ${e.message}`)
+        sonosLastLog = now
+      }
+      if (!sonosDownSince) sonosDownSince = now
     }
-    if (!sonosDownSince) sonosDownSince = now
     return json(res, 502, { ok: false, error: String(e.message || e) })
   }
 }
@@ -952,6 +967,7 @@ async function handle(req, res) {
       refreshRunning: running,
       app: appDeployed(),
       sonosUpstream: SONOS_UPSTREAM,
+      sonos: { upstream: SONOS_UPSTREAM, ...sonosWatchdog.status() },
       health: health.brief(),
       state: {
         timerActive: state.timer.active,

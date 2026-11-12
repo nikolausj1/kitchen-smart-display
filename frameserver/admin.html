@@ -1071,6 +1071,7 @@ function renderShared() {
   renderWeather()
   renderHomeAssistant()
   renderVideos()
+  renderSonos()
   // Paint the status from what was last fetched, so a re-render does not flash
   // "Loading", then refetch it if that is over a minute old.
   paintExtras()
@@ -1335,6 +1336,66 @@ function renderWeather() {
   const body = make('div')
   body.id = 'weatherStatus'
   c.appendChild(body)
+}
+
+// GET /healthz `sonos` (lib/sonosWatchdog.mjs status()): the proxy's upstream,
+// when a read last answered, write timeouts per room over the window, and the
+// watchdog's last restart of SmartDisplaySonosAPI. Read-only; the thresholds
+// are the module's defaults. From the 2026-10-29 stale-address incident, when
+// every write to the Family Room hung for six days and nothing said so.
+function renderSonos() {
+  const c = card('Sonos',
+    'Every screen reads and controls Sonos through the hub’s /api/sonos proxy to node-sonos-http-api on this box. ' +
+    'When commands to one player keep timing out while reads still work (a player that changed address), the hub restarts the service itself.')
+  const body = make('div')
+  body.id = 'sonosStatus'
+  c.appendChild(body)
+}
+
+const SONOS_READ_STALE_MS = 60 * 1000
+
+function paintSonosStatus(box) {
+  box.innerHTML = ''
+  const { hub } = extras
+  if (!hub) {
+    infoRow(box, 'Sonos', make('span', 'muted', 'Loading…'))
+    return
+  }
+  if (hub.error) {
+    infoRow(box, 'Sonos', make('span', 'bad', `Could not read /healthz: ${hub.error}`))
+    return
+  }
+  const d = (hub.data && hub.data.sonos) || {}
+  if (!d.service) {
+    infoRow(box, 'Sonos', make('span', 'muted', 'This hub predates the watchdog; deploy to see its status here.'))
+    return
+  }
+  infoRow(box, 'Upstream', make('code', null, String(d.upstream || hub.data.sonosUpstream || '')))
+  infoRow(box, 'Last read answered', ageSpan(d.lastReadOkAt, 'not since the hub started', SONOS_READ_STALE_MS))
+
+  const rooms = Object.entries(d.timeouts || {}).sort((a, b) => b[1] - a[1])
+  const windowMin = Math.round((d.windowMs || 0) / 60000)
+  const t = make('span', rooms.length ? 'bad' : 'ok',
+    rooms.length
+      ? rooms.map(([room, n]) => `${room}: ${n}`).join(' · ')
+      : 'None')
+  infoRow(box, `Command timeouts, last ${windowMin} min`, t)
+  if (d.holding) infoRow(box, 'Watchdog', make('span', 'muted', `Holding: ${d.holding}`))
+  else if (d.restarting) infoRow(box, 'Watchdog', make('span', null, `Restarting ${d.service} now…`))
+
+  const r = d.lastRestart
+  if (!r) {
+    infoRow(box, 'Last restart by the hub', make('span', 'muted',
+      `none since the hub started · restarts after ${d.threshold} timeouts to one room in ${windowMin} min, at most once per ${Math.round((d.cooldownMs || 0) / 60000)} min`))
+    return
+  }
+  const w = make('span')
+  w.appendChild(ageSpan(r.at, 'never'))
+  const why = ` · ${r.timeouts} timeouts to ${r.room}`
+  if (r.ok === true) w.append(document.createTextNode(why + ' · '), make('span', 'ok', `restarted${r.result ? ` (${r.result})` : ''}`))
+  else if (r.ok === false) w.append(document.createTextNode(why + ' · '), make('span', 'bad', `failed: ${r.error || 'no reason given'}`))
+  else w.append(document.createTextNode(why + ' · restarting…'))
+  infoRow(box, `Last restart by the hub${d.restarts > 1 ? ` (${d.restarts} total)` : ''}`, w)
 }
 
 let artSyncing = false
@@ -1989,7 +2050,7 @@ const EXTRAS_MS = 60 * 1000
 const CAL_STALE_MS = 20 * 60 * 1000     // the hub refetches Google every 5 min
 const ART_STALE_MS = 3 * 60 * 60 * 1000 // and syncs the album hourly
 const WEATHER_STALE_MS = 45 * 60 * 1000 // and refreshes the weather feed every 15 min
-let extras = { calendar: null, state: null, art: null, weather: null, ha: null, haLog: null, at: 0 }
+let extras = { calendar: null, state: null, art: null, weather: null, ha: null, haLog: null, hub: null, at: 0 }
 let extrasJob = null
 
 function loadExtras(force) {
@@ -2001,10 +2062,10 @@ function loadExtras(force) {
   const get = (path) => api(path).then((data) => ({ data }), (e) => ({ error: String(e.message || e) }))
   extrasJob = Promise.all([
     get('/api/calendar?days=3'), get('/api/state'), get('/api/countdown-art'),
-    get('/api/weather'), get('/api/ha/state'), get('/api/ha/actions/log?limit=20'),
+    get('/api/weather'), get('/api/ha/state'), get('/api/ha/actions/log?limit=20'), get('/healthz'),
   ])
-    .then(([calendar, state, art, weather, ha, haLog]) => {
-      extras = { calendar, state, art, weather, ha, haLog, at: Date.now() }
+    .then(([calendar, state, art, weather, ha, haLog, hub]) => {
+      extras = { calendar, state, art, weather, ha, haLog, hub, at: Date.now() }
       paintExtras()
     })
     .catch((e) => console.error('house-wide status', e))
@@ -2023,6 +2084,8 @@ function paintExtras() {
   if (haStatus) paintHaStatus(haStatus)
   const haLog = $('#haLog')
   if (haLog) paintHaLog(haLog)
+  const sonos = $('#sonosStatus')
+  if (sonos) paintSonosStatus(sonos)
   updateAges()
 }
 
