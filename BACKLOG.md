@@ -311,6 +311,21 @@ Remaining:
   the kitchen frame. Short ribbon was the deciding variable. Rigid right-angle
   adapters (Option B) failed on geometry twice and are closed. Reference build
   for every frame in the house: `docs/designs/frame-cabling-hdmi.md` v2.0.
+- **Kitchen frame build, Michaels Ashland shadow box** (IN PROGRESS 2026-10-24) -
+  glass broken out; liner opening 15 7/8 x 11 3/4 in, groove 5.45 mm deep,
+  1.5 in usable depth. The mat is a printed bezel (six bars, tongue in the old
+  glass groove, 45 degree window bevel, printed face down on the textured
+  plate) and the panel sits in a printed carrier (two halves, Pi bosses on the
+  back, cooler through a window in the backing into the cleat gap). Generator:
+  `scripts/frame/frame_parts.py` (manifold3d), STLs in `_review/frame-parts/`.
+  Measured so far: groove gap 1.91 mm, panel 13.68 mm thick, ports on the right
+  edge, low. Still assumed: active area, panel width and height. Power: replace the
+  outlet with a Leviton T5636 (two USB-C PD ports, 30 W each) and sleeve two
+  USB-C cables as one cord; no wall wart. Decided 2026-10-24. Hardware ordered
+  2026-10-26 (CC1P6-W outlet on backorder, aluminium Z-bar cleat plus 3/4 in wood
+  spacer rails for the cooler gap; no grommet, no right-angle cables). Build guide and
+  animated assembly: `_review/frame-build-guide.html`, `_review/frame-assembly.html`
+  (transient; regenerate the parts with the script if `_review/` is cleared).
 - **Front door frame build** (TODO, parts ordered 2026-09-10) - third screen,
   same EVICIV B0CYLTZSWD panel as the kitchen. **Ordered:** `B0CYLTZSWD` panel,
   `B0DFMNHL62` Vemico Pi 5 8GB kit, `B01787RBUO` JSER micro-to-mini FPC kit (both
@@ -504,6 +519,15 @@ progress bar). Remaining:
 
 ### Shared / infrastructure
 
+- **Sonos write hardening** (TODO, from the 2026-10-29 stale-address incident) -
+  three parts: (1) Justin: a DHCP reservation on the router for the Family
+  Room Playbar, `94:9F:3E:61:11:84`, so its address stops changing; (2) the
+  card aborts volume, join and leave requests client-side after about 3 s so
+  one stuck player cannot fill the browser's connection pool and stall the
+  zones poll (`useSonosActions` sendRaw, `AbortController`); (3) a watchdog
+  on the hub that restarts `SmartDisplaySonosAPI` when the Sonos log shows
+  sustained `ETIMEDOUT` to one player, or a nightly restart as the cheap
+  version.
 - **Lock the kitchen Pi to localhost after the soak** (TODO, from 2026-10-01) -
   the Pi's legacy routes (`/api/state`, `/api/flags`, `/api/lunch`,
   `/api/schoolcal`, `/api/sonos`) and its `node-sonos-http-api` service stayed
@@ -890,6 +914,20 @@ Append-only, newest first. Locked product decisions also live in
 `PRD - Smart Displays.md` ("Decisions Made") and `docs/Apple-TV-Display-PRD.md`; this log
 captures decisions made during working sessions.
 
+- **2026-10-31 - Apple TV Photos: the center button splits by photo type; mat
+  off means no caption; music off hides the corner and the lines; the setting
+  stays on the TV.** On an art-album artwork with the mat on, the center button
+  keeps cycling Art Display (Shadow Box, Fill, Fill + Music); on ordinary photos
+  or any photo with the mat off, it toggles the music presence (corner art plus
+  track lines), with a 1.5 s toast. Fill + Music only joins the rotation while
+  the music presence is shown. Chosen over making the thumbnail toggle win
+  everywhere, and over short press vs long press. With the mat off the whole
+  white caption goes, not just the date, and music off hides both the corner
+  art and the lines, so mat off plus music off is a bare full-bleed image for
+  full-screen pictures with no metadata. Persistence by whatever is easiest:
+  local UserDefaults (`tv.photosMusicThumbnail`, default on), no hub sync, no
+  Settings row. Built and installed on the Living Room TV at 13:19, after
+  re-downloading the Metal Toolchain that the Xcode 27.2 update dropped.
 - **2026-10-16 - The Sound card becomes a mixer (per-room volume); built the
   same day, see Recently Shipped.** Group volume stays the hero on top; when Main is grouped,
   one compact row per room in the group sits under it (Main first, then
@@ -914,20 +952,6 @@ captures decisions made during working sessions.
   No, one-hour revert, long press to mark a video wrong, yt-dlp and ffmpeg on
   the NUC self-updating weekly. Backdrops pruned to Drift, Smoke, Marble,
   Mixtape and Music Videos; Smoke is the new default. Engine first, nostalgic
-- **2026-10-31 - Apple TV Photos: the center button splits by photo type; mat
-  off means no caption; music off hides the corner and the lines; the setting
-  stays on the TV.** On an art-album artwork with the mat on, the center button
-  keeps cycling Art Display (Shadow Box, Fill, Fill + Music); on ordinary photos
-  or any photo with the mat off, it toggles the music presence (corner art plus
-  track lines), with a 1.5 s toast. Fill + Music only joins the rotation while
-  the music presence is shown. Chosen over making the thumbnail toggle win
-  everywhere, and over short press vs long press. With the mat off the whole
-  white caption goes, not just the date, and music off hides both the corner
-  art and the lines, so mat off plus music off is a bare full-bleed image for
-  full-screen pictures with no metadata. Persistence by whatever is easiest:
-  local UserDefaults (`tv.photosMusicThumbnail`, default on), no hub sync, no
-  Settings row. Built and installed on the Living Room TV at 13:19, after
-  re-downloading the Metal Toolchain that the Xcode 27.2 update dropped.
   TV skin second. `docs/designs/music-videos.md`.
 - **2026-10-10 - `feature/echo-hub` merged to `main`** (fast-forward, 128
   commits: the hub migration, Echo Show, layout editor, Entry board, Today
@@ -1423,6 +1447,21 @@ captures decisions made during working sessions.
 
 ## Recently Shipped
 
+Newest first.
+
+- **2026-10-31 - Apple TV Photos: center button toggles the music presence, and
+  a bare full-bleed mode** (`feature/music-videos`; installed on the Living
+  Room TV at 13:19; not committed). On the
+  Photos view the Siri Remote center button turns the album-art corner
+  thumbnail and the handwritten track lines on the mat on and off, with a 1.5 s
+  "Music On" / "Music Off" toast. It is a TV-local setting
+  (`photosMusicThumbnail`, UserDefaults `tv.photosMusicThumbnail`, default on),
+  kept across relaunches, not synced to the hub, no Settings row. An artwork
+  from an art album with the mat on keeps the old center-button job (cycling
+  Art Display: Shadow Box, Fill, Fill + Music, which joins the rotation only
+  while the music presence shows). With the mat off the unmatted white
+  location + date caption is gone (`ExifCaptionOverlay` removed), so mat off
+  plus music off is a bare full-bleed image with nothing drawn on it.
 - **2026-10-22 - Kitchen Wi-Fi self-heal.** After the 2026-10-20 brownout
   truncated NetworkManager's connection files and took the kitchen off Wi-Fi
   for a day, `pi/wifi-selfheal.sh` + `wifi-selfheal.service` now restore the
@@ -1445,21 +1484,6 @@ captures decisions made during working sessions.
   `_review/mockups/sound-mixer-mockup.html`.
 - **2026-10-16 - Mixtape polish round, realism items 1 to 7** (`feature/mixtape-polish`):
   reel spin-up and coast with a rock-back, wow and flutter, a flickering lamp
-Newest first.
-
-- **2026-10-31 - Apple TV Photos: center button toggles the music presence, and
-  a bare full-bleed mode** (`feature/music-videos`; installed on the Living
-  Room TV at 13:19; not committed). On the
-  Photos view the Siri Remote center button turns the album-art corner
-  thumbnail and the handwritten track lines on the mat on and off, with a 1.5 s
-  "Music On" / "Music Off" toast. It is a TV-local setting
-  (`photosMusicThumbnail`, UserDefaults `tv.photosMusicThumbnail`, default on),
-  kept across relaunches, not synced to the hub, no Settings row. An artwork
-  from an art album with the mat on keeps the old center-button job (cycling
-  Art Display: Shadow Box, Fill, Fill + Music, which joins the rotation only
-  while the music presence shows). With the mat off the unmatted white
-  location + date caption is gone (`ExifCaptionOverlay` removed), so mat off
-  plus music off is a bare full-bleed image with nothing drawn on it.
   in the window with pack edge light, drifting glass with a specular sweep on
   the swing, hash-driven VU character with a song-start bounce, per-tape hub
   rims so the packs sit behind the shell, door edge thickness, aligned
@@ -1978,6 +2002,17 @@ Newest first.
 
 ## Housekeeping / Ops
 
+- **2026-10-29 - Sonos service held a stale address for the Family Room
+  Playbar for six days.** The Playbar moved from 192.168.4.67 to .64 on
+  2026-10-23 17:21 UTC (DHCP) and `node-sonos-http-api` on the NUC kept the
+  old one: 78,417 `connect ETIMEDOUT 192.168.4.67:1400` lines in
+  `C:\Services\SonosHTTPAPI\logs\service.log`. Reads stayed right (the
+  group coordinator carries the members' state) but every write to that
+  player (its volume, the group volume, join, leave) hung 21 s and failed,
+  and the kitchen card looked dead for the Family Room because hung requests
+  filled the browser's six connections to the hub and stalled the poll.
+  `Restart-Service SmartDisplaySonosAPI` fixed it (0.06 s afterwards). Follow-
+  ups in the Shared / infrastructure backlog (Sonos write hardening).
 - **2026-06-10 - Merged `feature/apple-tv-display` into main** (merge commit
   31d6af4) after the TV app proved out in daily use. Day-to-day work continues
   on main; origin (GitHub) has not been pushed - push when ready.
