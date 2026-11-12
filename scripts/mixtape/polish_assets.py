@@ -34,10 +34,11 @@ All hand work in numpy / OpenCV / Pillow; no image generation, no API calls.
             spindles (it is the door rect of the plate, glass un-composited)
             and gets the same move. Verifies by diff that only the two spindle
             regions changed. Manifest deck.plates.deck_v3, deck.spindles.
-  counter   A 3-digit mechanical tape counter above the OUTPUT label, built by
+  counter   A 3-digit mechanical tape counter under the right VU meter, built by
             hand: a chrome-rimmed recessed black bezel with a drop shadow and a
-            round chrome RESET button, composited into v3 as
-            deck_empty_v3_counter.png (byte-identical outside the housing).
+            round chrome RESET button, placed per Justin's mockup (see D.),
+            composited into v3 as deck_empty_v3_counter.png with the OUTPUT
+            legend erased (byte-identical outside the housing and the erase).
             counter_digits.png is the roller strip (0..9 then 0 again, so
             scrolling 9 -> 0 wraps seamlessly), white Helvetica numerals on
             near-black drums; counter_glass.png is an optional overlay drawn
@@ -583,18 +584,41 @@ def stage_spindles():
 
 # =========================================================================== D. tape counter
 
-# Placement (4K px, pixel edges): the clear brushed band between the right VU
-# bezel (its shadow ends about y 888) and the OUTPUT legend (cap top y 1003),
-# centred over the OUTPUT knob (x 3178). Inside the 16:10 crop (x 192..3648).
-CNT_RIM = (3062, 907, 3222, 983)       # chrome rim, outer edge (160 x 76)
-CNT_RIM_W = 4                          # chrome rim width
-CNT_WIN = (3076, 920, 3208, 970)       # digit window (132 x 50)
-CNT_CELL_W, CNT_GAP = 40, 6            # three drums 40 px wide, 6 px apart
-RESET_C, RESET_R, RESET_HOLE = (3252.0, 945.0), 13.0, 17.0
+# Placement v2 (2026-10-22, Justin's mockup art-src/mixtape/reference/
+# counter_placement_mockup.png, 1600x900, x2.4 to the plate). Measured on the
+# mockup (pixel edges): housing x 1208.7..1305.5, y 382.5..426.5; RESET ring
+# x 1315..1334, y 396..415 (centre 1324.5, 405.5). In 4K that is a housing of
+# 232 x 106 with its top 32 px under the right VU bezel (bezel bottom y 886),
+# the RESET button 46 px right of the housing. The housing's left edge is set
+# exactly on the right VU bezel's outer left edge as measured on the plate
+# (x 2894; the mockup has it 7 px further right, inside its own tolerance).
+# Everything inside the housing is the v1 counter (160 x 76) scaled with the
+# housing: insets, drum widths and gaps by SX, heights by SY, radii and
+# blurs by SR. Inside the 16:10 crop (x 192..3648).
+V1_RIM, V1_WIN, V1_CELL_W, V1_GAP = (160, 76), (14, 13, 132, 50), 40, 6     # v1 geometry, for scaling
+CNT_RIM = (2894, 918, 3126, 1024)      # chrome rim, outer edge (232 x 106)
+SX = (CNT_RIM[2] - CNT_RIM[0]) / V1_RIM[0]                                   # 1.45
+SY = (CNT_RIM[3] - CNT_RIM[1]) / V1_RIM[1]                                   # 1.395
+SR = (SX * SY) ** 0.5                                                        # 1.422, radii and blurs
+CNT_RIM_W = round(4 * SR)              # chrome rim width (6)
+CNT_GAP = round(V1_GAP * SX)           # 9 px between drums
+_wx0, _wy0 = CNT_RIM[0] + round(V1_WIN[0] * SX), CNT_RIM[1] + round(V1_WIN[1] * SY)
+CNT_CELL_W = round(V1_CELL_W * SX)     # 58 px drums
+CNT_WIN = (_wx0, _wy0, _wx0 + 3 * CNT_CELL_W + 2 * CNT_GAP, _wy0 + round(V1_WIN[3] * SY))   # 192 x 70
+RESET_C = (CNT_RIM[2] + 46.0, (CNT_RIM[1] + CNT_RIM[3]) / 2)   # centred on the housing, as v1
+RESET_HOLE = round(17 * SR)            # 24, the mockup's ring radius (10 x 2.4)
+RESET_R = 13 * SR                      # 18.5, the chrome cap
 DIGIT_FONT = "/System/Library/Fonts/Helvetica.ttc"
 DIGIT_CAP = 0.60                       # numeral height / cell height
 DRUM_RGB = np.array([20, 19, 18], np.float32)
 INK_RGB = np.array([238, 234, 224], np.float32)
+
+# The OUTPUT legend (ink x 3084..3252, y 1011..1040) sits under the housing's
+# bottom edge: erased like HORIZON, by a Poisson clone of the brushed faceplate
+# beside it (the same rows, shifted left, so the horizontal brushing runs on),
+# kept to our rect with a feathered edge. MIN and MAX stay.
+OUT_ER = (3074, 1001, 3262, 1050)      # x0, y0, x1, y1 (pixel edges)
+OUT_SHIFT = -(OUT_ER[2] - OUT_ER[0] + 2)
 
 
 def cells():
@@ -608,10 +632,29 @@ def drum_shade(h):
     return 1 - 0.55 * t * t
 
 
+def erase_output(plate_bgr):
+    """OUTPUT legend out of the plate (BGR uint8 in, out)."""
+    H, W = plate_bgr.shape[:2]
+    x0, y0, x1, y1 = OUT_ER
+    pad = 4
+    patch = plate_bgr[y0 - pad:y1 + pad, x0 - pad + OUT_SHIFT:x1 + pad + OUT_SHIFT].copy()
+    mask = np.zeros(patch.shape[:2], np.uint8)
+    mask[pad:-pad, pad:-pad] = 255
+    center = ((x0 - pad + x1 + pad) // 2, (y0 - pad + y1 + pad) // 2)
+    cloned = cv2.seamlessClone(patch, plate_bgr, mask, center, cv2.NORMAL_CLONE)
+    fe = np.zeros((H, W), np.float32)
+    fe[y0:y1, x0:x1] = 1
+    fe = cv2.GaussianBlur(fe, (0, 0), 2.0) * (fe > 0)
+    fe = cv2.GaussianBlur(fe, (0, 0), 1.0)
+    out = plate_bgr.astype(np.float32) * (1 - fe[..., None]) + cloned.astype(np.float32) * fe[..., None]
+    return out.round().astype(np.uint8)
+
+
 def build_housing(plate_bgr):
     """Hand-built housing composited into the plate (BGR uint8 in, out)."""
     out = plate_bgr.astype(np.float32).copy()
-    X0, Y0, X1, Y1 = CNT_RIM[0] - 40, CNT_RIM[1] - 30, RESET_C[0] + RESET_HOLE + 30, CNT_RIM[3] + 30
+    X0, Y0 = CNT_RIM[0] - round(40 * SR), CNT_RIM[1] - round(30 * SR)
+    X1, Y1 = RESET_C[0] + RESET_HOLE + round(30 * SR), CNT_RIM[3] + round(30 * SR)
     X0, Y0, X1, Y1 = int(X0), int(Y0), int(X1), int(Y1)
     reg = out[Y0:Y1, X0:X1]
     h, w = reg.shape[:2]
@@ -620,40 +663,40 @@ def build_housing(plate_bgr):
     tint = face / face.mean()
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32) + 0.5
     rx0, ry0, rx1, ry1 = [v - o for v, o in zip(CNT_RIM, (X0, Y0, X0, Y0))]
-    rim = rrect_cover(w, h, rx0, ry0, rx1, ry1, 8.0, 1.0)
+    rim = rrect_cover(w, h, rx0, ry0, rx1, ry1, 8.0 * SR, 1.0)
     # 1. soft drop shadow of the raised rim (light from above): darken the plate
-    sh = cv2.GaussianBlur(np.roll(rim, 3, axis=0), (0, 0), 3.5)
+    sh = cv2.GaussianBlur(np.roll(rim, round(3 * SR), axis=0), (0, 0), 3.5 * SR)
     reg *= (1 - 0.45 * sh)[..., None]
     # 2. chrome rim: vertical chrome profile, brushed, tinted like the faceplate
     ty = np.clip((yy - ry0) / (ry1 - ry0), 0, 1)
     prof = np.interp(ty, [0, 0.06, 0.35, 0.55, 0.72, 0.94, 1], [250, 228, 168, 150, 205, 128, 92])
     rng = np.random.default_rng(7)
-    brush = cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), sigmaX=18, sigmaY=0.6) * 22
+    brush = cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), sigmaX=18 * SR, sigmaY=0.6) * 22
     chrome = (prof + brush)[..., None] * tint[None, None]
     reg[:] = reg * (1 - rim[..., None]) + chrome * rim[..., None]
     # 3. recessed black bezel inside the rim, darker under its top lip
     bx0, by0, bx1, by1 = rx0 + CNT_RIM_W, ry0 + CNT_RIM_W, rx1 - CNT_RIM_W, ry1 - CNT_RIM_W
-    bez = rrect_cover(w, h, bx0, by0, bx1, by1, 5.0, 1.0)
+    bez = rrect_cover(w, h, bx0, by0, bx1, by1, 5.0 * SR, 1.0)
     tb = np.clip((yy - by0) / (by1 - by0), 0, 1)
-    bez_v = 9 + 15 * tb + 10 * np.exp(-((yy - (by1 - 2)) / 1.5) ** 2)     # lit lower lip
-    bez_v *= 1 - 0.5 * np.exp(-(yy - by0) / 3.0) * (yy >= by0)             # shadow under the top lip
+    bez_v = 9 + 15 * tb + 10 * np.exp(-((yy - (by1 - 2 * SR)) / (1.5 * SR)) ** 2)   # lit lower lip
+    bez_v *= 1 - 0.5 * np.exp(-(yy - by0) / (3.0 * SR)) * (yy >= by0)                 # shadow under the top lip
     reg[:] = reg * (1 - bez[..., None]) + (bez_v[..., None] * np.array([1.0, 1.0, 1.06])) * bez[..., None]
     # 4. the digit window: three blank drums (no digits), separators, deep shadow at top
     wx0, wy0, wx1, wy1 = [v - o for v, o in zip(CNT_WIN, (X0, Y0, X0, Y0))]
-    win = rrect_cover(w, h, wx0, wy0, wx1, wy1, 2.0, 1.0)
+    win = rrect_cover(w, h, wx0, wy0, wx1, wy1, 2.0 * SR, 1.0)
     shade = np.interp(yy, wy0 + np.arange(wy1 - wy0) + 0.5, drum_shade(wy1 - wy0))
     drum = DRUM_RGB[::-1][None, None] * shade[..., None]
     for k in range(2):
         sx = wx0 + (k + 1) * CNT_CELL_W + k * CNT_GAP
         sep = ((xx >= sx) & (xx < sx + CNT_GAP)).astype(np.float32)
         drum = drum * (1 - 0.6 * sep[..., None])
-    drum *= (1 - 0.55 * np.exp(-(yy - wy0) / 4.0) * (yy >= wy0))[..., None]
+    drum *= (1 - 0.55 * np.exp(-(yy - wy0) / (4.0 * SY)) * (yy >= wy0))[..., None]
     reg[:] = reg * (1 - win[..., None]) + drum * win[..., None]
     # 5. RESET button: a dark ring in the plate, a domed chrome cap, light from upper left
     cx, cy = RESET_C[0] - X0, RESET_C[1] - Y0
     d = np.hypot(xx - cx, yy - cy)
     hole = np.clip(RESET_HOLE - d + 0.5, 0, 1)
-    hsh = cv2.GaussianBlur(np.roll(hole, 2, axis=0), (0, 0), 2.5)
+    hsh = cv2.GaussianBlur(np.roll(hole, round(2 * SR), axis=0), (0, 0), 2.5 * SR)
     reg *= (1 - 0.35 * hsh * (1 - hole))[..., None]
     hole_v = 14 + 10 * np.clip((yy - (cy - RESET_HOLE)) / (2 * RESET_HOLE), 0, 1)
     reg[:] = reg * (1 - hole[..., None]) + hole_v[..., None] * hole[..., None]
@@ -663,8 +706,8 @@ def build_housing(plate_bgr):
     L = np.array([-0.45, -0.6, 0.66]); L /= np.linalg.norm(L)
     lam = np.clip(nx_ * L[0] + ny_ * L[1] + nz * L[2], 0, 1)
     spec = np.clip(nx_ * L[0] + ny_ * L[1] + nz * L[2], 0, 1) ** 24
-    capv = 70 + 140 * lam + 90 * spec + cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), 1.2) * 4
-    capv *= 1 - 0.35 * np.clip((d - (RESET_R - 2.5)) / 2.5, 0, 1)            # dark bevel at the edge
+    capv = 70 + 140 * lam + 90 * spec + cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), 1.2 * SR) * 4
+    capv *= 1 - 0.35 * np.clip((d - (RESET_R - 2.5 * SR)) / (2.5 * SR), 0, 1)       # dark bevel at the edge
     reg[:] = reg * (1 - cap[..., None]) + (capv[..., None] * tint[None, None]) * cap[..., None]
     out[Y0:Y1, X0:X1] = reg
     res = np.clip(out, 0, 255).round().astype(np.uint8)
@@ -672,7 +715,8 @@ def build_housing(plate_bgr):
 
 
 def build_digit_strip():
-    """11 cells (0..9, then 0) of CNT_CELL_W x cell height, RGBA (opaque)."""
+    """11 cells (0..9, then 0) of CNT_CELL_W x cell height, RGBA (opaque),
+    rendered at this size (8x supersampled), not scaled from an older strip."""
     ch = CNT_WIN[3] - CNT_WIN[1]
     ss = 8
     n = 11
@@ -705,12 +749,12 @@ def build_glass():
     w, h = x1 - x0, y1 - y0
     t = (np.arange(h) + 0.5) / h * 2 - 1
     dark = np.clip(0.75 * np.abs(t) ** 2.2, 0, 1)[:, None] * np.ones((1, w))
-    dark = np.maximum(dark, 0.6 * np.exp(-(np.arange(h)[:, None] + 0.5) / 4.0))
+    dark = np.maximum(dark, 0.6 * np.exp(-(np.arange(h)[:, None] + 0.5) / (4.0 * SY)))
     for k in range(2):
         sx = (k + 1) * CNT_CELL_W + k * CNT_GAP
         dark[:, sx:sx + CNT_GAP] = 0.92
     rgb = np.zeros((h, w, 3), np.float32)
-    hl = np.exp(-((np.arange(h) - 5.0) / 1.2) ** 2)[:, None] * np.ones((1, w)) * 0.10
+    hl = np.exp(-((np.arange(h) - 5.0 * SY) / (1.2 * SY)) ** 2)[:, None] * np.ones((1, w)) * 0.10
     rgb[:] = 255 * (hl / np.maximum(dark + hl, 1e-3))[..., None]
     a = np.clip(dark + hl, 0, 1)
     return np.dstack([rgb.round().astype(np.uint8), (a * 255).round().astype(np.uint8)])
@@ -734,19 +778,22 @@ def draw_digits(img_bgr, strip_rgba, glass_rgba, values):
 
 def stage_counter():
     v3 = cv2.imread(str(DECK / "deck_empty_v3.png"))
-    plate, box = build_housing(v3)
+    erased = erase_output(v3)
+    plate, box = build_housing(erased)
+    assert box[2] <= 3648 and RESET_C[0] + RESET_HOLE <= 3648, "counter outside the 16:10 crop"
     save_bgr(DECK / "deck_empty_v3_counter.png", plate)
     bxs, npx = changed_boxes(v3, plate)
-    print(f"  v3 -> v3_counter: {npx} px changed in {bxs} (housing box {box})")
-    X0, Y0, X1, Y1 = box
+    print(f"  v3 -> v3_counter: {npx} px changed in {bxs} (housing box {box}, OUTPUT erase {OUT_ER})")
     outside = plate.copy()
-    outside[Y0:Y1, X0:X1] = v3[Y0:Y1, X0:X1]
-    assert np.array_equal(outside, v3), "pixels changed outside the housing box"
+    for X0, Y0, X1, Y1 in (box, (OUT_ER[0] - 8, OUT_ER[1] - 8, OUT_ER[2] + 8, OUT_ER[3] + 8)):
+        outside[Y0:Y1, X0:X1] = v3[Y0:Y1, X0:X1]
+    assert np.array_equal(outside, v3), "pixels changed outside the housing box and the OUTPUT erase"
     strip = build_digit_strip()
     save_rgba(DECK / "counter_digits.png", strip)
     glass = build_glass()
     save_rgba(DECK / "counter_glass.png", glass)
     ch = CNT_WIN[3] - CNT_WIN[1]
+    print(f"  housing {CNT_RIM}, window {CNT_WIN}, cells {cells()}, reset {RESET_C} r {RESET_HOLE}")
     counter = {
         "housing": rect_n(*CNT_RIM),
         "window": rect_n(*CNT_WIN),
@@ -767,8 +814,8 @@ def stage_counter():
     merge_plate({"plates": {"deck_v3_counter": "tvos/Resources/Mixtape/deck/deck_empty_v3_counter.png"},
                  "counter": counter})
     # comparison: context, then housing empty / 000 / 147 / mid-roll 149.5 -> 150 at 2x
-    cx0, cy0, cx1, cy1 = 3020, 880, 3300, 1010
-    rows = [label(plate[760:1340, 2780:3700].copy(), "placement (1x)")]
+    cx0, cy0, cx1, cy1 = CNT_RIM[0] - 50, CNT_RIM[1] - 50, int(RESET_C[0] + RESET_HOLE + 50), OUT_ER[3] + 20
+    rows = [label(plate[780:1380, 2780:3700].copy(), "placement (1x)")]
     zs = []
     for vals, name in ((None, "housing, empty"), ((0, 0, 0), "000"), ((1, 4, 7), "147"),
                        ((1, 4.5, 9.5), "rolling 149 -> 150")):
@@ -776,6 +823,9 @@ def stage_counter():
         zs.append(label(cv2.resize(img[cy0:cy1, cx0:cx1], None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC), name + " (2x)"))
     save_bgr(CHECK / "counter-compare.png", grid(zs, 2))
     save_bgr(CHECK / "counter-placement.png", rows[0])
+    oz = [cv2.resize(im[OUT_ER[1] - 40:OUT_ER[3] + 40, OUT_ER[0] - 120:OUT_ER[2] + 120], None, fx=2, fy=2,
+                     interpolation=cv2.INTER_NEAREST) for im in (v3, erased)]
+    save_bgr(CHECK / "counter-output-erase-2x.png", grid([label(oz[0], "v3 (2x)"), label(oz[1], "OUTPUT erased (2x)")], 1))
 
 
 # =========================================================================== manifest
