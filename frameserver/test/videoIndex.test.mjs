@@ -15,13 +15,28 @@ import { createVideoIndex, newEntry } from '../lib/videoIndex.mjs'
 
 function setup(t) {
   const root = mkdtempSync(join(tmpdir(), 'videoindex-test-'))
-  t.after(() => rmSync(root, { recursive: true, force: true }))
   const nas = join(root, 'nas')
   const local = join(root, 'local')
   mkdirSync(nas, { recursive: true })
   let clock = 1_000_000
-  const index = createVideoIndex({ dir: nas, localDir: local, now: () => clock })
-  return { root, nas, local, index, tick: (ms = 1000) => (clock += ms), clock: () => clock }
+  // Every index opened over these folders, the first and any "again" a test
+  // opens to prove a reload. Each writes its NAS copy in the background
+  // (coalesced, so a hung share cannot block the hub), and a load() that
+  // adopts the other copy saves too. Cleanup waits for all of them: an
+  // unawaited write landing in nas/ mid-removal failed the suite with
+  // ENOTEMPTY about one run in four.
+  const opened = []
+  const open = (opts = {}) => {
+    const ix = createVideoIndex({ dir: nas, localDir: local, ...opts })
+    opened.push(ix)
+    return ix
+  }
+  const index = open({ now: () => clock })
+  t.after(async () => {
+    for (const ix of opened) await ix.flush()
+    rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
+  })
+  return { root, nas, local, index, open, tick: (ms = 1000) => (clock += ms), clock: () => clock }
 }
 
 const info = { artist: 'Fleetwood Mac', title: 'Dreams', album: 'Rumours', durationMs: 257_000 }
@@ -177,7 +192,7 @@ describe('persistence: local copy wins, NAS copy is write-through', () => {
     const s = setup(t)
     s.index.set(KEY, newEntry({ key: KEY, ...info }))
     await s.index.flush()
-    const again = createVideoIndex({ dir: s.nas, localDir: s.local })
+    const again = s.open()
     assert.equal(await again.load(), 1)
     assert.equal(again.get(KEY).title, 'Dreams')
   })
@@ -189,7 +204,7 @@ describe('persistence: local copy wins, NAS copy is write-through', () => {
     const nas = JSON.parse(readFileSync(join(s.nas, 'index.json'), 'utf8'))
     nas.entries[KEY].videoTitle = 'nas'
     writeFileSync(join(s.nas, 'index.json'), JSON.stringify(nas))
-    const again = createVideoIndex({ dir: s.nas, localDir: s.local })
+    const again = s.open()
     await again.load()
     assert.equal(again.get(KEY).videoTitle, 'local')
   })
@@ -199,7 +214,7 @@ describe('persistence: local copy wins, NAS copy is write-through', () => {
     s.index.set(KEY, newEntry({ key: KEY, ...info }))
     await s.index.flush()
     rmSync(s.local, { recursive: true })
-    const again = createVideoIndex({ dir: s.nas, localDir: s.local })
+    const again = s.open()
     assert.equal(await again.load(), 1)
     assert.ok(existsSync(join(s.local, 'index.json')))
   })
@@ -210,7 +225,7 @@ describe('persistence: local copy wins, NAS copy is write-through', () => {
     s.index.set(KEY, newEntry({ key: KEY, ...info }))
     await s.index.flush()
     writeFileSync(join(s.local, 'index.json'), '{ not json')
-    const again = createVideoIndex({ dir: s.nas, localDir: s.local })
+    const again = s.open()
     assert.equal(await again.load(), 1)
   })
 

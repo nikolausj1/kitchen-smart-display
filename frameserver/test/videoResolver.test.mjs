@@ -120,11 +120,18 @@ function setup(t, { shared = {}, env = {}, search = defaultSearch, downloadBytes
     if (u.includes('/favorites/detailed')) return new Response(readFix('favorites-detailed.json'), { status: 200 })
     return new Response('{}', { status: 404 })
   }
-  t.after(() => {
-    globalThis.fetch = realFetch
+  // Let background work (the index's NAS write, a download's move) finish
+  // before the temp folder goes, bounded so a stuck fake cannot hang the
+  // suite; the retries cover a write that lands mid-removal (ENOTEMPTY).
+  t.after(async () => {
     ctx.releaseHold?.()
     ctx.resolver?.stop()
-    rmSync(root, { recursive: true, force: true })
+    await Promise.race([
+      Promise.resolve(ctx.resolver?.whenIdle?.()).catch(() => {}),
+      new Promise((r) => setTimeout(r, 1000)),
+    ])
+    globalThis.fetch = realFetch
+    rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
   })
 
   ctx.make = (over = {}) => {
