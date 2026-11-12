@@ -444,3 +444,26 @@ describe('favoriteAllowed', () => {
     assert.equal(favoriteAllowed('Classic Rock Party (My Station)', { favorites: { 'Classic Rock Party': 'no' } }), false)
   })
 })
+
+describe('scoring: lessons from the first evening (2026-11-11)', () => {
+  const ctx = (over) => ({ artist: 'Miike Snow', title: 'Black & Blue', durationMs: 219_000, denied: [], ...over })
+
+  test('"&" in the song matches "and" in the upload, and the other way round', () => {
+    const own = cand({ title: 'Miike Snow - Black and Blue', channel: 'Miike Snow', duration: 223 })
+    assert.ok(scoreCandidate(own, ctx()) >= 40)
+    const amp = cand({ title: 'Miike Snow - Black & Blue', channel: 'Miike Snow', duration: 223 })
+    assert.ok(scoreCandidate(amp, ctx({ title: 'Black and Blue' })) >= 40)
+  })
+
+  test('a remix is rejected unless Sonos is playing the remix', () => {
+    const remix = cand({ title: 'Black & Blue (Netsky Remix)', channel: 'Miike Snow', duration: 315 })
+    assert.equal(scoreCandidate(remix, ctx()), -1)
+    assert.ok(scoreCandidate(remix, ctx({ title: 'Black & Blue - Netsky Remix', durationMs: 315_000 })) >= 40)
+  })
+
+  test('the artist own upload now beats the remix for the same song', () => {
+    const own = cand({ id: 'own00000001', title: 'Miike Snow - Black and Blue', channel: 'Miike Snow', duration: 223 })
+    const remix = cand({ id: 'rmx00000001', title: 'Black & Blue (Netsky Remix)', channel: 'Miike Snow', duration: 315 })
+    assert.equal(pickCandidate([remix, own], ctx())?.candidate.id, 'own00000001')
+  })
+})

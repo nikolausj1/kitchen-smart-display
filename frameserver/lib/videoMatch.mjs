@@ -52,7 +52,7 @@ const NAME_MAX = 120
 // Words that mark an upload as something other than the official video.
 const REJECT_RE = new RegExp(
   '\\b(lyric|lyrics|live|cover|karaoke|reaction|audio only|official audio|visuali[sz]er|fan[- ]?made|8d|slowed|sped up|' +
-  'nightcore|instrumental|hour|loop|tutorial|teaser|trailer|behind the scenes|making of)\\b',
+  'nightcore|instrumental|remix|hour|loop|tutorial|teaser|trailer|behind the scenes|making of)\\b',
   'gi',
 )
 
@@ -200,7 +200,12 @@ export function scoreCandidate(candidate, { artist = '', title = '', durationMs 
   const vt = squash(vTitle)
   const vtLower = vTitle.toLowerCase()
   // Spaces ignored on both sides: "Go-Go" keys as "gogo", the upload says "Go Go".
-  const titleIn = !k.title || vt.replace(/ /g, '').includes(k.title.replace(/ /g, ''))
+  // "&" and "and" are one word: Sonos says "Black & Blue", the artist's own
+  // upload says "Black and Blue" (the 2026-11-11 first evening; it missed).
+  const flat = (x) => x.replace(/ /g, '')
+  const and = (x) => String(x).replace(/&/g, ' and ')
+  const titleIn = !k.title || flat(vt).includes(flat(k.title)) ||
+    flat(squash(and(vTitle))).includes(flat(keyParts(artist, and(title)).title))
   if (!titleIn) return -1
   let score = 0
   if (durationClose(Number(candidate.duration), durationMs)) score += DURATION_CLOSE_BONUS
